@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 460" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Consistent Hashing Ring for Database Sharding</title>
+  <desc id="desc">Animated diagram showing keys hashing onto a 0 to 360 degree ring, routing clockwise to Shard 1, Shard 2, and Shard 3, and how adding Shard 4 only migrates approximately 1/N keys compared to modulo hashing.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .label { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; font-weight: 600; fill: #e2e8f0; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .deg { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #64748b; }
+      .ring { fill: none; stroke: #334155; stroke-width: 6; }
+      .ring-dash { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 6; opacity: 0.45; }
+      .shard1 { fill: #0284c7; stroke: #38bdf8; stroke-width: 2; }
+      .shard2 { fill: #059669; stroke: #34d399; stroke-width: 2; }
+      .shard3 { fill: #7c3aed; stroke: #a78bfa; stroke-width: 2; }
+      .shard4 { fill: #d97706; stroke: #fbbf24; stroke-width: 2.5; }
+      .key-dot { fill: #f43f5e; stroke: #fda4af; stroke-width: 1.5; }
+      .key-dot-move { fill: #fbbf24; stroke: #fef08a; stroke-width: 2; }
+      .route-arc { fill: none; stroke: #38bdf8; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 5 5; }
+      .route-migrate { fill: none; stroke: #fbbf24; stroke-width: 3; stroke-linecap: round; }
+      .badge-bad { fill: #450a0a; stroke: #ef4444; stroke-width: 1; }
+      .badge-good { fill: #064e3b; stroke: #10b981; stroke-width: 1; }
+      .bad-text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #fca5a5; }
+      .good-text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #6ee7b7; }
+
+      @keyframes spinSlow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -40; }
+      }
+      @keyframes shard4Appear {
+        0%, 35% { opacity: 0.18; transform: scale(0.82); }
+        45%, 88% { opacity: 1; transform: scale(1.06); }
+        95%, 100% { opacity: 0.18; transform: scale(0.82); }
+      }
+      @keyframes migrateArc {
+        0%, 35% { opacity: 0; stroke-dashoffset: 60; }
+        45%, 88% { opacity: 1; stroke-dashoffset: 0; }
+        95%, 100% { opacity: 0; }
+      }
+      @keyframes oldArc {
+        0%, 35% { opacity: 0.9; }
+        45%, 88% { opacity: 0.15; }
+        95%, 100% { opacity: 0.9; }
+      }
+      @keyframes pulseRing {
+        0%, 100% { r: 18; opacity: 0.55; }
+        50% { r: 26; opacity: 0; }
+      }
+      .spin-group {
+        transform-origin: 245px 250px;
+        animation: spinSlow 28s linear infinite;
+      }
+      .dash-anim {
+        animation: dashFlow 2.2s linear infinite;
+      }
+      .shard4-anim {
+        transform-origin: 142px 353px;
+        animation: shard4Appear 8s ease-in-out infinite;
+      }
+      .migrate-anim {
+        stroke-dasharray: 60;
+        animation: migrateArc 8s ease-in-out infinite;
+      }
+      .old-arc-anim {
+        animation: oldArc 8s ease-in-out infinite;
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="920" height="460" rx="14" />
+
+  <!-- Header -->
+  <text x="28" y="34" class="title">Consistent Hashing Ring (0&#176;&#8211;360&#176;) &#8212; Minimal Key Migration</text>
+  <text x="28" y="54" class="subtitle">Keys hash onto a circular space and route clockwise to the nearest shard. Adding Shard 4 only moves ~1/N keys.</text>
+
+  <!-- Left Panel: Hash Ring -->
+  <rect class="panel" x="24" y="72" width="442" height="364" rx="12" />
+
+  <!-- Degree Ticks & Labels -->
+  <text x="238" y="92" class="deg">0&#176;</text>
+  <text x="404" y="254" class="deg">90&#176;</text>
+  <text x="234" y="418" class="deg">180&#176;</text>
+  <text x="72" y="254" class="deg">270&#176;</text>
+
+  <!-- Main Ring -->
+  <circle cx="245" cy="250" r="145" class="ring" />
+  <g class="spin-group">
+    <circle cx="245" cy="250" r="134" class="ring-dash" />
+  </g>
+
+  <!-- Clockwise Direction Indicator in Center -->
+  <text x="245" y="242" text-anchor="middle" class="label" fill="#38bdf8">hash(key) &#8594; &#952;</text>
+  <text x="245" y="260" text-anchor="middle" class="mono">Walk Clockwise &#8635;</text>
+
+  <!-- Static Route Arcs: K1 (65 deg -> 150 deg Shard 2) -->
+  <!-- 65 deg: (376, 189), 150 deg: (318, 376) -->
+  <path d="M 376 189 A 145 145 0 0 1 318 376" class="route-arc dash-anim" />
+
+  <!-- K3 (310 deg -> 30 deg Shard 1) -->
+  <!-- 310 deg: (134, 157), 30 deg: (318, 124) -->
+  <path d="M 134 157 A 145 145 0 0 1 318 124" class="route-arc dash-anim" />
+
+  <!-- K2 (190 deg -> 270 deg Shard 3) fades when Shard 4 joins -->
+  <!-- 190 deg: (220, 393), 270 deg: (100, 250) -->
+  <path d="M 220 393 A 145 145 0 0 1 100 250" class="route-arc dash-anim old-arc-anim" />
+
+  <!-- K2 Migrated Route (190 deg -> 225 deg Shard 4) -->
+  <!-- 190 deg: (220, 393), 225 deg: (142, 353) -->
+  <path d="M 220 393 A 145 145 0 0 1 142 353" class="route-migrate migrate-anim" />
+
+  <!-- Shard 1 (30 deg): (318, 124) -->
+  <g transform="translate(318, 124)">
+    <circle r="18" class="shard1" />
+    <text y="4" text-anchor="middle" class="label" fill="#ffffff">S1</text>
+    <text x="24" y="-8" class="mono" fill="#7dd3fc">Shard 1 (30&#176;)</text>
+  </g>
+
+  <!-- Shard 2 (150 deg): (318, 376) -->
+  <g transform="translate(318, 376)">
+    <circle r="18" class="shard2" />
+    <text y="4" text-anchor="middle" class="label" fill="#ffffff">S2</text>
+    <text x="24" y="14" class="mono" fill="#6ee7b7">Shard 2 (150&#176;)</text>
+  </g>
+
+  <!-- Shard 3 (270 deg): (100, 250) -->
+  <g transform="translate(100, 250)">
+    <circle r="18" class="shard3" />
+    <text y="4" text-anchor="middle" class="label" fill="#ffffff">S3</text>
+    <text x="-66" y="-24" class="mono" fill="#c4b5fd">Shard 3 (270&#176;)</text>
+  </g>
+
+  <!-- Shard 4 (225 deg): (142, 353) - Animated Join -->
+  <g class="shard4-anim">
+    <circle cx="142" cy="353" r="18" fill="none" stroke="#fbbf24" stroke-width="2">
+      <animate attributeName="r" values="18;28" dur="2s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.7;0" dur="2s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="142" cy="353" r="18" class="shard4" />
+    <text x="142" y="357" text-anchor="middle" class="label" fill="#ffffff">S4</text>
+    <text x="44" y="382" class="mono" fill="#fcd34d">+Shard 4 (225&#176;)</text>
+  </g>
+
+  <!-- Keys on the Ring -->
+  <!-- K1 (65 deg): (376, 189) -->
+  <g transform="translate(376, 189)">
+    <circle r="7" class="key-dot" />
+    <text x="14" y="4" class="mono" fill="#fda4af">K1 (65&#176;)</text>
+  </g>
+
+  <!-- K2 (190 deg): (220, 393) -->
+  <g transform="translate(220, 393)">
+    <circle r="8" class="key-dot-move" />
+    <text x="14" y="14" class="mono" fill="#fde047">K2 (190&#176;) &#8594; moves!</text>
+  </g>
+
+  <!-- K3 (310 deg): (134, 157) -->
+  <g transform="translate(134, 157)">
+    <circle r="7" class="key-dot" />
+    <text x="-68" y="-10" class="mono" fill="#fda4af">K3 (310&#176;)</text>
+  </g>
+
+  <!-- Right Top Panel: Modulo % N Problem -->
+  <rect class="panel" x="484" y="72" width="412" height="162" rx="12" />
+  <rect class="badge-bad" x="502" y="88" width="168" height="24" rx="6" />
+  <text x="512" y="104" class="bad-text">Naive Modulo: hash(k) % N</text>
+  <text x="684" y="104" class="mono" fill="#f87171">N = 3 &#8594; N = 4</text>
+
+  <text x="502" y="132" class="label">Changing N invalidates almost every bucket:</text>
+  <text x="502" y="152" class="mono">key 100 % 3 = 1 (S1)  &#8594;  100 % 4 = 0 (S0)  [MOVES]</text>
+  <text x="502" y="170" class="mono">key 101 % 3 = 2 (S2)  &#8594;  101 % 4 = 1 (S1)  [MOVES]</text>
+  <text x="502" y="188" class="mono">key 102 % 3 = 0 (S0)  &#8594;  102 % 4 = 2 (S2)  [MOVES]</text>
+
+  <rect x="502" y="202" width="376" height="18" rx="4" fill="#0f172a" stroke="#334155" />
+  <rect x="502" y="202" width="282" height="18" rx="4" fill="#dc2626" opacity="0.85">
+    <animate attributeName="width" values="120;282;282" dur="4s" repeatCount="indefinite" />
+  </rect>
+  <text x="690" y="215" text-anchor="middle" class="mono" fill="#ffffff">~75% keys remapped (Cache/DB Stampede)</text>
+
+  <!-- Right Bottom Panel: Consistent Hashing Solution -->
+  <rect class="panel" x="484" y="248" width="412" height="188" rx="12" />
+  <rect class="badge-good" x="502" y="264" width="188" height="24" rx="6" />
+  <text x="512" y="280" class="good-text">Consistent Hashing + Vnodes</text>
+  <text x="702" y="280" class="mono" fill="#34d399">Only ~1/N Moves</text>
+
+  <text x="502" y="308" class="mono" fill="#e2e8f0">&#8226; K1 (65&#176;)  &#8594; Shard 2 (150&#176;)   [Unchanged]</text>
+  <text x="502" y="328" class="mono" fill="#fde047">&#8226; K2 (190&#176;) &#8594; Shard 3 &#8658; Shard 4 [Only 150&#176;&#8211;225&#176; moves]</text>
+  <text x="502" y="348" class="mono" fill="#e2e8f0">&#8226; K3 (310&#176;) &#8594; Shard 1 (30&#176;)    [Unchanged]</text>
+
+  <rect x="502" y="366" width="376" height="18" rx="4" fill="#0f172a" stroke="#334155" />
+  <rect x="502" y="366" width="94" height="18" rx="4" fill="#10b981" opacity="0.9" />
+  <text x="690" y="379" text-anchor="middle" class="mono" fill="#ffffff">~25% (1/N) keys migrated</text>
+
+  <text x="502" y="408" class="subtitle">Virtual Nodes (100&#8211;200 per physical shard) prevent hotspots and</text>
+  <text x="502" y="423" class="subtitle">keep key distribution balanced across heterogeneous hardware.</text>
+</svg>

@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">B-Tree Index Lookup: Index Scan vs. Index-Only Scan</title>
+  <desc id="desc">Animated diagram showing a PostgreSQL B-Tree traversal from Root to Branch to Leaf page, then comparing an Index Scan that performs a random Heap fetch against an Index-Only Scan that hits the Visibility Map and skips the Heap.</desc>
+  <defs>
+    <style><![CDATA[
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1.2; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; fill: #94a3b8; }
+      .label { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; font-weight: 600; fill: #e2e8f0; }
+      .label-sm { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 11px; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; fill: #f8fafc; }
+      .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; fill: #cbd5e1; }
+      .node-box { fill: #1e293b; stroke: #475569; stroke-width: 1.5; }
+      .node-faded { fill: #172033; stroke: #334155; stroke-width: 1; opacity: 0.55; }
+      .key-cell { fill: #0f172a; stroke: #475569; stroke-width: 1; }
+      .edge { stroke: #475569; stroke-width: 1.8; fill: none; }
+      .edge-active { stroke: #38bdf8; stroke-width: 2.5; fill: none; stroke-dasharray: 6 4; animation: dashFlow 1.2s linear infinite; }
+      .edge-heap { stroke: #f59e0b; stroke-width: 2.4; fill: none; stroke-dasharray: 6 4; animation: dashFlow 1.4s linear infinite; }
+      .edge-vm { stroke: #10b981; stroke-width: 2.4; fill: none; stroke-dasharray: 6 4; animation: dashFlow 1.2s linear infinite; }
+      .badge-blue { fill: #0c4a6e; stroke: #38bdf8; stroke-width: 1.2; }
+      .badge-amber { fill: #451a03; stroke: #f59e0b; stroke-width: 1.2; }
+      .badge-green { fill: #064e3b; stroke: #10b981; stroke-width: 1.2; }
+      .text-blue { fill: #7dd3fc; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px; font-weight: 700; }
+      .text-amber { fill: #fcd34d; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px; font-weight: 700; }
+      .text-green { fill: #6ee7b7; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px; font-weight: 700; }
+
+      .hl-root { animation: pulseBlue 6s infinite; }
+      .hl-branch { animation: pulseBlueDelayed1 6s infinite; }
+      .hl-leaf { animation: pulseBlueDelayed2 6s infinite; }
+      .hl-heap { animation: pulseAmber 6s infinite; }
+      .hl-vm { animation: pulseGreen 6s infinite; }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes pulseBlue {
+        0%, 100% { stroke: #475569; stroke-width: 1.5; }
+        8%, 28% { stroke: #38bdf8; stroke-width: 2.6; }
+        35% { stroke: #475569; stroke-width: 1.5; }
+      }
+      @keyframes pulseBlueDelayed1 {
+        0%, 20%, 100% { stroke: #475569; stroke-width: 1.5; }
+        26%, 46% { stroke: #38bdf8; stroke-width: 2.6; }
+        52% { stroke: #475569; stroke-width: 1.5; }
+      }
+      @keyframes pulseBlueDelayed2 {
+        0%, 38%, 100% { stroke: #475569; stroke-width: 1.5; }
+        44%, 68% { stroke: #38bdf8; stroke-width: 2.6; }
+        74% { stroke: #475569; stroke-width: 1.5; }
+      }
+      @keyframes pulseAmber {
+        0%, 58%, 100% { stroke: #475569; stroke-width: 1.2; }
+        65%, 90% { stroke: #f59e0b; stroke-width: 2.4; }
+      }
+      @keyframes pulseGreen {
+        0%, 58%, 100% { stroke: #475569; stroke-width: 1.2; }
+        65%, 90% { stroke: #10b981; stroke-width: 2.4; }
+      }
+    ]]></style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981"/>
+    </marker>
+    <marker id="arrow-dim" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Dark Slate Canvas -->
+  <rect x="0" y="0" width="960" height="560" rx="14" class="bg"/>
+  <rect x="12" y="12" width="936" height="536" rx="10" class="card"/>
+
+  <!-- Header -->
+  <text x="32" y="44" class="title">B-Tree Index Lookup: Index Scan vs. Index-Only Scan</text>
+  <text x="32" y="66" class="subtitle">Query: SELECT status FROM orders WHERE id = 42  |  O(log n) tree descent + MVCC visibility check</text>
+
+  <!-- Step Badge -->
+  <rect x="735" y="28" width="193" height="28" rx="6" class="badge-blue"/>
+  <text x="831" y="46" text-anchor="middle" class="text-blue">1. DESCEND B-TREE (O(log n))</text>
+
+  <!-- ================= B-TREE SECTION ================= -->
+  <!-- Level 0: Root Page -->
+  <g transform="translate(330, 88)">
+    <rect x="0" y="0" width="300" height="54" rx="8" class="node-box hl-root"/>
+    <text x="12" y="18" class="label-sm">Level 0: Root Page</text>
+    <rect x="12" y="25" width="84" height="22" rx="4" class="key-cell"/>
+    <text x="54" y="40" text-anchor="middle" class="mono">10</text>
+    <rect x="108" y="25" width="84" height="22" rx="4" class="key-cell"/>
+    <text x="150" y="40" text-anchor="middle" class="mono">30</text>
+    <rect x="204" y="25" width="84" height="22" rx="4" class="key-cell"/>
+    <text x="246" y="40" text-anchor="middle" class="mono">50</text>
+  </g>
+
+  <!-- Edges Root -> Level 1 -->
+  <path d="M 384 142 L 170 178" class="edge" marker-end="url(#arrow-dim)"/>
+  <path d="M 480 142 L 480 178" class="edge-active" marker-end="url(#arrow-blue)"/>
+  <path d="M 576 142 L 790 178" class="edge" marker-end="url(#arrow-dim)"/>
+  <text x="536" y="164" class="mono-sm" fill="#7dd3fc">30 &lt; 42 &lt; 50</text>
+
+  <!-- Level 1: Sibling Left (faded) -->
+  <g transform="translate(70, 180)">
+    <rect x="0" y="0" width="200" height="48" rx="8" class="node-faded"/>
+    <text x="12" y="17" class="label-sm">Branch (id &lt; 10)</text>
+    <text x="100" y="36" text-anchor="middle" class="mono-sm">[ 5 | 8 ]</text>
+  </g>
+
+  <!-- Level 1: Active Middle Branch -->
+  <g transform="translate(345, 180)">
+    <rect x="0" y="0" width="270" height="52" rx="8" class="node-box hl-branch"/>
+    <text x="12" y="18" class="label-sm">Level 1: Branch Page</text>
+    <rect x="12" y="24" width="116" height="21" rx="4" class="key-cell"/>
+    <text x="70" y="39" text-anchor="middle" class="mono">35</text>
+    <rect x="142" y="24" width="116" height="21" rx="4" class="key-cell"/>
+    <text x="200" y="39" text-anchor="middle" class="mono">45</text>
+  </g>
+
+  <!-- Level 1: Sibling Right (faded) -->
+  <g transform="translate(690, 180)">
+    <rect x="0" y="0" width="200" height="48" rx="8" class="node-faded"/>
+    <text x="12" y="17" class="label-sm">Branch (id &gt;= 50)</text>
+    <text x="100" y="36" text-anchor="middle" class="mono-sm">[ 55 | 70 ]</text>
+  </g>
+
+  <!-- Edge Branch -> Leaf -->
+  <path d="M 480 232 L 480 268" class="edge-active" marker-end="url(#arrow-blue)"/>
+  <text x="492" y="254" class="mono-sm" fill="#7dd3fc">35 &lt; 42 &lt; 45</text>
+
+  <!-- Level 2: Leaf Page -->
+  <g transform="translate(260, 270)">
+    <rect x="0" y="0" width="440" height="62" rx="8" class="node-box hl-leaf"/>
+    <text x="14" y="18" class="label-sm">Level 2: Leaf Page (Index Tuple + ctid + INCLUDE)</text>
+    <rect x="14" y="25" width="105" height="28" rx="4" class="key-cell"/>
+    <text x="66" y="43" text-anchor="middle" class="mono-sm">40 (14,1)</text>
+
+    <rect x="129" y="25" width="182" height="28" rx="4" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="220" y="43" text-anchor="middle" class="mono" fill="#e0f2fe">42 -&gt; ctid(14,3) | 'shipped'</text>
+
+    <rect x="321" y="25" width="105" height="28" rx="4" class="key-cell"/>
+    <text x="373" y="43" text-anchor="middle" class="mono-sm">44 (14,4)</text>
+  </g>
+
+  <!-- Animated Descent Dot -->
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="6s" repeatCount="indefinite" path="M 480 115 L 480 205 L 480 301" keyPoints="0;0.5;1;1" keyTimes="0;0.25;0.5;1" calcMode="linear"/>
+    <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.05;0.48;0.55;1" dur="6s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- ================= COMPARISON SPLIT ================= -->
+  <!-- Left Panel: Index Scan (Heap Fetch) -->
+  <g transform="translate(32, 366)">
+    <rect x="0" y="0" width="430" height="162" rx="10" class="subcard hl-heap"/>
+    <rect x="14" y="12" width="185" height="24" rx="5" class="badge-amber"/>
+    <text x="106" y="28" text-anchor="middle" class="text-amber">PATH A: INDEX SCAN</text>
+    <text x="212" y="28" class="label-sm">Standard Index (no INCLUDE)</text>
+
+    <!-- Heap Page Box -->
+    <rect x="16" y="50" width="210" height="72" rx="6" fill="#1e293b" stroke="#f59e0b" stroke-width="1.2"/>
+    <text x="26" y="68" class="label">Heap Table: Page 14 (8KB)</text>
+    <text x="26" y="86" class="mono-sm">Slot 3: id=42, status='shipped'</text>
+    <text x="26" y="104" class="mono-sm" fill="#fcd34d">MVCC: check xmin/xmax</text>
+
+    <!-- Result Box -->
+    <rect x="256" y="56" width="156" height="58" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1.2"/>
+    <text x="334" y="77" text-anchor="middle" class="label">Random I/O</text>
+    <text x="334" y="96" text-anchor="middle" class="mono-sm" fill="#fcd34d">random_page_cost = 4.0</text>
+
+    <path d="M 226 85 L 254 85" class="edge-heap" marker-end="url(#arrow-amber)"/>
+    <text x="16" y="146" class="label-sm" fill="#fcd34d">Extra Heap Page fetch required per matching ctid</text>
+  </g>
+
+  <!-- Arrow Leaf -> Left Panel -->
+  <path d="M 410 332 L 247 366" class="edge-heap" marker-end="url(#arrow-amber)"/>
+
+  <!-- Animated Dot Left (Index Scan) -->
+  <circle r="5" fill="#f59e0b">
+    <animateMotion dur="6s" repeatCount="indefinite" path="M 410 332 L 247 366 L 150 451 L 340 451" keyPoints="0;0;0.35;0.75;1" keyTimes="0;0.52;0.68;0.88;1" calcMode="linear"/>
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.5;0.55;0.92;1" dur="6s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Right Panel: Index-Only Scan (VM Hit) -->
+  <g transform="translate(498, 366)">
+    <rect x="0" y="0" width="430" height="162" rx="10" class="subcard hl-vm"/>
+    <rect x="14" y="12" width="215" height="24" rx="5" class="badge-green"/>
+    <text x="121" y="28" text-anchor="middle" class="text-green">PATH B: INDEX-ONLY SCAN</text>
+    <text x="240" y="28" class="label-sm">Covering Index (INCLUDE)</text>
+
+    <!-- Visibility Map Box -->
+    <rect x="16" y="50" width="205" height="72" rx="6" fill="#1e293b" stroke="#10b981" stroke-width="1.2"/>
+    <text x="26" y="68" class="label">Visibility Map (VM)</text>
+    <text x="26" y="86" class="mono-sm" fill="#6ee7b7">Page 14: ALL-VISIBLE = 1</text>
+    <text x="26" y="104" class="mono-sm">Heap fetch SKIPPED!</text>
+
+    <!-- Result Box -->
+    <rect x="250" y="56" width="162" height="58" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="1.2"/>
+    <text x="331" y="77" text-anchor="middle" class="label" fill="#ecfdf5">Zero Heap I/O</text>
+    <text x="331" y="96" text-anchor="middle" class="mono-sm" fill="#6ee7b7">Return 'shipped' directly</text>
+
+    <path d="M 221 85 L 248 85" class="edge-vm" marker-end="url(#arrow-green)"/>
+    <text x="16" y="146" class="label-sm" fill="#6ee7b7">VACUUM keeps VM bits set; avoids random Heap reads</text>
+  </g>
+
+  <!-- Arrow Leaf -> Right Panel -->
+  <path d="M 550 332 L 713 366" class="edge-vm" marker-end="url(#arrow-green)"/>
+
+  <!-- Animated Dot Right (Index-Only Scan) -->
+  <circle r="5" fill="#10b981">
+    <animateMotion dur="6s" repeatCount="indefinite" path="M 550 332 L 713 366 L 620 451 L 820 451" keyPoints="0;0;0.35;0.75;1" keyTimes="0;0.52;0.68;0.88;1" calcMode="linear"/>
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.5;0.55;0.92;1" dur="6s" repeatCount="indefinite"/>
+  </circle>
+</svg>

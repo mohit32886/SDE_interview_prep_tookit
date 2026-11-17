@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" width="100%" height="100%" role="img" aria-labelledby="wal-title wal-desc">
+  <title id="wal-title">PostgreSQL Write-Ahead Logging (WAL) and Checkpointer</title>
+  <desc id="wal-desc">Animated diagram showing an UPDATE modifying a dirty page in Shared Buffers and writing a WAL record to WAL Buffers, fsyncing to pg_wal on COMMIT before returning OK, and the Checkpointer flushing dirty pages asynchronously to data files.</desc>
+  <defs>
+    <style>
+      .bg-card { fill: #0f172a; stroke: #334155; stroke-width: 1.5; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.2; }
+      .zone-ram { fill: #0f172a; stroke: #38bdf8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+      .zone-disk { fill: #0f172a; stroke: #10b981; stroke-width: 1.5; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 19px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12.5px; fill: #94a3b8; }
+      .label { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600; fill: #e2e8f0; }
+      .small { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; fill: #e2e8f0; }
+      .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #cbd5e1; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; }
+
+      /* 12s cycle */
+      @keyframes s1Box {
+        0%, 23% { fill: #0284c7; stroke: #38bdf8; }
+        25%, 100% { fill: #1e293b; stroke: #334155; }
+      }
+      @keyframes s2Box {
+        0%, 24% { fill: #1e293b; stroke: #334155; }
+        25%, 48% { fill: #7c3aed; stroke: #a78bfa; }
+        50%, 100% { fill: #1e293b; stroke: #334155; }
+      }
+      @keyframes s3Box {
+        0%, 49% { fill: #1e293b; stroke: #334155; }
+        50%, 73% { fill: #059669; stroke: #34d399; }
+        75%, 100% { fill: #1e293b; stroke: #334155; }
+      }
+      @keyframes s4Box {
+        0%, 74% { fill: #1e293b; stroke: #334155; }
+        75%, 98% { fill: #d97706; stroke: #fbbf24; }
+        100% { fill: #1e293b; stroke: #334155; }
+      }
+
+      /* Dirty page state in Shared Buffers */
+      @keyframes dirtyPage {
+        0%, 8% { fill: #1e293b; stroke: #475569; }
+        10%, 85% { fill: #451a03; stroke: #f59e0b; }
+        90%, 100% { fill: #064e3b; stroke: #10b981; }
+      }
+      @keyframes dirtyTag {
+        0%, 8% { opacity: 0; }
+        10%, 85% { opacity: 1; }
+        90%, 100% { opacity: 0; }
+      }
+      @keyframes cleanTag {
+        0%, 8% { opacity: 1; }
+        10%, 85% { opacity: 0; }
+        90%, 100% { opacity: 1; }
+      }
+
+      /* WAL fsync flash */
+      @keyframes walFsyncFlash {
+        0%, 24% { fill: #1e293b; stroke: #334155; }
+        28%, 55% { fill: #3b0764; stroke: #c084fc; }
+        60%, 100% { fill: #1e293b; stroke: #334155; }
+      }
+
+      /* Commit ACK pulse */
+      @keyframes commitAck {
+        0%, 48% { opacity: 0.25; }
+        50%, 72% { opacity: 1; }
+        75%, 100% { opacity: 0.25; }
+      }
+
+      /* Data file async flush */
+      @keyframes dataFileFlush {
+        0%, 74% { fill: #1e293b; stroke: #334155; }
+        78%, 96% { fill: #064e3b; stroke: #34d399; }
+        100% { fill: #1e293b; stroke: #334155; }
+      }
+
+      .s1-box { animation: s1Box 12s infinite; }
+      .s2-box { animation: s2Box 12s infinite; }
+      .s3-box { animation: s3Box 12s infinite; }
+      .s4-box { animation: s4Box 12s infinite; }
+      .page-dirty { animation: dirtyPage 12s infinite; }
+      .tag-dirty { animation: dirtyTag 12s infinite; }
+      .tag-clean { animation: cleanTag 12s infinite; }
+      .wal-disk { animation: walFsyncFlash 12s infinite; }
+      .ack-badge { animation: commitAck 12s infinite; }
+      .data-disk { animation: dataFileFlush 12s infinite; }
+
+      .dash-flow { stroke-dasharray: 6 4; }
+    </style>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="4" y="4" width="912" height="512" rx="14" class="bg-card" />
+
+  <!-- Header -->
+  <text x="28" y="38" class="title">PostgreSQL Write-Ahead Logging (WAL) &amp; Checkpointer</text>
+  <text x="28" y="58" class="subtitle">Sequential fsync() to pg_wal guarantees durability on COMMIT before asynchronous data-file flush</text>
+
+  <!-- 4-Step Timeline -->
+  <g transform="translate(28, 74)">
+    <rect x="0" y="0" width="206" height="34" rx="7" class="s1-box" />
+    <text x="103" y="21" text-anchor="middle" class="label">1. UPDATE (RAM Only)</text>
+
+    <rect x="220" y="0" width="206" height="34" rx="7" class="s2-box" />
+    <text x="323" y="21" text-anchor="middle" class="label">2. COMMIT (WAL fsync)</text>
+
+    <rect x="440" y="0" width="206" height="34" rx="7" class="s3-box" />
+    <text x="543" y="21" text-anchor="middle" class="label">3. Return OK to Client</text>
+
+    <rect x="660" y="0" width="204" height="34" rx="7" class="s4-box" />
+    <text x="762" y="21" text-anchor="middle" class="label">4. Checkpointer (Async)</text>
+  </g>
+
+  <!-- Zone 1: Client & Backend (Left) -->
+  <g transform="translate(28, 130)">
+    <rect x="0" y="0" width="215" height="334" rx="10" class="panel" />
+    <text x="16" y="26" class="label" fill="#38bdf8">CLIENT &amp; BACKEND</text>
+
+    <rect x="16" y="46" width="183" height="84" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.4" />
+    <text x="28" y="68" class="label">Client Session</text>
+    <text x="28" y="88" class="mono-sm" fill="#7dd3fc">UPDATE accounts</text>
+    <text x="28" y="103" class="mono-sm" fill="#7dd3fc">  SET bal = 900;</text>
+    <text x="28" y="119" class="mono-sm" fill="#c4b5fd">COMMIT;</text>
+
+    <rect x="16" y="156" width="183" height="72" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.2" />
+    <text x="28" y="180" class="label">Backend Process</text>
+    <text x="28" y="198" class="small">1. Modifies Shared Buffer</text>
+    <text x="28" y="214" class="small">2. Appends WAL record</text>
+
+    <g class="ack-badge">
+      <rect x="16" y="252" width="183" height="62" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5" />
+      <text x="107" y="278" text-anchor="middle" class="label" fill="#6ee7b7">COMMIT OK!</text>
+      <text x="107" y="297" text-anchor="middle" class="small" fill="#a7f3d0">Durable via pg_wal fsync</text>
+    </g>
+  </g>
+
+  <!-- Zone 2: Shared Memory (RAM) -->
+  <g transform="translate(274, 130)">
+    <rect x="0" y="0" width="290" height="334" rx="10" class="zone-ram" />
+    <text x="16" y="26" class="label" fill="#38bdf8">SHARED MEMORY (RAM)</text>
+
+    <!-- Shared Buffers -->
+    <rect x="16" y="44" width="258" height="122" rx="8" class="panel" />
+    <text x="28" y="66" class="label">Shared Buffers (8KB Pages)</text>
+
+    <rect x="28" y="78" width="234" height="74" rx="6" class="page-dirty" stroke-width="1.6" />
+    <text x="40" y="100" class="mono" font-weight="700">Page #42 (accounts)</text>
+    <text x="40" y="120" class="mono-sm">bal: 1000 -&gt; 900</text>
+
+    <g class="tag-dirty">
+      <rect x="172" y="84" width="80" height="20" rx="10" fill="#f59e0b" />
+      <text x="212" y="98" text-anchor="middle" class="badge-text" fill="#451a03">DIRTY</text>
+    </g>
+    <g class="tag-clean">
+      <rect x="172" y="84" width="80" height="20" rx="10" fill="#10b981" />
+      <text x="212" y="98" text-anchor="middle" class="badge-text" fill="#022c22">CLEAN</text>
+    </g>
+    <text x="40" y="140" class="small">Random I/O avoided during COMMIT</text>
+
+    <!-- WAL Buffers -->
+    <rect x="16" y="180" width="258" height="82" rx="8" class="panel" />
+    <text x="28" y="202" class="label">WAL Buffers (16MB Ring)</text>
+    <rect x="28" y="214" width="234" height="36" rx="5" fill="#0f172a" stroke="#a78bfa" />
+    <text x="40" y="236" class="mono-sm" fill="#ddd6fe">LSN 0/1A4F: Page #42 bal=900</text>
+
+    <!-- Checkpointer -->
+    <rect x="16" y="274" width="258" height="46" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="1.2" />
+    <text x="28" y="295" class="label" fill="#fde68a">Checkpointer / BgWriter</text>
+    <text x="28" y="311" class="small">Flushes dirty pages asynchronously</text>
+  </g>
+
+  <!-- Zone 3: Persistent Storage (Disk) -->
+  <g transform="translate(596, 130)">
+    <rect x="0" y="0" width="296" height="334" rx="10" class="zone-disk" />
+    <text x="16" y="26" class="label" fill="#34d399">PERSISTENT STORAGE (DISK)</text>
+
+    <!-- pg_wal -->
+    <rect x="16" y="148" width="264" height="114" rx="8" class="wal-disk" stroke-width="1.6" />
+    <text x="28" y="172" class="label" fill="#c4b5fd">pg_wal/ (Sequential Log)</text>
+    <text x="28" y="192" class="mono-sm">000000010000000000000001</text>
+    <rect x="28" y="204" width="240" height="24" rx="4" fill="#0f172a" stroke="#a78bfa" />
+    <text x="38" y="220" class="mono-sm" fill="#e9d5ff">fsync() LSN 0/1A4F [DURABLE]</text>
+    <text x="28" y="248" class="small">Fast sequential append on COMMIT</text>
+
+    <!-- Data Files -->
+    <rect x="16" y="44" width="264" height="90" rx="8" class="data-disk" stroke-width="1.5" />
+    <text x="28" y="68" class="label" fill="#6ee7b7">Data Files (base/ Heap &amp; Index)</text>
+    <text x="28" y="88" class="mono-sm">base/16384/24576 (Page #42)</text>
+    <text x="28" y="108" class="small">Updated lazily at checkpoint or</text>
+    <text x="28" y="122" class="small">buffer eviction (reduces random I/O)</text>
+
+    <!-- Crash Recovery Callout -->
+    <rect x="16" y="274" width="264" height="46" rx="8" fill="#0f172a" stroke="#334155" />
+    <text x="28" y="294" class="label" fill="#38bdf8">Crash Recovery</text>
+    <text x="28" y="310" class="small">Replays pg_wal from last checkpoint</text>
+  </g>
+
+  <!-- Animated Paths & Moving Packets -->
+  <!-- 1. Backend -> Shared Buffers (UPDATE) -->
+  <path d="M 227 308 L 290 245" fill="none" stroke="#f59e0b" stroke-width="2.2" class="dash-flow" />
+  <circle r="4.5" fill="#f59e0b">
+    <animateMotion dur="3s" repeatCount="indefinite" path="M 227 308 L 290 245" />
+  </circle>
+
+  <!-- 2. Backend -> WAL Buffers -->
+  <path d="M 227 325 L 290 362" fill="none" stroke="#a78bfa" stroke-width="2.2" class="dash-flow" />
+  <circle r="4.5" fill="#a78bfa">
+    <animateMotion dur="3s" repeatCount="indefinite" path="M 227 325 L 290 362" />
+  </circle>
+
+  <!-- 3. WAL Buffers -> pg_wal (fsync) -->
+  <path d="M 548 362 L 612 335" fill="none" stroke="#c084fc" stroke-width="2.6" class="dash-flow" />
+  <circle r="5" fill="#c084fc">
+    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 548 362 L 612 335" />
+  </circle>
+
+  <!-- 4. Checkpointer -> Data Files (Async) -->
+  <path d="M 548 250 L 612 220" fill="none" stroke="#34d399" stroke-width="2.4" class="dash-flow" />
+  <circle r="4.5" fill="#34d399">
+    <animateMotion dur="4s" repeatCount="indefinite" path="M 548 250 L 612 220" />
+  </circle>
+
+  <!-- Footer -->
+  <text x="28" y="502" class="small">Key Rule: WAL is always written and fsynced BEFORE data pages are flushed — enabling fast sequential commits &amp; crash recovery.</text>
+</svg>

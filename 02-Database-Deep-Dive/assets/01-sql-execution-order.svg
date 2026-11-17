@@ -1,0 +1,243 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">SQL Logical Execution Order and Alias Scope</title>
+  <desc id="desc">Animated diagram comparing SQL written syntax order with logical execution order from FROM/JOIN through WHERE, GROUP BY, HAVING, SELECT, DISTINCT, ORDER BY, and LIMIT/OFFSET, illustrating row filtering and why SELECT aliases fail in WHERE.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .card-inner { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 8; }
+      .title-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; fill: #94a3b8; }
+      .section-hdr { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; fill: #cbd5e1; letter-spacing: 0.5px; }
+      .code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; fill: #e2e8f0; }
+      .code-kw { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 700; fill: #60a5fa; }
+      .code-alias { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 700; fill: #34d399; }
+      .code-err { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 700; fill: #f87171; }
+      .badge-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10.5px; font-weight: 700; }
+      .stage-num { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 700; fill: #0f172a; }
+      .stage-name { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; font-weight: 700; fill: #f8fafc; }
+      .stage-desc { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; fill: #94a3b8; }
+      .row-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #e2e8f0; }
+
+      @keyframes pulseGlow {
+        0%, 100% { opacity: 0.25; }
+        50% { opacity: 0.9; }
+      }
+      @keyframes rowFade {
+        0%, 15% { opacity: 1; transform: translateX(0px); }
+        30%, 85% { opacity: 0.22; transform: translateX(8px); }
+        100% { opacity: 1; transform: translateX(0px); }
+      }
+      @keyframes groupPulse {
+        0%, 30% { opacity: 0.45; }
+        45%, 80% { opacity: 1; }
+        100% { opacity: 0.45; }
+      }
+      @keyframes aliasUnlock {
+        0%, 50% { opacity: 0.35; }
+        60%, 92% { opacity: 1; }
+        100% { opacity: 0.35; }
+      }
+      @keyframes flowDash {
+        to { stroke-dashoffset: -24; }
+      }
+
+      .glow-ring { animation: pulseGlow 3.2s ease-in-out infinite; }
+      .filtered-row { animation: rowFade 8s ease-in-out infinite; }
+      .group-box { animation: groupPulse 8s ease-in-out infinite; }
+      .alias-badge { animation: aliasUnlock 8s ease-in-out infinite; }
+      .flow-line { stroke-dasharray: 6 6; animation: flowDash 1.2s linear infinite; }
+    </style>
+
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#60a5fa"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f87171"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="540" class="bg"/>
+
+  <!-- Header -->
+  <text x="28" y="34" class="title-text">SQL Logical Execution Order vs. Written Syntax</text>
+  <text x="28" y="54" class="subtitle-text">Why SELECT aliases fail in WHERE (step 2) but succeed in ORDER BY (step 7)</text>
+
+  <!-- Left Panel: Written Syntax -->
+  <rect x="24" y="72" width="320" height="444" class="card"/>
+  <text x="42" y="98" class="section-hdr">WRITTEN SYNTAX ORDER</text>
+  <line x1="42" y1="108" x2="326" y2="108" stroke="#334155" stroke-width="1"/>
+
+  <rect x="38" y="122" width="292" height="224" class="card-inner"/>
+
+  <!-- SQL Lines -->
+  <text x="50" y="146" class="code-kw">SELECT</text>
+  <text x="102" y="146" class="code">dept_id, salary + bonus</text>
+  <text x="64" y="166" class="code-kw">AS</text>
+  <text x="86" y="166" class="code-alias">total_comp</text>
+
+  <text x="50" y="192" class="code-kw">FROM</text>
+  <text x="90" y="192" class="code">employees e</text>
+  <text x="50" y="212" class="code-kw">JOIN</text>
+  <text x="90" y="212" class="code">departments d ON ...</text>
+
+  <!-- WHERE error highlight -->
+  <rect x="46" y="222" width="276" height="24" rx="4" fill="#7f1d1d" fill-opacity="0.45" stroke="#ef4444" stroke-width="1"/>
+  <text x="50" y="238" class="code-kw">WHERE</text>
+  <text x="96" y="238" class="code-err">total_comp &gt; 100000</text>
+
+  <text x="50" y="264" class="code-kw">GROUP BY</text>
+  <text x="118" y="264" class="code">dept_id, total_comp</text>
+
+  <text x="50" y="284" class="code-kw">HAVING</text>
+  <text x="104" y="284" class="code">COUNT(*) &gt; 1</text>
+
+  <!-- ORDER BY valid highlight -->
+  <rect x="46" y="294" width="276" height="24" rx="4" fill="#14532d" fill-opacity="0.45" stroke="#22c55e" stroke-width="1"/>
+  <text x="50" y="310" class="code-kw">ORDER BY</text>
+  <text x="118" y="310" class="code-alias">total_comp DESC</text>
+
+  <text x="50" y="336" class="code-kw">LIMIT</text>
+  <text x="94" y="336" class="code">10 OFFSET 0;</text>
+
+  <!-- Alias Scope Callouts -->
+  <rect x="38" y="362" width="292" height="66" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.2"/>
+  <text x="50" y="382" class="badge-text" fill="#fca5a5">ERR: WHERE executes at Step 2</text>
+  <text x="50" y="400" class="stage-desc" fill="#fecaca">Alias "total_comp" does not exist yet.</text>
+  <text x="50" y="416" class="stage-desc" fill="#fecaca">Fix: repeat expression salary + bonus &gt; 100000</text>
+
+  <rect x="38" y="438" width="292" height="64" rx="8" fill="#052e16" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="50" y="458" class="badge-text" fill="#86efac">OK: ORDER BY executes at Step 7</text>
+  <text x="50" y="476" class="stage-desc" fill="#bbf7d0">SELECT (Step 5) already bound "total_comp".</text>
+  <text x="50" y="492" class="stage-desc" fill="#bbf7d0">ORDER BY can safely sort by alias.</text>
+
+  <!-- Center Panel: 8-Step Execution Pipeline -->
+  <rect x="364" y="72" width="320" height="444" class="card"/>
+  <text x="382" y="98" class="section-hdr">LOGICAL EXECUTION ORDER</text>
+  <line x1="382" y1="108" x2="666" y2="108" stroke="#334155" stroke-width="1"/>
+
+  <!-- Animated Scanner Highlight Bar -->
+  <rect x="376" y="118" width="296" height="40" rx="8" fill="none" stroke="#38bdf8" stroke-width="2" class="glow-ring">
+    <animate attributeName="y" values="118;166;214;262;310;358;406;454;118" dur="8s" repeatCount="indefinite" calcMode="discrete"/>
+  </rect>
+
+  <!-- Step 1: FROM / JOIN -->
+  <rect x="380" y="122" width="288" height="32" rx="6" fill="#1e3a8a" fill-opacity="0.5" stroke="#3b82f6" stroke-width="1"/>
+  <circle cx="398" cy="138" r="10" fill="#60a5fa"/>
+  <text x="394" y="142" class="stage-num">1</text>
+  <text x="416" y="137" class="stage-name">FROM / JOIN</text>
+  <text x="416" y="149" class="stage-desc">Cartesian product + ON filter</text>
+
+  <!-- Step 2: WHERE -->
+  <rect x="380" y="170" width="288" height="32" rx="6" fill="#7f1d1d" fill-opacity="0.45" stroke="#ef4444" stroke-width="1"/>
+  <circle cx="398" cy="186" r="10" fill="#f87171"/>
+  <text x="394" y="190" class="stage-num">2</text>
+  <text x="416" y="185" class="stage-name">WHERE</text>
+  <text x="416" y="197" class="stage-desc">Filters individual rows (no aliases)</text>
+
+  <!-- Step 3: GROUP BY -->
+  <rect x="380" y="218" width="288" height="32" rx="6" fill="#581c87" fill-opacity="0.45" stroke="#a855f7" stroke-width="1"/>
+  <circle cx="398" cy="234" r="10" fill="#c084fc"/>
+  <text x="394" y="238" class="stage-num">3</text>
+  <text x="416" y="233" class="stage-name">GROUP BY</text>
+  <text x="416" y="245" class="stage-desc">Buckets rows into groups</text>
+
+  <!-- Step 4: HAVING -->
+  <rect x="380" y="266" width="288" height="32" rx="6" fill="#78350f" fill-opacity="0.45" stroke="#f59e0b" stroke-width="1"/>
+  <circle cx="398" cy="282" r="10" fill="#fbbf24"/>
+  <text x="394" y="286" class="stage-num">4</text>
+  <text x="416" y="281" class="stage-name">HAVING</text>
+  <text x="416" y="293" class="stage-desc">Filters aggregated groups</text>
+
+  <!-- Step 5: SELECT -->
+  <rect x="380" y="314" width="288" height="32" rx="6" fill="#14532d" fill-opacity="0.5" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="398" cy="330" r="10" fill="#34d399"/>
+  <text x="394" y="334" class="stage-num">5</text>
+  <text x="416" y="329" class="stage-name">SELECT</text>
+  <text x="416" y="341" class="stage-desc">Evaluates expressions + binds aliases</text>
+
+  <!-- Step 6: DISTINCT -->
+  <rect x="380" y="362" width="288" height="32" rx="6" fill="#1e293b" stroke="#64748b" stroke-width="1"/>
+  <circle cx="398" cy="378" r="10" fill="#94a3b8"/>
+  <text x="394" y="382" class="stage-num">6</text>
+  <text x="416" y="377" class="stage-name">DISTINCT</text>
+  <text x="416" y="389" class="stage-desc">Deduplicates projected rows</text>
+
+  <!-- Step 7: ORDER BY -->
+  <rect x="380" y="410" width="288" height="32" rx="6" fill="#14532d" fill-opacity="0.5" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="398" cy="426" r="10" fill="#34d399"/>
+  <text x="394" y="430" class="stage-num">7</text>
+  <text x="416" y="425" class="stage-name">ORDER BY</text>
+  <text x="416" y="437" class="stage-desc">Sorts result (aliases visible here)</text>
+
+  <!-- Step 8: LIMIT / OFFSET -->
+  <rect x="380" y="458" width="288" height="32" rx="6" fill="#1e3a8a" fill-opacity="0.5" stroke="#3b82f6" stroke-width="1"/>
+  <circle cx="398" cy="474" r="10" fill="#60a5fa"/>
+  <text x="394" y="478" class="stage-num">8</text>
+  <text x="416" y="473" class="stage-name">LIMIT / OFFSET</text>
+  <text x="416" y="485" class="stage-desc">Slices final output rows</text>
+
+  <!-- Connector Arrows (Written -> Logical) -->
+  <path d="M 330 234 C 350 234, 355 186, 376 186" fill="none" stroke="#f87171" stroke-width="1.8" class="flow-line" marker-end="url(#arrowRed)"/>
+  <path d="M 330 306 C 355 306, 355 426, 376 426" fill="none" stroke="#34d399" stroke-width="1.8" class="flow-line" marker-end="url(#arrowGreen)"/>
+
+  <!-- Right Panel: Live Row-Set Transformation -->
+  <rect x="704" y="72" width="232" height="444" class="card"/>
+  <text x="722" y="98" class="section-hdr">ROW-SET TRANSFORMATION</text>
+  <line x1="722" y1="108" x2="918" y2="108" stroke="#334155" stroke-width="1"/>
+
+  <!-- Source Rows (FROM/JOIN) -->
+  <text x="722" y="128" class="stage-desc" fill="#93c5fd">1. FROM/JOIN: 5 rows</text>
+  <rect x="722" y="136" width="196" height="20" rx="4" fill="#1e3a8a" fill-opacity="0.6" stroke="#3b82f6" stroke-width="1"/>
+  <text x="730" y="150" class="row-label">e1 | Eng | 120k</text>
+
+  <rect x="722" y="160" width="196" height="20" rx="4" fill="#1e3a8a" fill-opacity="0.6" stroke="#3b82f6" stroke-width="1"/>
+  <text x="730" y="174" class="row-label">e2 | Eng | 140k</text>
+
+  <g class="filtered-row">
+    <rect x="722" y="184" width="196" height="20" rx="4" fill="#7f1d1d" fill-opacity="0.6" stroke="#ef4444" stroke-width="1"/>
+    <text x="730" y="198" class="row-label" fill="#fca5a5">e3 | Eng |  75k  (dropped)</text>
+  </g>
+
+  <rect x="722" y="208" width="196" height="20" rx="4" fill="#1e3a8a" fill-opacity="0.6" stroke="#3b82f6" stroke-width="1"/>
+  <text x="730" y="222" class="row-label">e4 | Sal | 110k</text>
+
+  <g class="filtered-row">
+    <rect x="722" y="232" width="196" height="20" rx="4" fill="#7f1d1d" fill-opacity="0.6" stroke="#ef4444" stroke-width="1"/>
+    <text x="730" y="246" class="row-label" fill="#fca5a5">e5 | HR  |  85k  (dropped)</text>
+  </g>
+
+  <!-- GROUP BY + HAVING -->
+  <text x="722" y="276" class="stage-desc" fill="#d8b4fe">3-4. GROUP BY + HAVING</text>
+  <g class="group-box">
+    <rect x="722" y="284" width="196" height="28" rx="5" fill="#581c87" fill-opacity="0.55" stroke="#a855f7" stroke-width="1.2"/>
+    <text x="730" y="302" class="row-label">Eng (cnt=2) -&gt; PASS</text>
+
+    <rect x="722" y="318" width="196" height="24" rx="5" fill="#78350f" fill-opacity="0.4" stroke="#f59e0b" stroke-width="1"/>
+    <text x="730" y="334" class="row-label" fill="#fcd34d">Sal (cnt=1) -&gt; HAVING drop</text>
+  </g>
+
+  <!-- SELECT Alias Bound -->
+  <text x="722" y="366" class="stage-desc" fill="#86efac">5. SELECT: Alias Bound</text>
+  <g class="alias-badge">
+    <rect x="722" y="374" width="196" height="32" rx="5" fill="#14532d" fill-opacity="0.6" stroke="#22c55e" stroke-width="1.2"/>
+    <text x="730" y="394" class="code-alias">total_comp := 140k, 120k</text>
+  </g>
+
+  <!-- ORDER BY + LIMIT -->
+  <text x="722" y="428" class="stage-desc" fill="#93c5fd">7-8. ORDER BY + LIMIT</text>
+  <rect x="722" y="436" width="196" height="62" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="730" y="454" class="row-label" fill="#38bdf8">1. e2 | Eng | 140k</text>
+  <text x="730" y="472" class="row-label" fill="#38bdf8">2. e1 | Eng | 120k</text>
+  <text x="730" y="489" class="stage-desc">Sorted by total_comp DESC</text>
+
+  <!-- Animated Data Packet -->
+  <circle cx="524" cy="138" r="5" fill="#38bdf8">
+    <animate attributeName="cy" values="138;186;234;282;330;378;426;474;138" dur="8s" repeatCount="indefinite" calcMode="discrete"/>
+  </circle>
+</svg>

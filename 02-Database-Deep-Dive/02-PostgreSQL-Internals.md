@@ -1,88 +1,105 @@
 # PostgreSQL Internals
 
+## Table of Contents
+
+- [PostgreSQL Architecture Overview](#postgresql-architecture-overview)
+- [MVCC (Multi-Version Concurrency Control)](#mvcc-multi-version-concurrency-control)
+- [WAL (Write-Ahead Logging)](#wal-write-ahead-logging)
+- [VACUUM and AUTOVACUUM](#vacuum-and-autovacuum)
+- [TOAST (The Oversized-Attribute Storage Technique)](#toast-the-oversized-attribute-storage-technique)
+- [Buffer Management and Shared Buffers](#buffer-management-and-shared-buffers)
+- [PostgreSQL Data Types](#postgresql-data-types)
+- [Tablespaces](#tablespaces)
+- [PostgreSQL-Specific Features](#postgresql-specific-features)
+- [Configuration Tuning](#configuration-tuning)
+- [Connection Pooling with PgBouncer](#connection-pooling-with-pgbouncer)
+- [Common Interview Questions and Answers](#common-interview-questions-and-answers)
+
+---
+
 ## PostgreSQL Architecture Overview
 
 ### Process Architecture
 
-PostgreSQL uses a **multi-process architecture** (not multi-threaded).
+PostgreSQL uses a **multi-process architecture** (not multi-threaded). A single master `Postmaster` process listens for incoming connections and forks a dedicated `Backend` OS process per client connection, alongside specialized auxiliary background processes.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Postmaster Process                        │
-│  (Listens on port 5432, spawns backend processes)            │
-└─────────────────────────────────────────────────────────────┘
-            │              │              │
-            ▼              ▼              ▼
-    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-    │  Backend 1   │ │  Backend 2   │ │  Backend N   │
-    │  (Client 1)  │ │  (Client 2)  │ │  (Client N)  │
-    └──────────────┘ └──────────────┘ └──────────────┘
+```mermaid
+flowchart TD
+    PM["Postmaster Process (Port 5432)"] -->|"Forks per client"| B1["Backend 1 (Client 1)"]
+    PM -->|"Forks per client"| B2["Backend 2 (Client 2)"]
+    PM -->|"Forks per client"| BN["Backend N (Client N)"]
+    PM -->|"Coordinates"| AUX["Auxiliary Background Processes"]
+    AUX --> WW["WAL Writer (Flushes WAL buffer)"]
+    AUX --> AV["Autovacuum Launcher & Workers"]
+    AUX --> CP["Checkpointer (Manages checkpoints)"]
+    AUX --> BGW["Background Writer (Flushes dirty buffers)"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef worker fill:#0f172a,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    classDef aux fill:#1e293b,stroke:#a855f7,stroke-width:1.5px,color:#f8fafc
+
+    class PM primary
+    class B1,B2,BN worker
+    class AUX,WW,AV,CP,BGW aux
 ```
 
 ### Key Processes
 
-**Postmaster:** Main server process
-- Listens for client connections
-- Forks backend processes for each client
-- Manages crash recovery
-- Coordinates background workers (autovacuum, WAL archiver, etc.)
-
-**Backend Process:** One per client connection
-- Executes queries from client
-- Communicates via TCP/IP or Unix socket
-- Isolated memory space (process-level isolation)
-- Process crash doesn't affect other backends
-
-**Auxiliary Processes:**
-- **WAL Writer:** Flushes WAL buffer to disk
-- **Autovacuum Launcher/Worker:** Initiates and performs vacuuming
-- **Checkpointer:** Manages checkpoint operations
-- **Background Writer:** Flushes dirty buffers to disk
+- **Postmaster:** Main server process
+  - Listens for client connections on port `5432`
+  - Forks backend processes for each client
+  - Manages crash recovery
+  - Coordinates background workers (autovacuum, WAL archiver, etc.)
+- **Backend Process:** One per client connection
+  - Executes queries from client
+  - Communicates via TCP/IP or Unix socket
+  - Isolated memory space (process-level isolation)
+  - Process crash doesn't affect other backends
+- **Auxiliary Processes:**
+  - **WAL Writer:** Flushes WAL buffer to disk
+  - **Autovacuum Launcher/Worker:** Initiates and performs vacuuming
+  - **Checkpointer:** Manages checkpoint operations
+  - **Background Writer:** Flushes dirty buffers to disk
 
 ### Shared Memory Structure
 
+All backend and auxiliary processes attach to a shared memory segment allocated at startup in RAM.
+
+```mermaid
+flowchart LR
+    SM["Shared Memory (RAM)"] --> SB["Shared Buffers (8MB - 40GB): Table & index page cache, LRU"]
+    SM --> WB["WAL Buffers (1MB - 16MB): Circular buffer, flushed on COMMIT"]
+    SM --> LM["Lock Manager: Row-level & table-level locks"]
+    SM --> CL["Clog (Commit Log): Transaction status, recycled via VACUUM"]
+    SM --> BD["Buffer Descriptors: Metadata per shared buffer slot"]
+    SM --> PA["ProcArray (Process Array): Active processes for MVCC checks"]
+
+    classDef mem fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef sub fill:#0f172a,stroke:#64748b,stroke-width:1.5px,color:#e2e8f0
+
+    class SM mem
+    class SB,WB,LM,CL,BD,PA sub
 ```
-┌─────────────────────────────────────────────────┐
-│           Shared Memory (RAM)                   │
-├─────────────────────────────────────────────────┤
-│  Shared Buffers                 (8MB-40GB)      │
-│  - Cache for table/index pages                  │
-│  - LRU replacement policy                       │
-│                                                 │
-│  WAL Buffers                    (1MB-16MB)      │
-│  - Circular buffer for write-ahead log          │
-│  - Flushed on transaction commit                │
-│                                                 │
-│  Lock Manager                                   │
-│  - Row-level locks                              │
-│  - Table-level locks                            │
-│                                                 │
-│  Clog (Commit Log)                              │
-│  - Tracks transaction status (committed/abort)  │
-│  - Recycled periodically with VACUUM            │
-│                                                 │
-│  Buffer Descriptors                             │
-│  - Metadata for each shared buffer slot         │
-│                                                 │
-│  Process Array                                  │
-│  - ProcArray: All active processes              │
-│  - Used for visibility checks (MVCC)            │
-└─────────────────────────────────────────────────┘
-```
+
+> [!IMPORTANT]
+> Because each client connection spawns a separate OS process with its own private memory (~6 MB+ overhead plus `work_mem`), unbounded direct client connections can exhaust RAM rapidly—making connection poolers like PgBouncer essential at scale.
 
 ---
 
 ## MVCC (Multi-Version Concurrency Control)
 
-PostgreSQL uses MVCC to provide high concurrency and isolation without heavy locking.
+PostgreSQL uses MVCC to provide high concurrency and isolation without heavy locking: **readers never block writers, and writers never block readers**.
+
+![PostgreSQL MVCC Tuple Versioning and Snapshot Isolation](./assets/02-postgres-mvcc-tuples.svg)
 
 ### Core Concepts
 
-Every row has **invisible metadata:**
+Every row (tuple) has **invisible system metadata**:
 - `xmin` (Insert transaction ID): Which transaction inserted this row
-- `xmax` (Delete transaction ID): Which transaction deleted this row (NULL if not deleted)
-- `cmin` (Command ID): Which command in transaction inserted row
-- `cmax` (Command ID): Which command in transaction deleted row
+- `xmax` (Delete transaction ID): Which transaction deleted/updated this row (`0` / NULL if not deleted)
+- `cmin` (Command ID): Which command in the transaction inserted the row
+- `cmax` (Command ID): Which command in the transaction deleted the row
+- `ctid`: Physical tuple location `(page, slot)` — updated rows form a version chain
 
 ### How MVCC Works
 
@@ -110,13 +127,30 @@ SELECT * FROM employees;
 -- Sees Version 1 (Version 2's xmin=101 is after snapshot)
 ```
 
+```mermaid
+sequenceDiagram
+    participant Tx100 as Tx 100 (INSERT)
+    participant Tx101 as Tx 101 (UPDATE)
+    participant Heap as Heap Page (Tuples)
+    participant Tx102 as Tx 102 (READ COMMITTED)
+    participant Snap100 as Tx 100 Snapshot (REPEATABLE READ)
+
+    Tx100->>Heap: INSERT ('Alice', 50000) -> v1 (xmin=100, xmax=NULL)
+    Tx100->>Tx100: COMMIT
+    Tx101->>Heap: UPDATE salary=55000 -> marks v1 xmax=101, inserts v2 (xmin=101)
+    Tx101->>Tx101: COMMIT
+    Tx102->>Heap: SELECT * FROM employees
+    Heap-->>Tx102: Returns v2 (55000) — xmin=101 committed before 102
+    Snap100->>Heap: SELECT * FROM employees
+    Heap-->>Snap100: Returns v1 (50000) — v2 xmin=101 is after snapshot
+```
+
 ### Visibility Determination (Key Interview Topic)
 
 PostgreSQL determines if a row is visible to a transaction based on:
-
-1. **xmin status:** Is the inserting transaction committed before my snapshot?
-2. **xmax status:** Is the deleting transaction visible to me?
-3. **Isolation level:** REPEATABLE READ, READ COMMITTED, etc.
+1. **`xmin` status:** Is the inserting transaction committed before my snapshot?
+2. **`xmax` status:** Is the deleting transaction visible to me?
+3. **Isolation level:** `REPEATABLE READ`, `READ COMMITTED`, `SERIALIZABLE`.
 
 ```c
 // Pseudocode for visibility check
@@ -142,55 +176,57 @@ bool HeapTupleSatisfiesMVCC(HeapTuple tuple, Snapshot snapshot) {
 
 ### Transaction ID Wraparound Problem
 
-Transaction IDs are 32-bit (0 to 4 billion).
+Transaction IDs are 32-bit unsigned integers (`0` to ~4.29 billion).
 
+```mermaid
+flowchart TD
+    A["32-bit XID Counter (0 to 4,294,967,295)"] --> B{"XID Wraps Around (4.29B -&gt; 0)?"}
+    B -->|"Without VACUUM Freeze"| C["Old committed XID looks newer than new XIDs (Visibility Breaks!)"]
+    C --> D["Emergency Safeguard: DB enters Read-Only at ~2B XIDs"]
+    B -->|"With Regular VACUUM"| E["XID &gt; autovacuum_freeze_max_age marked FrozenTransactionId"]
+    E --> F["Always visible to all snapshots; Wraparound prevented"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef danger fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fee2e2
+    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+
+    class A,B primary
+    class C,D danger
+    class E,F success
 ```
-Transaction ID wraparound:
-Xid 4,294,967,295 → 0 (wraps around)
 
-This breaks visibility! A very old committed xid might be treated as
-more recent than new transactions.
-
-Solution: VACUUM regularly to "freeze" old rows
-```
-
-**Interview Answer:** "VACUUM marks rows as frozen when xid > `autovacuum_freeze_max_age`. This prevents xid wraparound anomalies. If you don't vacuum and reach xid 2 billion, database goes read-only!"
+> [!WARNING]
+> **Interview Answer:** "VACUUM marks rows as frozen when `xid > autovacuum_freeze_max_age`. This prevents XID wraparound anomalies. If you don't vacuum and reach ~2 billion un-frozen XIDs, PostgreSQL forces the database into **read-only mode** to prevent data corruption!"
 
 ---
 
 ## WAL (Write-Ahead Logging)
 
-PostgreSQL never writes dirty pages directly to disk. Instead:
-1. Log entry written to WAL (sequential disk write, fast)
-2. Entry written to memory buffer
-3. Later, buffer flushed to disk (in background or on checkpoint)
+PostgreSQL never writes dirty data pages directly to disk on commit. Instead:
+1. Log entry is written to WAL (sequential disk write, fast).
+2. Entry is written to memory buffer (`Shared Buffers`).
+3. Later, dirty buffers are flushed to disk asynchronously in the background or on checkpoint.
+
+![PostgreSQL Write-Ahead Logging and Checkpointer](./assets/02-postgres-wal-checkpoint.svg)
 
 ### WAL Flush Rules (Critical!)
 
-```
-┌─────────────────────────────────────┐
-│     Transaction Commit              │
-│  (Client sends COMMIT)              │
-└─────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────┐
-│  Write WAL entry to WAL buffer      │
-│  (still in memory)                  │
-└─────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────┐
-│  SYNCHRONOUS_COMMIT = LOCAL?       │
-│  Flush WAL to disk physically       │
-│  (fsync to filesystem)              │
-└─────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────┐
-│  Return OK to Client                │
-│  (COMMIT acknowledged)              │
-└─────────────────────────────────────┘
+```mermaid
+flowchart TD
+    C["Transaction COMMIT (Client sends COMMIT)"] --> WB["Write WAL entry to WAL Buffer (RAM)"]
+    WB --> SC{"synchronous_commit = local / on?"}
+    SC -->|"Yes (Default)"| FS["Physically flush WAL to pg_wal on disk (fsync)"]
+    SC -->|"off (Async)"| OK["Return OK to Client immediately"]
+    FS --> OK
+    OK -.->|"Later (Background)"| CP["Checkpointer / BgWriter flushes dirty pages to base/"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef accent fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+
+    class C,WB,SC primary
+    class FS,CP accent
+    class OK success
 ```
 
 ### WAL Configuration Parameters
@@ -213,15 +249,15 @@ max_wal_size = 4GB   -- Max WAL before forced checkpoint
 
 | Level | Use Case | What's Logged |
 |-------|----------|---------------|
-| `minimal` | Single-server, no HA | Only critical for crash recovery |
-| `replica` (default) | Streaming replication | Full WAL for replication |
+| `minimal` | Single-server, no HA | Only critical data for crash recovery |
+| `replica` (default) | Streaming replication, PITR | Full WAL for physical replication & archiving |
 | `logical` | Logical replication, CDC | Decoded WAL for logical subscribers |
 
 ### WAL Segments
 
-WAL is divided into 16MB segments (default, `wal_segment_size`).
+WAL is divided into **16MB segments** (default, `wal_segment_size`):
 
-```
+```text
 pg_wal/000000010000000000000001
 pg_wal/000000010000000000000002
 pg_wal/000000010000000000000003
@@ -231,11 +267,22 @@ pg_wal/0000000100000000FFFFFFFF  (4GB worth, then timeline increments)
 
 ### Crash Recovery
 
-On startup, PostgreSQL:
-1. Reads latest checkpoint location from `pg_control`
-2. Replays WAL from checkpoint forward
-3. Undoes incomplete transactions (rollback)
-4. Commits completed transactions
+```mermaid
+flowchart LR
+    S["PostgreSQL Startup After Crash"] --> PC["1. Read latest checkpoint from pg_control"]
+    PC --> RP["2. Replay WAL segments forward from checkpoint"]
+    RP --> UN["3. Rollback incomplete transactions"]
+    UN --> CM["4. Persist all committed transactions"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+
+    class S,PC,RP,UN primary
+    class CM success
+```
+
+> [!TIP]
+> Sequential appends to `pg_wal` + `fsync()` are orders of magnitude faster than flushing scattered 8KB random heap pages on every `COMMIT`, giving PostgreSQL both high throughput and full ACID durability.
 
 ---
 
@@ -243,7 +290,7 @@ On startup, PostgreSQL:
 
 ### Why VACUUM is Needed
 
-MVCC leaves dead tuples (marked with xmax). These waste space and make queries slower.
+MVCC leaves dead tuples (marked with `xmax`). These waste disk/buffer space and make sequential and index scans slower.
 
 **Dead Tuple Problem:**
 ```sql
@@ -259,6 +306,15 @@ SELECT * FROM employees;  -- Scans 1M new + 1M old tuples
 -- Performance degrades over time
 ```
 
+```mermaid
+stateDiagram-v2
+    [*] --> LiveTuple : INSERT (xmin set, xmax=0)
+    LiveTuple --> DeadTuple : UPDATE or DELETE (xmax set)
+    DeadTuple --> ReusableSpace : VACUUM (space marked free in FSM)
+    DeadTuple --> CompactedTable : VACUUM FULL (table rewritten, OS space freed)
+    LiveTuple --> FrozenTuple : VACUUM Freeze (prevents XID wraparound)
+```
+
 ### VACUUM Process
 
 ```sql
@@ -272,15 +328,40 @@ VACUUM ANALYZE;
 VACUUM FULL;  -- Compresses table, returns space to OS
 ```
 
-**What VACUUM does:**
+**What `VACUUM` does:**
 1. Scans all pages looking for dead tuples
-2. Marks space as reusable (doesn't return to OS)
-3. Updates `pg_stat_user_tables` visibility map
-4. Removes old clog entries beyond `vacuum_freeze_min_age`
+2. Marks space as reusable in the Free Space Map (doesn't return space to OS)
+3. Updates `pg_stat_user_tables` and Visibility Map (enables Index-Only Scans)
+4. Removes old `clog` entries beyond `vacuum_freeze_min_age`
+
+| Command | Table Lock | Returns Space to OS? | Rebuilds Indexes? | Use Case |
+|---------|-----------|----------------------|-------------------|----------|
+| `VACUUM` | Non-blocking (ShareUpdateExclusive) | No (reusable internally) | No | Routine bloat prevention |
+| `VACUUM ANALYZE` | Non-blocking | No | No | Vacuum + refresh planner stats |
+| `VACUUM FULL` | `ACCESS EXCLUSIVE` (blocks all reads/writes) | Yes | Yes | Severe bloat recovery |
 
 ### AUTOVACUUM
 
-PostgreSQL runs autovacuum daemon automatically.
+PostgreSQL runs the autovacuum daemon automatically. It triggers when:
+`dead_tuples > autovacuum_vacuum_threshold + autovacuum_vacuum_scale_factor * reltuples`
+
+```mermaid
+flowchart LR
+    NAP["Autovacuum Launcher (Wakes every autovacuum_naptime)"] --> CHK{"n_dead_tup &gt; threshold + scale_factor * rows?"}
+    CHK -->|"No"| NAP
+    CHK -->|"Yes"| WRK["Spawn Autovacuum Worker"]
+    WRK --> SCN["Scan dirty/unfrozen pages &amp; reclaim dead tuples"]
+    SCN --> VM["Update Visibility Map &amp; pg_stat_user_tables"]
+    VM --> CLG["Truncate old clog entries"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef warn fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+
+    class NAP,WRK,SCN primary
+    class CHK warn
+    class VM,CLG success
+```
 
 ```sql
 -- Check autovacuum settings
@@ -296,7 +377,7 @@ WHERE n_live_tup > 0
 ORDER BY last_vacuum DESC;
 ```
 
-### Monitoring Dead Tuples
+### Monitoring Dead Tuples & Tuning
 
 ```sql
 -- Count dead tuples in a table
@@ -308,12 +389,6 @@ SELECT
 FROM pg_stat_user_tables
 WHERE n_dead_tup > 1000
 ORDER BY n_dead_tup DESC;
-```
-
-### AUTOVACUUM Tuning
-
-```sql
--- postgresql.conf or ALTER SYSTEM
 
 -- Table-specific settings (for high-churn tables)
 ALTER TABLE employees SET (
@@ -327,40 +402,66 @@ ALTER SYSTEM SET autovacuum_max_workers = 8;
 SELECT pg_reload_conf();
 ```
 
+> [!TIP]
+> On a 100M-row table, the default `autovacuum_vacuum_scale_factor = 0.1` waits for **10 million** dead tuples before triggering! Lower `scale_factor` (e.g., `0.01` or `0.02`) per-table on huge, high-churn tables.
+
 ---
 
 ## TOAST (The Oversized-Attribute Storage Technique)
 
-PostgreSQL pages are 8KB. Large columns are stored separately.
+PostgreSQL heap pages are fixed at **8KB**, and tuples cannot span multiple pages. Large variable-length columns are compressed and/or stored out-of-line in a companion TOAST table.
 
 ### How TOAST Works
 
-```
-Table Page (8KB)
-┌──────────────────────┐
-│ row_id (4 bytes)     │
-│ col1 (8 bytes)       │
-│ col2_oid (4 bytes)   │ ← Points to TOAST table
-│ col3 (100 bytes)     │
-└──────────────────────┘
-        │
-        ▼
-TOAST Table Page
-┌──────────────────────────────┐
-│ Chunk OID                    │
-│ Chunk Sequence Number        │
-│ Large data... (up to 2KB)    │
-└──────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Main["Main Heap Table Page (8KB)"]
+        R1["row_id (4 bytes)"]
+        R2["col1 (8 bytes)"]
+        R3["col2_oid (4 bytes pointer)"]
+        R4["col3 (100 bytes)"]
+    end
+
+    subgraph Toast["Companion TOAST Table"]
+        T1["Chunk OID (Matches col2_oid)"]
+        T2["Chunk Sequence Number (0, 1, 2...)"]
+        T3["Large Data Chunks (Up to 2KB each)"]
+    end
+
+    R3 -->|"Out-of-line lookup"| T1
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef accent fill:#0f172a,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+
+    class R1,R2,R3,R4 primary
+    class T1,T2,T3 accent
 ```
 
 ### TOAST Storage Strategies
 
-| Strategy | When Used |
-|----------|-----------|
-| `PLAIN` | No compression, inline storage |
-| `EXTENDED` (default) | Compress if helpful, store externally if > 2KB |
-| `EXTERNAL` | Always store separately, never inline |
-| `MAIN` | Compress, but inline if possible |
+```mermaid
+flowchart TD
+    IN["Column Value &gt; TOAST Threshold (~2KB)"] --> ST{"Column STORAGE Strategy?"}
+    ST -->|"PLAIN"| PL["No compression, inline only (fixed-width types)"]
+    ST -->|"EXTENDED (Default)"| EX["Compress first; if still &gt; 2KB, store out-of-line"]
+    ST -->|"EXTERNAL"| ET["No compression; store out-of-line (fast substr)"]
+    ST -->|"MAIN"| MN["Compress; keep inline if possible, else out-of-line"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef choice fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef strat fill:#0f172a,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+
+    class IN primary
+    class ST choice
+    class PL,EX,ET,MN strat
+```
+
+| Strategy | Compression | Out-of-Line Storage | Best For |
+|----------|-------------|---------------------|----------|
+| `PLAIN` | No | Never (inline only) | Fixed-size types (`int`, `uuid`) |
+| `EXTENDED` (default) | Yes | Yes, if still > 2KB | General `text`, `jsonb`, `bytea` |
+| `EXTERNAL` | No | Yes, always if > 2KB | Pre-compressed media, fast `SUBSTRING()` |
+| `MAIN` | Yes | Only as last resort | Columns you want kept inline when possible |
 
 ```sql
 -- Set TOAST strategy for column
@@ -368,7 +469,8 @@ ALTER TABLE documents
   ALTER COLUMN content SET STORAGE EXTENDED;
 ```
 
-**Interview Tip:** "Large text or bytea columns are TOASTed, stored separately from main table. This is why selecting a 10MB text column isn't too slow — main row is still small."
+> [!TIP]
+> **Interview Tip:** "Large `text` or `bytea` columns are TOASTed and stored separately from the main table. If a `SELECT` query doesn't reference the TOASTed column, PostgreSQL never reads the TOAST table—keeping row scans fast!"
 
 ---
 
@@ -386,14 +488,35 @@ SHOW shared_buffers;  -- Default: 128MB, should be 25% of RAM for dedicated serv
 -- Max practical: 40GB
 ```
 
-### Buffer Eviction Policy
+### Buffer Eviction Policy (Clock-Sweep / LRU Variant)
 
-PostgreSQL uses a **variant of LRU (Least Recently Used)**:
+PostgreSQL uses a **clock-sweep variant of LRU (Least Recently Used)** tracked via `usage_count` (0–5) in `BufferDescriptor`:
+1. Each buffer slot has a `usage_count` (incremented on access, capped at 5).
+2. The clock hand sweeps slots when a free buffer is needed.
+3. If `usage_count > 0`, it decrements `usage_count` and moves on.
+4. When `usage_count == 0`, the slot is evicted (if `dirty`, flushed to disk first).
 
-1. All buffers are in a linked list
-2. Accessed buffers move to head
-3. Tail (least recently used) is evicted when space needed
-4. Dirty buffers are flushed before eviction
+```mermaid
+flowchart TD
+    REQ["Backend Requests Page"] --> HIT{"Page in Shared Buffers?"}
+    HIT -->|"Yes (Cache Hit)"| INC["Increment usage_count (max 5) &amp; Pin Buffer"]
+    HIT -->|"No (Cache Miss)"| SWP["Clock Hand Sweeps BufferDescriptors"]
+    SWP --> CHK{"usage_count == 0 and unpinned?"}
+    CHK -->|"No"| DEC["Decrement usage_count; advance clock hand"]
+    DEC --> SWP
+    CHK -->|"Yes"| DRT{"Buffer dirty?"}
+    DRT -->|"Yes"| FLS["Flush dirty page to disk (WAL first!)"]
+    DRT -->|"No"| RD["Read new 8KB page from OS/Disk into slot"]
+    FLS --> RD
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    classDef warn fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+
+    class REQ,SWP,DEC,RD primary
+    class HIT,CHK,DRT warn
+    class INC,FLS success
+```
 
 ### Buffer Descriptors and Locking
 
@@ -405,6 +528,24 @@ struct BufferDescriptor {
     bool   dirty;            // Page modified since read from disk
     // ... other fields
 };
+```
+
+```mermaid
+classDiagram
+    class SharedBufferPool {
+        +int NBuffers
+        +Page[8KB] blocks
+        +allocateBuffer()
+        +evictClockSweep()
+    }
+    class BufferDescriptor {
+        +int buf_id
+        +int content_lock
+        +uint16 usage_count
+        +bool dirty
+        +int refcount
+    }
+    SharedBufferPool "1" *-- "N" BufferDescriptor : manages
 ```
 
 ### Impact on Query Performance
@@ -423,23 +564,50 @@ SELECT
 FROM pg_statio_user_tables;
 ```
 
+> [!IMPORTANT]
+> Setting `shared_buffers` above 25–40% of RAM rarely helps and can hurt by starving the OS page cache (PostgreSQL relies on double-buffering with the OS kernel page cache).
+
 ---
 
 ## PostgreSQL Data Types
 
 ### Choosing the Right Type
 
+```mermaid
+flowchart TD
+    DT["PostgreSQL Data Type Choice"] --> NUM["Numbers"]
+    DT --> STR["Strings &amp; Binary"]
+    DT --> SEMI["Semi-Structured"]
+    DT --> COLL["Structured / IDs"]
+
+    NUM --> N1["int (4B) / bigint (8B): IDs &amp; counts"]
+    NUM --> N2["numeric: Exact currency (no float rounding)"]
+    STR --> S1["text / varchar(n): Same storage; text has no limit"]
+    STR --> S2["bytea: Binary blobs (TOASTed &gt; 2KB)"]
+    SEMI --> J1["json: Plain text, reparsed every query"]
+    SEMI --> J2["jsonb: Binary pre-parsed, supports GIN index"]
+    COLL --> C1["uuid (16B) / enum (4B) / array (GIN indexed)"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef cat fill:#1e293b,stroke:#a855f7,stroke-width:1.5px,color:#f8fafc
+    classDef leaf fill:#0f172a,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+
+    class DT primary
+    class NUM,STR,SEMI,COLL cat
+    class N1,N2,S1,S2,J1,J2,C1 leaf
+```
+
 | Type | Size | Use Case | Interview Note |
-|------|------|----------|-----------------|
-| `int` (int4) | 4 bytes | Small numbers, IDs | 2.1B range, default for serial |
-| `bigint` (int8) | 8 bytes | Large counts, IDs | 9.2×10^18 range, use for `BIGSERIAL` |
-| `numeric` / `decimal` | variable | Currency, exact decimals | No rounding errors, slower |
-| `float8` | 8 bytes | Approximate values | Fast, less precise |
+|------|------|----------|----------------|
+| `int` (`int4`) | 4 bytes | Small numbers, IDs | 2.1B range, default for `SERIAL` |
+| `bigint` (`int8`) | 8 bytes | Large counts, IDs | 9.2×10^18 range, use for `BIGSERIAL` |
+| `numeric` / `decimal` | variable | Currency, exact decimals | No rounding errors, slower than float |
+| `float8` | 8 bytes | Approximate values | Fast, IEEE 754 precision |
 | `text` | variable | Strings, unlimited | No length limit unlike `varchar(n)` |
 | `varchar(n)` | variable | Limited strings | Enforces max length |
 | `char(n)` | fixed | Fixed-width | Pads with spaces, wasteful |
 | `bytea` | variable | Binary data | TOASTed if > 2KB |
-| `json` | variable | Tree structure, indexing | Slower, reparsed on each query |
+| `json` | variable | Tree structure, logging | Slower, reparsed on each query |
 | `jsonb` | variable | Binary JSON, indexing | Faster, pre-parsed, GIN indexing |
 | `uuid` | 16 bytes | Globally unique IDs | No sequence/autoinc dependency |
 | `array` | variable | Multiple values | GIN indexing support |
@@ -461,11 +629,9 @@ SELECT json_column->>'key' FROM table;  -- Must parse each time
 CREATE INDEX idx_jsonb ON table USING GIN (jsonb_column);
 
 SELECT jsonb_column->>'key' FROM table;  -- Binary access, fast
-
--- Interview: "Use jsonb for dynamic data that's frequently queried"
 ```
 
-### Arrays
+### Arrays & Enums
 
 ```sql
 CREATE TABLE events (
@@ -474,19 +640,12 @@ CREATE TABLE events (
     tags text[] DEFAULT ARRAY[]::text[]
 );
 
--- Insert
+-- Insert & Query & Index
 INSERT INTO events (name, tags) VALUES ('Event', ARRAY['tag1', 'tag2']);
-
--- Query
 SELECT * FROM events WHERE 'tag1' = ANY(tags);
-
--- Index
 CREATE INDEX idx_tags ON events USING GIN (tags);
-```
 
-### Enums
-
-```sql
+-- Enums (4 bytes + type safety)
 CREATE TYPE employment_status AS ENUM (
     'active',
     'inactive',
@@ -499,15 +658,31 @@ CREATE TABLE employees (
     name text,
     status employment_status DEFAULT 'active'
 );
-
--- Efficient storage (4 bytes) + type safety
 ```
+
+> [!TIP]
+> **Interview Note:** Use `jsonb` for dynamic attributes that are frequently queried or indexed with `GIN`, and `text` instead of `varchar(n)` when you don't need a hard character limit (their internal storage and performance are identical in PostgreSQL).
 
 ---
 
 ## Tablespaces
 
-Distribute tables/indexes across multiple disks for performance and capacity.
+Tablespaces allow you to distribute tables and indexes across multiple physical disks or mount points for I/O isolation and capacity management.
+
+```mermaid
+flowchart LR
+    TB["Hot Table: events"] -->|"TABLESPACE fast_disk"| NVME["/mnt/nvme/pg_data (NVMe SSD)"]
+    IX["GIN Index: idx_events"] -->|"TABLESPACE slow_disk"| HDD["/mnt/hdd/pg_indexes (Archive / HDD)"]
+    SYS["pg_default / pg_global"] -->|"Default cluster"| DEF["$PGDATA/base"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef fast fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    classDef slow fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+
+    class TB,IX,SYS primary
+    class NVME fast
+    class HDD,DEF slow
+```
 
 ```sql
 -- Create tablespace on different disk
@@ -528,13 +703,26 @@ ALTER TABLE events SET TABLESPACE fast_disk;
 SELECT * FROM pg_tablespaces;
 ```
 
-**Interview Use Case:** "High-frequency lookup tables → NVMe, less-used archives → HDD"
+> [!TIP]
+> **Interview Use Case:** Place high-frequency lookup tables or WAL on NVMe SSDs and cold archive partitions on cheaper HDDs.
 
 ---
 
 ## PostgreSQL-Specific Features
 
 ### LISTEN/NOTIFY (Pub-Sub)
+
+```mermaid
+sequenceDiagram
+    participant Sub as Subscriber Session
+    participant PG as PostgreSQL Server
+    participant Pub as Publisher Session
+
+    Sub->>PG: LISTEN events_channel
+    Note over Sub,PG: Blocks / waits for async notifications
+    Pub->>PG: NOTIFY events_channel, 'Some data'
+    PG-->>Sub: Delivers: NOTIFY events_channel 'Some data'
+```
 
 ```sql
 -- In one session (Subscriber)
@@ -547,49 +735,47 @@ NOTIFY events_channel, 'Some data';
 -- Listener receives: NOTIFY events_channel 'Some data'
 ```
 
-**Use Case:** Application event notification without polling (chat messages, real-time updates).
+**Use Case:** Application event notification without polling (chat messages, cache invalidation, real-time updates).
 
-### COPY (Bulk Load)
+### Bulk Load, Upsert, Lateral Joins & Materialized Views
+
+```mermaid
+flowchart LR
+    F1["COPY: 10x faster bulk load via streaming"] --> PG["PostgreSQL Engine"]
+    F2["ON CONFLICT: Atomic UPSERT"] --> PG
+    F3["CROSS JOIN LATERAL: Correlated top-N per row"] --> PG
+    F4["MATERIALIZED VIEW: Precomputed &amp; CONCURRENTLY refreshable"] --> PG
+
+    classDef feat fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef core fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+
+    class F1,F2,F3,F4 feat
+    class PG core
+```
 
 ```sql
--- COPY FROM (into database)
+-- COPY (Bulk Load - 10x faster than INSERT for large datasets)
 COPY employees (name, salary) FROM STDIN;
 Alice    50000
 Bob      60000
 \.
 
--- COPY TO (from database)
 COPY employees TO STDOUT;
-
--- From CSV file
 \COPY employees FROM '/path/to/file.csv' WITH (FORMAT csv, DELIMITER ',', HEADER);
 
--- Performance: 10x faster than INSERT for large datasets
-```
-
-### UPSERT (ON CONFLICT)
-
-```sql
--- Insert or update if unique constraint violated
+-- UPSERT (ON CONFLICT)
 INSERT INTO users (email, name, updated_at)
 VALUES ('user@example.com', 'Alice', NOW())
 ON CONFLICT (email) DO UPDATE SET
     name = EXCLUDED.name,
     updated_at = EXCLUDED.updated_at;
 
--- Update specific columns on conflict
 INSERT INTO product_inventory (product_id, quantity)
 VALUES (123, 100)
 ON CONFLICT (product_id) DO UPDATE SET
     quantity = product_inventory.quantity + EXCLUDED.quantity;
-```
 
-### Lateral Joins
-
-Subquery can reference columns from preceding tables (like SQL Server `CROSS APPLY`).
-
-```sql
--- Find top 3 orders for each customer
+-- Lateral Joins (like SQL Server CROSS APPLY)
 SELECT c.customer_id, c.name, o.*
 FROM customers c
 CROSS JOIN LATERAL (
@@ -600,15 +786,7 @@ CROSS JOIN LATERAL (
     LIMIT 3
 ) o;
 
--- Without LATERAL, would need window function or subquery
-```
-
-### Materialized Views
-
-View that's physically stored (not recomputed each time).
-
-```sql
--- Create materialized view
+-- Materialized Views
 CREATE MATERIALIZED VIEW customer_stats AS
 SELECT
     customer_id,
@@ -617,59 +795,73 @@ SELECT
 FROM orders
 GROUP BY customer_id;
 
--- Refresh when stale
 REFRESH MATERIALIZED VIEW customer_stats;
 
--- Concurrent refresh (doesn't lock, needs unique index)
+-- Concurrent refresh (doesn't lock reads, requires unique index)
 CREATE UNIQUE INDEX idx_customer_stats ON customer_stats (customer_id);
 REFRESH MATERIALIZED VIEW CONCURRENTLY customer_stats;
 ```
 
+> [!IMPORTANT]
+> `REFRESH MATERIALIZED VIEW CONCURRENTLY` avoids blocking `SELECT` queries during refresh, but **requires** a `UNIQUE` index on the materialized view.
+
 ---
 
 ## Configuration Tuning
+
+```mermaid
+flowchart TD
+    T["PostgreSQL Tuning Parameters"] --> MEM["Memory Allocation"]
+    T --> CONN["Connection Limits"]
+    T --> PLAN["Query Planner &amp; I/O"]
+
+    MEM --> M1["shared_buffers: 25% RAM (max ~40GB)"]
+    MEM --> M2["effective_cache_size: 50-75% RAM (planner hint)"]
+    MEM --> M3["work_mem: Per sort/hash op (beware concurrency!)"]
+    MEM --> M4["maintenance_work_mem: VACUUM, REINDEX, CREATE INDEX"]
+
+    CONN --> C1["max_connections (100 default) + superuser_reserved_connections"]
+    PLAN --> P1["random_page_cost (1.1 SSD vs 4.0 HDD) &amp; effective_io_concurrency (200)"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef cat fill:#1e293b,stroke:#a855f7,stroke-width:1.5px,color:#f8fafc
+    classDef leaf fill:#0f172a,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+
+    class T primary
+    class MEM,CONN,PLAN cat
+    class M1,M2,M3,M4,C1,P1 leaf
+```
 
 ### Memory Parameters
 
 ```sql
 SHOW shared_buffers;        -- Shared cache, 25% RAM
 SHOW effective_cache_size;  -- Total memory available, 50-75% RAM
-SHOW work_mem;              -- Per-operation memory (sorts, hash), 256MB default
+SHOW work_mem;              -- Per-operation memory (sorts, hash), 4MB-256MB
 SHOW maintenance_work_mem;  -- VACUUM, REINDEX, 64MB default
 ```
 
-**Tuning Guidelines:**
-```sql
--- For 16GB RAM server
-shared_buffers = 4GB              -- 25% of RAM
-effective_cache_size = 12GB       -- 75% of RAM
-work_mem = 256MB                  -- For complex sorts/hash joins
-maintenance_work_mem = 1GB        -- For vacuum/reindex
+| Server RAM | `shared_buffers` | `effective_cache_size` | `work_mem` | `maintenance_work_mem` |
+|------------|------------------|------------------------|------------|------------------------|
+| **16 GB** | `4GB` (25%) | `12GB` (75%) | `256MB` | `1GB` |
+| **64 GB** | `16GB` (25%) | `48GB` (75%) | `512MB` | `2GB` |
 
--- For 64GB RAM server
-shared_buffers = 16GB
-effective_cache_size = 48GB
-work_mem = 512MB
-maintenance_work_mem = 2GB
-```
-
-### Connection Pool Tuning
+### Connection Pool & Query Planning
 
 ```sql
-SHOW max_connections;      -- Default: 100, increase for many clients
+SHOW max_connections;                 -- Default: 100, increase for many clients
 SHOW superuser_reserved_connections;  -- Keep slots for admin
 
 -- For application with 1000+ clients, use PgBouncer:
--- PgBouncer: 1000 client connections → 20 database connections
+-- PgBouncer: 1000 client connections -> 20 database connections
+
+SET enable_seqscan = off;             -- Force index use (for testing only)
+SET random_page_cost = 1.1;           -- SSD: lower, HDD: higher (default 4)
+SET effective_io_concurrency = 200;   -- Number of concurrent I/O operations
 ```
 
-### Query Planning
-
-```sql
-SET enable_seqscan = off;      -- Force index use (for testing)
-SET random_page_cost = 1.1;    -- SSD: lower, HDD: higher (default 4)
-SET effective_io_concurrency = 200;  -- Number of concurrent I/O operations
-```
+> [!WARNING]
+> `work_mem` is allocated **per sort or hash operation**, not per connection. A single complex query with 4 hash joins across 100 concurrent connections can allocate `4 × 100 × work_mem`!
 
 ---
 
@@ -677,25 +869,22 @@ SET effective_io_concurrency = 200;  -- Number of concurrent I/O operations
 
 ### Problem: PostgreSQL Process Per Connection
 
-Each connection = one process = ~6MB RAM
+Each connection = one OS process = ~6MB RAM. For 1,000 clients, that's **6GB just for idle processes** plus heavy context-switching overhead.
 
-For 1000 clients: 6GB just for processes!
+```mermaid
+flowchart LR
+    C1["1,000 Client Connections (App Servers)"] --> PGB["PgBouncer Pool Manager (Port 6432)"]
+    PGB -->|"Multiplexed"| PG1["PostgreSQL Backend 1"]
+    PGB -->|"Multiplexed"| PG2["PostgreSQL Backend 2"]
+    PGB -->|"Reused"| PG20["PostgreSQL Backend 20"]
 
-### PgBouncer Solution
+    classDef client fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef pool fill:#3b0764,stroke:#c084fc,stroke-width:2px,color:#f3e8ff
+    classDef db fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
 
-```
-1000 Client Connections
-        │
-        ▼
-    PgBouncer
-    Pool Manager
-        │
-        ├─ Connection 1 → PostgreSQL Backend 1
-        ├─ Connection 2 → PostgreSQL Backend 2
-        ├─ Connection 3 → PostgreSQL Backend 1 (reused)
-        └─ ...
-
-    20 Database Connections (configurable)
+    class C1 client
+    class PGB pool
+    class PG1,PG2,PG20 db
 ```
 
 ### PgBouncer Configuration
@@ -715,59 +904,86 @@ reserve_pool_timeout = 10   # Timeout for reserve
 
 ### Connection Pooling Modes
 
-| Mode | Behavior | Good For |
-|------|----------|----------|
-| `session` | Connection returned to pool after client disconnects | Long-lived connections |
-| `transaction` | Connection returned after each transaction | Short queries, many clients |
-| `statement` | Connection returned after each statement | Single queries (rare) |
+```mermaid
+stateDiagram-v2
+    [*] --> SessionMode : Client connects
+    SessionMode --> [*] : Returned only on client disconnect
 
-**Interview Answer:** "With 5000 client connections, using PgBouncer with transaction pooling, we keep only 100 PostgreSQL connections. Each transaction borrows a connection from the pool, returns it when done. Reduces memory from 30GB to 600MB."
+    [*] --> TransactionMode : BEGIN / Query
+    TransactionMode --> [*] : Returned immediately on COMMIT / ROLLBACK
+
+    [*] --> StatementMode : Single statement
+    StatementMode --> [*] : Returned after each statement (no multi-stmt tx)
+```
+
+| Mode | Behavior | Good For | Caveats |
+|------|----------|----------|---------|
+| `session` | Connection returned after client disconnects | Long-lived connections, `PREPARE`, `LISTEN` | Lowest multiplexing |
+| `transaction` | Connection returned after each transaction | Short queries, high concurrency (recommended) | No session-level `SET` / temp tables across tx |
+| `statement` | Connection returned after each statement | Single auto-commit queries (rare) | Multi-statement transactions disallowed |
+
+> [!TIP]
+> **Interview Answer:** "With 5,000 client connections, using PgBouncer in `transaction` pooling mode lets us keep only 100 PostgreSQL backend connections. Each transaction borrows a backend and returns it on `COMMIT`—reducing connection memory from ~30GB to ~600MB."
 
 ---
 
 ## Common Interview Questions and Answers
 
+```mermaid
+flowchart LR
+    Q["SQL Query"] --> P["1. Parser (Syntax &amp; Parse Tree)"]
+    P --> PL["2. Planner / Optimizer (Stats &amp; Indexes)"]
+    PL --> EX["3. Executor (Fetch Pages, Filter, Sort)"]
+    EX --> RES["4. Return Results (Note: Dead tuples still scanned until VACUUM)"]
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+
+    class Q,P,PL,EX primary
+    class RES success
+```
+
 ### Q1: What happens when you run a SELECT query?
 
 **Answer:**
-1. Parser checks syntax
-2. Planner determines best execution plan (considers indexes, statistics)
-3. Executor runs plan (fetch pages, filter rows, aggregate, sort)
-4. Results returned to client
-5. If no VACUUM recently, might scan many dead tuples
+1. **Parser** checks syntax and builds a parse tree.
+2. **Planner** determines the best execution plan (considers indexes, `pg_statistic` histograms, cost estimates).
+3. **Executor** runs the plan (fetches 8KB pages via `Shared Buffers`, checks MVCC visibility, filters rows, aggregates, sorts).
+4. **Results** are returned to the client.
+5. If `VACUUM` hasn't run recently, the executor may scan many dead tuples, slowing down the query.
 
 ### Q2: How does PostgreSQL ensure durability?
 
 **Answer:**
-"WAL guarantees durability. Before returning OK to client on COMMIT:
-1. WAL entry is written to WAL buffer
-2. WAL buffer is fsync'd to disk
-3. Client is told commit succeeded
-4. Later (background), dirty pages are flushed to disk
-Even if PostgreSQL crashes before step 4, we can replay WAL and recover the transaction."
+"WAL guarantees durability. Before returning OK to the client on `COMMIT`:
+1. The WAL entry is written to the `WAL Buffer`.
+2. The WAL buffer is `fsync`'d to `pg_wal` on disk.
+3. The client is told the commit succeeded.
+4. Later (in the background), dirty pages in `Shared Buffers` are flushed to data files by the `Checkpointer` or `Background Writer`.
+Even if PostgreSQL crashes before step 4, it replays WAL from the last checkpoint and recovers the transaction."
 
 ### Q3: What's the difference between VACUUM and VACUUM FULL?
 
 **Answer:**
-"VACUUM marks dead tuples as reusable but doesn't shrink table size.
-VACUUM FULL rewrites the entire table, reclaiming space and returning it to OS.
-VACUUM takes longer on large tables and exclusive lock."
+"`VACUUM` marks dead tuples as reusable inside the table without shrinking the file size on disk, and runs concurrently without blocking reads/writes.
+`VACUUM FULL` rewrites the entire table into a new file, reclaiming space and returning it to the OS—but it takes much longer on large tables and requires an `ACCESS EXCLUSIVE` lock."
 
 ### Q4: What causes bloat?
 
 **Answer:**
-"Dead tuples not yet vacuumed, or indexes not maintained. Bloat means:
+"Dead tuples from `UPDATE`/`DELETE` not yet vacuumed, or B-tree indexes not maintained after heavy churn. Bloat causes:
 - Slower sequential scans (more pages to read)
-- Slower index scans (more index pages)
-- More disk space used
-Solution: Autovacuum or manual VACUUM, REINDEX"
+- Slower index scans (deeper/sparser index pages)
+- Wasted disk space and lower `Shared Buffers` hit ratio
+**Solution:** Tune `autovacuum` per-table, run manual `VACUUM`, or `REINDEX CONCURRENTLY`."
 
 ### Q5: Why use JSONB over regular columns?
 
 **Answer:**
-"JSONB for flexible schema (e.g., dynamic attributes). Regular columns for:
-- Fixed schema (performance, integrity)
-- Complex queries (SQL better than JSON path)
-- Indexing specific columns (B-tree better than GIN)
-Use JSONB when schema varies or rarely queried."
+"Use `JSONB` for flexible schemas (e.g., dynamic user attributes) where GIN indexing is helpful. Use regular typed columns for:
+- Fixed schemas (better performance, constraints, and type integrity)
+- Complex relational queries and joins
+- Specific column indexing (B-tree is smaller and faster than GIN)"
 
+> [!TIP]
+> In system design interviews, combine **MVCC** (non-blocking reads), **WAL** (`fsync` sequential durability), **Autovacuum** (bloat & XID wraparound prevention), and **PgBouncer** (transaction pooling) to explain why PostgreSQL scales cleanly under heavy OLTP workloads.

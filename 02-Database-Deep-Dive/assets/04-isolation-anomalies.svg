@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="PostgreSQL Isolation Levels and Anomalies Matrix">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 8; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .hdr { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; fill: #e2e8f0; }
+      .hdr-sub { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 11px; fill: #94a3b8; }
+      .row-title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .row-desc { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 700; }
+      .tiny { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; fill: #cbd5e1; }
+      .ok-box { fill: #064e3b; stroke: #10b981; stroke-width: 1.5; rx: 6; }
+      .ok-text { fill: #6ee7b7; }
+      .warn-box { fill: #451a03; stroke: #f59e0b; stroke-width: 1.5; rx: 6; }
+      .warn-text { fill: #fcd34d; }
+      .err-box { fill: #4c0519; stroke: #f43f5e; stroke-width: 1.5; rx: 6; }
+      .err-text { fill: #fda4af; }
+      .ssi-box { fill: #0c4a6e; stroke: #38bdf8; stroke-width: 1.5; rx: 6; }
+      .ssi-text { fill: #7dd3fc; }
+
+      @keyframes pulseWarn {
+        0%, 100% { opacity: 1; stroke-width: 1.5; }
+        50% { opacity: 0.72; stroke-width: 2.5; }
+      }
+      @keyframes pulseErr {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      .anim-warn { animation: pulseWarn 2.2s ease-in-out infinite; }
+      .anim-err { animation: pulseErr 1.6s ease-in-out infinite; }
+      .flow-line { stroke-dasharray: 6 6; animation: dashFlow 1.4s linear infinite; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="960" height="540" />
+
+  <!-- Header -->
+  <text x="28" y="38" class="title">PostgreSQL Isolation Levels vs. Concurrency Anomalies</text>
+  <text x="28" y="58" class="subtitle">MVCC Snapshot Visibility &amp; Serializable Snapshot Isolation (SSI) rw-conflict detection</text>
+
+  <!-- Live Pulse Legend -->
+  <g transform="translate(650, 22)">
+    <rect x="0" y="0" width="282" height="36" rx="8" fill="#1e293b" stroke="#334155" />
+    <circle cx="18" cy="18" r="5" fill="#10b981" />
+    <text x="28" y="22" class="tiny">Prevented</text>
+    <circle cx="100" cy="18" r="5" fill="#f59e0b" />
+    <text x="110" y="22" class="tiny">Possible</text>
+    <circle cx="176" cy="18" r="5" fill="#38bdf8" />
+    <text x="186" y="22" class="tiny">40001 Abort</text>
+  </g>
+
+  <!-- Main Matrix Card -->
+  <rect class="card" x="24" y="76" width="912" height="328" />
+
+  <!-- Column Headers -->
+  <text x="44" y="106" class="hdr">ANOMALY / PHENOMENON</text>
+  <g transform="translate(310, 88)">
+    <rect width="190" height="40" rx="6" fill="#0f172a" stroke="#475569" />
+    <text x="95" y="17" text-anchor="middle" class="hdr">READ COMMITTED</text>
+    <text x="95" y="32" text-anchor="middle" class="hdr-sub">Fresh snapshot per statement</text>
+  </g>
+  <g transform="translate(520, 88)">
+    <rect width="190" height="40" rx="6" fill="#0f172a" stroke="#475569" />
+    <text x="95" y="17" text-anchor="middle" class="hdr">REPEATABLE READ</text>
+    <text x="95" y="32" text-anchor="middle" class="hdr-sub">Snapshot at BEGIN (MVCC)</text>
+  </g>
+  <g transform="translate(730, 88)">
+    <rect width="190" height="40" rx="6" fill="#0f172a" stroke="#38bdf8" />
+    <text x="95" y="17" text-anchor="middle" class="hdr" fill="#38bdf8">SERIALIZABLE</text>
+    <text x="95" y="32" text-anchor="middle" class="hdr-sub">SSI (SIREAD locks + rw-edges)</text>
+  </g>
+
+  <!-- Row 1: Dirty Read -->
+  <line x1="40" y1="140" x2="920" y2="140" stroke="#334155" stroke-width="1" />
+  <text x="44" y="164" class="row-title">1. Dirty Read</text>
+  <text x="44" y="182" class="row-desc">T1 reads uncommitted write from T2</text>
+
+  <rect class="ok-box" x="325" y="150" width="160" height="38" />
+  <text x="405" y="173" text-anchor="middle" class="badge-text ok-text">PREVENTED (MVCC)</text>
+
+  <rect class="ok-box" x="535" y="150" width="160" height="38" />
+  <text x="615" y="173" text-anchor="middle" class="badge-text ok-text">PREVENTED (MVCC)</text>
+
+  <rect class="ok-box" x="745" y="150" width="160" height="38" />
+  <text x="825" y="173" text-anchor="middle" class="badge-text ok-text">PREVENTED (MVCC)</text>
+
+  <!-- Row 2: Non-Repeatable Read -->
+  <line x1="40" y1="202" x2="920" y2="202" stroke="#334155" stroke-width="1" />
+  <text x="44" y="226" class="row-title">2. Non-Repeatable Read</text>
+  <text x="44" y="244" class="row-desc">T1 re-reads row: $100 -&gt; $90 after T2 commit</text>
+
+  <g class="anim-warn">
+    <rect class="warn-box" x="325" y="212" width="160" height="38" />
+    <text x="405" y="229" text-anchor="middle" class="badge-text warn-text">ALLOWED</text>
+    <text x="405" y="243" text-anchor="middle" class="tiny" fill="#fde68a">
+      $100 -&gt; $90 on 2nd SELECT
+      <animate attributeName="opacity" values="1;0.45;1" dur="2.4s" repeatCount="indefinite" />
+    </text>
+  </g>
+
+  <rect class="ok-box" x="535" y="212" width="160" height="38" />
+  <text x="615" y="229" text-anchor="middle" class="badge-text ok-text">PREVENTED</text>
+  <text x="615" y="243" text-anchor="middle" class="tiny" fill="#a7f3d0">Pinned BEGIN snapshot</text>
+
+  <rect class="ok-box" x="745" y="212" width="160" height="38" />
+  <text x="825" y="229" text-anchor="middle" class="badge-text ok-text">PREVENTED</text>
+  <text x="825" y="243" text-anchor="middle" class="tiny" fill="#a7f3d0">Pinned BEGIN snapshot</text>
+
+  <!-- Row 3: Phantom Read -->
+  <line x1="40" y1="264" x2="920" y2="264" stroke="#334155" stroke-width="1" />
+  <text x="44" y="288" class="row-title">3. Phantom Read</text>
+  <text x="44" y="306" class="row-desc">T2 inserts matching row; T1 count changes</text>
+
+  <g class="anim-warn">
+    <rect class="warn-box" x="325" y="274" width="160" height="38" />
+    <text x="405" y="291" text-anchor="middle" class="badge-text warn-text">ALLOWED</text>
+    <text x="405" y="305" text-anchor="middle" class="tiny" fill="#fde68a">+1 phantom row visible</text>
+  </g>
+
+  <rect class="ok-box" x="535" y="274" width="160" height="38" />
+  <text x="615" y="291" text-anchor="middle" class="badge-text ok-text">PREVENTED (SELECT)</text>
+  <text x="615" y="305" text-anchor="middle" class="tiny" fill="#a7f3d0">PG Snapshot blocks read</text>
+
+  <rect class="ok-box" x="745" y="274" width="160" height="38" />
+  <text x="825" y="291" text-anchor="middle" class="badge-text ok-text">PREVENTED</text>
+  <text x="825" y="305" text-anchor="middle" class="tiny" fill="#a7f3d0">Full serial order</text>
+
+  <!-- Row 4: Write Skew -->
+  <line x1="40" y1="326" x2="920" y2="326" stroke="#334155" stroke-width="1" />
+  <text x="44" y="350" class="row-title">4. Write Skew</text>
+  <text x="44" y="368" class="row-desc">T1 &amp; T2 read overlap, update disjoint rows</text>
+
+  <g class="anim-err">
+    <rect class="err-box" x="325" y="336" width="160" height="44" />
+    <text x="405" y="354" text-anchor="middle" class="badge-text err-text">ALLOWED (ANOMALY)</text>
+    <text x="405" y="369" text-anchor="middle" class="tiny" fill="#fecdd3">Invariant broken</text>
+  </g>
+
+  <g class="anim-err">
+    <rect class="err-box" x="535" y="336" width="160" height="44" />
+    <text x="615" y="354" text-anchor="middle" class="badge-text err-text">ALLOWED (ANOMALY)</text>
+    <text x="615" y="369" text-anchor="middle" class="tiny" fill="#fecdd3">Snapshot misses rw-cycle</text>
+  </g>
+
+  <g>
+    <rect class="ssi-box" x="745" y="336" width="160" height="44">
+      <animate attributeName="stroke" values="#38bdf8;#f43f5e;#38bdf8" dur="2.6s" repeatCount="indefinite" />
+    </rect>
+    <text x="825" y="354" text-anchor="middle" class="badge-text ssi-text">DETECTED &amp; ABORTED</text>
+    <text x="825" y="369" text-anchor="middle" class="tiny" fill="#bae6fd">SQLSTATE 40001 (Retry)</text>
+  </g>
+
+  <!-- Bottom Animated Timeline: Write Skew vs SSI -->
+  <rect class="card" x="24" y="418" width="912" height="104" />
+  <text x="44" y="442" class="hdr" fill="#38bdf8">LIVE TRACE: WRITE SKEW &amp; SSI CONFLICT DETECTION (2 DOCTORS ON-CALL)</text>
+
+  <!-- T1 Lane -->
+  <text x="44" y="468" class="tiny" fill="#38bdf8">Txn 1</text>
+  <line x1="90" y1="464" x2="880" y2="464" stroke="#334155" stroke-width="2" />
+  <rect x="110" y="452" width="160" height="24" rx="4" fill="#1e3a8a" stroke="#60a5fa" />
+  <text x="190" y="468" text-anchor="middle" class="tiny">SELECT count(*) = 2</text>
+
+  <rect x="430" y="452" width="185" height="24" rx="4" fill="#1e3a8a" stroke="#60a5fa" />
+  <text x="522" y="468" text-anchor="middle" class="tiny">UPDATE doc A off-call</text>
+
+  <rect x="660" y="452" width="110" height="24" rx="4" fill="#064e3b" stroke="#10b981" />
+  <text x="715" y="468" text-anchor="middle" class="tiny" fill="#6ee7b7">COMMIT OK</text>
+
+  <!-- T2 Lane -->
+  <text x="44" y="502" class="tiny" fill="#f43f5e">Txn 2</text>
+  <line x1="90" y1="498" x2="880" y2="498" stroke="#334155" stroke-width="2" />
+  <rect x="150" y="486" width="160" height="24" rx="4" fill="#3b0764" stroke="#c084fc" />
+  <text x="230" y="502" text-anchor="middle" class="tiny">SELECT count(*) = 2</text>
+
+  <rect x="470" y="486" width="185" height="24" rx="4" fill="#3b0764" stroke="#c084fc" />
+  <text x="562" y="502" text-anchor="middle" class="tiny">UPDATE doc B off-call</text>
+
+  <rect x="700" y="486" width="210" height="24" rx="4" fill="#4c0519" stroke="#f43f5e">
+    <animate attributeName="opacity" values="1;0.55;1" dur="1.5s" repeatCount="indefinite" />
+  </rect>
+  <text x="805" y="502" text-anchor="middle" class="tiny" fill="#fda4af">SSI ABORT (40001)</text>
+
+  <!-- Animated rw-conflict edges -->
+  <path d="M 270 464 L 470 498" fill="none" stroke="#f59e0b" stroke-width="1.8" class="flow-line" />
+  <path d="M 310 498 L 430 464" fill="none" stroke="#f59e0b" stroke-width="1.8" class="flow-line" />
+
+  <!-- Animated Time Cursor -->
+  <line x1="90" y1="448" x2="90" y2="514" stroke="#38bdf8" stroke-width="2" opacity="0.85">
+    <animate attributeName="x1" values="90;880;90" dur="6s" repeatCount="indefinite" />
+    <animate attributeName="x2" values="90;880;90" dur="6s" repeatCount="indefinite" />
+  </line>
+</svg>

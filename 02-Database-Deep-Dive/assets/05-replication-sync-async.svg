@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 470" width="100%" height="100%" role="img" aria-labelledby="repTitle repDesc">
+  <title id="repTitle">Synchronous vs Asynchronous Database Replication</title>
+  <desc id="repDesc">Animated comparison of Synchronous Quorum replication waiting for follower acknowledgement before COMMIT versus Asynchronous replication committing immediately with a replication lag window.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .sec-title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #f1f5f9; }
+      .node-title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; font-weight: 700; fill: #ffffff; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .node-client { fill: #1d4ed8; stroke: #60a5fa; stroke-width: 1.5; }
+      .node-leader { fill: #0f766e; stroke: #2dd4bf; stroke-width: 2; }
+      .node-follower { fill: #334155; stroke: #94a3b8; stroke-width: 1.5; }
+      .track { stroke: #475569; stroke-width: 2; stroke-dasharray: 4 4; }
+      .badge-cp { fill: #064e3b; stroke: #10b981; stroke-width: 1; }
+      .badge-ap { fill: #451a03; stroke: #f59e0b; stroke-width: 1; }
+      .cp-text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #6ee7b7; }
+      .ap-text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #fcd34d; }
+
+      @keyframes lagPulse {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 0.9; }
+      }
+      .lag-bar {
+        animation: lagPulse 2s ease-in-out infinite;
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="920" height="470" rx="14" />
+
+  <!-- Header -->
+  <text x="28" y="34" class="title">Leader &#8594; Follower Replication: Synchronous vs Asynchronous</text>
+  <text x="28" y="54" class="subtitle">Contrast durability (RPO = 0) and write latency when committing transactions across WAL replicas.</text>
+
+  <!-- ==================== TOP PANEL: SYNCHRONOUS QUORUM ==================== -->
+  <rect class="panel" x="24" y="72" width="872" height="178" rx="12" />
+  <text x="44" y="98" class="sec-title">1. Synchronous Quorum (CP &#8212; Zero Data Loss)</text>
+  <rect class="badge-cp" x="678" y="80" width="198" height="24" rx="6" />
+  <text x="777" y="96" text-anchor="middle" class="cp-text">RPO = 0 | Higher Latency</text>
+
+  <!-- Tracks -->
+  <line x1="150" y1="146" x2="360" y2="146" class="track" />
+  <line x1="480" y1="146" x2="690" y2="146" class="track" />
+
+  <!-- Nodes -->
+  <rect class="node-client" x="44" y="124" width="110" height="44" rx="8" />
+  <text x="99" y="143" text-anchor="middle" class="node-title">Client</text>
+  <text x="99" y="159" text-anchor="middle" class="mono">BEGIN; INSERT</text>
+
+  <rect class="node-leader" x="356" y="120" width="128" height="52" rx="8" />
+  <text x="420" y="142" text-anchor="middle" class="node-title">Leader (Primary)</text>
+  <text x="420" y="159" text-anchor="middle" class="mono">Write Local WAL</text>
+
+  <rect class="node-follower" x="690" y="124" width="184" height="44" rx="8" />
+  <text x="782" y="143" text-anchor="middle" class="node-title">Sync Follower (Standby)</text>
+  <text x="782" y="159" text-anchor="middle" class="mono">Flush WAL &#8594; Send ACK</text>
+
+  <!-- Step Labels -->
+  <text x="252" y="136" text-anchor="middle" class="mono" fill="#60a5fa">1. WRITE</text>
+  <text x="585" y="136" text-anchor="middle" class="mono" fill="#2dd4bf">2. WAL Stream</text>
+  <text x="585" y="168" text-anchor="middle" class="mono" fill="#34d399">3. Replica ACK</text>
+  <text x="252" y="168" text-anchor="middle" class="mono" fill="#6ee7b7">4. COMMIT OK</text>
+
+  <!-- Animated Packet: Sync Cycle (6s loop) -->
+  <!-- Phase 1: Client -> Leader (0.0 to 0.25) -->
+  <circle r="6" fill="#60a5fa" cy="146">
+    <animate attributeName="cx" values="154;356;356" keyTimes="0;0.22;1" dur="6s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.22;0.24;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+  <!-- Phase 2: Leader -> Follower WAL (0.25 to 0.50) -->
+  <circle r="6" fill="#2dd4bf" cy="146">
+    <animate attributeName="cx" values="484;484;690;690" keyTimes="0;0.24;0.48;1" dur="6s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.23;0.25;0.48;0.50;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+  <!-- Phase 3: Follower -> Leader ACK (0.50 to 0.72) -->
+  <circle r="6" fill="#34d399" cy="154">
+    <animate attributeName="cx" values="690;690;484;484" keyTimes="0;0.50;0.72;1" dur="6s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.49;0.51;0.72;0.74;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+  <!-- Phase 4: Leader -> Client COMMIT OK (0.72 to 0.95) -->
+  <circle r="6" fill="#10b981" cy="154">
+    <animate attributeName="cx" values="356;356;154;154" keyTimes="0;0.74;0.95;1" dur="6s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.73;0.75;0.95;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Wait indicator on Leader -->
+  <text x="420" y="196" text-anchor="middle" class="mono" fill="#fcd34d">Leader blocks COMMIT until quorum ACK arrives (synchronous_commit = on / remote_apply)</text>
+  <text x="44" y="232" class="subtitle">&#10003; Guarantees committed data survives primary crash.  &#9888; Cross-AZ / cross-region RTT directly adds to every write latency.</text>
+
+  <!-- ==================== BOTTOM PANEL: ASYNCHRONOUS REPLICATION ==================== -->
+  <rect class="panel" x="24" y="266" width="872" height="180" rx="12" />
+  <text x="44" y="292" class="sec-title">2. Asynchronous Replication (AP &#8212; Low Latency, Lag Window)</text>
+  <rect class="badge-ap" x="650" y="274" width="226" height="24" rx="6" />
+  <text x="763" y="290" text-anchor="middle" class="ap-text">Fast COMMIT | Replication Lag Risk</text>
+
+  <!-- Tracks -->
+  <line x1="150" y1="340" x2="360" y2="340" class="track" />
+  <line x1="480" y1="340" x2="690" y2="340" class="track" />
+
+  <!-- Nodes -->
+  <rect class="node-client" x="44" y="318" width="110" height="44" rx="8" />
+  <text x="99" y="337" text-anchor="middle" class="node-title">Client</text>
+  <text x="99" y="353" text-anchor="middle" class="mono">BEGIN; INSERT</text>
+
+  <rect class="node-leader" x="356" y="314" width="128" height="52" rx="8" />
+  <text x="420" y="336" text-anchor="middle" class="node-title">Leader (Primary)</text>
+  <text x="420" y="353" text-anchor="middle" class="mono">WAL + Instant ACK</text>
+
+  <rect class="node-follower" x="690" y="318" width="184" height="44" rx="8" />
+  <text x="782" y="337" text-anchor="middle" class="node-title">Async Follower</text>
+  <text x="782" y="353" text-anchor="middle" class="mono">Applies WAL Later</text>
+
+  <!-- Step Labels -->
+  <text x="252" y="330" text-anchor="middle" class="mono" fill="#60a5fa">1. WRITE</text>
+  <text x="252" y="362" text-anchor="middle" class="mono" fill="#34d399">2. Instant COMMIT</text>
+  <text x="585" y="330" text-anchor="middle" class="mono" fill="#f59e0b">3. Background WAL (Lag)</text>
+
+  <!-- Lag Window Box -->
+  <rect class="lag-bar" x="504" y="352" width="162" height="20" rx="4" fill="#78350f" stroke="#f59e0b" stroke-width="1" />
+  <text x="585" y="366" text-anchor="middle" class="mono" fill="#fde68a">Lag Window (RPO &gt; 0)</text>
+
+  <!-- Animated Packet: Async Cycle (4s loop) -->
+  <!-- Phase 1: Client -> Leader (0.0 to 0.25) -->
+  <circle r="6" fill="#60a5fa" cy="340">
+    <animate attributeName="cx" values="154;356;356" keyTimes="0;0.25;1" dur="4s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.25;0.27;1" dur="4s" repeatCount="indefinite" />
+  </circle>
+  <!-- Phase 2: Leader -> Client Instant COMMIT (0.28 to 0.52) -->
+  <circle r="6" fill="#10b981" cy="348">
+    <animate attributeName="cx" values="356;356;154;154" keyTimes="0;0.28;0.52;1" dur="4s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.27;0.29;0.52;0.54;1" dur="4s" repeatCount="indefinite" />
+  </circle>
+  <!-- Phase 3: Background WAL stream (0.35 to 0.95) -->
+  <circle r="6" fill="#f59e0b" cy="340">
+    <animate attributeName="cx" values="484;484;690;690" keyTimes="0;0.35;0.92;1" dur="4s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.34;0.36;0.92;1" dur="4s" repeatCount="indefinite" />
+  </circle>
+
+  <text x="420" y="396" text-anchor="middle" class="mono" fill="#fca5a5">If Leader crashes during the lag window, committed writes not yet shipped are lost!</text>
+  <text x="44" y="428" class="subtitle">&#10003; Lowest write latency; immune to slow replicas.  &#9888; Stale reads on followers &amp; potential data loss on ungraceful failover.</text>
+</svg>

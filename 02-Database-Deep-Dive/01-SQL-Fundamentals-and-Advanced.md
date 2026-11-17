@@ -1,10 +1,59 @@
 # SQL Fundamentals and Advanced Concepts
 
+## Table of Contents
+
+- [SQL Execution Order (Critical for Interview Prep)](#sql-execution-order-critical-for-interview-prep)
+- [JOINs Deep Dive](#joins-deep-dive)
+- [Subqueries vs JOINs](#subqueries-vs-joins)
+- [Window Functions](#window-functions)
+- [Common Table Expressions (CTEs)](#common-table-expressions-ctes)
+- [Set Operations](#set-operations)
+- [CASE Expressions](#case-expressions)
+- [COALESCE and NULLIF](#coalesce-and-nullif)
+- [Aggregate Functions and GROUP BY](#aggregate-functions-and-group-by)
+- [EXISTS vs IN Performance](#exists-vs-in-performance)
+- [String Functions](#string-functions)
+- [Date/Time Functions](#datetime-functions)
+- [Top 20 SQL Interview Questions with Solutions](#top-20-sql-interview-questions-with-solutions)
+- [Interview Tips](#interview-tips)
+
+---
+
 ## SQL Execution Order (Critical for Interview Prep)
 
-Understanding the order SQL executes is fundamental. The written syntax differs from execution order:
+Understanding the order SQL executes is fundamental. The written syntax differs from logical execution order:
+
+![SQL Logical Execution Order and Alias Scope](./assets/01-sql-execution-order.svg)
+
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    S1["1. FROM / JOIN (Load + Join)"]:::blue --> S2["2. WHERE (Filter Rows - No Aliases)"]:::red
+    S2 --> S3["3. GROUP BY (Form Buckets)"]:::purple
+    S3 --> S4["4. HAVING (Filter Groups)"]:::amber
+    S4 --> S5["5. SELECT (Project + Bind Aliases)"]:::green
+    S5 --> S6["6. DISTINCT (Deduplicate)"]:::blue
+    S6 --> S7["7. ORDER BY (Sort - Aliases Valid)"]:::green
+    S7 --> S8["8. LIMIT / OFFSET (Slice Rows)"]:::blue
+```
 
 ### Execution Order vs Syntax Order
+
+| Stage | Written Order | Logical Execution Order | Scope &amp; Alias Visibility |
+|-------|--------------|------------------------|---------------------------|
+| **1** | `SELECT` | `FROM` / `JOIN` | Identifies source table(s) and join predicates |
+| **2** | `FROM` | `WHERE` | Filters individual rows before grouping; `SELECT` aliases **not** visible |
+| **3** | `WHERE` | `GROUP BY` | Aggregates rows into groups |
+| **4** | `GROUP BY` | `HAVING` | Filters groups (not individual rows) |
+| **5** | `HAVING` | `SELECT` | Evaluates expressions, window functions, and binds column aliases |
+| **6** | `ORDER BY` | `DISTINCT` | Removes duplicate projected rows |
+| **7** | `LIMIT / OFFSET` | `ORDER BY` | Sorts result set; `SELECT` aliases **are** visible |
+| **8** | — | `LIMIT / OFFSET` | Returns final subset of rows |
 
 **Written Order:**
 ```sql
@@ -28,9 +77,12 @@ LIMIT 10
 
 ### Why This Matters
 
-- You **cannot use aliases** in WHERE clause (WHERE executes before SELECT)
-- You **can use aliases** in ORDER BY (ORDER BY executes after SELECT)
-- Aggregate functions are **only valid in SELECT or HAVING** (need grouping context)
+- You **cannot use aliases** in `WHERE` clause (`WHERE` executes before `SELECT`)
+- You **can use aliases** in `ORDER BY` (`ORDER BY` executes after `SELECT`)
+- Aggregate functions are **only valid in `SELECT` or `HAVING`** (need grouping context)
+
+> [!IMPORTANT]
+> When an interviewer asks why `WHERE total_comp > 100000` throws an "unknown column" error, explain that `WHERE` runs at **Step 2** before `SELECT` binds `total_comp` at **Step 5**. `ORDER BY` runs at **Step 7**, so aliases are valid there.
 
 ```sql
 -- WRONG: Error - alias not yet defined
@@ -53,6 +105,22 @@ ORDER BY total_comp DESC;
 ---
 
 ## JOINs Deep Dive
+
+```mermaid
+flowchart TD
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    Q["Join Requirement?"]:::blue -->|"Only matching rows"| J1["INNER JOIN: B, C"]:::green
+    Q -->|"All Left + matching Right"| J2["LEFT JOIN: A, B, C"]:::blue
+    Q -->|"All Right + matching Left"| J3["RIGHT JOIN: B, C, D"]:::amber
+    Q -->|"All from both sides"| J4["FULL OUTER JOIN: A, B, C, D"]:::purple
+    Q -->|"Every pair N x M"| J5["CROSS JOIN: Cartesian"]:::red
+    Q -->|"Hierarchy in same table"| J6["SELF JOIN: e.manager_id = m.id"]:::green
+```
 
 ### 1. INNER JOIN
 
@@ -77,7 +145,7 @@ Employees Table          Departments Table
 
 ### 2. LEFT JOIN (LEFT OUTER JOIN)
 
-Returns **all rows from left table** + matching rows from right table. Non-matching get NULL.
+Returns **all rows from left table** + matching rows from right table. Non-matching get `NULL`.
 
 ```sql
 SELECT e.employee_id, e.name, d.department_name
@@ -97,11 +165,12 @@ Employees Table          Departments Table
     (All from left, matched right data where available)
 ```
 
-**Interview Tip:** "What if an employee has no department?" → LEFT JOIN includes them with NULLs.
+> [!TIP]
+> **Interview Tip:** "What if an employee has no department?" → `LEFT JOIN` includes them with `NULL`s. Watch out for filtering the right table in `WHERE` (e.g., `WHERE d.active = true`), which silently turns a `LEFT JOIN` into an `INNER JOIN`! Put right-table filters in the `ON` clause instead.
 
 ### 3. RIGHT JOIN (RIGHT OUTER JOIN)
 
-Returns **all rows from right table** + matching from left. Rarely used; usually rewrite as LEFT JOIN.
+Returns **all rows from right table** + matching from left. Rarely used; usually rewrite as `LEFT JOIN`.
 
 ```sql
 SELECT e.employee_id, e.name, d.department_name
@@ -116,7 +185,7 @@ LEFT JOIN employees e ON e.department_id = d.id;
 
 ### 4. FULL OUTER JOIN
 
-Returns **all rows from both tables**. Non-matching get NULLs.
+Returns **all rows from both tables**. Non-matching get `NULL`s.
 
 ```sql
 SELECT e.employee_id, e.name, d.department_name
@@ -137,7 +206,7 @@ Employees Table          Departments Table
     FULL OUTER JOIN: [A, B, C, D]
 ```
 
-**Performance Note:** FULL OUTER JOIN often requires hash or merge join; can be expensive on large tables.
+**Performance Note:** `FULL OUTER JOIN` often requires hash or merge join; can be expensive on large tables.
 
 ### 5. CROSS JOIN
 
@@ -183,13 +252,27 @@ LEFT JOIN employees m ON e.manager_id = m.employee_id;
 
 | Join Type | Selectivity | Use When | Performance |
 |-----------|-----------|----------|-------------|
-| INNER | Both tables needed | Standard case | Fastest; both tables filtered |
-| LEFT | Keep all left rows | Want all left records | Medium; right must be complete |
-| RIGHT | Keep all right rows | Rare; prefer LEFT | Medium; left must be complete |
-| FULL | All rows from both | Need unmatched from both | Slowest; no table pre-filtered |
-| CROSS | All combinations | Specific use cases | Very slow; N × M results |
+| `INNER` | Both tables needed | Standard case | Fastest; both tables filtered |
+| `LEFT` | Keep all left rows | Want all left records | Medium; right must be complete |
+| `RIGHT` | Keep all right rows | Rare; prefer `LEFT` | Medium; left must be complete |
+| `FULL` | All rows from both | Need unmatched from both | Slowest; no table pre-filtered |
+| `CROSS` | All combinations | Specific use cases | Very slow; N × M results |
 
 **Join Algorithm Selection (PostgreSQL):**
+
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    Opt["Planner Chooses Physical Join"]:::blue -->|"Small inner or indexed lookup"| NL["Nested Loop Join: O(N * log M)"]:::green
+    Opt -->|"Large unsorted equi-join"| HJ["Hash Join: O(N + M)"]:::purple
+    Opt -->|"Pre-sorted or range join"| MJ["Merge Join: O(N log N + M log M)"]:::amber
+```
+
 - **Nested Loop Join:** Sequential scan of inner table for each outer row. Good for small inner table or indexed join condition.
 - **Hash Join:** Builds hash table of inner table, probes with outer rows. Best for large tables, good hash distribution.
 - **Merge Join:** Both tables sorted on join columns. Good when data already sorted, useful for range joins.
@@ -198,13 +281,25 @@ LEFT JOIN employees m ON e.manager_id = m.employee_id;
 
 ## Subqueries vs JOINs
 
+```mermaid
+flowchart TD
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    C["Correlated Subquery (N+1)"]:::red -->|"Row 1..N triggers inner scan"| C1["O(N * M) Repeated Scans"]:::red
+    J["Derived Table + JOIN"]:::green -->|"Compute dept_avg once"| J1["Single Hash/Merge Join O(N + M)"]:::green
+```
+
 ### When to Use Subqueries
 
 **Subqueries best for:**
 1. Logical readability (complex logic in subquery)
 2. Aggregating first, then joining
 3. Top-N per group
-4. Exists/Not Exists checks
+4. `EXISTS` / `NOT EXISTS` checks
 
 ```sql
 -- Find employees earning more than average salary
@@ -253,7 +348,8 @@ JOIN (
 WHERE e.salary > dept_avg.dept_avg;
 ```
 
-**Interview Tip:** Correlated subqueries often indicate N+1 problem. Rewrite with JOIN when possible.
+> [!WARNING]
+> **Interview Tip:** Correlated subqueries often indicate an N+1 problem. Rewrite with a `JOIN` or a Window Function (`AVG(salary) OVER (PARTITION BY department_id)`) when possible so the table is scanned once.
 
 ### EXISTS vs IN with Subqueries
 
@@ -283,11 +379,27 @@ WHERE employee_id IN (
 
 ## Window Functions
 
-Window functions operate on a set of rows (window) and return a value for each row. They don't collapse rows like GROUP BY.
+Window functions operate on a set of rows (window) and return a value for each row. They don't collapse rows like `GROUP BY`.
+
+![Window Functions and Sliding Frame Animation](./assets/01-window-functions-frames.svg)
+
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    R["Input Rows"]:::blue --> P["PARTITION BY (Split into Groups)"]:::purple
+    P --> O["ORDER BY (Sort Within Partition)"]:::amber
+    O --> F["ROWS/RANGE Frame (Slide Window)"]:::green
+    F --> W["Emit 1 Value Per Row (No Collapse)"]:::blue
+```
 
 ### Core Window Functions
 
-#### 1. ROW_NUMBER()
+#### 1. `ROW_NUMBER()`
 
 Assigns unique sequential number within partition.
 
@@ -302,10 +414,17 @@ FROM employees;
 -- dept 2: employee D (rank 1), employee E (rank 2)
 ```
 
-### 2. RANK() and DENSE_RANK()
+### 2. `RANK()` and `DENSE_RANK()`
 
-**RANK():** Assigns rank with gaps for ties
-**DENSE_RANK():** Assigns rank without gaps
+- **`RANK()`:** Assigns rank with gaps for ties (`1, 1, 3, 4`)
+- **`DENSE_RANK()`:** Assigns rank without gaps (`1, 1, 2, 3`)
+
+| Salary | `ROW_NUMBER()` | `RANK()` | `DENSE_RANK()` |
+|--------|---------------|----------|---------------|
+| 100 | 1 | 1 | 1 |
+| 100 | 2 | 1 | 1 |
+| 90 | 3 | 3 | 2 |
+| 80 | 4 | 4 | 3 |
 
 ```sql
 SELECT
@@ -321,7 +440,7 @@ FROM employees;
 -- ROW_NUMBER: 1,   2,  3,  4
 ```
 
-### 3. LEAD() and LAG()
+### 3. `LEAD()` and `LAG()`
 
 Access rows before/after current row within partition.
 
@@ -340,7 +459,7 @@ FROM employees
 ORDER BY hire_date;
 ```
 
-### 4. NTILE()
+### 4. `NTILE()`
 
 Divides rows into N buckets.
 
@@ -353,9 +472,12 @@ FROM employees;
 -- Quartiles: 25% in bucket 1, 25% in bucket 2, etc.
 ```
 
-### 5. FIRST_VALUE() and LAST_VALUE()
+### 5. `FIRST_VALUE()` and `LAST_VALUE()`
 
 Access first/last value in window.
+
+> [!IMPORTANT]
+> By default, when `ORDER BY` is present in `OVER (...)`, SQL uses `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. That makes `LAST_VALUE()` return the **current row** unless you explicitly specify `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`!
 
 ```sql
 SELECT
@@ -406,14 +528,29 @@ ROWS BETWEEN <start> AND <end>
 -- UNBOUNDED FOLLOWING  - to last row
 
 -- Examples:
-ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW  -- Running total
-ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING          -- Window around current
-ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING  -- All rows
+ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW         -- Running total
+ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING                 -- Window around current
+ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING -- All rows
 ```
 
 ---
 
 ## Common Table Expressions (CTEs)
+
+```mermaid
+flowchart TD
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    Base["Base Case: Anchor Query (level = 1)"]:::blue --> Union["UNION ALL Working Table"]:::purple
+    Union --> Step["Recursive Step: Join employees ON manager_id"]:::amber
+    Step --> Guard{"Guard: eh.level &lt; 5?"}:::red
+    Guard -->|"True: More rows"| Union
+    Guard -->|"False: Empty or depth cap"| Out["Final Output: Employee Hierarchy"]:::green
+```
 
 ### Basic CTE
 
@@ -435,7 +572,7 @@ WHERE e.salary > da.avg_salary;
 - Improves readability
 - Can reference multiple times
 - Can chain multiple CTEs
-- Performance: CTE is materialized (executed once)
+- Performance: CTE can be materialized (executed once) or inlined by modern planners (PostgreSQL 12+)
 
 ### Multiple CTEs
 
@@ -479,13 +616,37 @@ SELECT * FROM employee_hierarchy
 ORDER BY level, employee_id;
 ```
 
-**Critical for Interviews:** Recursive CTEs often appear in system design questions for org charts, category hierarchies, etc.
+> [!TIP]
+> **Critical for Interviews:** Recursive CTEs often appear in system design and SQL rounds for org charts, category trees, and graph traversal. Always include a depth guard (e.g., `WHERE eh.level < 5`) or cycle detection to prevent infinite loops on cyclic data.
 
 ---
 
 ## Set Operations
 
-### UNION (Removes Duplicates)
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    A["Set A: 1, 2, 3"]:::blue --> Op{"Set Operator"}:::purple
+    B["Set B: 2, 3, 4"]:::blue --> Op
+    Op -->|"UNION"| U["1, 2, 3, 4 (Deduplicated)"]:::amber
+    Op -->|"UNION ALL"| UA["1, 2, 3, 2, 3, 4 (Fastest)"]:::green
+    Op -->|"INTERSECT"| I["2, 3 (Common Rows)"]:::purple
+    Op -->|"EXCEPT"| E["1 (In A, Not in B)"]:::red
+```
+
+| Operator | Duplicates | Sort/Hash Cost | Use Case |
+|----------|-----------|----------------|----------|
+| `UNION` | Removed (`DISTINCT`) | High | Combine sets needing deduplication |
+| `UNION ALL` | Kept | Very Low | Disjoint sets or when duplicates are valid |
+| `INTERSECT` | Removed | Medium-High | Rows present in both queries |
+| `EXCEPT` | Removed | Medium-High | Rows in first query but absent from second |
+
+### `UNION` (Removes Duplicates)
 
 ```sql
 SELECT employee_id, name, 'Current' AS status
@@ -499,9 +660,10 @@ FROM employees
 WHERE active = false;
 ```
 
-**Performance:** UNION performs DISTINCT, which is expensive. Use UNION ALL if duplicates are impossible.
+> [!WARNING]
+> **Performance:** `UNION` performs `DISTINCT`, which requires sorting or hashing all rows. Always prefer `UNION ALL` if duplicates are impossible (e.g., mutually exclusive `WHERE` predicates) or acceptable.
 
-### UNION ALL (Keeps Duplicates)
+### `UNION ALL` (Keeps Duplicates)
 
 ```sql
 -- Combine results from multiple tables without distinct operation
@@ -514,7 +676,7 @@ SELECT contractor_id, name, rate * hours_worked, 'contractor'
 FROM contractors;
 ```
 
-### INTERSECT (Common Rows)
+### `INTERSECT` (Common Rows)
 
 ```sql
 -- Find IDs that appear in both employees and contractors
@@ -525,7 +687,7 @@ INTERSECT
 SELECT id FROM contractors;
 ```
 
-### EXCEPT (Difference)
+### `EXCEPT` (Difference)
 
 ```sql
 -- Find employees who are not contractors
@@ -539,6 +701,23 @@ SELECT employee_id FROM contractors;
 ---
 
 ## CASE Expressions
+
+```mermaid
+flowchart TD
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    In["Row: salary"]:::blue --> W1{"salary &lt; 50000?"}:::amber
+    W1 -->|"True"| R1["'Junior' (Stop)"]:::green
+    W1 -->|"False"| W2{"salary &lt; 100000?"}:::amber
+    W2 -->|"True"| R2["'Mid' (Stop)"]:::green
+    W2 -->|"False"| W3{"salary &lt; 150000?"}:::amber
+    W3 -->|"True"| R3["'Senior' (Stop)"]:::green
+    W3 -->|"False"| R4["ELSE 'Executive'"]:::purple
+```
 
 ### Simple CASE
 
@@ -581,13 +760,32 @@ FROM employees
 GROUP BY department_id;
 ```
 
+> [!TIP]
+> **Conditional Aggregation:** `COUNT(CASE WHEN ... THEN 1 END)` works because `COUNT(col)` ignores `NULL`s, and a `CASE` without an `ELSE` implicitly returns `NULL` when the condition is false. Never use `ELSE 0` inside `COUNT(CASE ...)` or it will count `0`! Use `ELSE 0` only with `SUM(CASE ...)`.
+
 ---
 
 ## COALESCE and NULLIF
 
-### COALESCE
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
 
-Returns first non-NULL value.
+    C1["phone_mobile"]:::blue -->|"NULL"| C2["phone_home"]:::blue
+    C2 -->|"NULL"| C3["phone_work"]:::blue
+    C3 -->|"NULL"| C4["'No phone'"]:::green
+
+    N1["NULLIF(costs, 0)"]:::purple -->|"costs == 0"| N2["Returns NULL (Safe Divide)"]:::amber
+    N1 -->|"costs != 0"| N3["Returns costs"]:::green
+```
+
+### `COALESCE`
+
+Returns first non-`NULL` value.
 
 ```sql
 SELECT
@@ -598,9 +796,9 @@ FROM employees;
 -- Useful for providing defaults when columns are NULL
 ```
 
-### NULLIF
+### `NULLIF`
 
-Returns NULL if two expressions are equal, otherwise returns first expression.
+Returns `NULL` if two expressions are equal, otherwise returns first expression.
 
 ```sql
 -- Avoid division by zero
@@ -614,9 +812,26 @@ SELECT
 FROM products;
 ```
 
+> [!NOTE]
+> Combining `COALESCE(revenue / NULLIF(costs, 0), 0)` is a classic production SQL idiom: `NULLIF` prevents a division-by-zero crash by turning `0` into `NULL`, and `COALESCE` converts the resulting `NULL` ratio into `0`.
+
 ---
 
 ## Aggregate Functions and GROUP BY
+
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    T["employees"]:::blue --> W["WHERE salary &gt; 50000 (Pre-Filter Rows)"]:::red
+    W --> G["GROUP BY department_id (Collapse Buckets)"]:::purple
+    G --> H["HAVING COUNT(*) &gt; 5 (Post-Filter Groups)"]:::amber
+    H --> S["SELECT Aggregates"]:::green
+```
 
 ### Core Aggregates
 
@@ -634,7 +849,7 @@ FROM employees
 GROUP BY department_id;
 ```
 
-### HAVING vs WHERE
+### `HAVING` vs `WHERE`
 
 ```sql
 -- WHERE: Filters BEFORE grouping
@@ -649,11 +864,30 @@ GROUP BY department_id
 HAVING COUNT(*) > 5;  -- Filter groups second
 ```
 
+> [!IMPORTANT]
+> `COUNT(*)` counts all rows including `NULL`s, whereas `COUNT(column)` counts only non-`NULL` values. Similarly, `AVG(salary)` ignores `NULL` salaries—use `AVG(COALESCE(salary, 0))` if `NULL` should be treated as `0`.
+
 ---
 
 ## EXISTS vs IN Performance
 
-### EXISTS (Better for Subqueries with Large Result Sets)
+```mermaid
+flowchart TD
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    E["EXISTS / NOT EXISTS"]:::green --> E1["Semi-Join: Short-circuits on 1st match"]:::green
+    E1 --> E2["Safe with NULLs (TRUE/FALSE only)"]:::blue
+
+    N["NOT IN (subquery)"]:::red --> N1{"Any NULL in subquery?"}:::amber
+    N1 -->|"Yes"| N2["x != NULL evaluates to UNKNOWN → 0 ROWS!"]:::red
+    N1 -->|"No"| N3["Returns unmatched rows"]:::blue
+```
+
+### `EXISTS` (Better for Subqueries with Large Result Sets)
 
 ```sql
 -- EXISTS stops checking once it finds ANY match
@@ -669,10 +903,10 @@ WHERE EXISTS (
 
 **Advantages:**
 - Stops early (doesn't need to build full result set)
-- Handles NULL better
+- Handles `NULL` better
 - Can be optimized by query planner
 
-### IN (Simpler Syntax, But May Build Full Set)
+### `IN` (Simpler Syntax, But May Build Full Set)
 
 ```sql
 SELECT e.employee_id, e.name
@@ -687,7 +921,7 @@ WHERE employee_id IN (
 -- Better to use NOT EXISTS instead of NOT IN
 ```
 
-### NOT EXISTS vs NOT IN
+### `NOT EXISTS` vs `NOT IN`
 
 ```sql
 -- Correct: Use NOT EXISTS
@@ -709,9 +943,25 @@ WHERE employee_id NOT IN (
 );
 ```
 
+> [!WARNING]
+> **Classic SQL Trap:** `x NOT IN (1, 2, NULL)` expands to `x != 1 AND x != 2 AND x != NULL`. Because `x != NULL` is `UNKNOWN`, the entire `AND` expression never evaluates to `TRUE`, returning **zero rows**. Always use `NOT EXISTS` (or filter `WHERE col IS NOT NULL` inside `NOT IN`).
+
 ---
 
 ## String Functions
+
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    Raw["Raw String"]:::blue --> Clean["TRIM / UPPER / LOWER"]:::green
+    Clean --> Mod["SUBSTRING / REPLACE / CONCAT"]:::amber
+    Mod --> Split["STRING_TO_ARRAY -&gt; UNNEST (Rows)"]:::purple
+```
 
 ```sql
 -- Concatenation
@@ -740,9 +990,25 @@ SELECT POSITION('a' IN name) FROM employees;  -- Position of first 'a'
 SELECT UNNEST(STRING_TO_ARRAY(email, '.')) FROM employees;
 ```
 
+> [!TIP]
+> **Indexing Note:** Applying `LOWER(email) = 'a@b.com'` in a `WHERE` clause prevents a standard B-tree index on `email` from being used unless you create a functional/expression index (`CREATE INDEX idx_email_lower ON users (LOWER(email))`).
+
 ---
 
 ## Date/Time Functions
+
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    TS["Timestamp: 2026-11-17 14:35:10"]:::blue -->|"DATE_TRUNC('month', ts)"| Trunc["2026-11-01 00:00:00 (Bucket)"]:::green
+    TS -->|"EXTRACT(YEAR FROM ts)"| Ext["2026 (Part)"]:::purple
+    TS -->|"+ INTERVAL '1 year'"| Arith["2027-11-17 14:35:10"]:::amber
+```
 
 ```sql
 -- Current date/time
@@ -770,9 +1036,29 @@ SELECT * FROM employees
 WHERE hire_date >= DATE_TRUNC('month', NOW()) - INTERVAL '1 year';
 ```
 
+> [!IMPORTANT]
+> **Sargable Predicates:** Keep indexed date columns bare on one side of the comparison (`WHERE hire_date >= DATE_TRUNC('month', NOW()) - INTERVAL '1 year'`). Wrapping the column itself (`WHERE EXTRACT(YEAR FROM hire_date) = 2025`) forces a full table scan.
+
 ---
 
 ## Top 20 SQL Interview Questions with Solutions
+
+```mermaid
+flowchart TD
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    P["SQL Interview Problem"]:::blue -->|"Top-N / Ranking"| W["DENSE_RANK / ROW_NUMBER (Q1, Q2, Q5, Q17, Q18)"]:::green
+    P -->|"Streaks / Gaps"| G["val - ROW_NUMBER() Grouping (Q7, Q16)"]:::purple
+    P -->|"Running / Moving Stats"| S["SUM/AVG OVER + Frame (Q8, Q9, Q15)"]:::amber
+    P -->|"Sequence / Funnel"| L["LAG / LEAD + PARTITION BY (Q19)"]:::blue
+    P -->|"Org Chart / Tree"| R["WITH RECURSIVE CTE (Q10)"]:::red
+    P -->|"Missing / Anti-Join"| A["NOT EXISTS / LEFT JOIN IS NULL (Q13, Q14)"]:::green
+    P -->|"Pivots / Cohorts"| C["CASE + GROUP BY (Q11, Q20)"]:::amber
+```
 
 ### 1. Find the Second Highest Salary
 
@@ -1061,16 +1347,34 @@ GROUP BY cohort_month
 ORDER BY cohort_month;
 ```
 
+> [!TIP]
+> **Pattern Recognition:** In Q7 (Consecutive Dates) and Q16 (Gap and Islands), subtracting `ROW_NUMBER()` from a monotonically increasing sequence produces a constant group key for contiguous runs—this single trick solves most streak and island interview problems.
+
 ---
 
 ## Interview Tips
 
-1. **Always clarify requirements first** — Ask about NULL handling, edge cases, performance requirements
+```mermaid
+flowchart LR
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87
+
+    T1["1. Clarify Ties, NULLs &amp; Scale"]:::blue --> T2["2. Structure with CTEs + Windows"]:::green
+    T2 --> T3["3. Walk Through Edge Cases"]:::amber
+    T3 --> T4["4. Analyze Indexes &amp; Join Plan"]:::purple
+```
+
+1. **Always clarify requirements first** — Ask about `NULL` handling, edge cases, performance requirements
 2. **Start with readable SQL, optimize later** — Premature optimization is the root of all evil
 3. **Use window functions for ranking/ordering** — Much cleaner than subqueries
-4. **Avoid correlated subqueries** — Always check if JOIN is better
+4. **Avoid correlated subqueries** — Always check if `JOIN` is better
 5. **Use CTEs for complex queries** — Makes logic clearer and often performs better
-6. **Test with edge cases** — Empty sets, NULLs, duplicates
+6. **Test with edge cases** — Empty sets, `NULL`s, duplicates
 7. **Explain query plan** — "This uses a hash join on indexed columns for O(n) performance"
 8. **Mention performance** — "This will full table scan if not indexed" or "This is O(log n) with B-tree index"
 
+> [!IMPORTANT]
+> Before finishing any SQL interview answer, verbally trace a 3-row edge-case table containing a **tie**, a **`NULL`**, and an **empty partition**—catching those proactively separates senior candidates from everyone else.

@@ -1,285 +1,190 @@
 # Database & PostgreSQL Deep-Dive Interview Preparation
 
-## Overview
+![Database Deep Dive Animated Roadmap Banner](./assets/00-database-deep-dive-banner.svg)
 
-This comprehensive interview preparation package contains 6 detailed markdown files covering database fundamentals, PostgreSQL internals, optimization, and real-world scenarios. Total: 6,100+ lines of content across ~170KB.
-
-**Target Audience:** Mid-level Java engineers (5+ years) preparing for FAANG company technical interviews.
-
----
-
-## File Breakdown
-
-### 1. **01-SQL-Fundamentals-and-Advanced.md** (1,076 lines)
-Deep dive into SQL with focus on execution and optimization.
-
-**Key Topics:**
-- SQL execution order (FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT)
-- JOINs (INNER, LEFT, RIGHT, FULL, CROSS, SELF) with Venn diagrams and performance implications
-- Subqueries vs JOINs, correlated subqueries
-- Window Functions: ROW_NUMBER, RANK, DENSE_RANK, LEAD, LAG, NTILE, running totals
-- CTEs and recursive CTEs
-- Set operations (UNION, INTERSECT, EXCEPT)
-- CASE expressions, COALESCE, NULLIF
-- Aggregate functions and GROUP BY
-- EXISTS vs IN (performance differences)
-- String and date/time functions
-- **20 solved SQL interview problems** (2nd highest salary, Nth highest, consecutive dates, pivoting, etc.)
+> [!NOTE]
+> **Target Audience & Scope:** Built for mid-to-senior Java engineers (5+ years) preparing for FAANG technical interviews (Google, Amazon, Meta, Apple, Netflix, Microsoft). Covers **6,100+ lines** across **6 core guides** (~170 KB), **300+ code examples**, **150+ SQL queries**, and **50+ interview Q&As**.
 
 ---
 
-### 2. **02-PostgreSQL-Internals.md** (773 lines)
-PostgreSQL architecture and internal mechanisms.
+## Module Learning Roadmap
 
-**Key Topics:**
-- Process architecture (Postmaster, backends, auxiliary processes)
-- MVCC: xmin/xmax, tuple versioning, visibility determination
-- WAL (Write-Ahead Logging): Durability, segments, crash recovery
-- VACUUM and AUTOVACUUM: Dead tuples, bloat, tuning
-- TOAST (Oversized-Attribute Storage)
-- Buffer management and shared_buffers tuning
-- Data types: Choosing right types, jsonb vs json, arrays, enums
-- Tablespaces for multi-disk setup
-- PostgreSQL-specific features: LISTEN/NOTIFY, COPY, UPSERT (ON CONFLICT), LATERAL, materialized views
-- Configuration tuning: shared_buffers, work_mem, effective_cache_size
-- PgBouncer connection pooling
-- Common interview Q&A
+Follow the 6-stage progression below from SQL execution fundamentals through PostgreSQL internals, query optimization, concurrency control, schema design, and FAANG scenario drills.
 
----
+```mermaid
+flowchart LR
+    S1["01 SQL Fundamentals (1,076 lines)"] --> S2["02 PostgreSQL Internals (773 lines)"]
+    S2 --> S3["03 Indexing and Optimization (874 lines)"]
+    S3 --> S4["04 Transactions and Concurrency (903 lines)"]
+    S4 --> S5["05 Database Design and Scale (1,050 lines)"]
+    S5 --> S6["06 FAANG 50+ Q&amp;As (1,466 lines)"]
 
-### 3. **03-Indexing-and-Query-Optimization.md** (874 lines)
-Indexing strategies and query optimization techniques.
+    S1 -.-> QR["Quick Reference Cheat Sheet"]
+    S6 -.-> IDX["Full Module Index"]
 
-**Key Topics:**
-- B-Tree internals: Structure, page splits, search algorithm
-- Index types: B-Tree, Hash, GiST, SP-GiST, GIN, BRIN (when to use each)
-- Composite indexes and leftmost prefix rule
-- Covering indexes (INCLUDE clause)
-- Partial indexes, expression indexes
-- EXPLAIN and EXPLAIN ANALYZE: Reading execution plans, node types
-- Query optimization strategies (avoiding full table scans, statistics)
-- N+1 query problem and solutions
-- Index bloat, REINDEX
-- Slow query identification workflow
-- Partitioning: Range, list, hash with examples
-- Performance anti-patterns
-- Interview scenario: "Your query is slow"
+    classDef foundation fill:#0ea5e9,stroke:#38bdf8,color:#0f172a,stroke-width:2px
+    classDef engine fill:#6366f1,stroke:#818cf8,color:#f8fafc,stroke-width:2px
+    classDef perf fill:#14b8a6,stroke:#2dd4bf,color:#0f172a,stroke-width:2px
+    classDef concurrency fill:#f59e0b,stroke:#fbbf24,color:#0f172a,stroke-width:2px
+    classDef design fill:#8b5cf6,stroke:#a78bfa,color:#f8fafc,stroke-width:2px
+    classDef mastery fill:#10b981,stroke:#34d399,color:#0f172a,stroke-width:2px
+    classDef ref fill:#1e293b,stroke:#64748b,color:#e2e8f0,stroke-width:1.5px
 
----
+    class S1 foundation
+    class S2 engine
+    class S3 perf
+    class S4 concurrency
+    class S5 design
+    class S6 mastery
+    class QR,IDX ref
+```
 
-### 4. **04-Transactions-and-Concurrency-Control.md** (903 lines)
-ACID properties, isolation, and concurrency management.
-
-**Key Topics:**
-- ACID properties: Detailed explanation of each
-- Isolation levels: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
-- Anomalies: Dirty reads, non-repeatable reads, phantom reads, serialization anomalies
-- PostgreSQL locking: Row-level (FOR UPDATE, FOR SHARE, SKIP LOCKED), table-level, advisory
-- Deadlock detection and prevention strategies
-- Optimistic vs pessimistic locking in Java/JPA
-- Two-Phase Commit (2PC)
-- Savepoints and nested transactions
-- Long-running transaction problems and solutions
-- Connection pooling and transaction management
-- Interview scenarios: Deadlock, slow writes, connection exhaustion
+| Metric | Value | Coverage |
+| :--- | :--- | :--- |
+| **Total Content** | 6,100+ lines (~170 KB) | 6 deep-dive guides + [INDEX.md](./INDEX.md) + [QUICK-REFERENCE.md](./QUICK-REFERENCE.md) |
+| **Code & SQL** | 300+ examples, 150+ queries | PostgreSQL SQL, `EXPLAIN ANALYZE`, Java/JPA locking patterns |
+| **Practice & Q&A** | 20 SQL challenges + 50+ Q&As | Window functions, MVCC, deadlocks, system design, war stories |
+| **Difficulty** | Senior / Staff Engineer | Trade-off analysis, internals, production debugging |
 
 ---
 
-### 5. **05-Database-Design-and-Normalization.md** (1,050 lines)
-Database design principles and patterns.
+## Core Modules & File Breakdown
 
-**Key Topics:**
-- Normal forms: 1NF, 2NF, 3NF, BCNF with examples
-- Denormalization trade-offs and when to use
-- Entity-Relationship modeling and cardinality types
-- Primary keys: Natural vs surrogate, UUID vs serial
-- Foreign keys and cascading actions, deferred constraints
-- Database design patterns:
-  - Polymorphic associations (EAV)
-  - Adjacency list (tree hierarchies)
-  - Materialized path
-  - Nested sets
-- Schema migrations: Zero-downtime strategies, expand-contract pattern
-- Sharding: Horizontal partitioning, sharding keys, challenges
-- Replication: Streaming vs logical, synchronous vs asynchronous
-- CAP theorem and implications
-- **Interview exercises:** Social media database, e-commerce system design
+| # | Module Guide | Lines | Core Focus | Key Hands-On Deliverables |
+| :--- | :--- | :---: | :--- | :--- |
+| **01** | [01-SQL-Fundamentals-and-Advanced.md](./01-SQL-Fundamentals-and-Advanced.md) | 1,076 | Execution order, JOINs, Window Functions, CTEs, `EXISTS` vs `IN` | 20 solved SQL interview problems (Nth salary, consecutive dates, pivoting) |
+| **02** | [02-PostgreSQL-Internals.md](./02-PostgreSQL-Internals.md) | 773 | Postmaster/backends, MVCC (`xmin`/`xmax`), WAL, `VACUUM`, TOAST, PgBouncer | Tuning `shared_buffers`, `work_mem`, `effective_cache_size`, `jsonb` |
+| **03** | [03-Indexing-and-Query-Optimization.md](./03-Indexing-and-Query-Optimization.md) | 874 | B-Tree, Hash, GiST, SP-GiST, GIN, BRIN, covering/partial indexes | Reading `EXPLAIN (ANALYZE, BUFFERS)`, fixing N+1, partitioning |
+| **04** | [04-Transactions-and-Concurrency-Control.md](./04-Transactions-and-Concurrency-Control.md) | 903 | ACID, isolation levels, anomalies, row/table/advisory locks, 2PC | Deadlock prevention, `SKIP LOCKED`, Java/JPA optimistic vs pessimistic |
+| **05** | [05-Database-Design-and-Normalization.md](./05-Database-Design-and-Normalization.md) | 1,050 | 1NF–BCNF, denormalization, EAV, trees, zero-downtime migrations | Sharding, streaming vs logical replication, Twitter/X & e-commerce schemas |
+| **06** | [06-Database-Interview-Questions.md](./06-Database-Interview-Questions.md) | 1,466 | 50+ FAANG Q&As across SQL, internals, indexing, concurrency, design | "Your query is slow" war stories, XID wraparound, 10 red-flag anti-patterns |
+
+> [!TIP]
+> **Fast Navigation:** Use [INDEX.md](./INDEX.md) for a topic-by-topic map and [QUICK-REFERENCE.md](./QUICK-REFERENCE.md) for last-minute interview day syntax and tuning formulas.
 
 ---
 
-### 6. **06-Database-Interview-Questions.md** (1,466 lines)
-Comprehensive Q&A covering 50+ interview questions across all categories.
+## Topic Dependency & FAANG Priority Tree
 
-**Question Categories:**
-1. **SQL Query Optimization** (Q1-Q6)
-   - 2nd highest salary, department averages, consecutive dates, pivoting, etc.
+Understanding how PostgreSQL storage and SQL execution underpin indexing, locking, and distributed scaling makes trade-off questions effortless.
 
-2. **PostgreSQL-Specific** (Q7-Q11)
-   - MVCC explained, WAL & durability, VACUUM, buffer management, slow query debugging
+```mermaid
+flowchart TD
+    ROOT["Database Mastery Core"] --> P1["Must Know (Tier 1)"]
+    ROOT --> P2["Should Know (Tier 2)"]
+    ROOT --> P3["Nice to Know (Tier 3)"]
 
-3. **Indexing & Performance** (Q12-Q14)
-   - Index types, covering indexes, composite index column order
+    P1 --> M1["SQL Execution Order and Windowing"]
+    P1 --> M2["MVCC and Snapshot Visibility"]
+    P1 --> M3["Index Types and Leftmost Prefix"]
+    P1 --> M4["Isolation Levels and Anomalies"]
+    P1 --> M5["Normalization vs Denormalization"]
 
-4. **Transactions & Concurrency** (Q15-Q17)
-   - Isolation levels, deadlock prevention, optimistic vs pessimistic locking
+    M1 --> S1["EXPLAIN ANALYZE Plans"]
+    M2 --> S2["Deadlock Prevention and Locking"]
+    M3 --> S3["Slow Query Debugging Workflow"]
+    M5 --> S4["Zero-Downtime Migrations and Sharding"]
 
-5. **Database Design** (Q18-Q20)
-   - Twitter/X database design, e-commerce system, normalization vs denormalization
+    P2 --> S1
+    P2 --> S2
+    P2 --> S3
+    P2 --> S4
 
-6. **Scenario-Based** (Q21-Q26)
-   - Database slowness debugging, outage handling, handling millions of inserts
-   - "What happens when..." scenarios (query execution, xid wraparound, small buffers)
+    P3 --> N1["WAL Segments and Checkpoints"]
+    P3 --> N2["Shared Buffers and TOAST"]
+    P3 --> N3["Streaming vs Logical Replication"]
+    P3 --> N4["Advisory Locks and XID Wraparound"]
 
-7. **Comparison Questions** (Q27)
-   - PostgreSQL vs MySQL vs NoSQL (when to use each)
+    classDef root fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef tier1 fill:#10b981,stroke:#34d399,color:#0f172a,stroke-width:2px
+    classDef tier2 fill:#f59e0b,stroke:#fbbf24,color:#0f172a,stroke-width:2px
+    classDef tier3 fill:#6366f1,stroke:#818cf8,color:#f8fafc,stroke-width:2px
+    classDef leaf fill:#0f172a,stroke:#475569,color:#e2e8f0,stroke-width:1.5px
 
-8. **Red Flags & Anti-Patterns** (Q28)
-   - 10 common mistakes to avoid (N+1, missing indexes, correlated subqueries, etc.)
-
-**Bonus:** Interview tips and best practices
-
----
-
-## How to Use This Material
-
-### Week 1: Fundamentals
-- Read files 1-2 (SQL + PostgreSQL Internals)
-- Take notes on key concepts
-- Attempt SQL challenges in file 1
-
-### Week 2: Optimization & Design
-- Read files 3-5 (Indexing, Transactions, Design)
-- Study design patterns
-- Review EXPLAIN ANALYZE examples
-
-### Week 3: Interview Prep
-- Read file 6 (Interview Questions)
-- Practice explaining concepts out loud
-- Mock interviews covering scenarios
-- Review red flags/anti-patterns
-
-### Interview Day
-- Review "Interview Tips" section
-- Focus on explaining trade-offs
-- Be ready with concrete examples
-- Show knowledge of internals
+    class ROOT root
+    class P1 tier1
+    class P2 tier2
+    class P3 tier3
+    class M1,M2,M3,M4,M5,S1,S2,S3,S4,N1,N2,N3,N4 leaf
+```
 
 ---
 
-## Key Concepts to Master
+## 3-Week Prep Track Loop
 
-### Must Know:
-1. SQL execution order and optimization
-2. How MVCC prevents locking
-3. Index types and when to use each
-4. Isolation levels and anomalies
-5. Database design patterns
-6. Normalization vs denormalization
+Structure your preparation into focused weekly sprints with active SQL execution and out-loud mock explanations.
 
-### Should Know:
-1. EXPLAIN ANALYZE interpretation
-2. Deadlock prevention
-3. Query optimization workflow
-4. Schema migration strategies
-5. Partitioning and sharding
+```mermaid
+flowchart LR
+    W1["Week 1: Foundations (Files 01-02)"] --> W2["Week 2: Optimization and Design (Files 03-05)"]
+    W2 --> W3["Week 3: Mock Drills (File 06)"]
+    W3 --> CHECK{"Can Explain Trade-Offs and Internals?"}
+    CHECK -- "Needs Polish" --> AUDIT["Audit Red Flags and Re-Run EXPLAIN"]
+    AUDIT --> W2
+    CHECK -- "Ready" --> DAY["Interview Day: Quick Reference Review"]
 
-### Nice to Know:
-1. WAL internals
-2. Buffer management details
-3. TOAST mechanism
-4. Replication types
-5. Advisory locks
+    classDef week fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef gate fill:#f59e0b,stroke:#fbbf24,color:#0f172a,stroke-width:2px
+    classDef loop fill:#6366f1,stroke:#818cf8,color:#f8fafc,stroke-width:2px
+    classDef done fill:#10b981,stroke:#34d399,color:#0f172a,stroke-width:2px
+
+    class W1,W2,W3 week
+    class CHECK gate
+    class AUDIT loop
+    class DAY done
+```
+
+| Phase | Files to Study | Action Plan |
+| :--- | :--- | :--- |
+| **Week 1: Fundamentals** | `01` SQL + `02` PostgreSQL | Master SQL execution order, solve all 20 SQL challenges, diagram MVCC & WAL |
+| **Week 2: Optimization & Design** | `03` Indexing + `04` Transactions + `05` Design | Practice `EXPLAIN ANALYZE`, compare isolation anomalies, sketch sharded schemas |
+| **Week 3: Interview Prep** | `06` 50+ Q&As | Explain answers out loud, drill scenario questions, eliminate the 10 red flags |
+| **Interview Day** | [QUICK-REFERENCE.md](./QUICK-REFERENCE.md) | Review trade-offs, tuning parameters, and concrete production examples |
 
 ---
 
 ## Interview Question Quick Index
 
-| Topic | Q# | Difficulty |
-|-------|-----|-----------|
-| SQL Basics | Q1-Q6 | Easy-Medium |
-| MVCC | Q7 | Medium |
-| WAL | Q8 | Medium |
-| VACUUM | Q9 | Medium |
-| Tuning | Q10-Q11 | Medium |
-| Indexes | Q12-Q14 | Medium |
-| Isolation | Q15 | Hard |
-| Deadlock | Q16-Q17 | Hard |
-| Design | Q18-Q20 | Hard |
-| Scenarios | Q21-Q26 | Hard |
-| Comparison | Q27 | Medium |
-| Anti-Patterns | Q28 | Easy |
+All 28+ grouped question sets live in [06-Database-Interview-Questions.md](./06-Database-Interview-Questions.md):
+
+| Topic | Question Range | Difficulty | Primary Reference |
+| :--- | :--- | :--- | :--- |
+| **SQL Query Optimization** | Q1–Q6 | Easy–Medium | [01-SQL-Fundamentals-and-Advanced.md](./01-SQL-Fundamentals-and-Advanced.md) |
+| **MVCC Internals** | Q7 | Medium | [02-PostgreSQL-Internals.md](./02-PostgreSQL-Internals.md) |
+| **WAL & Durability** | Q8 | Medium | [02-PostgreSQL-Internals.md](./02-PostgreSQL-Internals.md) |
+| **VACUUM & Bloat** | Q9 | Medium | [02-PostgreSQL-Internals.md](./02-PostgreSQL-Internals.md) |
+| **Buffer & Slow Query Tuning** | Q10–Q11 | Medium | [02-PostgreSQL-Internals.md](./02-PostgreSQL-Internals.md) |
+| **Index Types & Composite Order** | Q12–Q14 | Medium | [03-Indexing-and-Query-Optimization.md](./03-Indexing-and-Query-Optimization.md) |
+| **Isolation Levels & Anomalies** | Q15 | Hard | [04-Transactions-and-Concurrency-Control.md](./04-Transactions-and-Concurrency-Control.md) |
+| **Deadlocks & Locking (Java/JPA)** | Q16–Q17 | Hard | [04-Transactions-and-Concurrency-Control.md](./04-Transactions-and-Concurrency-Control.md) |
+| **System & Schema Design** | Q18–Q20 | Hard | [05-Database-Design-and-Normalization.md](./05-Database-Design-and-Normalization.md) |
+| **Production Scenarios & Outages** | Q21–Q26 | Hard | [06-Database-Interview-Questions.md](./06-Database-Interview-Questions.md) |
+| **PostgreSQL vs MySQL vs NoSQL** | Q27 | Medium | [06-Database-Interview-Questions.md](./06-Database-Interview-Questions.md) |
+| **10 Red Flags & Anti-Patterns** | Q28 | Easy | [06-Database-Interview-Questions.md](./06-Database-Interview-Questions.md) |
+
+> [!IMPORTANT]
+> **Interview Day Checklist:** Always clarify scale and read/write ratios first, state trade-offs (consistency vs availability, write amplification vs read latency), cite internals (`MVCC`, `B-Tree`, `EXPLAIN (ANALYZE, BUFFERS)`), and address edge cases (`NULL`s, empty sets, concurrent updates).
 
 ---
 
-## File Stats
+## Success Metrics & Practice Toolkit
 
-```
-Total Lines: 6,100+
-Total Size: ~170KB
-Avg File: ~1,000 lines
+| Readiness Dimension | Target Outcome | Verification Method |
+| :--- | :--- | :--- |
+| **SQL Fluency** | Write JOINs, window functions, and recursive CTEs cleanly | Solve all 20 problems in Module 01 without hints |
+| **Query Diagnostics** | Read `EXPLAIN (ANALYZE, BUFFERS)` and spot Seq Scans / N+1 | Profile real queries using `pg_stat_statements` |
+| **Concurrency Mastery** | Explain MVCC snapshots, isolation anomalies, and `SKIP LOCKED` | Walk through Java/JPA optimistic vs pessimistic locking |
+| **Architecture & Scale** | Design 3NF schemas, zero-downtime migrations, and shard keys | Practice Twitter/X and e-commerce schema exercises |
 
-Code Examples: 300+
-SQL Queries: 150+
-Interview Q&A: 50+
-Diagrams: Text-based Venn, tree structures, process flows
-```
+### Diagnostics & External Practice
 
----
+- **PostgreSQL Docs:** Official [PostgreSQL Documentation](https://www.postgresql.org/docs/current/) for syntax, configuration parameters, and system catalogs.
+- **Query Profiling:** Enable `pg_stat_statements` and `log_min_duration_statement`, inspect bloat via `pg_stat_user_tables`, and run `EXPLAIN (ANALYZE, BUFFERS)`.
+- **Hands-On Drills:** LeetCode Database (Medium–Hard), HackerRank SQL, and a local PostgreSQL instance loaded with real schemas.
 
-## Success Metrics
-
-After studying this material, you should be able to:
-
-✓ Write complex SQL queries with JOINs, window functions, CTEs
-✓ Read and interpret EXPLAIN ANALYZE output
-✓ Explain MVCC, isolation levels, and locking mechanisms
-✓ Design normalized database schemas
-✓ Identify and optimize N+1 queries
-✓ Discuss index strategies for various scenarios
-✓ Handle concurrency and transaction design
-✓ Reason about trade-offs (consistency vs performance)
-✓ Debug slow queries systematically
-✓ Discuss distributed database concepts
+> [!WARNING]
+> **Common Pitfalls to Avoid:** Never skip `NULL` semantics in `NOT IN` vs `NOT EXISTS`, never add indexes blindly without checking write amplification, and never run long-running idle transactions that block `VACUUM` and risk XID wraparound.
 
 ---
 
-## Additional Resources
-
-### PostgreSQL Official Documentation
-- https://www.postgresql.org/docs/current/
-- SQL syntax reference
-- Configuration parameters
-- System administration
-
-### Performance Tuning
-- Use `pg_stat_statements` to find slow queries
-- Enable `log_min_duration_statement` for logging
-- Run `EXPLAIN (ANALYZE, BUFFERS)` on slow queries
-- Monitor `pg_stat_user_tables` for bloat
-
-### Practice Resources
-- LeetCode Database Problems (medium-hard difficulty)
-- HackerRank SQL challenges
-- Local PostgreSQL setup for experiments
-- Real schema from work projects
-
----
-
-## Interview Tips Recap
-
-1. **Ask clarifying questions** before diving into solutions
-2. **Explain trade-offs** (consistency vs availability, performance vs maintenance)
-3. **Show knowledge of internals** (mention MVCC, indexes, explain plans)
-4. **Demonstrate problem-solving** (EXPLAIN ANALYZE is your best friend)
-5. **Provide code examples** (both SQL and Java/ORM patterns)
-6. **Discuss monitoring** (how to detect and prevent issues)
-7. **Consider edge cases** (NULLs, empty sets, concurrency)
-8. **Be ready to design** (schema for unknown domains)
-
----
-
-Good luck with your FAANG interview!
-
-**Last Updated:** February 2025
-**Target Companies:** Google, Amazon, Meta, Apple, Netflix, Microsoft
-**Difficulty Level:** Senior/Staff Engineer level
+**Last Updated:** February 2025 · **Target Companies:** Google, Amazon, Meta, Apple, Netflix, Microsoft · **Difficulty:** Senior / Staff Engineer

@@ -1,0 +1,265 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" width="100%" height="100%" role="img" aria-labelledby="mvcc-title mvcc-desc">
+  <title id="mvcc-title">PostgreSQL MVCC Tuple Versioning and Snapshot Isolation</title>
+  <desc id="mvcc-desc">Animated diagram showing Transaction 100 inserting tuple (0,1), Transaction 102 updating it to (0,2) with xmax=102, concurrent Snapshot 101 reading (0,1) without blocking, and VACUUM reclaiming the dead tuple.</desc>
+  <defs>
+    <style>
+      .bg-card { fill: #0f172a; stroke: #334155; stroke-width: 1.5; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.2; }
+      .panel-accent { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.5; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 19px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12.5px; fill: #94a3b8; }
+      .label { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600; fill: #e2e8f0; }
+      .small { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; fill: #e2e8f0; }
+      .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #cbd5e1; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; }
+
+      /* Phase bar animations (12s loop) */
+      @keyframes p1Highlight {
+        0%, 23% { fill: #0284c7; stroke: #38bdf8; }
+        25%, 100% { fill: #1e293b; stroke: #334155; }
+      }
+      @keyframes p2Highlight {
+        0%, 24% { fill: #1e293b; stroke: #334155; }
+        25%, 48% { fill: #7c3aed; stroke: #a78bfa; }
+        50%, 100% { fill: #1e293b; stroke: #334155; }
+      }
+      @keyframes p3Highlight {
+        0%, 49% { fill: #1e293b; stroke: #334155; }
+        50%, 73% { fill: #059669; stroke: #34d399; }
+        75%, 100% { fill: #1e293b; stroke: #334155; }
+      }
+      @keyframes p4Highlight {
+        0%, 74% { fill: #1e293b; stroke: #334155; }
+        75%, 98% { fill: #d97706; stroke: #fbbf24; }
+        100% { fill: #1e293b; stroke: #334155; }
+      }
+
+      /* Tuple v1 (0,1) lifecycle */
+      @keyframes v1Box {
+        0%, 24% { fill: #064e3b; stroke: #10b981; opacity: 1; }
+        25%, 74% { fill: #451a03; stroke: #f59e0b; opacity: 1; }
+        75%, 96% { fill: #0f172a; stroke: #475569; stroke-dasharray: 5 4; opacity: 0.75; }
+        100% { fill: #064e3b; stroke: #10b981; opacity: 1; }
+      }
+      @keyframes v1LiveLabel {
+        0%, 24% { opacity: 1; }
+        25%, 99% { opacity: 0; }
+        100% { opacity: 1; }
+      }
+      @keyframes v1DeadLabel {
+        0%, 24% { opacity: 0; }
+        25%, 74% { opacity: 1; }
+        75%, 100% { opacity: 0; }
+      }
+      @keyframes v1ReclaimedLabel {
+        0%, 74% { opacity: 0; }
+        75%, 98% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      @keyframes xmaxZero {
+        0%, 24% { opacity: 1; }
+        25%, 98% { opacity: 0; }
+        100% { opacity: 1; }
+      }
+      @keyframes xmax102 {
+        0%, 24% { opacity: 0; }
+        25%, 74% { opacity: 1; }
+        75%, 100% { opacity: 0; }
+      }
+
+      /* Tuple v2 (0,2) lifecycle */
+      @keyframes v2Appear {
+        0%, 24% { opacity: 0.12; }
+        25%, 97% { opacity: 1; }
+        100% { opacity: 0.12; }
+      }
+
+      /* Flow beams */
+      @keyframes beamTx100 {
+        0%, 22% { opacity: 1; stroke-dashoffset: 24; }
+        25%, 100% { opacity: 0.12; stroke-dashoffset: 0; }
+      }
+      @keyframes beamTx102 {
+        0%, 24% { opacity: 0.12; }
+        25%, 48% { opacity: 1; stroke-dashoffset: 24; }
+        50%, 100% { opacity: 0.12; stroke-dashoffset: 0; }
+      }
+      @keyframes beamSnap101 {
+        0%, 49% { opacity: 0.12; }
+        50%, 73% { opacity: 1; stroke-dashoffset: 24; }
+        75%, 100% { opacity: 0.12; stroke-dashoffset: 0; }
+      }
+      @keyframes beamVacuum {
+        0%, 74% { opacity: 0.12; }
+        75%, 97% { opacity: 1; stroke-dashoffset: 24; }
+        100% { opacity: 0.12; stroke-dashoffset: 0; }
+      }
+
+      .p1-box { animation: p1Highlight 12s infinite; }
+      .p2-box { animation: p2Highlight 12s infinite; }
+      .p3-box { animation: p3Highlight 12s infinite; }
+      .p4-box { animation: p4Highlight 12s infinite; }
+
+      .v1-card { animation: v1Box 12s infinite; }
+      .v1-live { animation: v1LiveLabel 12s infinite; }
+      .v1-dead { animation: v1DeadLabel 12s infinite; }
+      .v1-free { animation: v1ReclaimedLabel 12s infinite; }
+      .xmax-0 { animation: xmaxZero 12s infinite; }
+      .xmax-102 { animation: xmax102 12s infinite; }
+      .v2-group { animation: v2Appear 12s infinite; }
+
+      .flow-100 { stroke-dasharray: 6 4; animation: beamTx100 12s infinite linear; }
+      .flow-102 { stroke-dasharray: 6 4; animation: beamTx102 12s infinite linear; }
+      .flow-101 { stroke-dasharray: 6 4; animation: beamSnap101 12s infinite linear; }
+      .flow-vac { stroke-dasharray: 6 4; animation: beamVacuum 12s infinite linear; }
+    </style>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="4" y="4" width="912" height="512" rx="14" class="bg-card" />
+
+  <!-- Header -->
+  <text x="28" y="38" class="title">PostgreSQL MVCC: Tuple Versioning &amp; Snapshot Isolation</text>
+  <text x="28" y="58" class="subtitle">Readers never block writers; writers never block readers (xmin, xmax, ctid &amp; VACUUM)</text>
+
+  <!-- 4-Phase Timeline Bar -->
+  <g transform="translate(28, 74)">
+    <rect x="0" y="0" width="206" height="34" rx="7" class="p1-box" />
+    <text x="103" y="21" text-anchor="middle" class="label">1. Tx 100: INSERT v1</text>
+
+    <rect x="220" y="0" width="206" height="34" rx="7" class="p2-box" />
+    <text x="323" y="21" text-anchor="middle" class="label">2. Tx 102: UPDATE to v2</text>
+
+    <rect x="440" y="0" width="206" height="34" rx="7" class="p3-box" />
+    <text x="543" y="21" text-anchor="middle" class="label">3. Snap 101: Non-Blocking</text>
+
+    <rect x="660" y="0" width="204" height="34" rx="7" class="p4-box" />
+    <text x="762" y="21" text-anchor="middle" class="label">4. VACUUM: Reclaim v1</text>
+  </g>
+
+  <!-- Left Column: Concurrent Transactions -->
+  <g transform="translate(28, 128)">
+    <text x="0" y="14" class="label" fill="#38bdf8">CONCURRENT TRANSACTIONS</text>
+
+    <!-- Tx 100 -->
+    <rect x="0" y="26" width="275" height="70" rx="8" class="panel" />
+    <circle cx="18" cy="46" r="5" fill="#38bdf8" />
+    <text x="30" y="50" class="label">Tx 100 (COMMITTED)</text>
+    <text x="16" y="70" class="mono-sm" fill="#7dd3fc">INSERT ('Alice', 50000);</text>
+    <text x="16" y="86" class="small">Creates tuple (0,1) with xmin=100</text>
+
+    <!-- Tx 102 -->
+    <rect x="0" y="110" width="275" height="74" rx="8" class="panel" />
+    <circle cx="18" cy="130" r="5" fill="#a78bfa" />
+    <text x="30" y="134" class="label">Tx 102 (COMMITTED)</text>
+    <text x="16" y="154" class="mono-sm" fill="#c4b5fd">UPDATE SET salary = 55000;</text>
+    <text x="16" y="170" class="small">Sets xmax=102 on v1; inserts v2 (0,2)</text>
+
+    <!-- Snapshot 101 -->
+    <rect x="0" y="198" width="275" height="74" rx="8" class="panel" />
+    <circle cx="18" cy="218" r="5" fill="#34d399" />
+    <text x="30" y="222" class="label">Snapshot txid=101 (READER)</text>
+    <text x="16" y="242" class="mono-sm" fill="#6ee7b7">SELECT salary WHERE name='Alice';</text>
+    <text x="16" y="258" class="small">Sees v1 (xmin=100 &lt;= 101, xmax=102 &gt; 101)</text>
+
+    <!-- Autovacuum -->
+    <rect x="0" y="286" width="275" height="70" rx="8" class="panel" />
+    <circle cx="18" cy="306" r="5" fill="#fbbf24" />
+    <text x="30" y="310" class="label">AUTOVACUUM Worker</text>
+    <text x="16" y="330" class="mono-sm" fill="#fde68a">VACUUM employees;</text>
+    <text x="16" y="346" class="small">Marks dead tuple (0,1) as reusable space</text>
+  </g>
+
+  <!-- Right Column: Heap Page 0 (8KB) -->
+  <g transform="translate(380, 128)">
+    <rect x="0" y="18" width="512" height="338" rx="10" class="panel-accent" />
+    <text x="16" y="42" class="label" fill="#38bdf8">HEAP TABLE PAGE 0 (8 KB) — employees</text>
+    <text x="330" y="42" class="mono-sm" fill="#94a3b8">ctid = (page, slot)</text>
+
+    <!-- Tuple v1 (0,1) -->
+    <g transform="translate(18, 60)">
+      <rect x="0" y="0" width="476" height="114" rx="8" class="v1-card" stroke-width="1.8" />
+      <text x="16" y="24" class="mono" font-weight="700">Tuple v1 — ctid: (0, 1)</text>
+
+      <!-- Status Pill -->
+      <g class="v1-live">
+        <rect x="366" y="10" width="94" height="22" rx="11" fill="#10b981" />
+        <text x="413" y="25" text-anchor="middle" class="badge-text" fill="#022c22">LIVE TUPLE</text>
+      </g>
+      <g class="v1-dead">
+        <rect x="338" y="10" width="122" height="22" rx="11" fill="#f59e0b" />
+        <text x="399" y="25" text-anchor="middle" class="badge-text" fill="#451a03">DEAD (xmax=102)</text>
+      </g>
+      <g class="v1-free">
+        <rect x="338" y="10" width="122" height="22" rx="11" fill="#334155" />
+        <text x="399" y="25" text-anchor="middle" class="badge-text" fill="#cbd5e1">FREE / REUSABLE</text>
+      </g>
+
+      <!-- Header fields -->
+      <rect x="16" y="38" width="136" height="30" rx="5" fill="#0f172a" stroke="#334155" />
+      <text x="26" y="57" class="mono">xmin = <tspan fill="#38bdf8" font-weight="700">100</tspan></text>
+
+      <rect x="164" y="38" width="144" height="30" rx="5" fill="#0f172a" stroke="#334155" />
+      <text x="174" y="57" class="mono xmax-0">xmax = <tspan fill="#94a3b8">0 (NULL)</tspan></text>
+      <text x="174" y="57" class="mono xmax-102">xmax = <tspan fill="#f59e0b" font-weight="700">102</tspan></text>
+
+      <rect x="320" y="38" width="140" height="30" rx="5" fill="#0f172a" stroke="#334155" />
+      <text x="330" y="57" class="mono xmax-0">ctid = <tspan fill="#34d399">(0, 1)</tspan></text>
+      <text x="330" y="57" class="mono xmax-102">ctid = <tspan fill="#a78bfa" font-weight="700">(0, 2)</tspan></text>
+
+      <!-- Payload -->
+      <text x="16" y="94" class="mono" fill="#e2e8f0">Payload: <tspan fill="#6ee7b7">('Alice', 50000)</tspan></text>
+      <text x="245" y="94" class="small v1-dead" fill="#fcd34d">Still visible to snapshots &lt; 102!</text>
+      <text x="245" y="94" class="small v1-free" fill="#94a3b8">Space reclaimed for future INSERTs</text>
+    </g>
+
+    <!-- ctid chain arrow between v1 and v2 -->
+    <g class="v2-group">
+      <path d="M 256 176 L 256 202" stroke="#a78bfa" stroke-width="2" stroke-dasharray="4 3" />
+      <polygon points="256,208 251,199 261,199" fill="#a78bfa" />
+      <text x="268" y="196" class="mono-sm" fill="#c4b5fd">ctid chain: (0,1) -&gt; (0,2)</text>
+    </g>
+
+    <!-- Tuple v2 (0,2) -->
+    <g transform="translate(18, 210)" class="v2-group">
+      <rect x="0" y="0" width="476" height="114" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.8" />
+      <text x="16" y="24" class="mono" font-weight="700">Tuple v2 — ctid: (0, 2)</text>
+
+      <rect x="366" y="10" width="94" height="22" rx="11" fill="#10b981" />
+      <text x="413" y="25" text-anchor="middle" class="badge-text" fill="#022c22">LIVE TUPLE</text>
+
+      <rect x="16" y="38" width="136" height="30" rx="5" fill="#0f172a" stroke="#334155" />
+      <text x="26" y="57" class="mono">xmin = <tspan fill="#a78bfa" font-weight="700">102</tspan></text>
+
+      <rect x="164" y="38" width="144" height="30" rx="5" fill="#0f172a" stroke="#334155" />
+      <text x="174" y="57" class="mono">xmax = <tspan fill="#94a3b8">0 (NULL)</tspan></text>
+
+      <rect x="320" y="38" width="140" height="30" rx="5" fill="#0f172a" stroke="#334155" />
+      <text x="330" y="57" class="mono">ctid = <tspan fill="#34d399">(0, 2)</tspan></text>
+
+      <text x="16" y="94" class="mono" fill="#e2e8f0">Payload: <tspan fill="#6ee7b7">('Alice', 55000)</tspan></text>
+      <text x="245" y="94" class="small" fill="#a7f3d0">Visible to snapshots &gt;= 102</text>
+    </g>
+  </g>
+
+  <!-- Animated Connector Beams -->
+  <!-- Tx 100 -> v1 -->
+  <path d="M 303 188 C 340 188, 350 220, 396 220" fill="none" stroke="#38bdf8" stroke-width="2.4" class="flow-100" />
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="3s" repeatCount="indefinite" path="M 303 188 C 340 188, 350 220, 396 220" />
+  </circle>
+
+  <!-- Tx 102 -> v1 & v2 -->
+  <path d="M 303 275 C 340 275, 350 250, 396 250" fill="none" stroke="#a78bfa" stroke-width="2.2" class="flow-102" />
+  <path d="M 303 275 C 345 275, 345 385, 396 385" fill="none" stroke="#a78bfa" stroke-width="2.4" class="flow-102" />
+
+  <!-- Snapshot 101 -> v1 (non-blocking read) -->
+  <path d="M 303 362 C 345 362, 345 275, 396 275" fill="none" stroke="#34d399" stroke-width="2.4" class="flow-101" />
+
+  <!-- Autovacuum -> v1 -->
+  <path d="M 303 448 C 355 448, 355 292, 396 292" fill="none" stroke="#fbbf24" stroke-width="2.4" class="flow-vac" />
+
+  <!-- Footer Legend -->
+  <text x="28" y="502" class="small">Key Rule: UPDATE in PostgreSQL = DELETE (mark old xmax) + INSERT (new tuple version). No in-place overwrite!</text>
+</svg>

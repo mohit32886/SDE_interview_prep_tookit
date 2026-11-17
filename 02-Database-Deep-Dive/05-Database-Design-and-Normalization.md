@@ -1,8 +1,43 @@
 # Database Design and Normalization
 
+A visual, interview-ready guide to relational modeling, normalization (1NF–BCNF), strategic denormalization, schema migrations, horizontal sharding, consistent hashing, replication, CAP theorem trade-offs, and production database design.
+
+---
+
+## Table of Contents
+
+- [Normal Forms (1NF Through BCNF)](#normal-forms-1nf-through-bcnf)
+- [When to Denormalize (Real-World Trade-Offs)](#when-to-denormalize-real-world-trade-offs)
+- [Entity-Relationship (ER) Modeling](#entity-relationship-er-modeling)
+- [Primary Keys: Natural vs Surrogate](#primary-keys-natural-vs-surrogate)
+- [Foreign Keys and Cascading Actions](#foreign-keys-and-cascading-actions)
+- [Database Design Patterns](#database-design-patterns)
+- [Schema Migration Strategies](#schema-migration-strategies)
+- [Sharding (Horizontal Partitioning)](#sharding-horizontal-partitioning)
+- [Replication](#replication)
+- [CAP Theorem and Implications](#cap-theorem-and-implications)
+- [Database Design Interview Exercises](#database-design-interview-exercises)
+
+---
+
 ## Normal Forms (1NF Through BCNF)
 
-Normalization is the process of organizing data to minimize redundancy and improve data integrity.
+Normalization is the process of organizing data to minimize redundancy and improve data integrity by eliminating insertion, update, and deletion anomalies.
+
+```mermaid
+flowchart LR
+    U["Unnormalized (Repeating Groups)"] --> NF1["1NF (Atomic Cells)"]
+    NF1 --> NF2["2NF (No Partial Dependencies)"]
+    NF2 --> NF3["3NF (No Transitive Dependencies)"]
+    NF3 --> BCNF["BCNF (Every Determinant = Candidate Key)"]
+
+    classDef raw fill:#334155,stroke:#94a3b8,color:#f8fafc
+    classDef norm fill:#0f766e,stroke:#2dd4bf,color:#f8fafc
+    classDef strict fill:#1d4ed8,stroke:#60a5fa,color:#f8fafc
+    class U raw
+    class NF1,NF2,NF3 norm
+    class BCNF strict
+```
 
 ### 1NF (First Normal Form)
 
@@ -146,6 +181,27 @@ departments table:
 No transitive dependencies
 ```
 
+```mermaid
+erDiagram
+    DEPARTMENTS ||--o{ EMPLOYEES : contains
+    EMPLOYEES ||--o{ PHONE_NUMBERS : owns
+
+    DEPARTMENTS {
+        int dept_id PK
+        text dept_name
+    }
+    EMPLOYEES {
+        int emp_id PK
+        text name
+        int dept_id FK
+    }
+    PHONE_NUMBERS {
+        int phone_id PK
+        int emp_id FK
+        text phone_number
+    }
+```
+
 ### BCNF (Boyce-Codd Normal Form)
 
 **Definition:** Every determinant is a candidate key.
@@ -195,14 +251,33 @@ Now: Every determinant is a candidate key
 
 | Form | Requirement | Prevents | Trade-off |
 |------|-------------|----------|-----------|
-| 1NF | Atomic values only | Repeating groups | Multiple rows per entity |
-| 2NF | 1NF + no partial dependencies | Data redundancy | More joins |
-| 3NF | 2NF + no transitive dependencies | Update anomalies | More joins |
-| BCNF | Every determinant is candidate key | Complex anomalies | Rare; most designs stop at 3NF |
+| **1NF** | Atomic values only | Repeating groups | Multiple rows per entity |
+| **2NF** | 1NF + no partial dependencies | Data redundancy | More joins |
+| **3NF** | 2NF + no transitive dependencies | Update anomalies | More joins |
+| **BCNF** | Every determinant is candidate key | Complex overlapping-key anomalies | Rare; most designs stop at 3NF |
+
+> [!IMPORTANT]
+> **The 3NF Sweet Spot:** Almost all production OLTP schemas target **3NF** (remembered as: *"every non-key column depends on the key, the whole key, and nothing but the key"*). Going beyond 3NF/BCNF often splits tightly coupled attributes across too many tables without practical benefit.
 
 ---
 
 ## When to Denormalize (Real-World Trade-Offs)
+
+```mermaid
+flowchart TD
+    Q["Query Performance Bottleneck?"] -->|"Write-heavy OLTP"| N["Keep 3NF (Data Integrity First)"]
+    Q -->|"Read-heavy / High Join Cost"| R{"Data Staleness Tolerable?"}
+    R -->|"Yes (Periodic Sync)"| MV["Materialized Views / Read Replicas"]
+    R -->|"No (Immediate Consistency)"| TR["Denormalized Columns + Triggers"]
+    R -->|"Semi-structured Document"| JB["PostgreSQL JSONB"]
+
+    classDef start fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef keep fill:#065f46,stroke:#34d399,color:#f8fafc
+    classDef denorm fill:#7c2d12,stroke:#fb923c,color:#f8fafc
+    class Q,R start
+    class N keep
+    class MV,TR,JB denorm
+```
 
 ### Why Denormalize?
 
@@ -224,17 +299,12 @@ SELECT name, salary, dept_name, location FROM employees;
 
 ### Denormalization Trade-Offs
 
-```
-Benefits:
-+ Fewer joins → faster SELECT
-+ Simpler schema → easier mental model
-+ Less overhead for complex queries
-
-Costs:
-- Update anomalies (change dept_name, must update all employees)
-- Extra storage (redundant data)
-- Maintenance burden (keep duplicates in sync)
-```
+| Dimension | Normalized (3NF) | Denormalized |
+|-----------|------------------|--------------|
+| **Read Speed** | Slower (requires multi-table joins) | Faster (single-table scan / index lookup) |
+| **Write Speed** | Fast, single-row updates | Slower (must update redundant copies) |
+| **Storage** | Minimal | Higher (duplicated values) |
+| **Data Integrity** | Guaranteed by FK & constraints | Risk of update anomalies / drift |
 
 ### When Denormalization Makes Sense
 
@@ -306,66 +376,74 @@ SELECT customer_data->>'city' AS city, line_items FROM orders
 WHERE id = 1;
 ```
 
+> [!WARNING]
+> **Normalize First, Denormalize with Proof:** Never denormalize prematurely. Always start in 3NF and introduce materialized views, summary columns, or JSONB only after profiling proves join or aggregation bottlenecks.
+
 ---
 
 ## Entity-Relationship (ER) Modeling
 
-### ER Diagram Basics
+ER modeling defines entities, their attributes, and the cardinality of relationships between them before writing DDL.
 
-```
-┌─────────────────┐         ┌─────────────────┐
-│   Customers     │         │     Orders      │
-├─────────────────┤         ├─────────────────┤
-│ customer_id (PK)├─────┬──→│ order_id (PK)   │
-│ name            │     │   │ customer_id (FK)│
-│ email           │ 1   │ N │ order_date      │
-│ phone           │     │   │ total           │
-└─────────────────┘     │   └─────────────────┘
-        │               │
-        └───────────────┘
-        One customer → Many orders
+```mermaid
+erDiagram
+    CUSTOMERS ||--o{ ORDERS : "1:N places"
+    EMPLOYEES ||--|| OFFICE_ASSIGNMENTS : "1:1 occupies"
+    STUDENTS ||--o{ ENROLLMENT : "N:N"
+    COURSES ||--o{ ENROLLMENT : "N:N"
 
-Cardinality: 1:N (one-to-many)
+    CUSTOMERS {
+        int customer_id PK
+        text name
+        text email
+        text phone
+    }
+    ORDERS {
+        int order_id PK
+        int customer_id FK
+        timestamp order_date
+        numeric total
+    }
+    ENROLLMENT {
+        int student_id PK,FK
+        int course_id PK,FK
+        text grade
+    }
 ```
 
 ### Cardinality Types
 
-```
-1:1 (One-to-One)
-Employee ├─────┤ OfficeAssignment
-- One employee per office
-- Use foreign key in either table
+| Cardinality | Meaning | Schema Implementation | Example |
+|-------------|---------|----------------------|---------|
+| **1:1** (One-to-One) | One row maps to at most one row | Foreign key + `UNIQUE` constraint on either table | `Employee` ↔ `OfficeAssignment` |
+| **1:N** (One-to-Many) | Parent has many children | Foreign key placed on the "Many" (`N`) child table | `Customers` → `Orders` |
+| **N:N** (Many-to-Many) | Both sides link to many of the other | Dedicated **junction table** with composite PK `(fk1, fk2)` | `Students` ↔ `Enrollment` ↔ `Courses` |
 
-1:N (One-to-Many)
-Department ├─────┤ Employees
-- One department, many employees
-- FK in employees table
-
-N:N (Many-to-Many)
-Students ├─────┤ Courses
-- Many students per course, many courses per student
-- Use junction table (enrollment)
-
-┌──────────────┐         ┌──────────────┐
-│  Students    │         │   Courses    │
-├──────────────┤         ├──────────────┤
-│ student_id   │         │ course_id    │
-│ name         │         │ name         │
-└──────────────┘         └──────────────┘
-     ▲                         ▲
-     │                         │
-     └────┬──────────────┬─────┘
-          │ Enrollment  │
-      ┌───┴─────────────┴───┐
-      │ student_id (FK)     │
-      │ course_id (FK)      │
-      │ grade               │
-      └─────────────────────┘
-```
+> [!TIP]
+> **Junction Tables Carry Relationship State:** In an `N:N` relationship like `Students ↔ Courses`, attributes that describe the *relationship itself* (such as `grade` or `enrolled_at`) belong on the `Enrollment` junction table—not on `Students` or `Courses`.
 
 ---
 
 ## Primary Keys: Natural vs Surrogate
+
+```mermaid
+flowchart TD
+    PK["Choose Primary Key Strategy"] --> DIST{"Multi-Node / Sharded or Public ID?"}
+    DIST -->|"Yes"| UUID["Use UUID (gen_random_uuid / UUIDv7)"]
+    DIST -->|"No (Single Primary)"| SIZE{"Expected Rows &gt; 2.1 Billion?"}
+    SIZE -->|"Yes"| BIG["Use BIGSERIAL (8 bytes)"]
+    SIZE -->|"No"| SER["Use SERIAL / IDENTITY (4 bytes)"]
+    UUID --> NAT["Add UNIQUE Constraint on Natural Key (e.g. email)"]
+    BIG --> NAT
+    SER --> NAT
+
+    classDef decision fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef choice fill:#1d4ed8,stroke:#60a5fa,color:#f8fafc
+    classDef rule fill:#065f46,stroke:#34d399,color:#f8fafc
+    class PK,DIST,SIZE decision
+    class UUID,BIG,SER choice
+    class NAT rule
+```
 
 ### Natural Keys (Domain-Meaningful)
 
@@ -380,10 +458,10 @@ CREATE TABLE users (
 -- Pros:
 -- + Meaningful (email is unique by nature)
 -- + No extra storage
-// Cons:
-// - Can change (email reassigned?)
-// - Longer foreign keys
-// - Joins slower (string vs int)
+-- Cons:
+-- - Can change (email reassigned?)
+-- - Longer foreign keys
+-- - Joins slower (string vs int)
 ```
 
 ### Surrogate Keys (Auto-Generated ID)
@@ -398,53 +476,73 @@ CREATE TABLE users (
 );
 
 -- Pros:
-// + Stable (never changes)
-// + Small (int = 4 bytes)
-// + Fast joins
-// Cons:
-// - Meaningless (user_id=12345 tells nothing)
-// - Extra storage per row
+-- + Stable (never changes)
+-- + Small (int = 4 bytes)
+-- + Fast joins
+-- Cons:
+-- - Meaningless (user_id=12345 tells nothing)
+-- - Extra storage per row
 ```
 
-**Interview Answer:** "Use surrogate keys (serial) for primary keys, natural keys (email) for unique constraints. Surrogate keys are faster for joins and more stable."
+**Interview Answer:** *"Use surrogate keys (`serial`/`bigserial`/`uuid`) for primary keys, and natural keys (`email`) for `UNIQUE` constraints. Surrogate keys are faster for joins and never change when business attributes change."*
 
-### UUID vs Serial/BIGSERIAL
+### UUID vs SERIAL / BIGSERIAL
+
+| Key Type | Size | Scope | Pros | Cons |
+|----------|------|-------|------|------|
+| **SERIAL** | 4 bytes | 1 to 2.1B | Compact, fast B-Tree joins | Single-server sequence; 32-bit overflow risk |
+| **BIGSERIAL** | 8 bytes | Up to 9.2 quintillion | Virtually inexhaustible, sequential inserts | Leaks row count if exposed publicly |
+| **UUID** | 16 bytes | Globally unique | Distributed ID generation, sharding-friendly, opaque | Larger index footprint; random UUIDv4 causes B-Tree page splits |
 
 ```sql
 -- SERIAL (auto-incrementing, 1 to 2.1 billion)
 CREATE TABLE events (
-    id serial PRIMARY KEY,  -- 4 bytes
-    ...
+    id serial PRIMARY KEY  -- 4 bytes
 );
 
 -- BIGSERIAL (auto-incrementing, huge range)
 CREATE TABLE logs (
-    id bigserial PRIMARY KEY,  -- 8 bytes
-    ...
+    id bigserial PRIMARY KEY  -- 8 bytes
 );
 
 -- UUID (globally unique, no sequence)
 CREATE TABLE distributed_data (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),  -- 16 bytes
-    ...
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid()  -- 16 bytes
 );
-
--- Comparison:
--- Serial: Pros - small, fast. Cons - sequence on single server
--- UUID: Pros - distributed, no server dependency. Cons - larger, slower
-
--- When to use UUID:
-// - Distributed system (multiple servers generate IDs)
-// - Public IDs (expose without revealing count)
-// - Sharded database (each shard has different ID range)
 ```
+
+**When to use UUID:**
+- Distributed systems (multiple servers generate IDs without coordination)
+- Public IDs (expose in URLs without revealing total row counts)
+- Sharded databases (avoid sequence collisions across shards)
+
+> [!TIP]
+> **UUIDv7 Over UUIDv4 for B-Trees:** Standard random `UUIDv4` (`gen_random_uuid()`) fragments B-Tree indexes because inserts land at random pages. Time-ordered **UUIDv7** preserves sequential insert locality while staying globally unique.
 
 ---
 
 ## Foreign Keys and Cascading Actions
 
+```mermaid
+flowchart LR
+    DEL["DELETE FROM customers WHERE customer_id = 1"] --> FK{"FK Policy on orders"}
+    FK -->|"ON DELETE RESTRICT (Default)"| ERR["Block Delete (FK Violation Error)"]
+    FK -->|"ON DELETE CASCADE"| CAS["Auto-Delete All Matching Orders"]
+    FK -->|"ON DELETE SET NULL"| NUL["Keep Orders, Set customer_id = NULL"]
+    FK -->|"DEFERRABLE INITIALLY DEFERRED"| DEF["Check Constraint at COMMIT"]
+
+    classDef action fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef safe fill:#065f46,stroke:#34d399,color:#f8fafc
+    classDef danger fill:#991b1b,stroke:#f87171,color:#f8fafc
+    classDef warn fill:#92400e,stroke:#fbbf24,color:#f8fafc
+    class DEL,FK action
+    class ERR,DEF safe
+    class CAS danger
+    class NUL warn
+```
+
 ```sql
--- Without cascading actions
+-- Without cascading actions (default RESTRICT behavior)
 CREATE TABLE orders (
     order_id serial PRIMARY KEY,
     customer_id int REFERENCES customers(customer_id)
@@ -509,19 +607,32 @@ INSERT INTO accounts (id, account_type) VALUES (999, 'parent');
 COMMIT;  -- All constraints checked and satisfied
 ```
 
+> [!WARNING]
+> **Beware `ON DELETE CASCADE` on Core Business Tables:** Deleting a single `customer` row with `ON DELETE CASCADE` can silently wipe millions of `orders`, `payments`, and audit records—holding long locks. Prefer `ON DELETE RESTRICT` combined with soft deletes (`deleted_at`) for financial or auditable entities.
+
 ---
 
 ## Database Design Patterns
+
+```mermaid
+flowchart TD
+    PAT["Design Pattern Selection"] -->|"Dynamic Entity Attributes"| EAV["EAV / Polymorphic (or JSONB)"]
+    PAT -->|"Hierarchical Tree Data"| TREE{"Read vs Write Workload?"}
+    TREE -->|"Simple Writes, Small Trees"| ADJ["Adjacency List (parent_id + CTE)"]
+    TREE -->|"Fast Subtree Reads, Rare Moves"| MAT["Materialized Path (/1/3/5/)"]
+    TREE -->|"Read-Only / Reporting Trees"| NEST["Nested Sets (lft / rgt)"]
+
+    classDef root fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef opt fill:#1d4ed8,stroke:#60a5fa,color:#f8fafc
+    class PAT,TREE root
+    class EAV,ADJ,MAT,NEST opt
+```
 
 ### 1. Polymorphic Associations (EAV Pattern)
 
 Handling different object types without complex schema.
 
 ```sql
--- Problem: Different entity types (Employee, Contractor, Vendor) with different attributes
-
--- Bad solution: Separate tables for each (complex joins)
-
 -- EAV (Entity-Attribute-Value) pattern:
 CREATE TABLE entities (
     entity_id serial PRIMARY KEY,
@@ -553,13 +664,13 @@ SELECT attr_name, attr_value FROM attributes
 WHERE entity_id = 1;
 
 -- Downside: Complex queries, no schema validation
-// SELECT salary FROM employees WHERE employee_id = 1;  ← Impossible!
-// Must query attributes table and aggregate values
+-- SELECT salary FROM employees WHERE employee_id = 1;  ← Impossible!
+-- Must query attributes table and aggregate values
 ```
 
 ### 2. Adjacency List (Tree Hierarchy)
 
-Each node points to parent (simple, but expensive for traversal).
+Each node points to parent (simple writes, requires recursive CTE for deep traversal).
 
 ```sql
 CREATE TABLE categories (
@@ -586,7 +697,7 @@ INSERT INTO categories VALUES
 SELECT * FROM categories WHERE parent_id = 3;
 -- Result: D
 
-// Query: Get all descendants (recursive)
+-- Query: Get all descendants (recursive)
 WITH RECURSIVE descendants AS (
     SELECT category_id, name, parent_id, 1 AS level
     FROM categories
@@ -599,13 +710,11 @@ WITH RECURSIVE descendants AS (
     JOIN descendants d ON c.parent_id = d.category_id
 )
 SELECT * FROM descendants;
-
--- Problem: Querying paths is expensive (many joins)
 ```
 
 ### 3. Materialized Path (Better for Trees)
 
-Store full path in each node.
+Store full path in each node for fast `LIKE` prefix queries.
 
 ```sql
 CREATE TABLE categories (
@@ -631,12 +740,12 @@ WHERE '/1/3/5/' LIKE path || '%';
 -- Result: Root, B
 
 -- Pros: Fast queries
-// Cons: Path update on move requires updating all children
+-- Cons: Path update on move requires updating all children
 ```
 
 ### 4. Nested Sets (Complex But Fast)
 
-Preorder traversal numbering.
+Preorder traversal numbering (`lft` and `rgt`).
 
 ```sql
 CREATE TABLE categories (
@@ -649,18 +758,10 @@ CREATE TABLE categories (
 -- Tree visualization with numbering:
 --    (1)Root(10)
 --    /   |    \
---  (2)A(3) (4)B(9) (8)C(9)
+--  (2)A(3) (4)B(9) (7)C(8)
 --       |
 --      (5)D(6)
 
-INSERT INTO categories VALUES
-    (1, 'Root', 1, 10),
-    (2, 'A', 2, 3),
-    (3, 'B', 4, 9),
-    (4, 'C', 8, 9),  -- Wait, wrong numbers
-    (5, 'D', 5, 6);
-
--- Correct:
 INSERT INTO categories VALUES
     (1, 'Root', 1, 10),
     (2, 'A', 2, 3),
@@ -672,20 +773,50 @@ INSERT INTO categories VALUES
 SELECT * FROM categories WHERE lft > 4 AND rgt < 9;
 -- Result: D
 
-// Pros: Any query without recursive join
-// Cons: Complex to understand and maintain
+-- Pros: Any subtree query without recursive join
+-- Cons: Complex to understand and maintain on inserts/moves
 ```
+
+### Tree Pattern Comparison
+
+| Pattern | Subtree Query | Move Node | Referential Integrity | Best For |
+|---------|--------------|-----------|-----------------------|----------|
+| **Adjacency List** | Slow (Recursive CTE) | O(1) | Enforced via FK | Frequent writes/moves |
+| **Materialized Path** | Fast (`LIKE` + index) | Updates subtree | Application-managed | Comments, category trees |
+| **Nested Sets** | Fastest (range scan) | Very expensive | Application-managed | Static/read-only hierarchies |
+
+> [!IMPORTANT]
+> **Prefer `JSONB` Over EAV in Modern PostgreSQL:** Traditional EAV tables lose type safety, foreign keys, and require multi-row pivots. Use `JSONB` with a `GIN` index for sparse/dynamic attributes instead.
 
 ---
 
 ## Schema Migration Strategies
+
+```mermaid
+sequenceDiagram
+    participant AppV1 as App v1 (Old Code)
+    participant DB as Database
+    participant Worker as Backfill Worker
+    participant AppV2 as App v2 (New Code)
+
+    Note over AppV1,DB: Phase 1 - Expand
+    DB->>DB: ADD COLUMN email_verified (nullable / default)
+    AppV1->>DB: Reads/Writes old schema seamlessly
+
+    Note over Worker,DB: Phase 2 - Backfill
+    Worker->>DB: Chunked UPDATEs (10k rows/batch)
+
+    Note over AppV2,DB: Phase 3 - Switch & Contract
+    AppV2->>DB: Reads/Writes email_verified
+    DB->>DB: SET NOT NULL + DROP old column
+```
 
 ### Zero-Downtime Migrations
 
 ```sql
 -- Step 1: Create new column (ADD COLUMN)
 ALTER TABLE users ADD COLUMN email_verified boolean DEFAULT false;
--- Non-blocking: New rows get default, reads/writes continue
+-- Non-blocking in PostgreSQL 11+: New rows get default, reads/writes continue
 
 -- Step 2: Backfill existing data (background process)
 -- Split into chunks to avoid long lock
@@ -699,53 +830,70 @@ WHERE id > 100000 AND id <= 200000 AND email_verified IS NULL;
 -- Step 3: Deploy code using new column
 -- Application reads/writes email_verified column
 
-// Step 4: Make column NOT NULL (requires no NULLs)
+-- Step 4: Make column NOT NULL (requires no NULLs)
 ALTER TABLE users ALTER COLUMN email_verified SET NOT NULL;
 
-// Step 5: Drop old column (if renaming)
+-- Step 5: Drop old column (if renaming)
 ALTER TABLE users DROP COLUMN old_email_verified;
 ```
 
 ### Expand-Contract Pattern
 
-Safer for large tables.
+Safer for large tables where old and new application versions run concurrently during rolling deploys:
 
 ```sql
 -- Phase 1: Expand (add new column, old code continues)
 ALTER TABLE users ADD COLUMN email_verified boolean DEFAULT false;
+-- Application still uses old column, dual-writes to new column
 
-// Application still uses old column, but optionally writes new column
-
-// Phase 2: Contract (switch to new column, old code retired)
-// Make sure backfill complete
-
+-- Phase 2: Contract (switch to new column, old code retired)
+-- Make sure backfill complete
 ALTER TABLE users DROP COLUMN email_unverified;  -- Old column gone
-// Code updated to use email_verified
+-- Code updated to use email_verified
 
 -- Advantages:
-// + Can rollback easily (new column exists, old code still works)
-// + No downtime
-// + Easy to test new column alongside old
+-- + Can rollback easily (new column exists, old code still works)
+-- + No downtime
+-- + Easy to test new column alongside old
 ```
+
+> [!TIP]
+> **Avoid `ACCESS EXCLUSIVE` Table Rewrites:** In PostgreSQL, `ALTER TABLE ... ADD COLUMN ... DEFAULT ...` is instant (metadata-only) since v11, and adding a `CHECK (...) NOT VALID` constraint followed by `VALIDATE CONSTRAINT` avoids blocking concurrent writes.
 
 ---
 
 ## Sharding (Horizontal Partitioning)
 
-Splitting data across multiple database servers.
+**Partitioning** splits a large table into smaller pieces within a **single** database instance (e.g., by date range), whereas **Sharding** distributes those horizontal slices across **multiple independent database servers** to scale writes and storage.
+
+```mermaid
+flowchart TD
+    Client["Application / Query"] --> Router["Shard Router (hash(user_id))"]
+    Router -->|"0° - 120°"| S1["Shard 1 (Primary + Replica)"]
+    Router -->|"120° - 240°"| S2["Shard 2 (Primary + Replica)"]
+    Router -->|"240° - 360°"| S3["Shard 3 (Primary + Replica)"]
+
+    classDef client fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef router fill:#1d4ed8,stroke:#60a5fa,color:#f8fafc
+    classDef shard fill:#065f46,stroke:#34d399,color:#f8fafc
+    class Client client
+    class Router router
+    class S1,S2,S3 shard
+```
+
+### Consistent Hashing Ring (Animated)
+
+Naive modulo sharding (`hash(key) % N`) breaks when `N` changes—adding 1 shard remaps ~75%+ of keys. **Consistent Hashing** maps both shards and keys onto a `0°–360°` ring so adding a new shard only migrates `~1/N` of keys:
+
+![Consistent Hashing Ring for Database Sharding](./assets/05-sharding-consistent-hash.svg)
 
 ### Sharding Key Selection
 
-```
-Bad sharding key (uneven distribution):
-- By country → Most users in USA (unbalanced)
-- By status → Few 'active', many 'inactive' (hot shard)
-
-Good sharding key (even distribution):
-- By user_id (hash) → Evenly distributed
-- By customer_id (hash) → Evenly distributed
-- By date range → OK if growth predictable
-```
+| Strategy | Example Key | Distribution | Trade-offs |
+|----------|-------------|--------------|------------|
+| **Bad (Skewed)** | `country`, `status` | Uneven (most users in US; few active vs many inactive) | Creates hot shards |
+| **Hash Sharding** | `user_id`, `customer_id` | Uniform across shards | Range queries require scatter-gather |
+| **Range Sharding** | `created_at` (date) | Predictable growth | Latest shard takes 100% of new writes |
 
 ### Sharding Implementation
 
@@ -755,7 +903,8 @@ public class ShardResolver {
 
     public int getShardId(long userId) {
         return Math.abs((int)(userId % NUM_SHARDS));
-        // Consistent hashing (userId 100 always → shard 4)
+        // Simple modulo routing (userId 100 always -> shard 4)
+        // Note: Use consistent hashing with virtual nodes when NUM_SHARDS changes dynamically
     }
 
     public DataSource getShardDataSource(long userId) {
@@ -775,37 +924,43 @@ public void insertUser(User user) {
 
 ### Sharding Challenges
 
-```
-1. Cross-shard queries
-   - SELECT * FROM users WHERE country = 'USA'
-   - Must query all shards (fan-out query)
-   - Slower than single database
+1. **Cross-shard queries:** `SELECT * FROM users WHERE country = 'USA'` must fan out to all shards (scatter-gather), making latency equal to the slowest shard.
+2. **Resharding (adding new shards):** Hash modulo changes (`id % 8` → `id % 16`) force massive data migration; consistent hashing with virtual nodes reduces this to `~1/N`.
+3. **Hotspots (Celebrity Problem):** One user with 1M transactions overloads a single shard while others sit idle. Mitigate with compound keys or dedicated sub-sharding.
+4. **Data integrity:** ACID transactions and foreign keys across shards are expensive (2PC) or unavailable, requiring eventual consistency (Sagas/Outbox).
 
-2. Resharding (adding new shards)
-   - Hash modulo changes: (id % 8) → (id % 16)
-   - Some records must migrate to new shard
-   - Expensive operation
-
-3. Hotspots
-   - Popular user 1M transactions, other users 100
-   - Shard 0 overloaded, others idle
-   - Solution: Subsharding, replication
-
-4. Data integrity
-   - Transactions across shards impossible
-   - Must use eventual consistency
-```
+> [!WARNING]
+> **Sharding Is a Last Resort:** Sharding permanently sacrifices cross-shard joins, global unique constraints, and simple ACID transactions. Exhaust vertical scaling, indexing, read replicas, and single-node table partitioning before sharding.
 
 ---
 
 ## Replication
 
+Replication copies data from a primary (leader) database to one or more standby (follower) databases for read scaling and high availability.
+
+![Synchronous vs Asynchronous Replication](./assets/05-replication-sync-async.svg)
+
+```mermaid
+flowchart LR
+    App["App Writes"] --> Primary["Primary (Leader)"]
+    Primary -->|"Sync WAL (Wait for ACK)"| Sync["Sync Standby (Zero Data Loss)"]
+    Primary -->|"Async WAL (Background)"| Async1["Read Replica 1 (Eventual)"]
+    Primary -->|"Logical Pub/Sub"| Async2["Analytics / External DB"]
+
+    classDef app fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef leader fill:#0f766e,stroke:#2dd4bf,color:#f8fafc
+    classDef replica fill:#1d4ed8,stroke:#60a5fa,color:#f8fafc
+    class App app
+    class Primary leader
+    class Sync,Async1,Async2 replica
+```
+
 ### Streaming Replication (Physical)
 
-Master streams all changes to replicas.
+Primary streams byte-for-byte WAL (Write-Ahead Log) records to replicas.
 
 ```sql
--- PostgreSQL configuration for master
+-- PostgreSQL configuration for primary
 wal_level = replica
 max_wal_senders = 10
 wal_keep_size = '1GB'
@@ -816,10 +971,10 @@ wal_keep_size = '1GB'
 
 ### Logical Replication
 
-Replicate subset of tables at SQL level.
+Replicate a subset of tables at the SQL/row level (supports cross-version upgrades and selective filtering).
 
 ```sql
--- Master: Create publication (what to replicate)
+-- Primary: Create publication (what to replicate)
 CREATE PUBLICATION pub_users FOR TABLE users, orders;
 
 -- Replica: Create subscription (subscribe to changes)
@@ -827,83 +982,76 @@ CREATE SUBSCRIPTION sub_from_master CONNECTION 'postgresql://master'
 PUBLICATION pub_users;
 
 -- Now: Users and orders replicated, other tables not
-// Useful for:
-// - Selective replication
-// - Replicating to different database system
+-- Useful for:
+-- - Selective replication
+-- - Replicating to different database version or system
 ```
 
 ### Synchronous vs Asynchronous Replication
 
-```
-Asynchronous (Default):
-├─ Master: Write to WAL, return OK to client
-└─ Replica: Catch up in background
-   Pros: Fast commits
-   Cons: Replica might lag, data loss if master crashes
+| Mode | Commit Behavior | Durability (RPO) | Write Latency | Best For |
+|------|-----------------|------------------|---------------|----------|
+| **Asynchronous (Default)** | Primary writes local WAL & returns `COMMIT OK` | Potential data loss during lag window | Lowest (no network wait) | Read scaling, non-critical logs |
+| **Synchronous** | Primary waits for standby ACK before `COMMIT OK` | Zero data loss (`RPO = 0`) | Higher (+1 network RTT) | Financial ledgers, HA failover |
 
-Synchronous:
-├─ Master: Write to WAL
-├─ Wait for replica ACK
-└─ Return OK to client
-   Pros: No data loss
-   Cons: Slower commits (network latency)
-
+```sql
+-- Slowest, safest: Wait for replica to apply changes to disk/visibility
 synchronous_commit = remote_apply
-// Slowest, safest: Wait for replica to apply changes
 ```
+
+> [!IMPORTANT]
+> **Watch `synchronous_commit` Levels:** PostgreSQL supports `off`, `local`, `remote_write`, `on` (flushed to standby WAL), and `remote_apply` (visible to standby reads). Only `remote_apply` prevents stale reads immediately after a primary `COMMIT`.
 
 ---
 
 ## CAP Theorem and Implications
 
-### CAP Constraints
+Any distributed data store can guarantee at most **2 of 3** properties during a **network partition** (`P`):
+- **Consistency (`C`):** Every read receives the most recent write or an error.
+- **Availability (`A`):** Every request receives a non-error response (without guaranteeing it has the latest write).
+- **Partition Tolerance (`P`):** The system continues operating despite arbitrary message loss or network splits.
 
-Any distributed system can guarantee at most 2 of 3:
-- **Consistency** (all nodes see same data)
-- **Availability** (system always responds)
-- **Partition Tolerance** (works despite network partitions)
+```mermaid
+flowchart TD
+    NP["Network Partition Occurs (P is Mandatory)"] --> CH{"System Design Choice"}
+    CH -->|"Choose Consistency (CP)"| CP["Block Writes on Minority / Unacked Nodes (Sync Replication)"]
+    CH -->|"Choose Availability (AP)"| AP["Accept Writes Everywhere, Reconcile Later (Async Replication)"]
+    CP --> CPEX["Examples: PostgreSQL Sync, Spanner, etcd"]
+    AP --> APEX["Examples: DynamoDB, Cassandra, PostgreSQL Async"]
 
+    classDef root fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef cp fill:#065f46,stroke:#34d399,color:#f8fafc
+    classDef ap fill:#92400e,stroke:#fbbf24,color:#f8fafc
+    class NP,CH root
+    class CP,CPEX cp
+    class AP,APEX ap
 ```
-PostgreSQL (single server):
-- Consistency: ACID guarantees
-- Availability: Up/down (no partition)
-- Partition Tolerance: N/A
 
-PostgreSQL with Replication (network partition):
-Must choose:
+### PostgreSQL Behavior Under Partitions
 
-CP (Consistency + Partition):
-- Block writes if replica down
-- Synchronous replication
-- Ensure consistency even if network fails
-- Cost: Availability suffers
-
-AP (Availability + Partition):
-- Accept writes even if replicas unreachable
-- Asynchronous replication
-- Replicas eventually consistent
-- Cost: Temporary inconsistency possible
-```
+| Setup | Mode | Behavior During Partition | Trade-off |
+|-------|------|---------------------------|-----------|
+| **Single Server** | CA (No `P`) | Full ACID guarantees | Single point of failure |
+| **Primary + Sync Standby** | **CP** | Blocks writes if standby unreachable | Availability suffers; zero data loss |
+| **Primary + Async Replica** | **AP** | Primary accepts writes; replica lags | Stale reads / potential data loss on failover |
 
 ### PostgreSQL HA (High Availability)
 
 ```
-Setup: Master + Hot Standby Replica
+Setup: Primary + Hot Standby Replica
 
-Scenario 1: Master fails
-- Use pg_rewind to convert failed master to standby
-- Promote replica to master
+Scenario 1: Primary fails
+- Promote standby replica to primary
+- Use pg_rewind to resync failed primary as a new standby
 - Brief downtime (seconds)
 
-Scenario 2: Network partition (master and replica disconnected)
-- Master: Keeps accepting writes (AP mode)
-- Replica: Falls behind, eventually catches up
-- Consistency violation: Reads from replica might show old data
-
-Solution: Use synchronous replication + connection pooling
-- Block writes until replica confirms (CP mode)
-- No data loss, guaranteed consistency
+Scenario 2: Network partition (primary and replica disconnected)
+- Async mode (AP): Primary keeps accepting writes; replica falls behind (stale reads)
+- Sync mode (CP): Primary blocks writes until replica confirms (no data loss)
 ```
+
+> [!IMPORTANT]
+> **CAP Is About Partitions, PACELC Is About Normal Operation:** Even when there is *no* network partition (`E` = Else), distributed databases still trade off **Latency (`L`)** vs **Consistency (`C`)**—which is why synchronous replication costs latency on every single write.
 
 ---
 
@@ -917,6 +1065,33 @@ Solution: Use synchronous replication + connection pooling
 - Followers/Following relationships
 - Notifications
 - Messaging
+
+```mermaid
+erDiagram
+    USERS ||--o{ POSTS : authors
+    USERS ||--o{ COMMENTS : writes
+    POSTS ||--o{ COMMENTS : has
+    USERS ||--o{ FOLLOWS : follower
+    USERS ||--o{ FOLLOWS : following
+    USERS ||--o{ NOTIFICATIONS : receives
+    USERS ||--o{ MESSAGES : sends
+
+    USERS {
+        int user_id PK
+        text username
+        text email
+        text bio
+    }
+    POSTS {
+        int post_id PK
+        int user_id FK
+        text content
+    }
+    FOLLOWS {
+        int follower_id PK,FK
+        int following_id PK,FK
+    }
+```
 
 **Schema:**
 
@@ -981,12 +1156,42 @@ CREATE INDEX idx_messages_receiver ON messages(receiver_id, is_read);
 ```
 
 **Key Design Decisions:**
-- User IDs instead of usernames (faster joins)
-- ON DELETE CASCADE for data cleanup
-- Follows table is self-referential (user follows user)
-- Notifications denormalize action_user_id (join optimization)
+- Surrogate `user_id` instead of `username` for faster integer joins
+- `ON DELETE CASCADE` for user-owned content cleanup
+- `follows` table is self-referential with composite PK `(follower_id, following_id)` and `CHECK (follower_id != following_id)`
+- `notifications` stores `action_user_id` directly for fast feed rendering
+
+---
 
 ### Exercise 2: Design E-Commerce Database
+
+```mermaid
+erDiagram
+    CUSTOMERS ||--o{ ORDERS : places
+    ORDERS ||--|{ ORDER_ITEMS : contains
+    PRODUCTS ||--o{ ORDER_ITEMS : referenced_by
+    PRODUCTS ||--|| INVENTORY : tracked_in
+    ORDERS ||--o{ PAYMENTS : settled_by
+
+    ORDERS {
+        int order_id PK
+        int customer_id FK
+        numeric total_amount
+        text status
+    }
+    ORDER_ITEMS {
+        int item_id PK
+        int order_id FK
+        int product_id FK
+        int quantity
+        numeric unit_price
+    }
+    PRODUCTS {
+        int product_id PK
+        text name
+        numeric price
+    }
+```
 
 **Schema:**
 
@@ -1044,7 +1249,9 @@ CREATE INDEX idx_inventory_warehouse ON inventory(warehouse_id);
 ```
 
 **Design Notes:**
-- inventory table separate (multi-warehouse support)
-- order_items stores snapshot prices (decouples from current product price)
-- Status fields instead of separate tables (simpler, adequate for this case)
+- `inventory` table is separated for multi-warehouse tracking
+- `order_items.unit_price` intentionally **denormalizes** the snapshot price at purchase time so future catalog price changes never alter historical invoices
+- `status` columns avoid unnecessary lookup joins for simple state machines
 
+> [!TIP]
+> **4-Step Interview Framework:** (1) Clarify read/write ratio & scale → (2) Sketch core ER entities & cardinalities → (3) Define PKs, FKs, and access-pattern indexes → (4) Discuss intentional denormalization, partitioning/sharding keys, and replication/CAP trade-offs.

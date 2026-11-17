@@ -1,10 +1,66 @@
 # Database Interview Questions for FAANG Companies
 
-## Top 50 Database Interview Questions with Detailed Answers
+![Slow Query Triage Pipeline](./assets/06-query-tuning-pipeline.svg)
 
-### Category 1: SQL Query Optimization
+## Study Guide Overview & Question Map
 
-#### Q1: Write a query to find the 2nd highest salary
+```mermaid
+flowchart LR
+    Q["FAANG DB Interview"] --> C1["Cat 1: SQL Optimization (Q1-Q6)"]
+    Q --> C2["Cat 2: PostgreSQL Internals (Q7-Q11)"]
+    Q --> C3["Cat 3: Indexing & Tuning (Q12-Q14)"]
+    Q --> C4["Cat 4: Concurrency & Locks (Q15-Q17)"]
+    Q --> C5["Cat 5: Schema Design (Q18-Q20)"]
+    Q --> C6["Cat 6: Production Scenarios (Q21-Q23)"]
+    Q --> C7["Cat 7: What Happens When (Q24-Q26)"]
+    Q --> C8["Cat 8: DB Selection (Q27)"]
+    Q --> C9["Cat 9: Anti-Patterns (Q28)"]
+
+    classDef root fill:#1e3a8a,stroke:#60a5fa,color:#f8fafc,stroke-width:2px;
+    classDef cat fill:#1e293b,stroke:#38bdf8,color:#f1f5f9,stroke-width:1.5px;
+    class Q root;
+    class C1,C2,C3,C4,C5,C6,C7,C8,C9 cat;
+```
+
+| Category | Questions | Core Focus |
+| :--- | :--- | :--- |
+| **1. SQL Query Optimization** | Q1 – Q6 | Window functions, CTEs, gaps-and-islands, pivot queries |
+| **2. PostgreSQL Internals** | Q7 – Q11 | MVCC (`xmin`/`xmax`), WAL, `VACUUM`, `shared_buffers`, `EXPLAIN` |
+| **3. Indexing & Performance** | Q12 – Q14 | B-Tree, Hash, GIN, BRIN, GiST, covering indexes, leftmost prefix |
+| **4. Transactions & Concurrency** | Q15 – Q17 | Isolation levels, deadlock prevention, optimistic vs pessimistic locking |
+| **5. Database Design** | Q18 – Q20 | Twitter/X schema, E-commerce schema, 3NF vs denormalization |
+| **6. Scenario-Based** | Q21 – Q23 | Slow DB triage, outage recovery, millions of inserts/day |
+| **7. "What Happens When..."** | Q24 – Q26 | `SELECT` lifecycle, XID wraparound, undersized `shared_buffers` |
+| **8. Comparison Questions** | Q27 | PostgreSQL vs MySQL vs Redis vs MongoDB vs Neo4j vs Time-Series |
+| **9. Red Flags & Mistakes** | Q28 | 10 production anti-patterns (N+1, leaks, SQLi, missing indexes) |
+
+> [!TIP]
+> **How to use this guide:** Start every interview answer by clarifying **scale (rows/QPS)** and **read/write ratio**, then anchor your explanation in internals (`Index Scan` vs `Seq Scan`, MVCC visibility, WAL durability) before writing SQL or schema DDL.
+
+---
+
+## Category 1: SQL Query Optimization
+
+```mermaid
+flowchart TD
+    S["SQL Problem Type"] --> R{"Ranking / Top-N?"}
+    R -- "Yes (with ties)" --> R1["DENSE_RANK() OVER (ORDER BY ...)"]
+    R -- "Yes (strict top K per group)" --> R2["ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)"]
+    R -- "No" --> G{"Compare row to group aggregate?"}
+    G -- "Yes" --> G1["AVG() OVER (PARTITION BY ...) - O(n) single scan"]
+    G -- "No" --> K{"Consecutive streaks?"}
+    K -- "Yes" --> K1["Gaps & Islands: date - ROW_NUMBER()"]
+    K -- "No" --> P["Pivot / Buckets: COUNT(CASE WHEN ... THEN 1 END)"]
+
+    classDef root fill:#1e3a8a,stroke:#60a5fa,color:#f8fafc;
+    classDef dec fill:#312e81,stroke:#a78bfa,color:#f8fafc;
+    classDef leaf fill:#064e3b,stroke:#34d399,color:#ecfdf5;
+    class S root;
+    class R,G,K dec;
+    class R1,R2,G1,K1,P leaf;
+```
+
+### Q1: Write a query to find the 2nd highest salary
 
 **Answer:**
 ```sql
@@ -30,7 +86,7 @@ WHERE salary < (SELECT MAX(salary) FROM employees);
 
 ---
 
-#### Q2: Write a query to find employees earning more than their department average
+### Q2: Write a query to find employees earning more than their department average
 
 **Answer:**
 ```sql
@@ -70,7 +126,7 @@ WHERE e.salary > dept_avg.avg_salary;
 
 ---
 
-#### Q3: Find customers who placed orders in every month of the year
+### Q3: Find customers who placed orders in every month of the year
 
 **Answer:**
 ```sql
@@ -88,7 +144,7 @@ HAVING COUNT(DISTINCT EXTRACT(MONTH FROM order_date)) = 12;
 
 ---
 
-#### Q4: Find the top 3 products by revenue for each category
+### Q4: Find the top 3 products by revenue for each category
 
 **Answer:**
 ```sql
@@ -110,7 +166,7 @@ SELECT * FROM product_revenue WHERE rank <= 3;
 
 ---
 
-#### Q5: Detect consecutive login days for each user
+### Q5: Detect consecutive login days for each user
 
 **Answer:**
 ```sql
@@ -144,7 +200,7 @@ ORDER BY user_id, consecutive_days DESC;
 
 ---
 
-#### Q6: Pivot query - Show salary ranges for each department
+### Q6: Pivot query - Show salary ranges for each department
 
 **Answer:**
 ```sql
@@ -160,11 +216,39 @@ LEFT JOIN employees e ON d.department_id = e.department_id
 GROUP BY d.department_id, d.department_name;
 ```
 
+> [!IMPORTANT]
+> **Window Functions vs Correlated Subqueries:** Always prefer `AVG() OVER (PARTITION BY ...)` or a pre-aggregated `JOIN` (`O(n)` single scan) over a correlated subquery (`O(n^2)`).
+
 ---
 
-### Category 2: PostgreSQL-Specific Questions
+## Category 2: PostgreSQL-Specific Questions
 
-#### Q7: What is MVCC? How does it work internally?
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant SB as Shared Buffers (RAM)
+    participant WB as WAL Buffer (RAM)
+    participant D as Disk (WAL + Heap)
+    participant V as Autovacuum
+
+    C->>SB: UPDATE accounts SET balance = 900
+    SB->>SB: Create new tuple (xmin=101), mark old (xmax=101)
+    SB->>WB: Append WAL record
+    WB->>D: fsync() WAL to disk (Durability Point)
+    D-->>C: COMMIT OK (fast sequential I/O)
+    Note over SB,D: Background writer flushes dirty heap pages later
+    V->>D: Scan dead tuples (xmax committed), mark reusable
+```
+
+| Parameter | Default | Recommended (Dedicated DB) | Role |
+| :--- | :--- | :--- | :--- |
+| `shared_buffers` | 128 MB | 25% of RAM | PostgreSQL-managed page cache (8 KB pages) |
+| `effective_cache_size` | 4 GB | 50–75% of RAM | Planner hint (OS cache + `shared_buffers`), not allocated |
+| `work_mem` | 4 MB | `RAM / (max_connections * 2)` | Per-sort/hash operation memory |
+| `synchronous_commit` | `on` | `on` (safe) / `off` (fast) | Controls whether `COMMIT` waits for WAL `fsync()` |
+| `log_min_duration_statement` | `-1` (off) | `1000` (ms) | Logs slow queries exceeding threshold |
+
+### Q7: What is MVCC? How does it work internally?
 
 **Answer:**
 ```
@@ -199,7 +283,7 @@ Key benefit: Readers never block writers (different versions)
 
 ---
 
-#### Q8: Explain WAL and its role in durability
+### Q8: Explain WAL and its role in durability
 
 **Answer:**
 ```
@@ -234,7 +318,7 @@ Configuration:
 
 ---
 
-#### Q9: How does VACUUM work? Why is it important?
+### Q9: How does VACUUM work? Why is it important?
 
 **Answer:**
 ```
@@ -270,7 +354,7 @@ Without VACUUM:
 
 ---
 
-#### Q10: Explain the difference between shared_buffers and effective_cache_size
+### Q10: Explain the difference between shared_buffers and effective_cache_size
 
 **Answer:**
 ```
@@ -305,7 +389,7 @@ work_mem = RAM / (max_connections * 2)
 
 ---
 
-#### Q11: How do you identify and fix a slow query?
+### Q11: How do you identify and fix a slow query?
 
 **Answer:**
 ```
@@ -346,11 +430,43 @@ Verify:
 -- Check execution time improvement
 ```
 
+> [!WARNING]
+> **Avoid `VACUUM FULL` in production peak hours:** Unlike regular `VACUUM`, `VACUUM FULL` acquires an `ACCESS EXCLUSIVE` lock and blocks all reads and writes while rewriting the entire table.
+
 ---
 
-### Category 3: Indexing and Performance
+## Category 3: Indexing and Performance
 
-#### Q12: Explain different index types in PostgreSQL
+```mermaid
+flowchart TD
+    W["Query Workload"] --> T{"Data / Predicate Type?"}
+    T -- "Equality &amp; Range (&lt;, &gt;, BETWEEN)" --> BT["B-Tree (Default)"]
+    T -- "Arrays / JSONB (@&gt;, ?)" --> GN["GIN (Inverted Index)"]
+    T -- "Append-Only Time-Series" --> BR["BRIN (100x Smaller)"]
+    T -- "Spatial / Geometry / Ranges" --> GS["GiST (PostGIS)"]
+    T -- "Strict Equality Only" --> HS["Hash Index"]
+    BT --> COV{"Hot SELECT touching few columns?"}
+    COV -- "Yes" --> INC["Covering Index: INCLUDE (col1, col2) -&gt; Index Only Scan"]
+    COV -- "No" --> ORD["Composite Order: Equality -&gt; Range -&gt; Sort"]
+
+    classDef root fill:#1e3a8a,stroke:#60a5fa,color:#f8fafc;
+    classDef dec fill:#312e81,stroke:#a78bfa,color:#f8fafc;
+    classDef idx fill:#0f766e,stroke:#2dd4bf,color:#f0fdfa;
+    class W root;
+    class T,COV dec;
+    class BT,GN,BR,GS,HS,INC,ORD idx;
+```
+
+| Index Type | Best For | Supported Operators | Trade-Off |
+| :--- | :--- | :--- | :--- |
+| **B-Tree** | General purpose, sorting, ranges | `=`, `<`, `>`, `<=`, `>=`, `BETWEEN` | Larger than BRIN; write amplification |
+| **Hash** | Exact equality lookups | `=` | No range/sort support |
+| **GIN** | Multi-valued (`ARRAY`, `JSONB`) | `@>`, `<@`, `?` | Slower writes, larger index |
+| **BRIN** | Physically sorted huge tables (logs) | Range queries on monotonic columns | 100x smaller, but coarse block-level |
+| **GiST** | Geospatial (`PostGIS`), range types | Geometric/overlap operators | Specialized use cases |
+| **Covering (`INCLUDE`)** | Hot-path `SELECT`s | Enables `Index Only Scan` | Extra storage & slower writes |
+
+### Q12: Explain different index types in PostgreSQL
 
 **Answer:**
 ```
@@ -386,7 +502,7 @@ GiST (Generalized Search Tree):
 
 ---
 
-#### Q13: What is a covering index? When use it?
+### Q13: What is a covering index? When use it?
 
 **Answer:**
 ```sql
@@ -418,7 +534,7 @@ Use when:
 
 ---
 
-#### Q14: Explain composite index column order
+### Q14: Explain composite index column order
 
 **Answer:**
 ```
@@ -452,11 +568,40 @@ Index: (customer_id, created_at)
 - Already sorted by created_at (no separate sort!)
 ```
 
+> [!TIP]
+> **Composite Index Golden Rule:** Order columns as **Equality → Range → Sort** (`E-R-S`). Once a range condition (`>`, `<`, `BETWEEN`) is encountered, subsequent index columns cannot be used for further filtering.
+
 ---
 
-### Category 4: Transactions and Concurrency
+## Category 4: Transactions and Concurrency
 
-#### Q15: What are isolation levels? How do they differ?
+```mermaid
+sequenceDiagram
+    participant S1 as Session 1
+    participant DB as PostgreSQL Lock Manager
+    participant S2 as Session 2
+
+    Note over S1,S2: Deadlock Scenario (Inconsistent Lock Order)
+    S1->>DB: Lock employees(id=1) FOR UPDATE
+    S2->>DB: Lock departments(id=1) FOR UPDATE
+    S1->>DB: Wait for departments(id=1)
+    S2->>DB: Wait for employees(id=1)
+    DB-->>S2: DEADLOCK DETECTED (abort one tx)
+
+    Note over S1,S2: Fix: Consistent Lock Order (employees -&gt; departments)
+    S1->>DB: Lock employees(id=1), then departments(id=1)
+    S2->>DB: Lock employees(id=2), then departments(id=1)
+    DB-->>S1: Commit OK (no cycle!)
+```
+
+| Isolation Level | Dirty Read | Non-Repeatable Read | Phantom Read | Serialization Anomaly |
+| :--- | :--- | :--- | :--- | :--- |
+| **READ UNCOMMITTED** *(PG = Read Committed)* | Prevented in PG | Allowed | Allowed | Allowed |
+| **READ COMMITTED** *(PG Default)* | Prevented | Allowed | Allowed | Allowed |
+| **REPEATABLE READ** | Prevented | Prevented | Mitigated by snapshot (allowed in SQL std) | Allowed |
+| **SERIALIZABLE** | Prevented | Prevented | Prevented | Prevented (`SQLSTATE 40001` on conflict) |
+
+### Q15: What are isolation levels? How do they differ?
 
 **Answer:**
 ```
@@ -508,7 +653,7 @@ SELECT COUNT(*) FROM orders;  -- ERROR: serialization_failure
 
 ---
 
-#### Q16: How to prevent deadlocks?
+### Q16: How to prevent deadlocks?
 
 **Answer:**
 ```
@@ -562,7 +707,7 @@ Prevention strategies:
 
 ---
 
-#### Q17: Optimistic vs Pessimistic locking in Java
+### Q17: Optimistic vs Pessimistic locking in Java
 
 **Answer:**
 ```java
@@ -617,11 +762,48 @@ Optimistic:
 - Good for low contention
 ```
 
+> [!IMPORTANT]
+> **Application Retry Loop:** Both `SERIALIZABLE` (`SQLSTATE 40001`) and Optimistic Locking (`@Version` mismatch) require idempotent retry logic with exponential backoff in your application layer.
+
 ---
 
-### Category 5: Database Design
+## Category 5: Database Design
 
-#### Q18: How would you design a database for Twitter/X?
+```mermaid
+erDiagram
+    USERS ||--o{ TWEETS : "posts"
+    USERS ||--o{ LIKES : "gives"
+    TWEETS ||--o{ LIKES : "receives"
+    USERS ||--o{ FOLLOWS : "follower / following"
+    USERS ||--o{ FEED_CACHE : "reads"
+    TWEETS ||--o{ FEED_CACHE : "fanned out to"
+    TWEETS ||--o{ TWEETS : "replies to"
+
+    USERS {
+        bigserial user_id PK
+        text username UK
+        int followers_count
+    }
+    TWEETS {
+        bigserial tweet_id PK
+        bigint user_id FK
+        bigint reply_to_tweet_id FK
+        int like_count
+    }
+    FEED_CACHE {
+        bigint user_id PK
+        bigint tweet_id PK
+        timestamp created_at
+    }
+```
+
+| Approach | Write Cost | Read Cost | Data Integrity | Best Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **Normalized (3NF)** | Low (single row update) | Higher (requires `JOIN`s) | Highest (FKs, no anomalies) | OLTP core entities |
+| **Denormalized** | Higher (sync multiple copies) | Lowest (single table scan) | Risk of drift | Read-heavy hot paths, counters |
+| **Materialized View** | Periodic `REFRESH` cost | Lowest (precomputed snapshot) | Eventual consistency | Analytics & reporting dashboards |
+
+### Q18: How would you design a database for Twitter/X?
 
 **Answer:**
 ```sql
@@ -702,7 +884,7 @@ Scaling considerations:
 
 ---
 
-#### Q19: How would you design database for e-commerce system?
+### Q19: How would you design database for e-commerce system?
 
 **Answer:**
 ```sql
@@ -791,7 +973,7 @@ Scaling:
 
 ---
 
-#### Q20: Explain normalization vs denormalization trade-offs
+### Q20: Explain normalization vs denormalization trade-offs
 
 **Answer:**
 ```
@@ -872,11 +1054,34 @@ Recommendation:
 - Measure impact before committing
 ```
 
+> [!TIP]
+> **Schema Design Rule of Thumb:** Start normalized in **3NF** for data integrity, then introduce **Materialized Views** or async `feed_cache` tables only for proven read-heavy hot paths.
+
 ---
 
-### Category 6: Scenario-Based Questions
+## Category 6: Scenario-Based Questions
 
-#### Q21: Your database is running slow. Walk me through your debugging process
+```mermaid
+flowchart TD
+    S["Production Scenario"] --> S1["Slow DB (Q21)"]
+    S --> S2["DB Outage (Q22)"]
+    S --> S3["Millions of Inserts/Day (Q23)"]
+
+    S1 --> S1A["pg_stat_database &amp; pg_stat_statements"] --> S1B["EXPLAIN (ANALYZE, BUFFERS)"] --> S1C["Index / ANALYZE / Fix N+1"]
+    S2 --> S2A["Check Process, Disk (df -h), Logs"] --> S2B{"Master Recoverable?"}
+    S2B -- "Yes" --> S2C["Restart + WAL Replay -&gt; VACUUM ANALYZE"]
+    S2B -- "No" --> S2D["SELECT pg_promote() on Replica"]
+    S3 --> S3A["unnest() Batch Inserts + Time Partitioning"] --> S3B["PgBouncer + Kafka Async + Aggressive Autovacuum"]
+
+    classDef root fill:#1e3a8a,stroke:#60a5fa,color:#f8fafc;
+    classDef scen fill:#312e81,stroke:#a78bfa,color:#f8fafc;
+    classDef act fill:#064e3b,stroke:#34d399,color:#ecfdf5;
+    class S root;
+    class S1,S2,S3,S2B scen;
+    class S1A,S1B,S1C,S2A,S2C,S2D,S3A,S3B act;
+```
+
+### Q21: Your database is running slow. Walk me through your debugging process
 
 **Answer:**
 ```
@@ -940,7 +1145,7 @@ Recommendation:
 
 ---
 
-#### Q22: How would you handle a database outage?
+### Q22: How would you handle a database outage?
 
 **Answer:**
 ```
@@ -999,7 +1204,7 @@ Prevention:
 
 ---
 
-#### Q23: Design a solution for handling millions of inserts per day
+### Q23: Design a solution for handling millions of inserts per day
 
 **Answer:**
 ```
@@ -1070,11 +1275,31 @@ Solution architecture:
    -- Keep recent data hot, archive cold data
 ```
 
+> [!WARNING]
+> **Never blindly restart a crashed database:** Always inspect `df -h` (disk full), OOM killer logs, and PostgreSQL logs first—a forced restart on a full disk or mid-checkpoint can prolong WAL replay recovery for hours.
+
 ---
 
-### Category 7: "What Happens When..." Questions
+## Category 7: "What Happens When..." Questions
 
-#### Q24: What happens when you run a SELECT query in PostgreSQL?
+```mermaid
+flowchart LR
+    P["1. Parser (Syntax -&gt; Parse Tree)"] --> PL["2. Planner (Stats + Cost Model)"]
+    PL --> EX["3. Executor (Scan Index/Heap)"]
+    EX --> BUF{"In shared_buffers?"}
+    BUF -- "Hit (0.1ms)" --> MVCC["4. MVCC Check (xmin/xmax)"]
+    BUF -- "Miss (10ms Disk I/O)" --> MVCC
+    MVCC --> OUT["5. Project, Sort, LIMIT -&gt; Wire Protocol"]
+
+    classDef step fill:#1e293b,stroke:#38bdf8,color:#f1f5f9;
+    classDef dec fill:#312e81,stroke:#a78bfa,color:#f8fafc;
+    classDef out fill:#064e3b,stroke:#34d399,color:#ecfdf5;
+    class P,PL,EX,MVCC step;
+    class BUF dec;
+    class OUT out;
+```
+
+### Q24: What happens when you run a SELECT query in PostgreSQL?
 
 **Answer:**
 ```
@@ -1125,7 +1350,7 @@ Performance factors:
 
 ---
 
-#### Q25: What happens when transaction ID (xid) wraps around?
+### Q25: What happens when transaction ID (xid) wraps around?
 
 **Answer:**
 ```
@@ -1173,7 +1398,7 @@ VACUUM FREEZE;  // Freeze all unfrozen rows
 
 ---
 
-#### Q26: What happens when shared_buffers is too small?
+### Q26: What happens when shared_buffers is too small?
 
 **Answer:**
 ```
@@ -1220,11 +1445,36 @@ FROM pg_statio_user_tables;
 // If < 90%: Buffer hits not good, increase shared_buffers
 ```
 
+> [!IMPORTANT]
+> **Two Health Ratios to Memorize:** Keep buffer cache hit ratio (`heap_blks_hit / (heap_blks_hit + heap_blks_read)`) **&gt; 99%**, and monitor `age(datfrozenxid)` so `VACUUM FREEZE` runs well before the 2-billion-transaction read-only cliff.
+
 ---
 
-### Category 8: Comparison Questions
+## Category 8: Comparison Questions
 
-#### Q27: PostgreSQL vs MySQL vs NoSQL - When to use each?
+```mermaid
+flowchart TD
+    W["Workload Requirement"] --> A{"Strict ACID &amp; Complex JOINs?"}
+    A -- "Yes" --> PG["PostgreSQL (Primary OLTP)"]
+    A -- "No" --> B{"In-Memory Sub-ms Cache / Rate Limit?"}
+    B -- "Yes" --> RD["Redis (KV Store)"]
+    B -- "No" --> C{"Flexible Document / Nested JSON?"}
+    C -- "Yes" --> MG["MongoDB (Document)"]
+    C -- "No" --> D{"Deep Graph Traversals?"}
+    D -- "Yes" --> NJ["Neo4j (Graph)"]
+    D -- "No" --> E{"Metrics / Time-Series?"}
+    E -- "Yes" --> TS["InfluxDB / Prometheus"]
+    E -- "No" --> MY["MySQL (Simple Sharded Writes)"]
+
+    classDef root fill:#1e3a8a,stroke:#60a5fa,color:#f8fafc;
+    classDef dec fill:#312e81,stroke:#a78bfa,color:#f8fafc;
+    classDef db fill:#0f766e,stroke:#2dd4bf,color:#f0fdfa;
+    class W root;
+    class A,B,C,D,E dec;
+    class PG,RD,MG,NJ,TS,MY db;
+```
+
+### Q27: PostgreSQL vs MySQL vs NoSQL - When to use each?
 
 **Answer:**
 ```
@@ -1293,11 +1543,51 @@ Best practice: Polyglot persistence
 - Neo4j: Social graph queries
 ```
 
+> [!TIP]
+> **Polyglot Persistence Soundbite:** In system design rounds, recommend **PostgreSQL** as the system of record for ACID transactions, paired with **Redis** for caching/rate-limiting and **Elasticsearch** or **Neo4j** for specialized search/graph workloads.
+
 ---
 
-### Category 9: Red Flags and Common Mistakes
+## Category 9: Red Flags and Common Mistakes
 
-#### Q28: What are common database anti-patterns to avoid?
+```mermaid
+flowchart LR
+    AP["10 Common Anti-Patterns"] --> Q["Query &amp; Index Mistakes"]
+    AP --> TX["Transaction &amp; Lock Mistakes"]
+    AP --> APP["App &amp; Connection Mistakes"]
+
+    Q --> Q1["N+1 Queries -&gt; Batch / JOIN"]
+    Q --> Q2["Missing Index / SELECT * -&gt; Targeted Index"]
+    Q --> Q3["Correlated Subquery -&gt; Pre-aggregate JOIN"]
+
+    TX --> TX1["Long Transactions -&gt; Shorten Lock Scope"]
+    TX --> TX2["No Transactions -&gt; Atomic BEGIN/COMMIT"]
+
+    APP --> APP1["String Concat SQL -&gt; PreparedStatement"]
+    APP --> APP2["No Pool / Unclosed Conn -&gt; HikariCP + try-with-resources"]
+
+    classDef root fill:#7f1d1d,stroke:#f87171,color:#fef2f2;
+    classDef grp fill:#1e293b,stroke:#f59e0b,color:#fef3c7;
+    classDef fix fill:#064e3b,stroke:#34d399,color:#ecfdf5;
+    class AP root;
+    class Q,TX,APP grp;
+    class Q1,Q2,Q3,TX1,TX2,APP1,APP2 fix;
+```
+
+| # | Anti-Pattern | Root Symptom | Production Fix |
+| :--- | :--- | :--- | :--- |
+| 1 | N+1 Query Problem | Loop issuing N `SELECT`s | Batch `IN` fetch or `JOIN` |
+| 2 | Missing Indexes | `Seq Scan` on large tables | Composite `CREATE INDEX` |
+| 3 | `SELECT *` Everywhere | Wasted I/O &amp; prevents covering scan | Project only needed columns |
+| 4 | Correlated Subqueries | `O(n²)` repeated execution | Window function or `JOIN` |
+| 5 | Long-Running Transactions | Lock contention &amp; MVCC bloat | Move business logic outside `BEGIN..COMMIT` |
+| 6 | Updating Without Index | `Seq Scan` before row lock | Index the `WHERE` predicate |
+| 7 | String Concatenated SQL | SQL Injection + no plan cache | `PreparedStatement` with `?` |
+| 8 | Unclosed DB Resources | Connection leak under load | Java `try-with-resources` |
+| 9 | No Connection Pooling | TCP/auth handshake per query | `HikariDataSource` / PgBouncer |
+| 10 | Missing Transactions | Orphaned child/parent rows | Wrap multi-step writes in `BEGIN..COMMIT` |
+
+### Q28: What are common database anti-patterns to avoid?
 
 **Answer:**
 ```
@@ -1419,9 +1709,23 @@ Best practice: Polyglot persistence
     COMMIT;  // All or nothing
 ```
 
+> [!WARNING]
+> **Instant Red Flags in Coding Rounds:** String-concatenated SQL (SQL injection), unclosed `Connection`/`ResultSet` objects outside `try-with-resources`, and calling `SELECT` inside a `for` loop (N+1 queries) are immediate senior-level red flags.
+
 ---
 
 ## Interview Tips
+
+```mermaid
+flowchart LR
+    T1["1. Clarify Scale &amp; QPS"] --> T2["2. Discuss Trade-Offs"]
+    T2 --> T3["3. Cite Internals (MVCC/WAL)"]
+    T3 --> T4["4. Debug via EXPLAIN ANALYZE"]
+    T4 --> T5["5. Cover Edge Cases &amp; Monitoring"]
+
+    classDef tip fill:#1e3a8a,stroke:#60a5fa,color:#f8fafc,stroke-width:1.5px;
+    class T1,T2,T3,T4,T5 tip;
+```
 
 1. **Always ask clarifying questions first**
    - "How large is the dataset?"

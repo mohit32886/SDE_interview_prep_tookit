@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" role="img" aria-label="PostgreSQL Deadlock Wait-For Graph and Lock Ordering Prevention">
+  <defs>
+    <marker id="arrow-hold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+    </marker>
+    <marker id="arrow-wait" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
+    </marker>
+    <marker id="arrow-order" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .inner { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 8; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .panel-hdr { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; fill: #e2e8f0; }
+      .node-title { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+      .node-sub { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 11px; fill: #cbd5e1; }
+      .edge-lbl { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; font-weight: 700; }
+      .tiny { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; fill: #cbd5e1; }
+
+      @keyframes dashWait {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes detectorRing {
+        0%, 100% { r: 28; opacity: 0.75; }
+        50% { r: 38; opacity: 0.2; }
+      }
+      @keyframes victimPulse {
+        0%, 40% { stroke: #c084fc; fill: #3b0764; }
+        60%, 100% { stroke: #f43f5e; fill: #4c0519; }
+      }
+      .wait-edge { stroke-dasharray: 6 4; animation: dashWait 1s linear infinite; }
+      .detector-pulse { animation: detectorRing 2s ease-out infinite; }
+      .victim-node { animation: victimPulse 3.6s ease-in-out infinite; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="960" height="520" />
+
+  <!-- Title -->
+  <text x="28" y="38" class="title">Deadlock Wait-For Graph &amp; Lock Ordering Prevention</text>
+  <text x="28" y="58" class="subtitle">PostgreSQL deadlock_timeout (1s) cycle detection, victim abort (SQLSTATE 40P01), and acyclic lock ordering</text>
+
+  <!-- LEFT PANEL: Deadlock Cycle & Detector -->
+  <rect class="card" x="24" y="76" width="540" height="420" />
+  <text x="44" y="104" class="panel-hdr" fill="#fda4af">1. CIRCULAR WAIT-FOR GRAPH (DEADLOCK)</text>
+  <text x="44" y="122" class="subtitle">Txn A holds Row 1 &amp; waits for Row 2; Txn B holds Row 2 &amp; waits for Row 1</text>
+
+  <!-- Txn A Node -->
+  <rect x="64" y="152" width="150" height="64" rx="10" fill="#1e3a8a" stroke="#60a5fa" stroke-width="2" />
+  <text x="139" y="178" text-anchor="middle" class="node-title">Txn A</text>
+  <text x="139" y="198" text-anchor="middle" class="node-sub" fill="#bfdbfe">Survivor (Commits)</text>
+
+  <!-- Txn B Node (Victim) -->
+  <rect x="374" y="152" width="150" height="64" rx="10" stroke-width="2" class="victim-node" />
+  <text x="449" y="178" text-anchor="middle" class="node-title">Txn B (Victim)</text>
+  <text x="449" y="198" text-anchor="middle" class="node-sub" fill="#fecdd3">Aborted: 40P01</text>
+
+  <!-- Row 1 Node -->
+  <rect x="64" y="328" width="150" height="58" rx="10" fill="#0f172a" stroke="#10b981" stroke-width="2" />
+  <text x="139" y="354" text-anchor="middle" class="node-title" fill="#6ee7b7">Row 1 (id=1)</text>
+  <text x="139" y="372" text-anchor="middle" class="node-sub">employees / acct 1</text>
+
+  <!-- Row 2 Node -->
+  <rect x="374" y="328" width="150" height="58" rx="10" fill="#0f172a" stroke="#10b981" stroke-width="2" />
+  <text x="449" y="354" text-anchor="middle" class="node-title" fill="#6ee7b7">Row 2 (id=2)</text>
+  <text x="449" y="372" text-anchor="middle" class="node-sub">departments / acct 2</text>
+
+  <!-- HOLDS Edges -->
+  <line x1="139" y1="216" x2="139" y2="322" stroke="#10b981" stroke-width="2.5" marker-end="url(#arrow-hold)" />
+  <rect x="74" y="256" width="58" height="20" rx="4" fill="#064e3b" />
+  <text x="103" y="270" text-anchor="middle" class="edge-lbl" fill="#6ee7b7">HOLDS</text>
+
+  <line x1="449" y1="216" x2="449" y2="322" stroke="#10b981" stroke-width="2.5" marker-end="url(#arrow-hold)" />
+  <rect x="456" y="256" width="58" height="20" rx="4" fill="#064e3b" />
+  <text x="485" y="270" text-anchor="middle" class="edge-lbl" fill="#6ee7b7">HOLDS</text>
+
+  <!-- WAITS FOR Edges (Diagonal Cycle) -->
+  <line x1="214" y1="200" x2="370" y2="334" stroke="#f43f5e" stroke-width="2.5" class="wait-edge" marker-end="url(#arrow-wait)" />
+  <line x1="374" y1="200" x2="218" y2="334" stroke="#f43f5e" stroke-width="2.5" class="wait-edge" marker-end="url(#arrow-wait)" />
+
+  <!-- Animated Wait Tokens -->
+  <circle r="5" fill="#fb7185">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 214 200 L 370 334" />
+  </circle>
+  <circle r="5" fill="#fb7185">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 374 200 L 218 334" />
+  </circle>
+
+  <!-- Center Deadlock Detector -->
+  <circle cx="294" cy="268" r="28" fill="#4c0519" stroke="#f43f5e" stroke-width="2" />
+  <circle cx="294" cy="268" r="28" fill="none" stroke="#f43f5e" stroke-width="2" class="detector-pulse" />
+  <text x="294" y="264" text-anchor="middle" class="edge-lbl" fill="#fda4af">CYCLE</text>
+  <text x="294" y="278" text-anchor="middle" class="tiny" fill="#fecdd3">1s timer</text>
+
+  <!-- Bottom Resolution Box in Left Panel -->
+  <rect class="inner" x="44" y="404" width="500" height="74" />
+  <text x="60" y="426" class="edge-lbl" fill="#f59e0b">DEADLOCK DETECTOR RESOLUTION:</text>
+  <text x="60" y="445" class="tiny">1. After deadlock_timeout (default 1s), Postgres scans Wait-For Graph.</text>
+  <text x="60" y="463" class="tiny">2. Aborts Txn B (40P01) -&gt; releases Row 2 -&gt; Txn A acquires Row 2 &amp; commits.</text>
+
+  <!-- RIGHT PANEL: Prevention via Consistent Lock Ordering -->
+  <rect class="card" x="584" y="76" width="352" height="420" />
+  <text x="604" y="104" class="panel-hdr" fill="#6ee7b7">2. PREVENTION: LOCK ORDERING</text>
+  <text x="604" y="122" class="subtitle">Always lock in deterministic order: Row 1 -&gt; Row 2</text>
+
+  <!-- Acyclic Flow -->
+  <rect class="inner" x="604" y="146" width="312" height="196" />
+
+  <!-- Step 1: Row 1 -->
+  <rect x="624" y="166" width="110" height="44" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5" />
+  <text x="679" y="192" text-anchor="middle" class="node-title" fill="#6ee7b7">1. Row 1</text>
+
+  <line x1="734" y1="188" x2="778" y2="188" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrow-order)" />
+
+  <!-- Step 2: Row 2 -->
+  <rect x="784" y="166" width="110" height="44" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5" />
+  <text x="839" y="192" text-anchor="middle" class="node-title" fill="#6ee7b7">2. Row 2</text>
+
+  <!-- Animated Txn A & Txn B sequential bars -->
+  <text x="624" y="236" class="tiny" fill="#60a5fa">Txn A: Lock Row 1 -&gt; Lock Row 2 -&gt; COMMIT</text>
+  <rect x="624" y="244" width="270" height="18" rx="4" fill="#1e3a8a" stroke="#60a5fa" />
+  <rect x="624" y="244" width="60" height="18" rx="4" fill="#38bdf8" opacity="0.65">
+    <animate attributeName="x" values="624;834;624" dur="3.6s" repeatCount="indefinite" />
+  </rect>
+
+  <text x="624" y="286" class="tiny" fill="#c084fc">Txn B: Wait Row 1 -&gt; Lock Row 1 -&gt; Row 2 -&gt; OK</text>
+  <rect x="624" y="294" width="270" height="18" rx="4" fill="#3b0764" stroke="#c084fc" />
+  <rect x="624" y="294" width="60" height="18" rx="4" fill="#c084fc" opacity="0.65">
+    <animate attributeName="x" values="624;624;834" dur="3.6s" repeatCount="indefinite" />
+  </rect>
+
+  <!-- Checklist Box -->
+  <rect class="inner" x="604" y="356" width="312" height="122" />
+  <text x="620" y="378" class="edge-lbl" fill="#38bdf8">OTHER PREVENTION GUARDRAILS:</text>
+  <text x="620" y="398" class="tiny">- Canonical order: ORDER BY id ASC</text>
+  <text x="620" y="416" class="tiny">- SET lock_timeout = '5s' (fail fast)</text>
+  <text x="620" y="434" class="tiny">- Keep transactions short (no I/O)</text>
+  <text x="620" y="452" class="tiny">- Retry SQLSTATE 40P01 w/ backoff</text>
+  <text x="620" y="468" class="tiny" fill="#6ee7b7">Result: Acyclic DAG -&gt; Zero deadlocks</text>
+</svg>

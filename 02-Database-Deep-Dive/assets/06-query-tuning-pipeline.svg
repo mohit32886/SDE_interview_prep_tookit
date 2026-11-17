@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" role="img" aria-labelledby="svg-title svg-desc">
+  <title id="svg-title">Slow Query Triage Pipeline</title>
+  <desc id="svg-desc">Animated end-to-end PostgreSQL slow query triage pipeline from Slow Query Alert through EXPLAIN (ANALYZE, BUFFERS), Seq Scan vs Index Scan Check, Bloat and Stale Stats (ANALYZE), Covering Index or Rewrite, to 10x Latency Drop.</desc>
+  <defs>
+    <style>
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .title { fill: #f8fafc; font-size: 16px; font-weight: 700; }
+      .subtitle { fill: #94a3b8; font-size: 12px; }
+      .step-num { fill: #38bdf8; font-size: 11px; font-weight: 700; }
+      .step-title { fill: #f1f5f9; font-size: 13px; font-weight: 700; }
+      .step-code { fill: #cbd5e1; font-size: 11px; }
+      .step-tag { fill: #94a3b8; font-size: 10px; }
+      .footer-text { fill: #94a3b8; font-size: 11px; }
+      .metric-bad { fill: #fb7185; font-size: 12px; font-weight: 700; }
+      .metric-good { fill: #34d399; font-size: 12px; font-weight: 700; }
+
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .flow-track { fill: none; stroke: #334155; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .flow-dash { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 8; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
+
+      @keyframes pulseCard1 {
+        0%, 16% { stroke: #f43f5e; fill: #261b2a; }
+        22%, 100% { stroke: #334155; fill: #1e293b; }
+      }
+      @keyframes pulseCard2 {
+        0%, 15% { stroke: #334155; fill: #1e293b; }
+        17%, 33% { stroke: #38bdf8; fill: #172a3e; }
+        38%, 100% { stroke: #334155; fill: #1e293b; }
+      }
+      @keyframes pulseCard3 {
+        0%, 32% { stroke: #334155; fill: #1e293b; }
+        34%, 50% { stroke: #f59e0b; fill: #29241b; }
+        55%, 100% { stroke: #334155; fill: #1e293b; }
+      }
+      @keyframes pulseCard4 {
+        0%, 49% { stroke: #334155; fill: #1e293b; }
+        51%, 66% { stroke: #a78bfa; fill: #231e36; }
+        71%, 100% { stroke: #334155; fill: #1e293b; }
+      }
+      @keyframes pulseCard5 {
+        0%, 65% { stroke: #334155; fill: #1e293b; }
+        67%, 83% { stroke: #2dd4bf; fill: #162c2d; }
+        88%, 100% { stroke: #334155; fill: #1e293b; }
+      }
+      @keyframes pulseCard6 {
+        0%, 82% { stroke: #334155; fill: #1e293b; }
+        84%, 100% { stroke: #10b981; fill: #132e26; }
+      }
+
+      .c1 { animation: pulseCard1 6s infinite; }
+      .c2 { animation: pulseCard2 6s infinite; }
+      .c3 { animation: pulseCard3 6s infinite; }
+      .c4 { animation: pulseCard4 6s infinite; }
+      .c5 { animation: pulseCard5 6s infinite; }
+      .c6 { animation: pulseCard6 6s infinite; }
+    </style>
+
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#1e293b" stroke-width="0.8" />
+    </pattern>
+
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="2" y="2" width="956" height="396" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.5" />
+  <rect x="2" y="2" width="956" height="396" rx="16" fill="url(#grid)" opacity="0.55" />
+
+  <!-- Header -->
+  <rect x="24" y="18" width="912" height="44" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1" />
+  <circle cx="44" cy="40" r="5" fill="#10b981">
+    <animate attributeName="opacity" values="1;0.35;1" dur="1.8s" repeatCount="indefinite" />
+  </circle>
+  <text x="58" y="45" class="sans title">Slow Query Triage Pipeline</text>
+  <rect x="660" y="27" width="260" height="26" rx="13" fill="#0f172a" stroke="#334155" stroke-width="1" />
+  <text x="790" y="44" text-anchor="middle" class="mono step-code">pg_stat_statements &#x2192; Index Only Scan</text>
+
+  <!-- Connector Paths (1->2->3->4->5->6) -->
+  <path id="pipeline-path" class="flow-track" d="M 288 128 L 352 128 M 600 128 L 664 128 M 792 176 L 792 200 L 168 200 L 168 218 M 288 272 L 352 272 M 600 272 L 664 272" />
+  <path class="flow-dash" d="M 288 128 L 352 128" marker-end="url(#arrow-cyan)">
+    <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1.2s" repeatCount="indefinite" />
+  </path>
+  <path class="flow-dash" d="M 600 128 L 664 128" marker-end="url(#arrow-cyan)">
+    <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1.2s" repeatCount="indefinite" />
+  </path>
+  <path class="flow-dash" d="M 792 176 L 792 200 L 168 200 L 168 218" marker-end="url(#arrow-cyan)">
+    <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1.2s" repeatCount="indefinite" />
+  </path>
+  <path class="flow-dash" d="M 288 272 L 352 272" marker-end="url(#arrow-cyan)">
+    <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1.2s" repeatCount="indefinite" />
+  </path>
+  <path class="flow-dash" d="M 600 272 L 664 272" marker-end="url(#arrow-cyan)">
+    <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1.2s" repeatCount="indefinite" />
+  </path>
+
+  <!-- Stage 1: Slow Query Alert -->
+  <g>
+    <rect x="48" y="80" width="240" height="96" rx="12" class="card c1" />
+    <rect x="60" y="92" width="58" height="18" rx="9" fill="#4c1d2e" />
+    <text x="89" y="104" text-anchor="middle" class="mono step-num" style="fill:#fda4af;">STEP 01</text>
+    <text x="126" y="105" class="sans step-title">Slow Query Alert</text>
+    <text x="60" y="130" class="mono step-code">mean_exec_time &gt; 1000ms</text>
+    <text x="60" y="150" class="sans step-tag">log_min_duration_statement</text>
+    <text x="60" y="164" class="sans step-tag">pg_stat_statements top-N</text>
+  </g>
+
+  <!-- Stage 2: EXPLAIN (ANALYZE, BUFFERS) -->
+  <g>
+    <rect x="360" y="80" width="240" height="96" rx="12" class="card c2" />
+    <rect x="372" y="92" width="58" height="18" rx="9" fill="#0c4a6e" />
+    <text x="401" y="104" text-anchor="middle" class="mono step-num">STEP 02</text>
+    <text x="438" y="105" class="sans step-title">EXPLAIN (ANALYZE)</text>
+    <text x="372" y="130" class="mono step-code">EXPLAIN (ANALYZE, BUFFERS)</text>
+    <text x="372" y="150" class="sans step-tag">Compare est vs actual rows</text>
+    <text x="372" y="164" class="sans step-tag">Check shared hit vs read</text>
+  </g>
+
+  <!-- Stage 3: Seq Scan vs Index Scan Check -->
+  <g>
+    <rect x="672" y="80" width="240" height="96" rx="12" class="card c3" />
+    <rect x="684" y="92" width="58" height="18" rx="9" fill="#451a03" />
+    <text x="713" y="104" text-anchor="middle" class="mono step-num" style="fill:#fcd34d;">STEP 03</text>
+    <text x="750" y="105" class="sans step-title">Scan &amp; Join Check</text>
+    <text x="684" y="130" class="mono step-code">Seq Scan? High nloops?</text>
+    <text x="684" y="150" class="sans step-tag">Detect missing composite idx</text>
+    <text x="684" y="164" class="sans step-tag">Spot N+1 / correlated subq</text>
+  </g>
+
+  <!-- Stage 4: Bloat / Stale Stats (ANALYZE) -->
+  <g>
+    <rect x="48" y="224" width="240" height="96" rx="12" class="card c4" />
+    <rect x="60" y="236" width="58" height="18" rx="9" fill="#2e1065" />
+    <text x="89" y="248" text-anchor="middle" class="mono step-num" style="fill:#c4b5fd;">STEP 04</text>
+    <text x="126" y="249" class="sans step-title">Bloat &amp; Stale Stats</text>
+    <text x="60" y="274" class="mono step-code">VACUUM; ANALYZE orders;</text>
+    <text x="60" y="294" class="sans step-tag">Check n_dead_tup bloat</text>
+    <text x="60" y="308" class="sans step-tag">Refresh planner histograms</text>
+  </g>
+
+  <!-- Stage 5: Covering Index / Rewrite -->
+  <g>
+    <rect x="360" y="224" width="240" height="96" rx="12" class="card c5" />
+    <rect x="372" y="236" width="58" height="18" rx="9" fill="#134e4a" />
+    <text x="401" y="248" text-anchor="middle" class="mono step-num" style="fill:#5eead4;">STEP 05</text>
+    <text x="438" y="249" class="sans step-title">Index / Query Fix</text>
+    <text x="372" y="274" class="mono step-code">CREATE INDEX ... INCLUDE</text>
+    <text x="372" y="294" class="sans step-tag">Equality &#x2192; Range &#x2192; Sort order</text>
+    <text x="372" y="308" class="sans step-tag">Rewrite correlated to JOIN</text>
+  </g>
+
+  <!-- Stage 6: 10x Latency Drop -->
+  <g>
+    <rect x="672" y="224" width="240" height="96" rx="12" class="card c6" />
+    <rect x="684" y="236" width="58" height="18" rx="9" fill="#064e3b" />
+    <text x="713" y="248" text-anchor="middle" class="mono step-num" style="fill:#6ee7b7;">STEP 06</text>
+    <text x="750" y="249" class="sans step-title">10x Latency Drop</text>
+    <text x="684" y="274" class="mono step-code">Index Only Scan (no heap)</text>
+    <text x="684" y="294" class="sans step-tag">Cost: 50,000 &#x2192; ~100</text>
+    <text x="684" y="308" class="sans step-tag">Buffer hit ratio &gt; 99%</text>
+  </g>
+
+  <!-- Moving Data Packet -->
+  <circle r="5" fill="#38bdf8" filter="url(#glow)">
+    <animateMotion dur="6s" repeatCount="indefinite" path="M 168 128 L 480 128 L 792 128 L 792 200 L 168 200 L 168 272 L 480 272 L 792 272" />
+  </circle>
+
+  <!-- Bottom Latency Comparison Bar -->
+  <rect x="48" y="340" width="864" height="40" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" />
+  <text x="66" y="364" class="sans footer-text">Before:</text>
+  <text x="114" y="364" class="mono metric-bad">500ms (Seq Scan)</text>
+
+  <rect x="260" y="354" width="360" height="12" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1" />
+  <rect x="260" y="354" width="360" height="12" rx="6" fill="#fb7185">
+    <animate attributeName="width" values="360;360;180;36;36;360" keyTimes="0;0.5;0.75;0.85;0.97;1" dur="6s" repeatCount="indefinite" />
+    <animate attributeName="fill" values="#fb7185;#fb7185;#f59e0b;#10b981;#10b981;#fb7185" keyTimes="0;0.5;0.75;0.85;0.97;1" dur="6s" repeatCount="indefinite" />
+  </rect>
+
+  <text x="640" y="364" class="sans footer-text">After:</text>
+  <text x="684" y="364" class="mono metric-good">&lt; 5ms (Index Only Scan)</text>
+</svg>

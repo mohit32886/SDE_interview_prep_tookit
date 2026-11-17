@@ -1,0 +1,286 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-label="Database and PostgreSQL Deep-Dive 6-Stage Mastery Roadmap">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="55%" stop-color="#131d33"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="trackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="25%" stop-color="#818cf8"/>
+      <stop offset="50%" stop-color="#2dd4bf"/>
+      <stop offset="75%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+
+    <linearGradient id="cardSurface" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="glowEmerald" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+
+    <pattern id="gridDots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#475569" fill-opacity="0.28"/>
+    </pattern>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <style>
+    .title {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 700;
+      fill: #f8fafc;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 400;
+      fill: #94a3b8;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .stage-num {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .stage-name {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      fill: #f1f5f9;
+    }
+    .stage-sub {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 10.5px;
+      fill: #94a3b8;
+    }
+    .stage-meta {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 9.5px;
+      fill: #64748b;
+    }
+    .flow-line {
+      stroke-dasharray: 7 7;
+      animation: dashMove 1.4s linear infinite;
+    }
+    @keyframes dashMove {
+      to {
+        stroke-dashoffset: -28;
+      }
+    }
+    .card-1 { animation: stagePulse 6s ease-in-out infinite 0s; }
+    .card-2 { animation: stagePulse 6s ease-in-out infinite 1s; }
+    .card-3 { animation: stagePulse 6s ease-in-out infinite 2s; }
+    .card-4 { animation: stagePulse 6s ease-in-out infinite 3s; }
+    .card-5 { animation: stagePulse 6s ease-in-out infinite 4s; }
+    .card-6 { animation: stagePulse 6s ease-in-out infinite 5s; }
+    @keyframes stagePulse {
+      0%, 100% { transform: translateY(0px); opacity: 0.92; }
+      10% { transform: translateY(-4px); opacity: 1; }
+      22% { transform: translateY(0px); opacity: 0.92; }
+    }
+  </style>
+
+  <!-- Main Card Background -->
+  <rect x="0" y="0" width="960" height="360" rx="18" fill="url(#bgGrad)"/>
+  <rect x="0" y="0" width="960" height="360" rx="18" fill="url(#gridDots)"/>
+  <ellipse cx="170" cy="70" rx="220" ry="140" fill="url(#glowCyan)"/>
+  <ellipse cx="810" cy="290" rx="220" ry="140" fill="url(#glowEmerald)"/>
+  <rect x="1" y="1" width="958" height="358" rx="17" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Top Header -->
+  <g transform="translate(38, 28)">
+    <rect x="0" y="0" width="270" height="24" rx="12" fill="#0ea5e9" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1"/>
+    <circle cx="14" cy="12" r="3.5" fill="#38bdf8">
+      <animate attributeName="opacity" values="1;0.35;1" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="25" y="16" class="mono" font-size="10.5" font-weight="600" fill="#7dd3fc">MODULE 02 · DATABASE DEEP-DIVE</text>
+
+    <text x="0" y="54" class="title" font-size="25">Database &amp; PostgreSQL Mastery Track</text>
+    <text x="0" y="75" class="subtitle" font-size="12.5">6 Core Guides · 6,100+ Lines · 300+ Code Examples · 50+ FAANG Interview Q&amp;As</text>
+  </g>
+
+  <!-- Top Right Badges -->
+  <g transform="translate(658, 34)">
+    <rect x="0" y="0" width="84" height="26" rx="7" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="42" y="17" text-anchor="middle" class="mono" font-size="10.5" fill="#cbd5e1">3 Weeks</text>
+
+    <rect x="92" y="0" width="92" height="26" rx="7" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="138" y="17" text-anchor="middle" class="mono" font-size="10.5" fill="#cbd5e1">PostgreSQL</text>
+
+    <rect x="192" y="0" width="72" height="26" rx="7" fill="#10b981" fill-opacity="0.15" stroke="#34d399" stroke-opacity="0.45" stroke-width="1"/>
+    <text x="228" y="17" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#6ee7b7">FAANG</text>
+  </g>
+
+  <!-- Pipeline Track Line & Animated Packet -->
+  <line x1="100" y1="194" x2="860" y2="194" stroke="#334155" stroke-width="3" stroke-linecap="round"/>
+  <line x1="100" y1="194" x2="860" y2="194" stroke="url(#trackGrad)" stroke-width="2.5" class="flow-line"/>
+
+  <!-- Chevron Connectors in Gaps -->
+  <g fill="none" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="173,189 179,194 173,199"/>
+    <polyline points="325,189 331,194 325,199"/>
+    <polyline points="477,189 483,194 477,199"/>
+    <polyline points="629,189 635,194 629,199"/>
+    <polyline points="781,189 787,194 781,199"/>
+  </g>
+
+  <!-- Animated Traveling Data Packet -->
+  <circle r="4.5" fill="#38bdf8" filter="url(#softGlow)">
+    <animateMotion path="M 100 194 L 860 194" dur="6s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Stage 01: SQL -->
+  <g class="card-1" transform="translate(38, 132)">
+    <rect x="0" y="0" width="124" height="124" rx="12" fill="url(#cardSurface)" stroke="#38bdf8" stroke-opacity="0.55" stroke-width="1.4"/>
+    <rect x="12" y="12" width="28" height="18" rx="5" fill="#38bdf8" fill-opacity="0.18"/>
+    <text x="26" y="25" text-anchor="middle" class="stage-num" fill="#38bdf8">01</text>
+    <!-- SQL Icon -->
+    <g transform="translate(88, 12)" stroke="#38bdf8" stroke-width="1.5" fill="none">
+      <rect x="0" y="2" width="22" height="16" rx="3"/>
+      <line x1="4" y1="7" x2="18" y2="7"/>
+      <line x1="4" y1="11" x2="14" y2="11"/>
+      <line x1="4" y1="15" x2="11" y2="15"/>
+    </g>
+    <text x="12" y="54" class="stage-name">SQL</text>
+    <text x="12" y="71" class="stage-sub">Execution Order</text>
+    <text x="12" y="85" class="stage-sub">Window &amp; CTEs</text>
+    <line x1="12" y1="98" x2="112" y2="98" stroke="#334155" stroke-width="1"/>
+    <text x="12" y="113" class="stage-meta">1,076L · 20 Qs</text>
+  </g>
+
+  <!-- Stage 02: PostgreSQL -->
+  <g class="card-2" transform="translate(190, 132)">
+    <rect x="0" y="0" width="124" height="124" rx="12" fill="url(#cardSurface)" stroke="#818cf8" stroke-opacity="0.55" stroke-width="1.4"/>
+    <rect x="12" y="12" width="28" height="18" rx="5" fill="#818cf8" fill-opacity="0.18"/>
+    <text x="26" y="25" text-anchor="middle" class="stage-num" fill="#818cf8">02</text>
+    <!-- DB Cylinder Icon -->
+    <g transform="translate(89, 11)" stroke="#818cf8" stroke-width="1.5" fill="none">
+      <ellipse cx="10" cy="4" rx="9" ry="3.2"/>
+      <path d="M1,4 L1,15 C1,16.8 5,18.2 10,18.2 C15,18.2 19,16.8 19,15 L19,4"/>
+      <path d="M1,9.5 C1,11.3 5,12.7 10,12.7 C15,12.7 19,11.3 19,9.5"/>
+    </g>
+    <text x="12" y="54" class="stage-name">PostgreSQL</text>
+    <text x="12" y="71" class="stage-sub">MVCC &amp; WAL</text>
+    <text x="12" y="85" class="stage-sub">VACUUM &amp; Buffers</text>
+    <line x1="12" y1="98" x2="112" y2="98" stroke="#334155" stroke-width="1"/>
+    <text x="12" y="113" class="stage-meta">773L · Internals</text>
+  </g>
+
+  <!-- Stage 03: Indexing -->
+  <g class="card-3" transform="translate(342, 132)">
+    <rect x="0" y="0" width="124" height="124" rx="12" fill="url(#cardSurface)" stroke="#2dd4bf" stroke-opacity="0.55" stroke-width="1.4"/>
+    <rect x="12" y="12" width="28" height="18" rx="5" fill="#2dd4bf" fill-opacity="0.18"/>
+    <text x="26" y="25" text-anchor="middle" class="stage-num" fill="#2dd4bf">03</text>
+    <!-- B-Tree Icon -->
+    <g transform="translate(88, 12)" stroke="#2dd4bf" stroke-width="1.5" fill="none">
+      <rect x="7" y="0" width="8" height="5" rx="1.5"/>
+      <rect x="0" y="12" width="8" height="5" rx="1.5"/>
+      <rect x="14" y="12" width="8" height="5" rx="1.5"/>
+      <line x1="11" y1="5" x2="4" y2="12"/>
+      <line x1="11" y1="5" x2="18" y2="12"/>
+    </g>
+    <text x="12" y="54" class="stage-name">Indexing</text>
+    <text x="12" y="71" class="stage-sub">B-Tree, GIN, BRIN</text>
+    <text x="12" y="85" class="stage-sub">EXPLAIN ANALYZE</text>
+    <line x1="12" y1="98" x2="112" y2="98" stroke="#334155" stroke-width="1"/>
+    <text x="12" y="113" class="stage-meta">874L · Tuning</text>
+  </g>
+
+  <!-- Stage 04: Transactions -->
+  <g class="card-4" transform="translate(494, 132)">
+    <rect x="0" y="0" width="124" height="124" rx="12" fill="url(#cardSurface)" stroke="#f59e0b" stroke-opacity="0.55" stroke-width="1.4"/>
+    <rect x="12" y="12" width="28" height="18" rx="5" fill="#f59e0b" fill-opacity="0.18"/>
+    <text x="26" y="25" text-anchor="middle" class="stage-num" fill="#f59e0b">04</text>
+    <!-- Lock Icon -->
+    <g transform="translate(90, 11)" stroke="#f59e0b" stroke-width="1.5" fill="none">
+      <rect x="2" y="8" width="14" height="10" rx="2.5"/>
+      <path d="M5,8 L5,5 C5,2.8 6.8,1 9,1 C11.2,1 13,2.8 13,5 L13,8"/>
+    </g>
+    <text x="12" y="54" class="stage-name">Transactions</text>
+    <text x="12" y="71" class="stage-sub">ACID &amp; Isolation</text>
+    <text x="12" y="85" class="stage-sub">Locks &amp; Deadlocks</text>
+    <line x1="12" y1="98" x2="112" y2="98" stroke="#334155" stroke-width="1"/>
+    <text x="12" y="113" class="stage-meta">903L · Concurrency</text>
+  </g>
+
+  <!-- Stage 05: DB Design -->
+  <g class="card-5" transform="translate(646, 132)">
+    <rect x="0" y="0" width="124" height="124" rx="12" fill="url(#cardSurface)" stroke="#a78bfa" stroke-opacity="0.55" stroke-width="1.4"/>
+    <rect x="12" y="12" width="28" height="18" rx="5" fill="#a78bfa" fill-opacity="0.18"/>
+    <text x="26" y="25" text-anchor="middle" class="stage-num" fill="#a78bfa">05</text>
+    <!-- Schema / Sharding Icon -->
+    <g transform="translate(88, 12)" stroke="#a78bfa" stroke-width="1.5" fill="none">
+      <circle cx="5" cy="5" r="3"/>
+      <circle cx="17" cy="5" r="3"/>
+      <circle cx="11" cy="15" r="3"/>
+      <line x1="7.5" y1="6.5" x2="14.5" y2="6.5"/>
+      <line x1="6.5" y1="7.5" x2="9.5" y2="12.5"/>
+      <line x1="15.5" y1="7.5" x2="12.5" y2="12.5"/>
+    </g>
+    <text x="12" y="54" class="stage-name">DB Design</text>
+    <text x="12" y="71" class="stage-sub">1NF–BCNF &amp; ER</text>
+    <text x="12" y="85" class="stage-sub">Sharding &amp; Scale</text>
+    <line x1="12" y1="98" x2="112" y2="98" stroke="#334155" stroke-width="1"/>
+    <text x="12" y="113" class="stage-meta">1,050L · Patterns</text>
+  </g>
+
+  <!-- Stage 06: 50 Q&As -->
+  <g class="card-6" transform="translate(798, 132)">
+    <rect x="0" y="0" width="124" height="124" rx="12" fill="url(#cardSurface)" stroke="#34d399" stroke-opacity="0.65" stroke-width="1.5"/>
+    <rect x="12" y="12" width="28" height="18" rx="5" fill="#34d399" fill-opacity="0.2"/>
+    <text x="26" y="25" text-anchor="middle" class="stage-num" fill="#34d399">06</text>
+    <!-- Check / Mastery Icon -->
+    <g transform="translate(89, 11)" stroke="#34d399" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10" cy="10" r="8"/>
+      <polyline points="6.5,10 9,12.5 14,7.5"/>
+    </g>
+    <text x="12" y="54" class="stage-name">50 Q&amp;As</text>
+    <text x="12" y="71" class="stage-sub">Scenarios &amp; War</text>
+    <text x="12" y="85" class="stage-sub">Red Flags &amp; Tips</text>
+    <line x1="12" y1="98" x2="112" y2="98" stroke="#334155" stroke-width="1"/>
+    <text x="12" y="113" class="stage-meta">1,466L · Readiness</text>
+  </g>
+
+  <!-- Bottom 3-Week Progression Bar -->
+  <g transform="translate(38, 286)">
+    <rect x="0" y="0" width="884" height="44" rx="10" fill="#0f172a" fill-opacity="0.78" stroke="#334155" stroke-width="1"/>
+
+    <!-- Week 1 -->
+    <circle cx="24" cy="22" r="4.5" fill="#38bdf8"/>
+    <text x="36" y="26" class="mono" font-size="11" fill="#e2e8f0">Week 1: Foundations (01–02)</text>
+
+    <line x1="278" y1="12" x2="278" y2="32" stroke="#334155" stroke-width="1"/>
+
+    <!-- Week 2 -->
+    <circle cx="302" cy="22" r="4.5" fill="#2dd4bf"/>
+    <text x="314" y="26" class="mono" font-size="11" fill="#e2e8f0">Week 2: Optimization &amp; Design (03–05)</text>
+
+    <line x1="620" y1="12" x2="620" y2="32" stroke="#334155" stroke-width="1"/>
+
+    <!-- Week 3 -->
+    <circle cx="644" cy="22" r="4.5" fill="#34d399">
+      <animate attributeName="r" values="4;5.5;4" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="656" y="26" class="mono" font-size="11" fill="#6ee7b7">Week 3: FAANG Mock &amp; 50 Q&amp;As (06)</text>
+  </g>
+</svg>

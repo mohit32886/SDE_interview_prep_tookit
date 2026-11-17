@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">SQL Window Functions and Sliding Frame Animation</title>
+  <desc id="desc">Animated diagram showing ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD across partitions, plus an animated sliding ROWS BETWEEN 2 PRECEDING AND CURRENT ROW window frame.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .card-inner { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 6; }
+      .title-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; fill: #94a3b8; }
+      .section-hdr { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; fill: #cbd5e1; letter-spacing: 0.5px; }
+      .tbl-hdr { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; fill: #93c5fd; }
+      .cell { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; fill: #e2e8f0; }
+      .cell-tie { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; font-weight: 700; fill: #fbbf24; }
+      .cell-null { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; font-style: italic; fill: #f87171; }
+      .cell-accent { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; font-weight: 700; fill: #34d399; }
+      .note { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; fill: #94a3b8; }
+
+      @keyframes lagPulse {
+        0%, 100% { stroke-opacity: 0.35; }
+        50% { stroke-opacity: 1; }
+      }
+      @keyframes frameGlow {
+        0%, 100% { stroke: #38bdf8; }
+        50% { stroke: #34d399; }
+      }
+      .lag-arrow { animation: lagPulse 2.4s ease-in-out infinite; }
+      .frame-box { animation: frameGlow 2s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrowCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="540" class="bg"/>
+
+  <!-- Header -->
+  <text x="28" y="34" class="title-text">Window Functions: Ranking, Offsets &amp; Sliding Frames</text>
+  <text x="28" y="54" class="subtitle-text">Rows are never collapsed (unlike GROUP BY) — each row retains its identity while computing over a window</text>
+
+  <!-- Top Card: Partitioned Ranking & LAG/LEAD -->
+  <rect x="24" y="72" width="912" height="236" class="card"/>
+  <text x="42" y="96" class="section-hdr">1. PARTITION BY dept ORDER BY salary DESC — ROW_NUMBER vs RANK vs DENSE_RANK + LAG/LEAD</text>
+  <line x1="42" y1="104" x2="918" y2="104" stroke="#334155" stroke-width="1"/>
+
+  <!-- Table Header -->
+  <rect x="42" y="112" width="876" height="26" rx="4" fill="#0f172a"/>
+  <text x="54" y="129" class="tbl-hdr">DEPT</text>
+  <text x="128" y="129" class="tbl-hdr">EMP</text>
+  <text x="200" y="129" class="tbl-hdr">SALARY</text>
+  <text x="280" y="129" class="tbl-hdr">ROW_NUMBER()</text>
+  <text x="392" y="129" class="tbl-hdr">RANK()</text>
+  <text x="476" y="129" class="tbl-hdr">DENSE_RANK()</text>
+  <text x="596" y="129" class="tbl-hdr">LAG(salary)</text>
+  <text x="716" y="129" class="tbl-hdr">LEAD(salary)</text>
+  <text x="826" y="129" class="tbl-hdr">NOTES</text>
+
+  <!-- Partition 1: Eng -->
+  <rect x="42" y="142" width="876" height="96" rx="6" fill="#1e3a8a" fill-opacity="0.22" stroke="#3b82f6" stroke-width="1"/>
+  <text x="54" y="162" class="cell" fill="#93c5fd">Eng</text>
+  <text x="128" y="162" class="cell">Alice</text>
+  <text x="200" y="162" class="cell-tie">100</text>
+  <text x="310" y="162" class="cell">1</text>
+  <text x="408" y="162" class="cell-tie">1</text>
+  <text x="506" y="162" class="cell-accent">1</text>
+  <text x="612" y="162" class="cell-null">NULL</text>
+  <text x="734" y="162" class="cell">100</text>
+  <text x="826" y="162" class="note">Partition start</text>
+
+  <text x="54" y="185" class="cell" fill="#93c5fd">Eng</text>
+  <text x="128" y="185" class="cell">Bob</text>
+  <text x="200" y="185" class="cell-tie">100</text>
+  <text x="310" y="185" class="cell">2</text>
+  <text x="408" y="185" class="cell-tie">1</text>
+  <text x="506" y="185" class="cell-accent">1</text>
+  <text x="612" y="185" class="cell">100</text>
+  <text x="734" y="185" class="cell">90</text>
+  <text x="826" y="185" class="note" fill="#fcd34d">Tie at 100!</text>
+
+  <text x="54" y="208" class="cell" fill="#93c5fd">Eng</text>
+  <text x="128" y="208" class="cell">Carol</text>
+  <text x="200" y="208" class="cell">90</text>
+  <text x="310" y="208" class="cell">3</text>
+  <text x="408" y="208" class="cell-tie">3</text>
+  <text x="506" y="208" class="cell-accent">2</text>
+  <text x="612" y="208" class="cell">100</text>
+  <text x="734" y="208" class="cell">80</text>
+  <text x="826" y="208" class="note">RANK skips 2</text>
+
+  <text x="54" y="231" class="cell" fill="#93c5fd">Eng</text>
+  <text x="128" y="231" class="cell">Dan</text>
+  <text x="200" y="231" class="cell">80</text>
+  <text x="310" y="231" class="cell">4</text>
+  <text x="408" y="231" class="cell">4</text>
+  <text x="506" y="231" class="cell-accent">3</text>
+  <text x="612" y="231" class="cell">90</text>
+  <text x="734" y="231" class="cell-null">NULL</text>
+  <text x="826" y="231" class="note">Partition end</text>
+
+  <!-- LAG / LEAD animated arrows -->
+  <path d="M 650 180 C 668 180, 668 158, 650 158" fill="none" stroke="#38bdf8" stroke-width="1.5" class="lag-arrow" marker-end="url(#arrowCyan)"/>
+  <path d="M 768 180 C 786 180, 786 204, 768 204" fill="none" stroke="#c084fc" stroke-width="1.5" class="lag-arrow" marker-end="url(#arrowPurple)"/>
+
+  <!-- Partition 2: Sales (resets!) -->
+  <rect x="42" y="244" width="876" height="52" rx="6" fill="#581c87" fill-opacity="0.22" stroke="#a855f7" stroke-width="1"/>
+  <text x="54" y="264" class="cell" fill="#d8b4fe">Sales</text>
+  <text x="128" y="264" class="cell">Eve</text>
+  <text x="200" y="264" class="cell">95</text>
+  <text x="310" y="264" class="cell">1</text>
+  <text x="408" y="264" class="cell">1</text>
+  <text x="506" y="264" class="cell-accent">1</text>
+  <text x="612" y="264" class="cell-null">NULL</text>
+  <text x="734" y="264" class="cell">85</text>
+  <text x="826" y="264" class="note" fill="#d8b4fe">Resets at partition</text>
+
+  <text x="54" y="287" class="cell" fill="#d8b4fe">Sales</text>
+  <text x="128" y="287" class="cell">Frank</text>
+  <text x="200" y="287" class="cell">85</text>
+  <text x="310" y="287" class="cell">2</text>
+  <text x="408" y="287" class="cell">2</text>
+  <text x="506" y="287" class="cell-accent">2</text>
+  <text x="612" y="287" class="cell">95</text>
+  <text x="734" y="287" class="cell-null">NULL</text>
+  <text x="826" y="287" class="note">No cross-dept leak</text>
+
+  <!-- Bottom Card: Sliding Window Frame -->
+  <rect x="24" y="322" width="912" height="196" class="card"/>
+  <text x="42" y="346" class="section-hdr">2. SLIDING WINDOW FRAME: AVG(sales) OVER (ORDER BY day ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)</text>
+  <line x1="42" y1="354" x2="918" y2="354" stroke="#334155" stroke-width="1"/>
+
+  <!-- 5 Day Cards -->
+  <rect x="52" y="378" width="150" height="84" class="card-inner"/>
+  <text x="68" y="400" class="tbl-hdr">DAY 1</text>
+  <text x="68" y="422" class="cell">sales = 10</text>
+  <text x="68" y="444" class="cell-accent">AVG = 10.0</text>
+
+  <rect x="226" y="378" width="150" height="84" class="card-inner"/>
+  <text x="242" y="400" class="tbl-hdr">DAY 2</text>
+  <text x="242" y="422" class="cell">sales = 20</text>
+  <text x="242" y="444" class="cell-accent">AVG = 15.0</text>
+
+  <rect x="400" y="378" width="150" height="84" class="card-inner"/>
+  <text x="416" y="400" class="tbl-hdr">DAY 3</text>
+  <text x="416" y="422" class="cell">sales = 30</text>
+  <text x="416" y="444" class="cell-accent">AVG = 20.0</text>
+
+  <rect x="574" y="378" width="150" height="84" class="card-inner"/>
+  <text x="590" y="400" class="tbl-hdr">DAY 4</text>
+  <text x="590" y="422" class="cell">sales = 40</text>
+  <text x="590" y="444" class="cell-accent">AVG = 30.0</text>
+
+  <rect x="748" y="378" width="150" height="84" class="card-inner"/>
+  <text x="764" y="400" class="tbl-hdr">DAY 5</text>
+  <text x="764" y="422" class="cell">sales = 50</text>
+  <text x="764" y="444" class="cell-accent">AVG = 40.0</text>
+
+  <!-- Animated Sliding Frame Overlay (2 PRECEDING + CURRENT ROW) -->
+  <rect x="44" y="370" width="166" height="100" rx="10" fill="#38bdf8" fill-opacity="0.1" stroke="#38bdf8" stroke-width="2.5" class="frame-box">
+    <animate attributeName="x" values="44;44;44;218;392;44" dur="7.5s" repeatCount="indefinite" calcMode="discrete"/>
+    <animate attributeName="width" values="166;340;514;514;514;166" dur="7.5s" repeatCount="indefinite" calcMode="discrete"/>
+  </rect>
+
+  <!-- Animated CURRENT ROW Marker -->
+  <g>
+    <rect x="82" y="476" width="90" height="22" rx="4" fill="#14532d" stroke="#22c55e" stroke-width="1.2"/>
+    <text x="90" y="491" class="cell-accent">CURRENT ROW</text>
+    <animateTransform attributeName="transform" type="translate" values="0,0;174,0;348,0;522,0;696,0;0,0" dur="7.5s" repeatCount="indefinite" calcMode="discrete"/>
+  </g>
+
+  <text x="42" y="508" class="note">Frame boundary shrinks at start of partition (Day 1 has 1 row, Day 2 has 2 rows, Day 3+ has full 3-row window).</text>
+</svg>
