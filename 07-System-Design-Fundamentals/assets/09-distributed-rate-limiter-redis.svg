@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 440" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">Distributed Rate Limiter: API Gateway to Atomic Redis Lua Token Bucket</title>
+  <desc id="desc">Animated flow showing requests entering API Gateway, executing atomic Redis EVALSHA Lua token bucket script, and branching to 200 OK with X-RateLimit-Remaining or 429 Too Many Requests with Retry-After.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .card-accent-blue { fill: #1e293b; stroke: #3b82f6; stroke-width: 1.8; rx: 12; }
+      .card-accent-purple { fill: #1e293b; stroke: #a855f7; stroke-width: 1.8; rx: 12; }
+      .card-accent-green { fill: #1e293b; stroke: #22c55e; stroke-width: 1.8; rx: 12; }
+      .card-accent-red { fill: #1e293b; stroke: #ef4444; stroke-width: 1.8; rx: 12; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 16px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .heading { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #f1f5f9; }
+      .label { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #cbd5e1; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #e2e8f0; }
+      .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #94a3b8; }
+      .badge-blue { fill: #1d4ed8; }
+      .badge-purple { fill: #7e22ce; }
+      .badge-green { fill: #15803d; }
+      .badge-red { fill: #b91c1c; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #ffffff; }
+      .wire { fill: none; stroke: #475569; stroke-width: 2; stroke-dasharray: 6 5; }
+      .wire-green { fill: none; stroke: #22c55e; stroke-width: 2.2; stroke-dasharray: 6 5; }
+      .wire-red { fill: none; stroke: #ef4444; stroke-width: 2.2; stroke-dasharray: 6 5; }
+      .pulse-ring {
+        fill: none;
+        stroke: #a855f7;
+        stroke-width: 2;
+        animation: pulseRing 3s infinite ease-out;
+        transform-origin: 455px 225px;
+      }
+      @keyframes pulseRing {
+        0% { opacity: 0.85; transform: scale(0.97); }
+        60% { opacity: 0.15; transform: scale(1.03); }
+        100% { opacity: 0; transform: scale(1.04); }
+      }
+      .flow-dash {
+        animation: dashMove 1.4s linear infinite;
+      }
+      @keyframes dashMove {
+        to { stroke-dashoffset: -22; }
+      }
+      .token-drop {
+        animation: tokenBlink 4s infinite ease-in-out;
+      }
+      @keyframes tokenBlink {
+        0%, 35% { opacity: 1; fill: #22c55e; }
+        50%, 85% { opacity: 0.35; fill: #475569; }
+        100% { opacity: 1; fill: #22c55e; }
+      }
+      .status-ok {
+        animation: okFlash 4s infinite ease-in-out;
+      }
+      @keyframes okFlash {
+        0%, 45% { opacity: 1; }
+        55%, 90% { opacity: 0.45; }
+        100% { opacity: 1; }
+      }
+      .status-429 {
+        animation: errFlash 4s infinite ease-in-out;
+      }
+      @keyframes errFlash {
+        0%, 45% { opacity: 0.45; }
+        55%, 90% { opacity: 1; }
+        100% { opacity: 0.45; }
+      }
+    </style>
+
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="920" height="440" class="bg" rx="14"/>
+
+  <!-- Header -->
+  <text x="28" y="34" class="title">Distributed Rate Limiter — Atomic Redis Lua Token Bucket</text>
+  <text x="28" y="54" class="subtitle">Single-threaded EVALSHA execution eliminates GET-then-SET race conditions across stateless API Gateway nodes</text>
+
+  <!-- Step 1: API Gateway -->
+  <rect x="28" y="105" width="215" height="240" class="card-accent-blue"/>
+  <rect x="42" y="119" width="88" height="20" rx="5" class="badge-blue"/>
+  <text x="86" y="133" text-anchor="middle" class="badge-text">1. GATEWAY</text>
+  <text x="42" y="160" class="heading">API Gateway Nodes</text>
+  <text x="42" y="178" class="label">Stateless filter extracts key:</text>
+
+  <rect x="42" y="192" width="187" height="62" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="52" y="211" class="mono">Key: rl:user:123</text>
+  <text x="52" y="227" class="mono-sm">Cap: 10  | Refill: 2/s</text>
+  <text x="52" y="243" class="mono-sm">Cost: 1 token</text>
+
+  <rect x="42" y="268" width="187" height="62" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="52" y="287" class="mono" fill="#38bdf8">EVALSHA &lt;sha1&gt; 1</text>
+  <text x="52" y="303" class="mono-sm">KEYS[1] = rl:user:123</text>
+  <text x="52" y="319" class="mono-sm">ARGV = [cap, rate, now]</text>
+
+  <!-- Arrow Gateway -> Redis -->
+  <path d="M 245 225 L 312 225" class="wire flow-dash" marker-end="url(#arrow-slate)"/>
+  <circle r="4.5" fill="#38bdf8">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M 245 225 L 312 225"/>
+  </circle>
+
+  <!-- Step 2: Atomic Redis Lua -->
+  <rect x="316" y="84" width="278" height="282" class="pulse-ring" rx="12"/>
+  <rect x="320" y="88" width="270" height="274" class="card-accent-purple"/>
+  <rect x="334" y="102" width="124" height="20" rx="5" class="badge-purple"/>
+  <text x="396" y="116" text-anchor="middle" class="badge-text">2. ATOMIC REDIS LUA</text>
+  <text x="334" y="142" class="heading">Token Bucket (Single-Threaded)</text>
+
+  <!-- Bucket visual -->
+  <rect x="334" y="156" width="242" height="72" rx="8" fill="#0f172a" stroke="#475569"/>
+  <text x="344" y="174" class="mono-sm">Bucket State (Hash: tokens, ts)</text>
+  <!-- 5 token blocks -->
+  <rect x="344" y="186" width="38" height="24" rx="4" fill="#22c55e"/>
+  <rect x="388" y="186" width="38" height="24" rx="4" fill="#22c55e"/>
+  <rect x="432" y="186" width="38" height="24" rx="4" fill="#22c55e"/>
+  <rect x="476" y="186" width="38" height="24" rx="4" fill="#22c55e"/>
+  <rect x="520" y="186" width="38" height="24" rx="4" class="token-drop"/>
+  <text x="363" y="202" text-anchor="middle" class="badge-text">1</text>
+  <text x="407" y="202" text-anchor="middle" class="badge-text">1</text>
+  <text x="451" y="202" text-anchor="middle" class="badge-text">1</text>
+  <text x="495" y="202" text-anchor="middle" class="badge-text">1</text>
+  <text x="539" y="202" text-anchor="middle" class="badge-text">1</text>
+
+  <!-- Lua pseudo-code -->
+  <rect x="334" y="238" width="242" height="110" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="344" y="256" class="mono" fill="#c084fc">1. refill = (now - ts) * rate</text>
+  <text x="344" y="274" class="mono" fill="#c084fc">2. tokens = min(cap, tokens + refill)</text>
+  <text x="344" y="294" class="mono" fill="#4ade80">3. if tokens &gt;= 1:</text>
+  <text x="358" y="310" class="mono-sm">HMSET + EXPIRE → return {1, rem}</text>
+  <text x="344" y="328" class="mono" fill="#f87171">4. else:</text>
+  <text x="358" y="342" class="mono-sm">return {0, 0, retry_after}</text>
+
+  <!-- Branching Arrows -->
+  <path d="M 590 175 C 630 175, 625 148, 662 148" class="wire-green flow-dash" marker-end="url(#arrow-green)"/>
+  <circle r="4.5" fill="#22c55e">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 590 175 C 630 175, 625 148, 662 148"/>
+  </circle>
+
+  <path d="M 590 275 C 630 275, 625 302, 662 302" class="wire-red flow-dash" marker-end="url(#arrow-red)"/>
+  <circle r="4.5" fill="#ef4444">
+    <animateMotion dur="2s" begin="1s" repeatCount="indefinite" path="M 590 275 C 630 275, 625 302, 662 302"/>
+  </circle>
+
+  <!-- Step 3A: Allowed 200 OK -->
+  <g class="status-ok">
+    <rect x="666" y="88" width="226" height="122" class="card-accent-green"/>
+    <rect x="680" y="102" width="104" height="20" rx="5" class="badge-green"/>
+    <text x="732" y="116" text-anchor="middle" class="badge-text">3A. 200 OK</text>
+    <text x="680" y="142" class="heading">Forwarded to Upstream</text>
+    <rect x="680" y="152" width="198" height="44" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="690" y="170" class="mono" fill="#4ade80">X-RateLimit-Limit: 10</text>
+    <text x="690" y="186" class="mono" fill="#4ade80">X-RateLimit-Remaining: 4</text>
+  </g>
+
+  <!-- Step 3B: Throttled 429 -->
+  <g class="status-429">
+    <rect x="666" y="240" width="226" height="122" class="card-accent-red"/>
+    <rect x="680" y="254" width="136" height="20" rx="5" class="badge-red"/>
+    <text x="748" y="268" text-anchor="middle" class="badge-text">3B. 429 THROTTLED</text>
+    <text x="680" y="294" class="heading">Rejected at Edge</text>
+    <rect x="680" y="304" width="198" height="44" rx="6" fill="#0f172a" stroke="#334155"/>
+    <text x="690" y="322" class="mono" fill="#f87171">HTTP/1.1 429 Too Many Req</text>
+    <text x="690" y="338" class="mono" fill="#f87171">Retry-After: 1</text>
+  </g>
+
+  <!-- Footer legend -->
+  <rect x="28" y="384" width="864" height="36" rx="8" fill="#1e293b" stroke="#334155"/>
+  <circle cx="50" cy="402" r="5" fill="#38bdf8"/>
+  <text x="62" y="406" class="mono-sm">Gateway Key Extraction</text>
+  <circle cx="235" cy="402" r="5" fill="#a855f7"/>
+  <text x="247" y="406" class="mono-sm">Atomic Lua (No Race Condition)</text>
+  <circle cx="475" cy="402" r="5" fill="#22c55e"/>
+  <text x="487" y="406" class="mono-sm">Allowed (tokens &gt;= 1)</text>
+  <circle cx="660" cy="402" r="5" fill="#ef4444"/>
+  <text x="672" y="406" class="mono-sm">Throttled (tokens == 0, Fail Fast)</text>
+</svg>

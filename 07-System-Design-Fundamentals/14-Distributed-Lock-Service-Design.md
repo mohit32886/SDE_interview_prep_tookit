@@ -10,12 +10,12 @@ This is the question that tests whether you TRULY understand distributed systems
 ## Table of Contents
 
 1. [Why Distributed Locks Are Hard](#1-why-distributed-locks-are-hard)
-2. [Single-Node Redis Lock — The Starting Point](#2-single-node-redis-lock)
-3. [Why Single-Node Lock Fails — And the GC Pause Problem](#3-why-single-node-lock-fails)
-4. [Fencing Tokens — The Fix Most People Don't Know](#4-fencing-tokens)
-5. [The Redlock Algorithm — Multi-Node Distributed Lock](#5-the-redlock-algorithm)
+2. [Single-Node Redis Lock](#2-single-node-redis-lock)
+3. [Why Single-Node Lock Fails](#3-why-single-node-lock-fails)
+4. [Fencing Tokens](#4-fencing-tokens)
+5. [The Redlock Algorithm](#5-the-redlock-algorithm)
 6. [Martin Kleppmann's Critique of Redlock](#6-martin-kleppmanns-critique-of-redlock)
-7. [ZooKeeper-Based Locks — The Consensus Approach](#7-zookeeper-based-locks)
+7. [ZooKeeper-Based Locks — The Consensus Approach](#7-zookeeper-based-locks--the-consensus-approach)
 8. [Leader Election](#8-leader-election)
 9. [Split-Brain Problem](#9-split-brain-problem)
 10. [Comparison: Redis vs ZooKeeper vs etcd](#10-comparison-redis-vs-zookeeper-vs-etcd)
@@ -23,12 +23,13 @@ This is the question that tests whether you TRULY understand distributed systems
 12. [When Do You Actually Need Distributed Locks?](#12-when-do-you-actually-need-distributed-locks)
 13. [Senior vs Mid-Level Comparison](#13-senior-vs-mid-level-comparison)
 14. [Interview Follow-Up Questions](#14-interview-follow-up-questions)
+15. [One-Page Summary](#one-page-summary)
 
 ---
 
 ## 1. Why Distributed Locks Are Hard
 
-### Locks on a single machine are simple:
+### Locks on a Single Machine Are Simple
 
 ```java
 // Single JVM — works perfectly
@@ -38,25 +39,36 @@ synchronized (resource) {
 }
 ```
 
-### But in distributed systems, everything breaks:
+### In Distributed Systems, Everything Breaks
 
+```mermaid
+flowchart TD
+    A["Server A: Lock('order-123')"] --> B["No Shared Memory Authority"]
+    C["Server B: Lock('order-123')"] --> B
+    B --> P1["Crash while holding lock → Deadlock"]
+    B --> P2["Network Partition → Both think they hold lock"]
+    B --> P3["GC Pause (30s) → Lock expires, both mutate resource"]
+    P3 --> D["Data Corruption"]
+
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc,stroke-width:2px
+
+    class A,C primary
+    class B,P1,P2,P3 warn
+    class D danger
 ```
-Server A                              Server B
-────────                              ────────
-Lock("order-123") ✓ acquired          Lock("order-123") ???
-modify order                          modify order
-Unlock()                              Unlock()
 
-Problems:
-1. Who is the authority? There's no shared memory.
-2. What if Server A crashes while holding the lock? Lock held forever.
-3. What if the network partitions? Both think they have the lock.
-4. What if Server A's GC pauses for 30 seconds? Lock expires,
-   Server B acquires it, Server A wakes up and STILL thinks it has the lock.
-   → BOTH modify the resource simultaneously. Data corruption.
-```
+| Challenge | Single-JVM Lock | Distributed Lock |
+|-----------|-----------------|------------------|
+| **Authority** | Shared RAM & OS/JVM monitor | External coordinator over unreliable network |
+| **Process Crash** | OS reclaims process memory/locks | Lock held until TTL or session expires |
+| **Network Partition** | Not applicable | Client cannot tell "node dead" vs "network slow" |
+| **Process / GC Pause** | Paused thread still owns monitor | Lock TTL expires while client is frozen |
+| **Clock Drift** | Monotonic CPU clock | Independent machine clocks drift or jump |
 
-**The fundamental problem:** In a distributed system, you cannot distinguish between "the other node crashed" and "the network is slow." And clocks across machines drift.
+> [!IMPORTANT]
+> **The fundamental problem:** In an asynchronous distributed system, you cannot distinguish between "the other node crashed" and "the network or GC is slow." Furthermore, physical clocks across machines drift.
 
 ---
 
@@ -78,6 +90,25 @@ if redis.call("GET", KEYS[1]) == ARGV[1] then
 else
     return 0
 end
+```
+
+### Acquire & Safe-Release Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Server A (uuid-aaa)
+    participant R as Redis Single Node
+    participant B as Server B (uuid-bbb)
+
+    A->>R: SET lock:order-123 "uuid-aaa" NX EX 30
+    R-->>A: OK (Lock Acquired)
+    Note over A: Slow processing (35s)... TTL expires at 30s!
+    B->>R: SET lock:order-123 "uuid-bbb" NX EX 30
+    R-->>B: OK (Server B acquires lock)
+    A->>R: Lua: GET == "uuid-aaa" then DEL
+    R-->>A: 0 (Mismatch: "uuid-bbb" != "uuid-aaa", NOT deleted)
+    Note over B,R: Server B's lock remains intact!
 ```
 
 ### Java Implementation
@@ -146,66 +177,72 @@ if (redisLock.tryLock(lockKey, requestId, 30)) {
 }
 ```
 
-### Why the Random Value Matters
+### Why the Random Value & Lua Script Matter
 
-```
-Without random value:
-  Server A: SET lock:order-123 "locked" EX 30      → acquired
-  Server A: (slow processing... 35 seconds pass)
-  Lock expires automatically after 30s
-  Server B: SET lock:order-123 "locked" EX 30      → acquired
-  Server A: DEL lock:order-123                      → DELETES SERVER B's LOCK!
-  Server C: SET lock:order-123 "locked" EX 30      → acquired
-  → Server B and C both think they have the lock. DATA CORRUPTION.
+| Mechanism | Without It | With It |
+|-----------|-----------|---------|
+| **`NX` (Set if Not Exists)** | Multiple clients overwrite the key | Only first client creates the key |
+| **`EX 30` (TTL)** | Client crash leaves lock held forever | Lock auto-expires after 30s |
+| **Random `requestId` (UUID)** | Slow Server A deletes Server B's lock | Server A sees `"uuid-bbb" ≠ "uuid-aaa"` and aborts `DEL` |
+| **Atomic Lua Script** | `GET` then `DEL` has a TOCTOU race condition | `GET` + `DEL` execute atomically inside Redis |
 
-With random value:
-  Server A: SET lock:order-123 "uuid-aaa" EX 30    → acquired
-  Lock expires after 30s
-  Server B: SET lock:order-123 "uuid-bbb" EX 30    → acquired
-  Server A: GET lock:order-123 → "uuid-bbb" ≠ "uuid-aaa" → DON'T DELETE
-  → Server A knows it lost the lock. Safe.
-```
+> [!TIP]
+> **Lease Renewal / Watchdog Pattern (e.g., Redisson Watchdog):** If your critical section legitimately takes longer than the initial TTL, a background watchdog thread can periodically renew the lease (`PEXPIRE` every `TTL / 3`, e.g., every 10s for a 30s lock) *only* while the holder thread is alive and still owns `requestId`. Note that a watchdog still cannot stop a **Stop-The-World GC pause** from freezing the renewal thread too—which is why fencing tokens remain essential for strict correctness.
 
 ---
 
 ## 3. Why Single-Node Lock Fails
 
-### Problem 1: Redis Failover
+### Problem 1: Redis Failover (Asynchronous Replication)
 
-```
-Time T1: Client A acquires lock on Redis master
-Time T2: Redis master crashes BEFORE replicating to slave
-Time T3: Redis slave promoted to master (doesn't have the lock)
-Time T4: Client B acquires the "same" lock on new master
-→ Both Client A and Client B hold the lock. UNSAFE.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Client A
+    participant M as Redis Master
+    participant S as Redis Replica
+    participant B as Client B
+
+    A->>M: SET lock:order-123 "uuid-aaa" NX EX 30
+    M-->>A: OK (Lock Acquired)
+    Note over M,S: Async replication has NOT flushed yet
+    M--xM: Redis Master CRASHES!
+    S->>S: Replica promoted to New Master (missing lock key)
+    B->>S: SET lock:order-123 "uuid-bbb" NX EX 30
+    S-->>B: OK (Lock Acquired!)
+    Note over A,B: BOTH Client A and Client B hold the lock simultaneously!
 ```
 
 This is a fundamental problem with single-node or master-slave Redis locks. Replication is asynchronous — the lock can be lost during failover.
 
 ### Problem 2: The GC Pause (Process Pause) Problem
 
-This is the subtle one that catches senior engineers off guard:
+```mermaid
+flowchart LR
+    T1["T1: Client A acquires lock (TTL=30s)"] --> T2["T2: Client A enters 40s STW GC Pause"]
+    T2 --> T3["T3: Lock expires at 30s"]
+    T3 --> T4["T4: Client B acquires lock & writes"]
+    T2 --> T5["T5: Client A wakes up, unaware of expiry"]
+    T5 --> T6["T6: Client A writes → DATA CORRUPTION"]
+    T4 --> T6
 
-```
-                    ┌─── GC PAUSE ──────────────────────┐
-                    │                                    │
-Time ──────────────►│                                    │──────────►
-                    │                                    │
-T1: Client A        │  T2: Lock expires                  │  T4: Client A
-    acquires lock   │      (TTL=30s)                     │  wakes up,
-    (30s TTL)       │                                    │  thinks it
-                    │  T3: Client B                      │  still has lock!
-                    │      acquires lock                 │
-                    │      modifies resource              │  T5: Client A
-                    │                                    │  modifies resource
-                    └────────────────────────────────────┘  → BOTH modified!
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc,stroke-width:2px
 
-Client A's GC pause was 40 seconds.
-The lock expired at 30 seconds.
-Client A doesn't KNOW the lock expired — it never checked after the pause.
+    class T1 primary
+    class T2,T3,T4,T5 warn
+    class T6 danger
 ```
 
-**This isn't theoretical.** Java GC pauses of 30+ seconds happen in production with large heaps and full GC events.
+| Failure Mode | Root Cause | Impact | Mitigated by Watchdog? |
+|--------------|------------|--------|------------------------|
+| **Master Crash Before Sync** | Async replication in Redis | Two clients hold lock on new master | No — lock key is lost on failover |
+| **STW GC Pause > TTL** | JVM freezes all threads (including watchdog) | Lock expires; client wakes up & writes | No — watchdog thread is frozen too |
+| **Network Delay > TTL** | Packet stalls between client & storage | Stale write arrives after lock expiry | No — packet is already in flight |
+
+> [!WARNING]
+> **This isn't theoretical.** Java Stop-The-World (STW) GC pauses of 30+ seconds happen in production with large heaps and full GC events. Client A's lock expires at 30s, and when it wakes up at 40s, it has no idea it lost the lock.
 
 ---
 
@@ -215,42 +252,36 @@ Client A doesn't KNOW the lock expired — it never checked after the pause.
 
 Instead of just locking, the lock service returns a **fencing token** — a number that increases every time a lock is granted. The protected resource REJECTS any request with a token older than the last one it saw.
 
-```
-T1: Client A acquires lock → fencing token = 33
-T2: Client A pauses (GC)
-T3: Lock expires, Client B acquires lock → fencing token = 34
-T4: Client B writes to storage with token 34 → accepted
-T5: Client A wakes up, writes to storage with token 33
-    → Storage says: "I've seen token 34, rejecting token 33" → REJECTED!
-    → Data is SAFE.
+![Fencing Tokens Preventing GC-Pause Split-Brain](./assets/14-fencing-tokens-redlock.svg)
+
+### Sequence & Storage Validation
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Client A
+    participant L as Lock Service
+    participant B as Client B
+    participant S as Storage Layer
+
+    A->>L: Acquire lock
+    L-->>A: Granted (fencing_token = 33)
+    Note over A: ~~~ STW GC PAUSE (40s) ~~~
+    Note over L: Lock TTL expires at 30s
+    B->>L: Acquire lock
+    L-->>B: Granted (fencing_token = 34)
+    B->>S: Write data (token = 34)
+    S-->>B: ACCEPTED (last_fencing_token = 34)
+    Note over A: ~~~ GC PAUSE ENDS ~~~
+    A->>S: Stale Write (token = 33)
+    S-->>A: REJECTED (33 < 34)
 ```
 
-```
-┌──────────┐         ┌──────────────┐         ┌──────────┐
-│ Client A │         │  Lock Service │         │ Storage  │
-└────┬─────┘         └──────┬───────┘         └────┬─────┘
-     │  acquire lock         │                      │
-     │──────────────────────►│                      │
-     │  token = 33           │                      │
-     │◄──────────────────────│                      │
-     │                       │                      │
-     │  ~~~ GC PAUSE ~~~     │                      │
-     │                       │                      │
-     │         Client B acquires lock               │
-     │                  token = 34                   │
-     │                       │                      │
-     │               Client B writes (token=34)     │
-     │                       │─────────────────────►│
-     │                       │         max_token=34 │
-     │                       │◄─────────────────────│
-     │                       │                      │
-     │  ~~~ GC PAUSE ENDS ~~ │                      │
-     │                       │                      │
-     │  write (token=33)     │                      │
-     │──────────────────────────────────────────────►│
-     │  REJECTED: 33 < 34    │                      │
-     │◄─────────────────────────────────────────────│
-```
+| Layer | Responsibility | Guarantee |
+|-------|---------------|-----------|
+| **Lock Service** | Issues strictly monotonic `fencing_token` per lock grant | Never issues the same or lower token twice |
+| **Client** | Passes `fencing_token` with every storage mutation | Transparently propagates proof of recency |
+| **Storage Layer** | Executes `WHERE last_fencing_token < :token` atomically | Rejects stale writes even if lock service or client fails |
 
 ### Java Implementation with Fencing
 
@@ -352,7 +383,8 @@ if (token > 0) {
 }
 ```
 
-**Interview key point:** "Fencing tokens push the correctness guarantee to the storage layer. Even if the lock service has bugs or the client has a GC pause, the storage will never accept a stale write. This is defense in depth."
+> [!IMPORTANT]
+> **Interview key point:** "Fencing tokens push the correctness guarantee to the storage layer. Even if the lock service has bugs or the client has a GC pause, the storage will never accept a stale write. This is defense in depth."
 
 ---
 
@@ -364,49 +396,53 @@ Single Redis node = single point of failure. If Redis crashes, all locks are los
 
 ### The Algorithm (by Salvatore Sanfilippo, creator of Redis)
 
-**Setup:** N independent Redis master nodes (no replication). Typically N=5.
+**Setup:** $N$ independent Redis master nodes (no replication). Typically $N = 5$.
 
-```
-┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-│ Redis #1 │  │ Redis #2 │  │ Redis #3 │  │ Redis #4 │  │ Redis #5 │
-│ (master) │  │ (master) │  │ (master) │  │ (master) │  │ (master) │
-└──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘
-      │              │             │             │             │
-      └──────────────┼─────────────┼─────────────┼─────────────┘
-                     │             │             │
-                 ┌───▼─────────────▼─────────────▼───┐
-                 │         Lock Client                │
-                 │   "Try to acquire lock on          │
-                 │    majority (3 of 5) nodes"        │
-                 └───────────────────────────────────┘
+```mermaid
+flowchart TD
+    C["Lock Client (T1 = now_ms)"] --> R1["Redis #1 (Master)"]
+    C --> R2["Redis #2 (Master)"]
+    C --> R3["Redis #3 (Master)"]
+    C --> R4["Redis #4 (Master)"]
+    C --> R5["Redis #5 (Master)"]
+
+    R1 --> Q{"Acquired &gt;= 3/5 AND elapsed &lt; TTL?"}
+    R2 --> Q
+    R3 --> Q
+    R4 --> Q
+    R5 --> Q
+
+    Q -->|"Yes"| OK["Lock Acquired (Effective TTL = TTL - elapsed)"]
+    Q -->|"No"| FAIL["Unlock ALL 5 nodes → Random backoff → Retry"]
+
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef neutral fill:#1e293b,stroke:#64748b,color:#f8fafc,stroke-width:1.5px
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc,stroke-width:2px
+
+    class C,Q primary
+    class R1,R2,R3,R4,R5 neutral
+    class OK success
+    class FAIL danger
 ```
 
 **Steps:**
+1. Get current time in milliseconds (`T1`).
+2. Try to acquire lock on ALL $N$ Redis instances sequentially using `SET NX EX` with the same key, same random value, and same TTL. Each attempt uses a **short timeout (5–50ms)** so one down node doesn't stall the client.
+3. Calculate elapsed time: `elapsed = now() - T1`.
+4. Lock is acquired **IF AND ONLY IF**:
+   - Lock was acquired on a **MAJORITY** of nodes ($\ge N/2 + 1 = 3$ of $5$).
+   - Total `elapsed < lock TTL` (if it took 29s to acquire a 30s lock, you only have 1s left).
+5. If lock acquired: **Effective TTL = original TTL - elapsed time**.
+6. If lock NOT acquired: **Release the lock on ALL nodes** (even ones where you succeeded), wait a random delay, then retry.
 
-```
-1. Get current time in milliseconds (T1)
+### Why Majority Matters
 
-2. Try to acquire lock on ALL N Redis instances sequentially
-   - Use SET NX EX with same key, same random value, same TTL
-   - Each attempt has a SHORT timeout (5-50ms)
-     (don't wait long if one node is down)
-
-3. Calculate elapsed time: elapsed = now() - T1
-
-4. Lock is acquired IF AND ONLY IF:
-   a. Lock was acquired on MAJORITY of nodes (>= N/2 + 1 = 3 of 5)
-   b. Total elapsed time < lock TTL
-      (if it took 29 seconds to acquire a 30-second lock,
-       you effectively have 1 second — not useful)
-
-5. If lock acquired:
-   - Effective TTL = original TTL - elapsed time
-   - Use this shorter TTL for your critical section
-
-6. If lock NOT acquired:
-   - Release the lock on ALL nodes (even ones where you succeeded)
-   - Wait a random delay, then retry
-```
+| Scenario (5 Independent Redis Nodes) | Outcome | Mutual Exclusion? |
+|--------------------------------------|---------|-------------------|
+| **2 nodes crash after Client A gets 3** | Client A holds 3; others can get at most 2 (&lt; 3) | Preserved |
+| **Client A holds 3, Client B tries all 5** | Client B gets at most 2 (&lt; 3) | Preserved |
+| **Network partition `[1,2] | [3,4,5]`** | Minority `[1,2]` cannot reach quorum; only `[3,4,5]` can | Preserved |
 
 ### Java Implementation
 
@@ -540,128 +576,121 @@ if (lock.isPresent()) {
 }
 ```
 
-### Why Majority Matters
-
-```
-5 Redis nodes. Client acquires lock on 3.
-
-Scenario: 2 nodes crash after lock acquired
-  - Lock still valid (held on 3, need 3 for quorum)
-  - Other clients can only get 2 nodes (crashed ones have the lock)
-  - 2 < quorum (3) → can't acquire → mutual exclusion preserved ✓
-
-Scenario: Client A has 3, Client B tries
-  - Client B tries all 5
-  - At best, gets the 2 nodes A doesn't have
-  - 2 < quorum (3) → can't acquire ✓
-
-Scenario: Network partition splits [1,2] | [3,4,5]
-  - Side [1,2]: can't get quorum (need 3) → no lock granted
-  - Side [3,4,5]: can get quorum → lock works
-  - Only ONE side can have the lock ✓
-```
+> [!TIP]
+> Always use a randomized retry delay (`RETRY_DELAY_MS + jitter`) when Redlock fails to reach quorum—otherwise competing clients will repeatedly collide in lockstep and cause livelock.
 
 ---
 
 ## 6. Martin Kleppmann's Critique of Redlock
 
-This is the MOST important part for senior-level interviews. Knowing the Redlock controversy shows deep understanding.
+This is the **MOST important** part for senior-level interviews. Knowing the Redlock controversy shows deep understanding of distributed systems.
 
-### Kleppmann's Argument (2016)
+### Kleppmann's Argument (2016) — Clock Jumps & Process Pauses
 
-Martin Kleppmann (author of "Designing Data-Intensive Applications") argued that Redlock is fundamentally flawed:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C1 as Client 1
+    participant R12 as Redis 1 & 2
+    participant R3 as Redis 3 (Clock Jumps +30s!)
+    participant R45 as Redis 4 & 5
+    participant C2 as Client 2
 
-**Problem 1: Clock jumps**
+    C1->>R12: Acquire lock (TTL 30s)
+    C1->>R3: Acquire lock (TTL 30s)
+    Note over C1: Client 1 holds Quorum (1, 2, 3)
+    Note over R3: NTP step / VM migration jumps Node 3 clock +30s!
+    R3--xR3: Lock on Redis 3 EXPIRES prematurely!
+    C2->>R3: Acquire lock → OK
+    C2->>R45: Acquire lock → OK
+    Note over C2: Client 2 holds Quorum (3, 4, 5)
+    Note over C1,C2: BOTH Client 1 and Client 2 hold the lock simultaneously!
 ```
-Redlock relies on time-based TTL across 5 independent nodes.
-If one node's clock jumps forward (NTP correction, leap second, VM migration),
-locks on that node expire prematurely.
 
-Example:
-  T0: Lock acquired on nodes 1, 2, 3 (TTL = 30s)
-  T1: Node 3's clock jumps forward 30 seconds
-  T2: Lock on node 3 expires prematurely
-  T3: Another client acquires lock on nodes 3, 4, 5
-  → TWO clients hold the lock simultaneously!
-```
+**Problem 1: Clock jumps** — Redlock relies on time-based TTL across 5 independent nodes. If one node's clock jumps forward (NTP step correction, leap second, VM migration), its lock expires prematurely, allowing a second client to form a quorum on `{3, 4, 5}`.
 
-**Problem 2: Process pauses (same GC problem)**
-```
-Even with Redlock, if Client A pauses for longer than the TTL,
-it will wake up thinking it has the lock — but it expired.
-Redlock doesn't solve this.
-```
+**Problem 2: Process pauses** — Even with Redlock, if Client A pauses (STW GC) for longer than the TTL, it wakes up thinking it still holds the lock. Redlock provides no fencing token.
+
+### Kleppmann vs. Antirez (Redis Creator)
+
+| Dimension | Martin Kleppmann (DDIA Author) | Salvatore Sanfilippo (Antirez) |
+|-----------|-------------------------------|--------------------------------|
+| **Core Stance** | Redlock is unsafe for correctness; relies on bounded clock drift & timing | Redlock is safe under practical operational assumptions |
+| **Clock Jumps** | NTP steps, VM pauses, and leap seconds break time-based mutual exclusion | Avoid NTP step adjustments (`ntpd -x` / slewing) and use `fsync` |
+| **Fencing Tokens** | Mandatory for correctness; Redlock lacks monotonic consensus tokens | Acknowledged for storage safety, argues Redlock is valid for lock use cases |
+| **Recommended Use** | Single Redis for efficiency; ZooKeeper/etcd + fencing for correctness | Redlock for distributed Redis high availability without ZK/etcd |
 
 **Kleppmann's conclusion:** For **efficiency** (avoiding duplicate work), a single Redis lock with TTL is fine. For **correctness** (preventing data corruption), you need either:
-1. Fencing tokens (any lock service + fenced storage)
-2. Consensus-based lock (ZooKeeper / etcd with sessions)
+1. **Fencing tokens** (any lock service + fenced storage)
+2. **Consensus-based lock** (ZooKeeper / etcd with sessions)
 
-### Antirez's (Redis creator) Rebuttal
-
-Salvatore Sanfilippo responded:
-- Clock jumps can be mitigated with `fsync` and by not using NTP step adjustments
-- In practice, clock monotonicity is maintained well enough on modern systems
-- The algorithm is correct under reasonable assumptions about time
-
-### Interview Answer
-
+> [!IMPORTANT]
+> **Interview Answer:**
 > "I'm aware of the Kleppmann vs. Antirez debate on Redlock. Kleppmann argues that Redlock is unsafe because it relies on synchronized clocks and can fail during process pauses or clock jumps. Antirez counters that under practical assumptions, it works well. My position: for efficiency-based locks (preventing duplicate work where worst case is doing work twice), single-node Redis with TTL is fine. For safety-critical locks (preventing data corruption in financial systems), I'd use ZooKeeper or etcd for true consensus, combined with fencing tokens at the storage layer for defense in depth."
 
 ---
 
 ## 7. ZooKeeper-Based Locks — The Consensus Approach
 
-### Why ZooKeeper Is Different
+### Why ZooKeeper (ZAB) & etcd (Raft) Are Different
 
-ZooKeeper uses the **ZAB protocol** (ZooKeeper Atomic Broadcast) — a consensus algorithm similar to Raft/Paxos. This means writes are replicated to a majority BEFORE being acknowledged. No data is lost on failover.
+ZooKeeper uses the **ZAB protocol** (ZooKeeper Atomic Broadcast) and etcd uses **Raft** — both are strong consensus algorithms. Writes are replicated to a majority **BEFORE** being acknowledged, so no acknowledged lock is ever lost on failover.
 
-```
-Redis (asynchronous replication):
-  Client writes → Master acknowledges → Replicates to slave (later)
-  → If master crashes before replication: DATA LOST
+```mermaid
+flowchart LR
+    subgraph Redis["Redis (Async Replication)"]
+        RA["Client Write"] --> RM["Master Acks Immediately"]
+        RM -.->|"Async (later)"| RS["Replica (Crash loses lock)"]
+    end
 
-ZooKeeper (consensus-based):
-  Client writes → Leader proposes → Majority of followers acknowledge → Client notified
-  → If leader crashes: new leader has ALL acknowledged writes. NO DATA LOST.
-```
+    subgraph Consensus["ZooKeeper (ZAB) / etcd (Raft)"]
+        CA["Client Write"] --> CL["Leader Proposes"]
+        CL --> CQ["Majority Quorum Acks"]
+        CQ --> CC["Client Notified (Zero Data Loss)"]
+    end
 
-### How ZooKeeper Locks Work
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc,stroke-width:2px
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
 
-```
-ZooKeeper ZNode tree:
-/locks/
-  /locks/order-789/
-    /locks/order-789/lock-0000000001  ← Client A (ephemeral sequential)
-    /locks/order-789/lock-0000000002  ← Client B (ephemeral sequential)
-    /locks/order-789/lock-0000000003  ← Client C (ephemeral sequential)
-
-Rule: The client with the LOWEST sequence number holds the lock.
-Others watch the node just before them (not the lock holder — avoids herd effect).
+    class RA,RM primary
+    class RS danger
+    class CA,CL,CQ,CC success
 ```
 
-**Lock acquisition:**
-```
-1. Client creates an EPHEMERAL SEQUENTIAL znode under /locks/order-789/
-   → Gets /locks/order-789/lock-0000000042
+### How ZooKeeper Ephemeral Sequential Locks Work
 
-2. Client lists all children of /locks/order-789/
-   → [lock-0000000040, lock-0000000041, lock-0000000042]
+```mermaid
+flowchart TD
+    R["/locks/order-789/"] --> N1["lock-0000000001 (Client A — Lowest = HOLDER)"]
+    R --> N2["lock-0000000002 (Client B — Watches 0001)"]
+    R --> N3["lock-0000000003 (Client C — Watches 0002)"]
 
-3. Is mine the smallest? (lock-0000000042)
-   → No, lock-0000000040 is smallest
-   → Set a WATCH on lock-0000000041 (the one just before mine)
-   → Wait...
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef neutral fill:#1e293b,stroke:#64748b,color:#f8fafc,stroke-width:1.5px
 
-4. When lock-0000000041 is deleted (its holder released or crashed):
-   → Client gets notification
-   → Check again: is mine now the smallest?
-   → If yes → LOCK ACQUIRED
-   → If no → watch the new predecessor
+    class R neutral
+    class N1 success
+    class N2,N3 primary
 ```
 
-**Why ephemeral nodes?** If the client crashes, ZooKeeper automatically deletes the ephemeral node (session timeout). The lock is released. No TTL needed, no stuck locks.
+**Lock acquisition steps:**
+1. Client creates an **EPHEMERAL SEQUENTIAL** znode under `/locks/order-789/` (e.g., `lock-0000000042`).
+2. Client lists all children: `[lock-0000000040, lock-0000000041, lock-0000000042]`.
+3. Is mine the smallest?
+   - **Yes** → **LOCK ACQUIRED**.
+   - **No** → Set a **WATCH** on the node *just before mine* (`lock-0000000041`), not the head node.
+4. When `lock-0000000041` is deleted (holder released or crashed), client is notified and re-checks if it is now the smallest.
 
-**Why watch only the predecessor (not the lock holder)?** If 100 clients are waiting and the lock holder releases, ALL 100 would wake up (thundering herd). By watching only the predecessor, only ONE client wakes up — the next in line.
+| ZooKeeper Feature | Purpose | Equivalent in etcd (Raft) |
+|-------------------|---------|---------------------------|
+| **Ephemeral znode** | Auto-deleted if client crashes / session times out | **Lease** with keep-alive heartbeats |
+| **Sequential znode** | Strict total ordering (`0001`, `0002`, ...) + natural fencing token (`zxid` / seq) | **Revision number** (`mod_revision`) |
+| **Predecessor Watch** | Wakes only ONE next client (avoids thundering herd) | Watch on previous `create_revision` key |
+
+> [!TIP]
+> **Why watch only the predecessor (not the lock holder)?** If 100 clients are waiting and the lock holder releases, watching the head node wakes ALL 100 clients simultaneously (**thundering herd**). Watching only the immediate predecessor wakes **exactly ONE** client—the next in line.
 
 ### Java Implementation with Apache Curator
 
@@ -740,17 +769,35 @@ BigDecimal balance = zookeeperLock.executeWithLock(
 
 ### The Problem
 
-In a cluster of 5 instances of your payment service, you need exactly ONE to run the scheduled reconciliation job. If two run simultaneously, you get duplicate processing.
+In a cluster of 5 instances of your payment service, you need **exactly ONE** to run the scheduled reconciliation job. If two run simultaneously, you get duplicate processing.
 
-```
-Instance 1: runReconciliation()  ← Should run
-Instance 2: runReconciliation()  ← Should NOT run
-Instance 3: runReconciliation()  ← Should NOT run
-Instance 4: (crashed)
-Instance 5: runReconciliation()  ← Should NOT run
+### Leader Election Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant I1 as Instance 1
+    participant ZK as ZooKeeper (/election/job)
+    participant I2 as Instance 2
+    participant I3 as Instance 3
+
+    I1->>ZK: Create ephemeral node-001 (Lowest → LEADER)
+    I2->>ZK: Create ephemeral node-002 (Watches node-001)
+    I3->>ZK: Create ephemeral node-003 (Watches node-002)
+    Note over I1: Instance 1 runs runReconciliation()
+    I1--xZK: Instance 1 CRASHES! (Session timeout ~10-30s)
+    ZK->>ZK: Auto-deletes ephemeral node-001
+    ZK-->>I2: Watch triggers! node-002 is now lowest
+    Note over I2: Instance 2 takes leadership & runs reconciliation
 ```
 
-### ZooKeeper Leader Election
+| Role | State | Behavior |
+|------|-------|----------|
+| **Instance 1 (Lowest seq)** | `isLeader = true` | Executes `@Scheduled` reconciliation job |
+| **Instance 2 (Next seq)** | `isLeader = false` | Watches `node-001`; skips scheduled runs |
+| **Instance 3..5** | `isLeader = false` | Watches immediate predecessor; skips scheduled runs |
+
+### ZooKeeper Leader Election (Java)
 
 ```java
 @Service
@@ -811,73 +858,44 @@ public class ReconciliationScheduler {
 }
 ```
 
-### Leader Election Flow
-
-```
-Instance 1  ──► Creates /election/job/node-001 (ephemeral sequential)
-Instance 2  ──► Creates /election/job/node-002 (ephemeral sequential)
-Instance 3  ──► Creates /election/job/node-003 (ephemeral sequential)
-
-Lowest sequence = Instance 1 → LEADER
-
-If Instance 1 crashes:
-  ZooKeeper deletes /election/job/node-001 (ephemeral)
-  Instance 2 gets notified (was watching node-001)
-  Instance 2 is now lowest → becomes new LEADER
-  Total failover time: ~session timeout (typically 10-30 seconds)
-```
+> [!WARNING]
+> **Failover latency:** When the leader crashes, ZooKeeper waits for the **session timeout** (typically 10–30 seconds) before deleting its ephemeral node and promoting Instance 2. Always pair leader election with idempotent jobs or fencing tokens in case the old leader is merely network-partitioned rather than dead.
 
 ---
 
 ## 9. Split-Brain Problem
 
-### What Is Split-Brain?
+### How ZooKeeper Prevents Split-Brain vs. How Redlock Can Fail
 
+```mermaid
+flowchart TD
+    subgraph ZK["ZooKeeper (5 Nodes, Quorum = 3)"]
+        ZKA["Partition A: ZK-1, ZK-2 (2 nodes)"] -->|"No Quorum"| ZKF["Cannot write or elect leader"]
+        ZKB["Partition B: ZK-3, ZK-4, ZK-5 (3 nodes)"] -->|"Has Quorum"| ZKO["Single Leader Only (Safe)"]
+    end
+
+    subgraph RL["Redis Redlock (5 Independent Masters)"]
+        RL1["Client X locks R1, R3, R4 BEFORE partition"] --> RL2["Partition: [R1,R2] | [R3,R4,R5]"]
+        RL2 --> RL3["TTL expires on R3, R4"]
+        RL3 --> RL4["Client Y locks R3, R4, R5 → SPLIT-BRAIN!"]
+    end
+
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc,stroke-width:2px
+    classDef neutral fill:#1e293b,stroke:#64748b,color:#f8fafc,stroke-width:1.5px
+
+    class ZKA,ZKF warn
+    class ZKB,ZKO success
+    class RL1,RL2,RL3 neutral
+    class RL4 danger
 ```
-Network partition splits your cluster:
 
-Partition A: [Instance 1, Instance 2, ZK-1, ZK-2]
-Partition B: [Instance 3, Instance 4, Instance 5, ZK-3, ZK-4, ZK-5]
-
-If both sides elect a leader → TWO leaders → conflicting writes
-This is the "split-brain" problem.
-```
-
-### How ZooKeeper Prevents Split-Brain
-
-ZooKeeper requires a **majority quorum** for all operations:
-
-```
-5 ZK nodes → need 3 for quorum
-
-Partition A: [ZK-1, ZK-2] → 2 nodes → NO QUORUM → can't write → can't elect leader
-Partition B: [ZK-3, ZK-4, ZK-5] → 3 nodes → HAS QUORUM → can elect leader
-
-Result: Only Partition B has a leader. Split-brain prevented.
-```
-
-### How Redis Does NOT Prevent Split-Brain
-
-```
-5 Redis master nodes (Redlock):
-
-Partition A: [Redis-1, Redis-2]
-Partition B: [Redis-3, Redis-4, Redis-5]
-
-Client X (in Partition A): acquires lock on Redis-1, Redis-2 → 2/5 → NO QUORUM ✓
-Client Y (in Partition B): acquires lock on Redis-3, Redis-4, Redis-5 → 3/5 → QUORUM ✓
-
-This case is safe. But:
-
-What if locks were acquired BEFORE the partition?
-Client X acquired lock on Redis-1, Redis-3, Redis-4 → 3/5 → QUORUM ✓
-Then partition happens: [Redis-1,2] | [Redis-3,4,5]
-Locks on Redis-3, Redis-4 expire (TTL)
-Client Y acquires lock on Redis-3, Redis-4, Redis-5 → 3/5 → QUORUM ✓
-→ TWO clients hold the lock. SPLIT-BRAIN.
-
-Redis Redlock depends on TTL timing. ZooKeeper doesn't.
-```
+| System | Partition Behavior | Split-Brain Risk |
+|--------|-------------------|------------------|
+| **Single Redis** | Old master in minority partition still accepts writes until fenced | High |
+| **Redlock (5 Masters)** | Safe if partition happens *before* acquire; **unsafe** if locks acquired *before* partition expire on majority side | Moderate (timing-dependent) |
+| **ZooKeeper / etcd** | Minority partition (&lt; N/2 + 1) rejects all writes and elections | None (strict quorum) |
 
 ### Preventing Split-Brain in Your Application
 
@@ -916,9 +934,33 @@ public class SplitBrainProtection {
 }
 ```
 
+> [!IMPORTANT]
+> Even with `isInMajorityPartition()`, there is a tiny race window between checking ZooKeeper and executing `operation.call()`. For true zero-window safety, pass a **fencing token** into the storage mutation itself.
+
 ---
 
 ## 10. Comparison: Redis vs ZooKeeper vs etcd
+
+### Selection Architecture
+
+```mermaid
+flowchart LR
+    REQ["Distributed Coordination Requirement"] --> TYPE{"Duplicate work OK?"}
+    TYPE -->|"Yes (Efficiency)"| REDIS["Redis Single-Node (SETNX + TTL, &lt;1ms)"]
+    TYPE -->|"No (Correctness)"| CONS{"Infra Stack?"}
+    CONS -->|"JVM / Hadoop"| ZK["ZooKeeper (ZAB + Ephemeral Seq)"]
+    CONS -->|"Cloud-Native / K8s"| ETCD["etcd (Raft + Leases)"]
+    ZK --> FENCE["+ Storage Fencing Tokens"]
+    ETCD --> FENCE
+
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+
+    class REQ,TYPE,CONS primary
+    class REDIS warn
+    class ZK,ETCD,FENCE success
+```
 
 | Feature | Redis (single) | Redlock (multi) | ZooKeeper | etcd |
 |---------|---------------|-----------------|-----------|------|
@@ -927,7 +969,7 @@ public class SplitBrainProtection {
 | **Lock safety** | Best-effort | Debated | Strong | Strong |
 | **Fencing support** | Manual | Manual | Session-based | Lease-based |
 | **Auto-release on crash** | TTL-based | TTL-based | Ephemeral nodes | Lease expiry |
-| **Latency** | <1ms | <10ms | ~2-10ms | ~2-10ms |
+| **Latency** | &lt;1ms | &lt;10ms | ~2-10ms | ~2-10ms |
 | **Throughput** | 100K ops/s | 20K ops/s | 10K ops/s | 10K ops/s |
 | **Complexity** | Low | Medium | High | Medium |
 | **Split-brain safe** | No | Partially | Yes | Yes |
@@ -935,23 +977,41 @@ public class SplitBrainProtection {
 
 ### When to Use What
 
-```
-"I don't want to send duplicate emails"
-  → Redis single-node lock. If it fails, worst case = 2 emails. Acceptable.
+- **"I don't want to send duplicate emails"** → Redis single-node lock. If it fails, worst case = 2 emails. Acceptable.
+- **"I don't want to process the same payment twice"** → ZooKeeper or etcd lock + fencing tokens. Double-charge = lawsuit.
+- **"I need leader election for a scheduled job"** → ZooKeeper / etcd. Must have exactly one leader.
+- **"I need to coordinate microservices during deployment"** → etcd (used by Kubernetes). Well-suited for config + coordination.
 
-"I don't want to process the same payment twice"
-  → ZooKeeper or etcd lock + fencing tokens. Double-charge = lawsuit.
-
-"I need leader election for a scheduled job"
-  → ZooKeeper / etcd. Must have exactly one leader.
-
-"I need to coordinate microservices during deployment"
-  → etcd (used by Kubernetes). Well-suited for config + coordination.
-```
+> [!TIP]
+> In Kubernetes-native environments, **etcd** is often preferred over ZooKeeper because it speaks gRPC/HTTP2, has simpler operations, and uses **Raft** with explicit **Leases** and `mod_revision` fencing tokens.
 
 ---
 
 ## 11. Production Java Implementation
+
+### Strategy Pattern Architecture
+
+```mermaid
+flowchart LR
+    PP["PaymentProcessor"] -->|"Injects Qualifier"| IF["DistributedLock Interface"]
+    IF -->|"zkLock (Correctness)"| ZK["ZookeeperDistributedLock"]
+    IF -->|"redisLock (Efficiency)"| RD["RedisDistributedLock"]
+    ZK --> LH["LockHandle (fencingToken, expiresAt)"]
+    RD --> LH
+
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+
+    class PP,IF,LH primary
+    class ZK success
+    class RD warn
+```
+
+| Bean Qualifier | Backing Store | Intended Use Case | Returns Fencing Token? |
+|----------------|---------------|-------------------|------------------------|
+| `@Qualifier("redisLock")` | Single-node Redis | Deduplication, cache stampede prevention | Optional (`INCR`) |
+| `@Qualifier("zkLock")` | ZooKeeper / Curator | Payments, inventory, ledger mutations | Yes (sequence / `zxid`) |
 
 ### A Complete Lock Service with Strategy Pattern
 
@@ -1007,9 +1067,34 @@ public class PaymentProcessor {
 }
 ```
 
+> [!TIP]
+> Abstracting `DistributedLock` behind an interface lets you start with Redis for non-critical paths and swap to ZooKeeper/etcd for financial paths without rewriting business logic—while keeping `fencingToken` first-class in `LockHandle`.
+
 ---
 
 ## 12. When Do You Actually Need Distributed Locks?
+
+### Decision Framework
+
+```mermaid
+flowchart TD
+    Q1{"Is duplicate execution OK?"} -->|"Yes"| A1["Use Idempotency Key (No Lock)"]
+    Q1 -->|"No"| Q2{"Can DB constraint / atomic UPDATE handle it?"}
+    Q2 -->|"Yes"| A2["Atomic DB Operation (Simpler & Safer)"]
+    Q2 -->|"No"| Q3{"Can you serialize via Queue?"}
+    Q3 -->|"Yes"| A3["Kafka Partition per Resource"]
+    Q3 -->|"No"| Q4{"Efficiency or Correctness?"}
+    Q4 -->|"Efficiency (Dedup)"| A4["Redis Lock + TTL"]
+    Q4 -->|"Correctness (Money)"| A5["ZooKeeper / etcd + Fencing Tokens"]
+
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+
+    class Q1,Q2,Q3,Q4 primary
+    class A1,A2,A3,A5 success
+    class A4 warn
+```
 
 ### Often You Don't — Alternatives
 
@@ -1021,45 +1106,69 @@ public class PaymentProcessor {
 | **Queue-based serialization** | Kafka partition per resource | One consumer per partition = serial |
 | **CAS operations** | Redis `WATCH + MULTI` or compare-and-swap | Lock-free concurrency |
 
-### Decision Framework
-
-```
-"Do I need a distributed lock?"
-
-Is it OK if the operation runs twice?
-  ├── Yes → No lock needed. Use idempotency.
-  └── No → Continue...
-
-Can you use a database constraint/atomic operation?
-  ├── Yes → Do that. Simpler, safer, no lock needed.
-  └── No → Continue...
-
-Can you serialize via a message queue?
-  ├── Yes → Use Kafka with one partition per resource. No lock needed.
-  └── No → You need a distributed lock. Continue...
-
-Is it for efficiency (dedup, caching) or correctness (money, data integrity)?
-  ├── Efficiency → Redis lock with TTL
-  └── Correctness → ZooKeeper/etcd + fencing tokens
-```
-
-**Interview tip:** Starting with "Do we actually need a distributed lock?" shows maturity. Many candidates jump to Redlock when a simple DB constraint would suffice.
+> [!TIP]
+> **Interview tip:** Starting with "Do we actually need a distributed lock?" shows maturity. Many candidates jump to Redlock when a simple DB unique constraint or atomic `UPDATE` would suffice.
 
 ---
 
 ## 13. Senior vs Mid-Level Comparison
 
+### Interview Depth Progression
+
+```mermaid
+flowchart LR
+    M["Mid-Level: 'Use Redis SETNX + TTL'"] --> S1["Senior: 'TTL fails on GC pauses → Add Fencing Tokens'"]
+    S1 --> S2["Staff: 'Kleppmann vs Antirez → ZK/etcd Consensus + DB Alternatives'"]
+
+    classDef neutral fill:#1e293b,stroke:#64748b,color:#f8fafc,stroke-width:1.5px
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+
+    class M neutral
+    class S1 primary
+    class S2 success
+```
+
 | Topic | Mid-Level | Senior |
 |-------|-----------|--------|
-| Lock mechanism | "Use Redis SETNX" | "Redis SETNX for efficiency, ZooKeeper for correctness. Always with TTL and random value for safe release." |
-| Failure handling | "Set a TTL so locks expire" | "TTL handles crashes, but doesn't handle GC pauses. Fencing tokens at the storage layer are needed for true correctness." |
-| Redlock | "Use 5 Redis nodes, get majority" | "I know the Kleppmann critique — Redlock depends on clock synchronization which can fail. For safety-critical systems, I'd prefer consensus-based locks." |
-| Split-brain | "..." | "Quorum-based systems (ZK, etcd) prevent split-brain because the minority partition can't form a quorum. Redis Redlock partially mitigates but has timing-dependent edge cases." |
-| Alternatives | "Use a lock" | "First question: do we need a lock at all? Atomic DB operations, idempotency keys, or queue-based serialization often eliminate the need for distributed locks entirely." |
+| **Lock mechanism** | "Use Redis SETNX" | "Redis SETNX for efficiency, ZooKeeper for correctness. Always with TTL and random value for safe release." |
+| **Failure handling** | "Set a TTL so locks expire" | "TTL handles crashes, but doesn't handle GC pauses. Fencing tokens at the storage layer are needed for true correctness." |
+| **Redlock** | "Use 5 Redis nodes, get majority" | "I know the Kleppmann critique — Redlock depends on clock synchronization which can fail. For safety-critical systems, I'd prefer consensus-based locks." |
+| **Split-brain** | "..." | "Quorum-based systems (ZK, etcd) prevent split-brain because the minority partition can't form a quorum. Redis Redlock partially mitigates but has timing-dependent edge cases." |
+| **Alternatives** | "Use a lock" | "First question: do we need a lock at all? Atomic DB operations, idempotency keys, or queue-based serialization often eliminate the need for distributed locks entirely." |
+
+> [!IMPORTANT]
+> The fastest way to signal senior/staff depth in a distributed locking interview is to proactively bring up **GC pauses**, **fencing tokens at the storage layer**, and **the Kleppmann vs. Antirez Redlock debate**.
 
 ---
 
 ## 14. Interview Follow-Up Questions
+
+### Testing & Verification Matrix
+
+```mermaid
+flowchart LR
+    T1["Unit: Mutual Exclusion"] --> T2["Concurrency: 100 Threads"]
+    T2 --> T3["Failure: Kill Holder"]
+    T3 --> T4["Partition: Split-Brain"]
+    T4 --> T5["Clock Skew: +30s Jump"]
+    T5 --> T6["GC Pause: Sleep &gt; TTL"]
+
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc,stroke-width:2px
+
+    class T1,T2 primary
+    class T3,T4 warn
+    class T5,T6 danger
+```
+
+| Follow-Up Question | Core Answer | Key Trade-off |
+|--------------------|-------------|---------------|
+| **Read-Write Lock?** | ZooKeeper `InterProcessReadWriteLock` natively; Redis via `writers` + `readers` keys | Redis RW lock is complex and race-prone |
+| **ZooKeeper Down?** | 3/5 quorum survives 1–2 node failures; beyond that, cluster is read-only | Existing sessions hold locks; new acquires fail |
+| **How to Test?** | Unit → 100-thread race → Kill holder → Network partition → Clock skew → `sleep(TTL+10s)` | Chaos/Jepsen-style fault injection catches timing bugs |
+| **How to Choose TTL?** | Critical section P99 + safety margin (e.g., 15s P99 → 30s TTL) | Too short = concurrent overlap; too long = slow crash recovery |
 
 ### "How would you implement a distributed read-write lock?"
 
@@ -1071,46 +1180,47 @@ Is it for efficiency (dedup, caching) or correctness (money, data integrity)?
 
 ### "How do you test distributed locks?"
 
-```
-1. Unit test: Lock/unlock with single client — verify mutual exclusion
-2. Concurrency test: 100 threads competing for same lock — verify only 1 succeeds
-3. Failure test: Kill lock holder mid-operation — verify lock eventually released
-4. Partition test: Simulate network partition — verify no split-brain
-5. Clock skew test: Advance one Redis node's clock — verify Redlock handles it
-6. GC pause test: Thread.sleep(TTL + 10s) — verify fencing token rejects stale writes
-```
+1. **Unit test:** Lock/unlock with single client — verify mutual exclusion.
+2. **Concurrency test:** 100 threads competing for same lock — verify only 1 succeeds.
+3. **Failure test:** Kill lock holder mid-operation — verify lock eventually released.
+4. **Partition test:** Simulate network partition — verify no split-brain.
+5. **Clock skew test:** Advance one Redis node's clock — verify Redlock handles it.
+6. **GC pause test:** `Thread.sleep(TTL + 10s)` — verify fencing token rejects stale writes.
 
 ### "How do you choose the TTL value?"
 
 "The TTL needs to be longer than the critical section takes, plus a safety margin. If processing takes 5 seconds on average and 15 seconds at P99, I'd set TTL to 30 seconds. Too short: lock expires during processing, allowing concurrent access. Too long: if the holder crashes, the resource is blocked for the full TTL. For ZooKeeper, there's no TTL — ephemeral nodes are deleted on session close, which is more precise."
 
+> [!TIP]
+> If asked about long-running jobs with unpredictable duration, mention combining a **heartbeat/watchdog lease renewal** with **storage-layer fencing tokens** rather than setting an arbitrarily huge TTL (like 1 hour).
+
 ---
 
 ## One-Page Summary
 
+```mermaid
+flowchart TD
+    L1["Level 1: Do you even need a lock? → Atomic DB / Idempotency / Kafka Queue"] --> L2["Level 2: Efficiency Lock → Redis SETNX + TTL + Random UUID (&lt;1ms)"]
+    L2 --> L3["Level 3: Safety Lock → ZooKeeper (ZAB) / etcd (Raft) + Ephemeral / Leases"]
+    L3 --> L4["Level 4: Belt AND Suspenders → Storage-Layer Fencing Tokens"]
+
+    classDef neutral fill:#1e293b,stroke:#64748b,color:#f8fafc,stroke-width:1.5px
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc,stroke-width:2px
+    classDef primary fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc,stroke-width:2px
+    classDef success fill:#14532d,stroke:#22c55e,color:#f8fafc,stroke-width:2px
+
+    class L1 neutral
+    class L2 warn
+    class L3 primary
+    class L4 success
 ```
-┌─────────────────────────────────────────────────────────────┐
-│              DISTRIBUTED LOCKS — THE FULL PICTURE            │
-│                                                              │
-│  Level 1: Do you even need a lock?                          │
-│    → Try: atomic DB operations, idempotency, queue           │
-│                                                              │
-│  Level 2: Efficiency lock (duplicate work is OK)             │
-│    → Redis SETNX + TTL + random value                        │
-│    → Simple, fast (<1ms), good enough for most cases         │
-│                                                              │
-│  Level 3: Safety lock (data corruption is NOT OK)            │
-│    → ZooKeeper / etcd (consensus-based)                      │
-│    → Ephemeral nodes = auto-release on crash                 │
-│    → No clock dependency, quorum prevents split-brain        │
-│                                                              │
-│  Level 4: Belt AND suspenders                                │
-│    → Any lock service + FENCING TOKENS at storage layer      │
-│    → Storage rejects stale writes even if lock is buggy      │
-│    → This is the only way to be truly safe                   │
-│                                                              │
-│  The Kleppmann Argument:                                     │
-│    "If you need correctness, use consensus + fencing.         │
-│     If you need efficiency, a single Redis lock is fine."     │
-└─────────────────────────────────────────────────────────────┘
-```
+
+| Level | Strategy | Protects Against | Limitation |
+|-------|----------|------------------|------------|
+| **Level 1** | No Lock (DB Constraints / Idempotency / Queue) | Lock service overhead & failure modes | Requires DB/queue support |
+| **Level 2** | Redis `SETNX` + TTL + Random UUID | Duplicate work under normal operation | Async failover & GC pauses |
+| **Level 3** | ZooKeeper / etcd (Consensus + Quorum) | Split-brain & failover lock loss | Higher latency (~2–10ms) |
+| **Level 4** | Any Lock + **Storage Fencing Tokens** | GC pauses, clock skew, buggy lock services | Requires storage to check token |
+
+> [!IMPORTANT]
+> **The Kleppmann Argument:** "If you need correctness, use consensus + fencing tokens. If you need efficiency, a single Redis lock is fine."

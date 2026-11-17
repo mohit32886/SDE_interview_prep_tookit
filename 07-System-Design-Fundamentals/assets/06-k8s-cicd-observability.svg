@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" width="960" height="460" role="img" aria-labelledby="title desc">
+  <title id="title">GitOps CI/CD and Kubernetes Canary Rollout</title>
+  <desc>Animated pipeline showing Git Push, Build and Scan, Canary 10% rollout, Prometheus SLO Gate, and branching to 100% Prod or Auto-Rollback.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .card-gate { fill: #1e293b; stroke: #6366f1; stroke-width: 1.8; rx: 10; }
+      .card-prod { fill: #052e16; stroke: #22c55e; stroke-width: 1.8; rx: 10; }
+      .card-rb { fill: #450a0a; stroke: #ef4444; stroke-width: 1.8; rx: 10; }
+      .title-text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .node-title { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #e2e8f0; }
+      .edge-base { fill: none; stroke: #334155; stroke-width: 2.5; stroke-linecap: round; }
+      .edge-flow { fill: none; stroke: #38bdf8; stroke-width: 2.5; stroke-dasharray: 7 7; stroke-linecap: round; animation: dashFlow 1.4s linear infinite; }
+      .edge-prod { fill: none; stroke: #22c55e; stroke-width: 2.5; stroke-dasharray: 7 7; stroke-linecap: round; animation: dashFlow 1.4s linear infinite; }
+      .edge-rb { fill: none; stroke: #ef4444; stroke-width: 2.2; stroke-dasharray: 5 6; stroke-linecap: round; animation: dashFlow 1.8s linear infinite; }
+      .pulse-blue { animation: pulseBlue 2.4s ease-in-out infinite; }
+      .pulse-green { animation: pulseGreen 2.4s ease-in-out infinite; }
+      .pulse-red { animation: pulseRed 2.8s ease-in-out infinite; }
+      .bar-anim-1 { animation: barPulse 2.2s ease-in-out infinite; }
+      .bar-anim-2 { animation: barPulse 2.2s ease-in-out 0.35s infinite; }
+      .bar-anim-3 { animation: barPulse 2.2s ease-in-out 0.7s infinite; }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -28; }
+      }
+      @keyframes pulseBlue {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 1; }
+      }
+      @keyframes pulseGreen {
+        0%, 100% { stroke-opacity: 0.65; }
+        50% { stroke-opacity: 1; }
+      }
+      @keyframes pulseRed {
+        0%, 100% { stroke-opacity: 0.45; }
+        50% { stroke-opacity: 1; }
+      }
+      @keyframes barPulse {
+        0%, 100% { opacity: 0.65; }
+        50% { opacity: 1; }
+      }
+    </style>
+
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e" />
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+    </marker>
+
+    <path id="path-main" d="M 162 175 L 200 175 M 354 175 L 392 175 M 552 175 L 590 175" />
+    <path id="path-pass" d="M 744 148 L 788 106" />
+    <path id="path-fail" d="M 744 202 L 788 264" />
+  </defs>
+
+  <!-- Canvas -->
+  <rect class="bg" x="0" y="0" width="960" height="460" rx="14" />
+
+  <!-- Header -->
+  <text class="title-text" x="32" y="42">GitOps CI/CD &amp; Kubernetes Canary Rollout</text>
+  <text class="subtitle-text" x="32" y="64">Automated build, security scan, progressive traffic shift, and Prometheus SLO-gated promotion or instant rollback</text>
+  <rect x="748" y="26" width="180" height="26" rx="13" fill="#1e293b" stroke="#38bdf8" stroke-width="1" />
+  <circle cx="764" cy="39" r="4" fill="#22c55e" class="pulse-blue" />
+  <text class="badge-text" x="776" y="43">GITOPS PIPELINE LIVE</text>
+
+  <!-- Stage 1: Git Push -->
+  <g transform="translate(32, 118)">
+    <rect class="card" width="130" height="114" rx="10" />
+    <rect x="12" y="12" width="54" height="18" rx="4" fill="#0ea5e9" fill-opacity="0.2" />
+    <text class="badge-text" x="18" y="25" fill="#38bdf8">STAGE 1</text>
+    <text class="node-title" x="12" y="50">Git Push</text>
+    <text class="node-sub" x="12" y="70">git push main</text>
+    <text class="node-sub" x="12" y="86">Webhook trigger</text>
+    <text class="node-sub" x="12" y="102">SHA: a9f3c21</text>
+  </g>
+
+  <!-- Connector 1 -> 2 -->
+  <line class="edge-base" x1="162" y1="175" x2="196" y2="175" />
+  <line class="edge-flow" x1="162" y1="175" x2="196" y2="175" marker-end="url(#arrow-blue)" />
+
+  <!-- Stage 2: Build & Scan -->
+  <g transform="translate(202, 118)">
+    <rect class="card" width="152" height="114" rx="10" />
+    <rect x="12" y="12" width="54" height="18" rx="4" fill="#6366f1" fill-opacity="0.25" />
+    <text class="badge-text" x="18" y="25" fill="#a5b4fc">STAGE 2</text>
+    <text class="node-title" x="12" y="50">Build &amp; Scan</text>
+    <text class="node-sub" x="12" y="70">Docker OCI build</text>
+    <text class="node-sub" x="12" y="86">Unit + SAST + Trivy</text>
+    <text class="node-sub" x="12" y="102">Push Registry v2</text>
+  </g>
+
+  <!-- Connector 2 -> 3 -->
+  <line class="edge-base" x1="354" y1="175" x2="388" y2="175" />
+  <line class="edge-flow" x1="354" y1="175" x2="388" y2="175" marker-end="url(#arrow-blue)" />
+
+  <!-- Stage 3: Canary 10% -->
+  <g transform="translate(394, 118)">
+    <rect class="card" width="158" height="114" rx="10" />
+    <rect x="12" y="12" width="54" height="18" rx="4" fill="#f59e0b" fill-opacity="0.22" />
+    <text class="badge-text" x="18" y="25" fill="#fcd34d">STAGE 3</text>
+    <text class="node-title" x="12" y="50">Canary 10%</text>
+    <text class="node-sub" x="12" y="70">ArgoCD Sync (K8s)</text>
+    <text class="node-sub" x="12" y="86">v1: 90% | v2: 10%</text>
+    <!-- Traffic split bar -->
+    <rect x="12" y="96" width="134" height="8" rx="4" fill="#334155" />
+    <rect x="12" y="96" width="120" height="8" rx="4" fill="#38bdf8" />
+    <rect x="132" y="96" width="14" height="8" rx="4" fill="#f59e0b" />
+  </g>
+
+  <!-- Connector 3 -> 4 -->
+  <line class="edge-base" x1="552" y1="175" x2="586" y2="175" />
+  <line class="edge-flow" x1="552" y1="175" x2="586" y2="175" marker-end="url(#arrow-blue)" />
+
+  <!-- Stage 4: Prometheus / SLO Gate -->
+  <g transform="translate(592, 110)">
+    <rect class="card-gate" width="156" height="130" rx="10" />
+    <rect x="12" y="12" width="66" height="18" rx="4" fill="#6366f1" fill-opacity="0.3" />
+    <text class="badge-text" x="18" y="25" fill="#c7d2fe">SLO GATE</text>
+    <text class="node-title" x="12" y="48">Prometheus</text>
+    <text class="node-sub" x="12" y="67">Err &lt; 1.0% (0.05%)</text>
+    <text class="node-sub" x="12" y="83">P99 &lt; 750ms (510ms)</text>
+    <!-- Mini animated telemetry bars -->
+    <rect class="bar-anim-1" x="12" y="96" width="38" height="18" rx="3" fill="#22c55e" fill-opacity="0.25" stroke="#22c55e" stroke-width="1" />
+    <text class="badge-text" x="18" y="109" fill="#4ade80">5xx</text>
+    <rect class="bar-anim-2" x="56" y="96" width="40" height="18" rx="3" fill="#38bdf8" fill-opacity="0.25" stroke="#38bdf8" stroke-width="1" />
+    <text class="badge-text" x="63" y="109" fill="#7dd3fc">P99</text>
+    <rect class="bar-anim-3" x="102" y="96" width="42" height="18" rx="3" fill="#a855f7" fill-opacity="0.25" stroke="#a855f7" stroke-width="1" />
+    <text class="badge-text" x="109" y="109" fill="#d8b4fe">CPU</text>
+  </g>
+
+  <!-- Branch Pass: Gate -> 100% Prod -->
+  <path class="edge-base" d="M 748 148 Q 770 108 794 108" />
+  <path class="edge-prod" d="M 748 148 Q 770 108 794 108" marker-end="url(#arrow-green)" />
+  <text class="node-sub" x="752" y="100" fill="#4ade80">SLO OK</text>
+
+  <g transform="translate(800, 66)">
+    <rect class="card-prod pulse-green" width="132" height="92" rx="10" />
+    <rect x="12" y="10" width="60" height="18" rx="4" fill="#22c55e" fill-opacity="0.25" />
+    <text class="badge-text" x="18" y="23" fill="#4ade80">PROMOTE</text>
+    <text class="node-title" x="12" y="46">100% Prod</text>
+    <text class="node-sub" x="12" y="64">v2: 100% traffic</text>
+    <text class="node-sub" x="12" y="80">Retire v1 pods</text>
+  </g>
+
+  <!-- Branch Fail: Gate -> Auto-Rollback -->
+  <path class="edge-base" d="M 748 202 Q 770 258 794 258" />
+  <path class="edge-rb" d="M 748 202 Q 770 258 794 258" marker-end="url(#arrow-red)" />
+  <text class="node-sub" x="746" y="248" fill="#f87171">BREACH</text>
+
+  <g transform="translate(800, 212)">
+    <rect class="card-rb pulse-red" width="132" height="92" rx="10" />
+    <rect x="12" y="10" width="68" height="18" rx="4" fill="#ef4444" fill-opacity="0.25" />
+    <text class="badge-text" x="17" y="23" fill="#fca5a5">ROLLBACK</text>
+    <text class="node-title" x="12" y="46">Auto-Rollback</text>
+    <text class="node-sub" x="12" y="64">Revert v1: 100%</text>
+    <text class="node-sub" x="12" y="80">Page PagerDuty</text>
+  </g>
+
+  <!-- Animated Packet Dots (SMIL) -->
+  <circle r="4.5" fill="#38bdf8">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 97 175 L 278 175 L 473 175 L 670 175" />
+  </circle>
+  <circle r="4" fill="#4ade80">
+    <animateMotion dur="2.4s" repeatCount="indefinite" path="M 670 148 L 748 148 Q 770 108 798 108" />
+  </circle>
+  <circle r="3.5" fill="#f87171">
+    <animateMotion dur="2.8s" repeatCount="indefinite" path="M 670 202 L 748 202 Q 770 258 798 258" />
+  </circle>
+
+  <!-- Bottom Observability & Security Strip -->
+  <g transform="translate(32, 336)">
+    <rect class="card" width="896" height="96" rx="10" />
+    <text class="node-title" x="18" y="26">Kubernetes Runtime, Observability &amp; Zero-Trust Feedback Loop</text>
+
+    <rect x="18" y="40" width="204" height="42" rx="6" fill="#0f172a" stroke="#334155" />
+    <text class="badge-text" x="28" y="57" fill="#38bdf8">LOGS (ELK / FluentBit)</text>
+    <text class="node-sub" x="28" y="73">stdout -&gt; Kafka -&gt; ES</text>
+
+    <rect x="236" y="40" width="204" height="42" rx="6" fill="#0f172a" stroke="#334155" />
+    <text class="badge-text" x="246" y="57" fill="#a5b4fc">METRICS (Prometheus)</text>
+    <text class="node-sub" x="246" y="73">5xx, P99, CPU, Memory</text>
+
+    <rect x="454" y="40" width="204" height="42" rx="6" fill="#0f172a" stroke="#334155" />
+    <text class="badge-text" x="464" y="57" fill="#fcd34d">TRACING (OpenTelemetry)</text>
+    <text class="node-sub" x="464" y="73">trace_id across pods</text>
+
+    <rect x="672" y="40" width="206" height="42" rx="6" fill="#0f172a" stroke="#334155" />
+    <text class="badge-text" x="682" y="57" fill="#4ade80">ZERO-TRUST (mTLS + RBAC)</text>
+    <text class="node-sub" x="682" y="73">SPIFFE ID + NetworkPolicy</text>
+  </g>
+</svg>

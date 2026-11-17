@@ -1,0 +1,237 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-labelledby="title desc">
+  <title id="title">Concurrent Seat Locking and Booking Flow</title>
+  <desc id="desc">Animated diagram showing User A and User B concurrently requesting Seat A5, Redis SET NX EX 600 granting the lock to User A and returning 409 Seat Held to User B, and the state transitions from LOCKED to BOOKED on payment success or back to AVAILABLE on TTL expiry.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .card-accent-a { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.75; }
+      .card-accent-b { fill: #1e293b; stroke: #f43f5e; stroke-width: 1.75; }
+      .card-redis { fill: #1e293b; stroke: #f59e0b; stroke-width: 1.75; }
+      .card-db { fill: #1e293b; stroke: #10b981; stroke-width: 1.5; }
+      .title-text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .label-bold { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .label-sm { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #cbd5e1; }
+      .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 11px; fill: #e2e8f0; }
+      .mono-sm { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 10px; fill: #94a3b8; }
+      .badge-ok { fill: #064e3b; stroke: #10b981; stroke-width: 1; }
+      .badge-ok-text { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 10.5px; font-weight: 700; fill: #34d399; }
+      .badge-err { fill: #4c0519; stroke: #f43f5e; stroke-width: 1; }
+      .badge-err-text { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 10.5px; font-weight: 700; fill: #fb7185; }
+      .badge-warn { fill: #451a03; stroke: #f59e0b; stroke-width: 1; }
+      .badge-warn-text { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 10.5px; font-weight: 700; fill: #fbbf24; }
+
+      .wire { fill: none; stroke: #475569; stroke-width: 2; stroke-dasharray: 5 4; }
+      .wire-a { fill: none; stroke: #38bdf8; stroke-width: 2.2; stroke-dasharray: 6 4; animation: dashMove 1.4s linear infinite; }
+      .wire-b { fill: none; stroke: #f43f5e; stroke-width: 2.2; stroke-dasharray: 6 4; animation: dashMove 1.4s linear infinite; }
+      .wire-ok { fill: none; stroke: #10b981; stroke-width: 2.2; stroke-dasharray: 6 4; animation: dashMove 1.6s linear infinite; }
+      .wire-exp { fill: none; stroke: #f59e0b; stroke-width: 2.2; stroke-dasharray: 6 4; animation: dashMove 1.8s linear infinite; }
+
+      @keyframes dashMove {
+        to { stroke-dashoffset: -20; }
+      }
+
+      /* 8-second cycle animations */
+      @keyframes pulseReqA {
+        0%, 10% { opacity: 0; transform: translate(0px, 0px); }
+        15% { opacity: 1; }
+        32% { opacity: 1; transform: translate(155px, 38px); }
+        38%, 100% { opacity: 0; transform: translate(155px, 38px); }
+      }
+      @keyframes pulseReqB {
+        0%, 12% { opacity: 0; transform: translate(0px, 0px); }
+        17% { opacity: 1; }
+        34% { opacity: 1; transform: translate(155px, -38px); }
+        40%, 100% { opacity: 0; transform: translate(155px, -38px); }
+      }
+      @keyframes seatColorCycle {
+        0%, 28% { fill: #065f46; stroke: #22c55e; }
+        34%, 72% { fill: #78350f; stroke: #f59e0b; }
+        78%, 94% { fill: #7f1d1d; stroke: #ef4444; }
+        100% { fill: #065f46; stroke: #22c55e; }
+      }
+      @keyframes seatStateTextAvail {
+        0%, 28% { opacity: 1; }
+        32%, 95% { opacity: 0; }
+        100% { opacity: 1; }
+      }
+      @keyframes seatStateTextLocked {
+        0%, 30% { opacity: 0; }
+        34%, 72% { opacity: 1; }
+        76%, 100% { opacity: 0; }
+      }
+      @keyframes seatStateTextBooked {
+        0%, 74% { opacity: 0; }
+        78%, 95% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      @keyframes ttlShrink {
+        0%, 32% { width: 0px; opacity: 0; }
+        35% { width: 170px; opacity: 1; }
+        72% { width: 28px; opacity: 1; }
+        76%, 100% { width: 0px; opacity: 0; }
+      }
+      @keyframes flashGrant {
+        0%, 28% { opacity: 0.25; }
+        34%, 72% { opacity: 1; }
+        78%, 100% { opacity: 0.35; }
+      }
+      @keyframes flashReject {
+        0%, 30% { opacity: 0.25; }
+        36%, 68% { opacity: 1; }
+        74%, 100% { opacity: 0.25; }
+      }
+
+      .packet-a { fill: #38bdf8; animation: pulseReqA 8s ease-in-out infinite; }
+      .packet-b { fill: #f43f5e; animation: pulseReqB 8s ease-in-out infinite; }
+      .seat-a5-box { animation: seatColorCycle 8s ease-in-out infinite; stroke-width: 2.2; }
+      .txt-avail { animation: seatStateTextAvail 8s linear infinite; }
+      .txt-locked { animation: seatStateTextLocked 8s linear infinite; }
+      .txt-booked { animation: seatStateTextBooked 8s linear infinite; }
+      .ttl-bar { animation: ttlShrink 8s linear infinite; }
+      .grant-badge { animation: flashGrant 8s ease-in-out infinite; }
+      .reject-badge { animation: flashReject 8s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" x="0" y="0" width="960" height="540" rx="14"/>
+
+  <!-- Header -->
+  <text x="28" y="36" class="title-text">Concurrent Seat Locking &amp; Booking Flow (Seat A5)</text>
+  <text x="28" y="56" class="subtitle-text">Atomic Redis SET NX EX 600 resolves contention in &lt;1ms; PostgreSQL optimistic lock confirms final booking</text>
+
+  <!-- User A Card -->
+  <rect class="card-accent-a" x="28" y="88" width="185" height="106" rx="10"/>
+  <circle cx="52" cy="112" r="12" fill="#0284c7"/>
+  <text x="52" y="116" text-anchor="middle" class="label-bold">A</text>
+  <text x="72" y="116" class="label-bold">User A (Winner)</text>
+  <text x="42" y="138" class="mono">POST /shows/s1/hold</text>
+  <text x="42" y="154" class="mono-sm">seats: ["A5"]  t = 0.0ms</text>
+  <g class="grant-badge">
+    <rect class="badge-ok" x="42" y="164" width="156" height="20" rx="5"/>
+    <text x="120" y="178" text-anchor="middle" class="badge-ok-text">200 OK: HELD (600s)</text>
+  </g>
+
+  <!-- User B Card -->
+  <rect class="card-accent-b" x="28" y="232" width="185" height="106" rx="10"/>
+  <circle cx="52" cy="256" r="12" fill="#e11d48"/>
+  <text x="52" y="260" text-anchor="middle" class="label-bold">B</text>
+  <text x="72" y="260" class="label-bold">User B (Blocked)</text>
+  <text x="42" y="282" class="mono">POST /shows/s1/hold</text>
+  <text x="42" y="298" class="mono-sm">seats: ["A5"]  t = 0.4ms</text>
+  <g class="reject-badge">
+    <rect class="badge-err" x="42" y="308" width="156" height="20" rx="5"/>
+    <text x="120" y="322" text-anchor="middle" class="badge-err-text">409 Conflict: Seat Held</text>
+  </g>
+
+  <!-- Wires from Users to Redis -->
+  <path class="wire-a" d="M 213 141 L 348 184" marker-end="url(#arrow-blue)"/>
+  <path class="wire-b" d="M 213 285 L 348 232" marker-end="url(#arrow-red)"/>
+
+  <!-- Animated request packets -->
+  <circle class="packet-a" cx="215" cy="142" r="5"/>
+  <circle class="packet-b" cx="215" cy="284" r="5"/>
+
+  <!-- Redis Lock Engine Card -->
+  <rect class="card-redis" x="355" y="96" width="250" height="232" rx="12"/>
+  <text x="375" y="122" class="label-bold">Redis Atomic Lock Engine</text>
+  <text x="375" y="138" class="mono-sm">Single-threaded Lua / SET NX EX</text>
+
+  <rect x="372" y="150" width="216" height="58" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="382" y="168" class="mono" fill="#fbbf24">SET seat:s1:A5 userA NX EX 600</text>
+  <text x="382" y="185" class="mono-sm">1) User A -&gt; OK (Key created)</text>
+  <text x="382" y="199" class="mono-sm">2) User B -&gt; nil (Key exists)</text>
+
+  <!-- Live Seat A5 Mini-Map inside Redis Card -->
+  <text x="375" y="228" class="label-sm">Live Seat State (Row A)</text>
+  <rect x="375" y="238" width="38" height="32" rx="6" fill="#065f46" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="394" y="258" text-anchor="middle" class="mono">A4</text>
+
+  <rect class="seat-a5-box" x="421" y="236" width="54" height="36" rx="6"/>
+  <text x="448" y="253" text-anchor="middle" class="label-bold">A5</text>
+  <text x="448" y="266" text-anchor="middle" class="mono-sm txt-avail" fill="#86efac">AVAIL</text>
+  <text x="448" y="266" text-anchor="middle" class="mono-sm txt-locked" fill="#fde68a">LOCKED</text>
+  <text x="448" y="266" text-anchor="middle" class="mono-sm txt-booked" fill="#fecaca">BOOKED</text>
+
+  <rect x="483" y="238" width="38" height="32" rx="6" fill="#7f1d1d" stroke="#ef4444" stroke-width="1.2"/>
+  <text x="502" y="258" text-anchor="middle" class="mono">A6</text>
+
+  <rect x="529" y="238" width="38" height="32" rx="6" fill="#065f46" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="548" y="258" text-anchor="middle" class="mono">A7</text>
+
+  <!-- TTL Countdown Bar -->
+  <text x="375" y="294" class="mono-sm">Hold TTL Window (600s / 10 min):</text>
+  <rect x="375" y="302" width="210" height="10" rx="5" fill="#0f172a" stroke="#334155"/>
+  <rect class="ttl-bar" x="376" y="303" width="170" height="8" rx="4" fill="#f59e0b"/>
+
+  <!-- Outcome Branch 1: Payment Success -> DB Confirm -->
+  <path class="wire-ok" d="M 605 170 L 668 170" marker-end="url(#arrow-green)"/>
+  <text x="636" y="160" text-anchor="middle" class="mono-sm" fill="#34d399">Pay OK</text>
+
+  <rect class="card-db" x="676" y="96" width="256" height="128" rx="12"/>
+  <text x="694" y="122" class="label-bold">Path 1: Payment Webhook OK</text>
+  <text x="694" y="142" class="mono-sm">PostgreSQL Optimistic Lock:</text>
+  <rect x="692" y="150" width="224" height="40" rx="6" fill="#0f172a" stroke="#334155"/>
+  <text x="700" y="166" class="mono-sm">UPDATE seats SET status='BOOKED',</text>
+  <text x="700" y="180" class="mono-sm">version=v+1 WHERE version=v</text>
+  <rect class="badge-ok" x="692" y="196" width="224" height="20" rx="5"/>
+  <text x="804" y="210" text-anchor="middle" class="badge-ok-text">LOCKED -&gt; BOOKED (Permanent)</text>
+
+  <!-- Outcome Branch 2: TTL Expiry -> Release -->
+  <path class="wire-exp" d="M 605 280 L 668 280" marker-end="url(#arrow-amber)"/>
+  <text x="636" y="270" text-anchor="middle" class="mono-sm" fill="#fbbf24">600s</text>
+
+  <rect class="card" x="676" y="242" width="256" height="106" rx="12"/>
+  <text x="694" y="268" class="label-bold">Path 2: Hold TTL Expires</text>
+  <text x="694" y="288" class="mono-sm">User abandons checkout (&gt; 10 min)</text>
+  <text x="694" y="304" class="mono-sm">Redis auto-deletes seat:s1:A5</text>
+  <rect class="badge-warn" x="692" y="316" width="224" height="20" rx="5"/>
+  <text x="804" y="330" text-anchor="middle" class="badge-warn-text">LOCKED -&gt; AVAILABLE (Auto)</text>
+
+  <!-- Bottom Timeline & Legend Bar -->
+  <rect class="card" x="28" y="374" width="904" height="142" rx="12"/>
+  <text x="48" y="400" class="label-bold">End-to-End Guarantees &amp; State Legend</text>
+
+  <!-- Step boxes -->
+  <rect x="48" y="414" width="200" height="48" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1"/>
+  <text x="60" y="434" class="label-sm" fill="#38bdf8">1. Per-Seat Lock (&lt;1ms)</text>
+  <text x="60" y="450" class="mono-sm">Other seats (A4, A7) unblocked</text>
+
+  <rect x="268" y="414" width="200" height="48" rx="8" fill="#0f172a" stroke="#f59e0b" stroke-width="1"/>
+  <text x="280" y="434" class="label-sm" fill="#fbbf24">2. Atomic Multi-Seat Lua</text>
+  <text x="280" y="450" class="mono-sm">All-or-nothing hold + 600s TTL</text>
+
+  <rect x="488" y="414" width="200" height="48" rx="8" fill="#0f172a" stroke="#10b981" stroke-width="1"/>
+  <text x="500" y="434" class="label-sm" fill="#34d399">3. Idempotent DB Confirm</text>
+  <text x="500" y="450" class="mono-sm">Unique constraint + Outbox</text>
+
+  <rect x="708" y="414" width="204" height="48" rx="8" fill="#0f172a" stroke="#94a3b8" stroke-width="1"/>
+  <text x="720" y="434" class="label-sm" fill="#e2e8f0">4. Live WebSocket Sync</text>
+  <text x="720" y="450" class="mono-sm">Redis Pub/Sub broadcasts map</text>
+
+  <!-- Legend -->
+  <rect x="48" y="478" width="14" height="14" rx="3" fill="#065f46" stroke="#22c55e"/>
+  <text x="68" y="489" class="label-sm">AVAILABLE (Open to hold)</text>
+
+  <rect x="248" y="478" width="14" height="14" rx="3" fill="#78350f" stroke="#f59e0b"/>
+  <text x="268" y="489" class="label-sm">LOCKED / HELD (Redis TTL 600s)</text>
+
+  <rect x="488" y="478" width="14" height="14" rx="3" fill="#7f1d1d" stroke="#ef4444"/>
+  <text x="508" y="489" class="label-sm">BOOKED (Permanent in PostgreSQL)</text>
+</svg>

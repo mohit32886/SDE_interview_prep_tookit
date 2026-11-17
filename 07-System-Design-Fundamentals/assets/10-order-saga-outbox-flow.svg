@@ -1,0 +1,213 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 620" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">Order Saga, Transactional Outbox, and Compensating Rollback Flow</title>
+  <desc>Animated architecture diagram showing Order Service state progression (PENDING, PAYMENT_RESERVED, INVENTORY_LOCKED, CONFIRMED) via Transactional Outbox, Debezium CDC, and Kafka, plus Compensating Rollback on Inventory failure.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke-width: 1.75; rx: 12; }
+      .card-blue { stroke: #38bdf8; }
+      .card-purple { stroke: #a855f7; }
+      .card-amber { stroke: #f59e0b; }
+      .card-green { stroke: #22c55e; }
+      .card-red { stroke: #ef4444; stroke-dasharray: 6 4; }
+      .pill { rx: 6; stroke-width: 1; }
+      .title { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 19px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12.5px; fill: #94a3b8; }
+      .h3 { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #f1f5f9; }
+      .body { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; fill: #cbd5e1; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #e2e8f0; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; }
+      .arrow-happy { stroke: #38bdf8; stroke-width: 2; fill: none; stroke-dasharray: 6 4; animation: dashMove 2.4s linear infinite; }
+      .arrow-rollback { stroke: #ef4444; stroke-width: 2; fill: none; stroke-dasharray: 6 4; animation: dashMove 2s linear infinite; }
+      .state-glow-1 { animation: pulseState1 8s infinite; }
+      .state-glow-2 { animation: pulseState2 8s infinite; }
+      .state-glow-3 { animation: pulseState3 8s infinite; }
+      .state-glow-4 { animation: pulseState4 8s infinite; }
+      @keyframes dashMove {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes pulseState1 {
+        0%, 22% { fill: #0284c7; stroke: #38bdf8; }
+        25%, 100% { fill: #0f172a; stroke: #475569; }
+      }
+      @keyframes pulseState2 {
+        0%, 24% { fill: #0f172a; stroke: #475569; }
+        25%, 47% { fill: #15803d; stroke: #4ade80; }
+        50%, 100% { fill: #0f172a; stroke: #475569; }
+      }
+      @keyframes pulseState3 {
+        0%, 49% { fill: #0f172a; stroke: #475569; }
+        50%, 72% { fill: #0369a1; stroke: #38bdf8; }
+        75%, 100% { fill: #0f172a; stroke: #475569; }
+      }
+      @keyframes pulseState4 {
+        0%, 74% { fill: #0f172a; stroke: #475569; }
+        75%, 97% { fill: #047857; stroke: #34d399; }
+        100% { fill: #0f172a; stroke: #475569; }
+      }
+    </style>
+
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+    </marker>
+
+    <path id="happyPath" d="M 150 155 L 420 155 L 680 155 L 680 245 L 186 245 L 186 275 M 336 332 L 390 332 M 690 332 L 744 332" />
+    <path id="rollbackPath" d="M 540 390 L 540 420 L 160 420 L 160 475 M 266 512 L 310 512 M 530 512 L 574 512 M 784 512 L 828 512" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="0" y="0" width="1080" height="620" rx="16" class="bg" stroke="#334155" stroke-width="2"/>
+
+  <!-- Header -->
+  <text x="36" y="38" class="title">Order Saga + Transactional Outbox + Compensating Rollback</text>
+  <text x="36" y="60" class="subtitle">Atomic DB + Outbox write -&gt; Debezium CDC -&gt; Kafka (partitioned by order_id) -&gt; Saga Orchestration &amp; Rollback</text>
+
+  <!-- Row 1: Order Service -> Outbox + CDC -> Kafka -->
+  <!-- Order Service -->
+  <rect x="36" y="85" width="248" height="132" class="card card-blue"/>
+  <text x="52" y="109" class="h3">1. Order Service</text>
+  <text x="52" y="127" class="body">Single Local ACID TX:</text>
+  <text x="52" y="143" class="mono">INSERT order_events + outbox</text>
+
+  <!-- State Progression Pills inside Order Service -->
+  <rect x="50" y="155" width="102" height="22" class="pill state-glow-1"/>
+  <text x="101" y="170" text-anchor="middle" class="badge-text" fill="#e0f2fe">PENDING</text>
+
+  <rect x="162" y="155" width="110" height="22" class="pill state-glow-2"/>
+  <text x="217" y="170" text-anchor="middle" class="badge-text" fill="#dcfce7">PAYMENT_RESVD</text>
+
+  <rect x="50" y="184" width="102" height="22" class="pill state-glow-3"/>
+  <text x="101" y="199" text-anchor="middle" class="badge-text" fill="#e0f2fe">INV_LOCKED</text>
+
+  <rect x="162" y="184" width="110" height="22" class="pill state-glow-4"/>
+  <text x="217" y="199" text-anchor="middle" class="badge-text" fill="#d1fae5">CONFIRMED</text>
+
+  <!-- Arrow Order -> Outbox -->
+  <line x1="284" y1="151" x2="328" y2="151" class="arrow-happy" marker-end="url(#arrowBlue)"/>
+  <text x="306" y="143" text-anchor="middle" class="mono" fill="#38bdf8">TX</text>
+
+  <!-- Transactional Outbox + Debezium CDC -->
+  <rect x="330" y="85" width="228" height="132" class="card card-purple"/>
+  <text x="346" y="109" class="h3">2. Outbox + Debezium CDC</text>
+  <text x="346" y="128" class="body">No dual-write race condition</text>
+  <rect x="346" y="140" width="196" height="28" rx="6" fill="#0f172a" stroke="#6b21a8"/>
+  <text x="356" y="158" class="mono">outbox (id, agg_id, payload)</text>
+  <rect x="346" y="176" width="196" height="28" rx="6" fill="#0f172a" stroke="#9333ea"/>
+  <text x="356" y="194" class="mono">Debezium tails Postgres WAL</text>
+
+  <!-- Arrow Outbox -> Kafka -->
+  <line x1="558" y1="151" x2="602" y2="151" class="arrow-happy" marker-end="url(#arrowBlue)"/>
+  <text x="580" y="143" text-anchor="middle" class="mono" fill="#38bdf8">CDC</text>
+
+  <!-- Kafka Event Bus -->
+  <rect x="604" y="85" width="440" height="132" class="card card-amber"/>
+  <text x="622" y="109" class="h3">3. Kafka Event Bus (Key = order_id)</text>
+  <text x="622" y="128" class="body">Per-order strict ordering across partitions; replication factor = 3</text>
+
+  <rect x="622" y="142" width="128" height="26" rx="6" fill="#0f172a" stroke="#d97706"/>
+  <text x="686" y="159" text-anchor="middle" class="mono" fill="#fcd34d">order-events</text>
+
+  <rect x="760" y="142" width="136" height="26" rx="6" fill="#0f172a" stroke="#d97706"/>
+  <text x="828" y="159" text-anchor="middle" class="mono" fill="#fcd34d">payment-commands</text>
+
+  <rect x="906" y="142" width="124" height="26" rx="6" fill="#0f172a" stroke="#d97706"/>
+  <text x="968" y="159" text-anchor="middle" class="mono" fill="#fcd34d">inv-commands</text>
+
+  <rect x="622" y="176" width="196" height="26" rx="6" fill="#0f172a" stroke="#b45309"/>
+  <text x="720" y="193" text-anchor="middle" class="mono" fill="#fde68a">payment / inventory-events</text>
+
+  <rect x="828" y="176" width="202" height="26" rx="6" fill="#0f172a" stroke="#ef4444"/>
+  <text x="929" y="193" text-anchor="middle" class="mono" fill="#fca5a5">saga-dlq (30d retention)</text>
+
+  <!-- Connecting Kafka down to Row 2 -->
+  <path d="M 824 217 L 824 244 L 186 244 L 186 273" class="arrow-happy" marker-end="url(#arrowBlue)"/>
+
+  <!-- Row 2: Payment Service -> Inventory Service -> Confirmed -->
+  <!-- Payment Service -->
+  <rect x="36" y="275" width="300" height="118" class="card card-green"/>
+  <text x="54" y="299" class="h3">4. Payment Service</text>
+  <text x="54" y="318" class="body">Reserves / charges via Stripe API</text>
+  <text x="54" y="336" class="mono">Dedup table: idempotency_key PK</text>
+  <rect x="54" y="348" width="264" height="28" rx="6" fill="#052e16" stroke="#22c55e"/>
+  <text x="186" y="366" text-anchor="middle" class="badge-text" fill="#86efac">Emits PaymentReserved -&gt; PAYMENT_RESERVED</text>
+
+  <!-- Arrow Payment -> Inventory -->
+  <line x1="336" y1="334" x2="388" y2="334" class="arrow-happy" marker-end="url(#arrowBlue)"/>
+
+  <!-- Inventory Service -->
+  <rect x="390" y="275" width="300" height="118" class="card card-blue"/>
+  <text x="408" y="299" class="h3">5. Inventory Service</text>
+  <text x="408" y="318" class="body">Soft Reserve (10m TTL) -&gt; Hard Lock</text>
+  <text x="408" y="336" class="mono">Optimistic Lock: WHERE version = ?</text>
+  <rect x="408" y="348" width="264" height="28" rx="6" fill="#0c4a6e" stroke="#38bdf8"/>
+  <text x="540" y="366" text-anchor="middle" class="badge-text" fill="#bae6fd">Emits InventoryLocked -&gt; INVENTORY_LOCKED</text>
+
+  <!-- Arrow Inventory -> Order Confirmation -->
+  <line x1="690" y1="334" x2="742" y2="334" class="arrow-happy" marker-end="url(#arrowBlue)"/>
+
+  <!-- Order Confirmation -->
+  <rect x="744" y="275" width="300" height="118" class="card card-green"/>
+  <text x="762" y="299" class="h3">6. Order Confirmation</text>
+  <text x="762" y="318" class="body">Saga marks order CONFIRMED</text>
+  <text x="762" y="336" class="mono">CQRS updates order_view + notify</text>
+  <rect x="762" y="348" width="264" height="28" rx="6" fill="#064e3b" stroke="#10b981"/>
+  <text x="894" y="366" text-anchor="middle" class="badge-text" fill="#6ee7b7">State: CONFIRMED (Ready to Ship)</text>
+
+  <!-- Row 3: Compensating Rollback Path -->
+  <rect x="36" y="428" width="1008" height="142" class="card card-red"/>
+  <text x="54" y="454" class="h3" fill="#fca5a5">Compensating Rollback Path (Triggered on Inventory Failure / Insufficient Stock)</text>
+
+  <!-- Arrow from Inventory down to Failure -->
+  <line x1="540" y1="393" x2="540" y2="426" class="arrow-rollback" marker-end="url(#arrowRed)"/>
+  <text x="615" y="414" class="mono" fill="#fca5a5">InsufficientStockException</text>
+
+  <!-- Step 1 -->
+  <rect x="54" y="472" width="212" height="78" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="160" y="496" text-anchor="middle" class="h3" fill="#fecaca">1. InventoryFailed</text>
+  <text x="160" y="516" text-anchor="middle" class="body" fill="#fca5a5">Stock &lt; requested qty</text>
+  <text x="160" y="534" text-anchor="middle" class="mono" fill="#fca5a5">Published via Outbox</text>
+
+  <line x1="266" y1="511" x2="306" y2="511" class="arrow-rollback" marker-end="url(#arrowRed)"/>
+
+  <!-- Step 2 -->
+  <rect x="308" y="472" width="218" height="78" rx="8" fill="#451a03" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="417" y="496" text-anchor="middle" class="h3" fill="#fde68a">2. Saga Compensates</text>
+  <text x="417" y="516" text-anchor="middle" class="body" fill="#fcd34d">Step -&gt; COMPENSATING</text>
+  <text x="417" y="534" text-anchor="middle" class="mono" fill="#fcd34d">Cmd: RefundPayment</text>
+
+  <line x1="526" y1="511" x2="566" y2="511" class="arrow-rollback" marker-end="url(#arrowRed)"/>
+
+  <!-- Step 3 -->
+  <rect x="568" y="472" width="218" height="78" rx="8" fill="#451a03" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="677" y="496" text-anchor="middle" class="h3" fill="#fde68a">3. Payment Refunded</text>
+  <text x="677" y="516" text-anchor="middle" class="body" fill="#fcd34d">Idempotent refund API</text>
+  <text x="677" y="534" text-anchor="middle" class="mono" fill="#fcd34d">Emits PaymentRefunded</text>
+
+  <line x1="786" y1="511" x2="826" y2="511" class="arrow-rollback" marker-end="url(#arrowRed)"/>
+
+  <!-- Step 4 -->
+  <rect x="828" y="472" width="198" height="78" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="927" y="496" text-anchor="middle" class="h3" fill="#fecaca">4. Order CANCELLED</text>
+  <text x="927" y="516" text-anchor="middle" class="body" fill="#fca5a5">State: CANCELLED</text>
+  <text x="927" y="534" text-anchor="middle" class="mono" fill="#fca5a5">Customer notified</text>
+
+  <!-- Animated SMIL Pulses -->
+  <circle r="5" fill="#38bdf8">
+    <animateMotion dur="4.5s" repeatCount="indefinite" path="M 284 151 L 330 151 M 558 151 L 604 151 M 824 217 L 824 244 L 186 244 L 186 273" />
+  </circle>
+  <circle r="5" fill="#22c55e">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 336 334 L 390 334 M 690 334 L 744 334" />
+  </circle>
+  <circle r="5" fill="#ef4444">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 266 511 L 308 511 M 526 511 L 568 511 M 786 511 L 828 511" />
+  </circle>
+
+  <!-- Footer Legend -->
+  <circle cx="48" cy="596" r="5" fill="#38bdf8"/>
+  <text x="60" y="600" class="body">Happy Path: PENDING -&gt; PAYMENT_RESERVED -&gt; INVENTORY_LOCKED -&gt; CONFIRMED</text>
+  <circle cx="620" cy="596" r="5" fill="#ef4444"/>
+  <text x="632" y="600" class="body">Compensating Rollback: Inventory Failure -&gt; Refund Payment -&gt; CANCELLED</text>
+</svg>

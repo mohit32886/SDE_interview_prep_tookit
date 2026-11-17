@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-labelledby="title desc">
+  <title id="title">URL Shortener (TinyURL) Write and Read Path Architecture</title>
+  <desc>Animated architecture diagram showing the Write Path (POST /shorten with Base62 KGS, Sharded DB, and Redis cache) and Read Path (GET /{code} with Redis cache hit vs Sharded DB fallback).</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .card-write { fill: #1e293b; stroke: #10b981; stroke-width: 1.5; rx: 10; }
+      .card-read { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.5; rx: 10; }
+      .card-miss { fill: #1e293b; stroke: #f59e0b; stroke-width: 1.5; rx: 10; }
+      .card-kgs { fill: #1e293b; stroke: #a78bfa; stroke-width: 1.5; rx: 10; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; fill: #94a3b8; }
+      .lane-label { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; }
+      .node-title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 600; fill: #f8fafc; }
+      .flow-write { fill: none; stroke: #10b981; stroke-width: 2.2; stroke-dasharray: 7 5; animation: dashMove 1.4s linear infinite; }
+      .flow-kgs { fill: none; stroke: #a78bfa; stroke-width: 1.8; stroke-dasharray: 5 4; animation: dashMove 1.8s linear infinite; }
+      .flow-read { fill: none; stroke: #38bdf8; stroke-width: 2.2; stroke-dasharray: 7 5; animation: dashMove 1.2s linear infinite; }
+      .flow-miss { fill: none; stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 5 5; animation: dashMove 1.6s linear infinite; }
+      .divider { stroke: #334155; stroke-width: 1.5; stroke-dasharray: 6 6; }
+      .pulse-write { animation: pulseGreen 2.8s ease-in-out infinite; }
+      .pulse-read { animation: pulseBlue 2.4s ease-in-out infinite; }
+      @keyframes dashMove {
+        to { stroke-dashoffset: -24; }
+      }
+      @keyframes pulseGreen {
+        0%, 100% { stroke-opacity: 0.65; }
+        50% { stroke-opacity: 1; }
+      }
+      @keyframes pulseBlue {
+        0%, 100% { stroke-opacity: 0.65; }
+        50% { stroke-opacity: 1; }
+      }
+    </style>
+
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="960" height="540" rx="14"/>
+
+  <!-- Header -->
+  <text x="32" y="38" class="title">URL Shortener (TinyURL) — Write &amp; Read Paths</text>
+  <text x="32" y="58" class="subtitle">Base62 Range KGS · Sharded DB (hash % N) · Redis Cache-Aside (80–90% Hit Rate)</text>
+
+  <!-- Legend -->
+  <g transform="translate(550, 22)">
+    <rect x="0" y="0" width="122" height="24" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+    <circle cx="14" cy="12" r="4" fill="#10b981"/>
+    <text x="24" y="16" class="badge-text">Write Path</text>
+
+    <rect x="132" y="0" width="122" height="24" rx="6" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1"/>
+    <circle cx="146" cy="12" r="4" fill="#38bdf8"/>
+    <text x="156" y="16" class="badge-text">Cache Hit</text>
+
+    <rect x="264" y="0" width="122" height="24" rx="6" fill="#78350f" stroke="#f59e0b" stroke-width="1"/>
+    <circle cx="278" cy="12" r="4" fill="#f59e0b"/>
+    <text x="288" y="16" class="badge-text">DB Fallback</text>
+  </g>
+
+  <!-- ==================== WRITE PATH LANE ==================== -->
+  <text x="32" y="88" class="lane-label" fill="#10b981">WRITE PATH · POST /shorten → 201 Created (~5.8K Write QPS)</text>
+
+  <!-- Write Connections -->
+  <path id="write-main-path" class="flow-write" d="M 170 134 L 228 134 M 388 134 L 456 134 M 636 134 L 716 134" marker-end="url(#arrow-green)"/>
+  <path class="flow-write" d="M 170 134 L 224 134" marker-end="url(#arrow-green)"/>
+  <path class="flow-write" d="M 388 134 L 452 134" marker-end="url(#arrow-green)"/>
+  <path class="flow-write" d="M 636 134 L 712 134" marker-end="url(#arrow-green)"/>
+
+  <!-- KGS Connection -->
+  <path class="flow-kgs" d="M 308 170 L 308 206" marker-end="url(#arrow-purple)" marker-start="url(#arrow-purple)"/>
+
+  <!-- Write Nodes -->
+  <g transform="translate(36, 100)">
+    <rect class="card-write pulse-write" width="134" height="68"/>
+    <text x="16" y="26" class="node-title">Client</text>
+    <text x="16" y="44" class="node-sub">POST /shorten</text>
+    <text x="16" y="58" class="node-sub">long_url + alias</text>
+  </g>
+
+  <g transform="translate(230, 100)">
+    <rect class="card-write pulse-write" width="158" height="68"/>
+    <text x="16" y="26" class="node-title">API Server</text>
+    <text x="16" y="44" class="node-sub">Stateless Worker</text>
+    <text x="16" y="58" class="node-sub">Base62(id) → abc123</text>
+  </g>
+
+  <g transform="translate(230, 210)">
+    <rect class="card-kgs" width="158" height="58"/>
+    <text x="16" y="24" class="node-title">KGS / ID Allocator</text>
+    <text x="16" y="42" class="node-sub">Range: 10M–20M IDs</text>
+  </g>
+
+  <g transform="translate(458, 100)">
+    <rect class="card-write pulse-write" width="178" height="68"/>
+    <text x="16" y="26" class="node-title">Sharded DB</text>
+    <text x="16" y="44" class="node-sub">hash(code) % 10</text>
+    <text x="16" y="58" class="node-sub">Master + 2 Replicas</text>
+  </g>
+
+  <g transform="translate(718, 100)">
+    <rect class="card-write pulse-write" width="206" height="68"/>
+    <text x="16" y="26" class="node-title">Redis Cache</text>
+    <text x="16" y="44" class="node-sub">Warm Key: abc123</text>
+    <text x="16" y="58" class="node-sub">TTL: 24h · Evict: LRU</text>
+  </g>
+
+  <!-- Animated Write Packet -->
+  <circle r="5.5" fill="#10b981">
+    <animateMotion dur="3.2s" repeatCount="indefinite" path="M 103 134 L 309 134 L 547 134 L 821 134"/>
+  </circle>
+  <circle r="4" fill="#a78bfa">
+    <animateMotion dur="2.4s" repeatCount="indefinite" path="M 309 168 L 309 210 L 309 168"/>
+  </circle>
+
+  <!-- Divider -->
+  <line x1="32" y1="286" x2="928" y2="286" class="divider"/>
+
+  <!-- ==================== READ PATH LANE ==================== -->
+  <text x="32" y="312" class="lane-label" fill="#38bdf8">READ PATH · GET /{code} → 301 / 302 Redirect (~28.9K Read QPS · 87K Peak)</text>
+
+  <!-- Read Connections -->
+  <path class="flow-read" d="M 168 380 L 222 380" marker-end="url(#arrow-cyan)"/>
+  <path class="flow-read" d="M 362 380 L 416 380" marker-end="url(#arrow-cyan)"/>
+  <!-- API to Redis (Hit path) -->
+  <path class="flow-read" d="M 564 366 L 628 344" marker-end="url(#arrow-cyan)"/>
+  <!-- Redis to 301/302 -->
+  <path class="flow-read" d="M 800 344 L 844 364" marker-end="url(#arrow-cyan)"/>
+
+  <!-- API to Sharded DB (Miss path) -->
+  <path class="flow-miss" d="M 564 394 L 628 438" marker-end="url(#arrow-amber)"/>
+  <!-- Sharded DB backfill to Redis -->
+  <path class="flow-miss" d="M 716 408 L 716 378" marker-end="url(#arrow-amber)"/>
+  <!-- Sharded DB to 301/302 -->
+  <path class="flow-miss" d="M 800 438 L 844 402" marker-end="url(#arrow-amber)"/>
+
+  <!-- Read Nodes -->
+  <g transform="translate(36, 342)">
+    <rect class="card-read pulse-read" width="132" height="76"/>
+    <text x="16" y="28" class="node-title">Client</text>
+    <text x="16" y="46" class="node-sub">GET /abc123</text>
+    <text x="16" y="62" class="node-sub">Latency &lt; 100ms</text>
+  </g>
+
+  <g transform="translate(228, 342)">
+    <rect class="card-read pulse-read" width="134" height="76"/>
+    <text x="16" y="28" class="node-title">CDN / Load Bal.</text>
+    <text x="16" y="46" class="node-sub">Edge Redirects</text>
+    <text x="16" y="62" class="node-sub">Geo-Routing</text>
+  </g>
+
+  <g transform="translate(422, 342)">
+    <rect class="card-read pulse-read" width="142" height="76"/>
+    <text x="16" y="28" class="node-title">API Server</text>
+    <text x="16" y="46" class="node-sub">1. Check Redis</text>
+    <text x="16" y="62" class="node-sub">2. Else Query DB</text>
+  </g>
+
+  <g transform="translate(634, 314)">
+    <rect class="card-read pulse-read" width="166" height="60"/>
+    <text x="14" y="24" class="node-title">Redis Cache (Hit)</text>
+    <text x="14" y="44" class="node-sub">80–90% Hit · ~1ms</text>
+  </g>
+
+  <g transform="translate(634, 410)">
+    <rect class="card-miss" width="166" height="60"/>
+    <text x="14" y="24" class="node-title">Sharded DB (Miss)</text>
+    <text x="14" y="44" class="node-sub">10–20% Miss + Fill</text>
+  </g>
+
+  <g transform="translate(850, 348)">
+    <rect class="card-read" width="76" height="64"/>
+    <text x="12" y="28" class="node-title">301/302</text>
+    <text x="12" y="46" class="node-sub">Location</text>
+  </g>
+
+  <!-- Animated Read Hit Packet -->
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="2.6s" repeatCount="indefinite" path="M 102 380 L 295 380 L 493 380 L 717 344 L 888 380"/>
+  </circle>
+
+  <!-- Animated Cache Miss Fallback Packet -->
+  <circle r="4.5" fill="#f59e0b">
+    <animateMotion dur="3.8s" repeatCount="indefinite" path="M 493 394 L 717 440 L 717 344"/>
+  </circle>
+
+  <!-- Footer Note -->
+  <text x="32" y="516" class="subtitle">301 (Permanent): Browser caches redirect, lowers server load | 302 (Temporary): Hits server every time, enables click analytics</text>
+</svg>

@@ -6,6 +6,7 @@
 3. [Consistent Hashing](#consistent-hashing)
 4. [Key-Value Store](#key-value-store)
 5. [Unique ID Generator](#unique-id-generator)
+6. [Key Takeaways](#key-takeaways)
 
 ---
 
@@ -13,105 +14,123 @@
 
 Design a URL shortening service like TinyURL. Users can shorten long URLs, and others can access the original URL via the short link.
 
+![URL Shortener Write and Read Path Architecture](./assets/04-url-shortener-tinyurl.svg)
+
 ### Requirements
 
 **Functional:**
-- Users can submit long URL → get short URL
-- Access short URL → redirect to long URL
-- Optional: Expiration, custom aliases, analytics
+- Users submit a long URL → receive a short URL
+- Users access a short URL → redirect to the original long URL
+- Optional: Custom aliases, expiration timestamps, and click analytics
 
-**Non-Functional (at Twitter/TinyURL scale):**
-- DAU: 100M
-- Write: 500M URLs shortened/day = 5,787 write QPS
-- Read: 2B accesses/day = 23,148 read QPS (read-heavy)
-- Latency: Redirect < 100ms (user experience)
-- Availability: 99.9%
-- Durability: URLs never expire (unless explicitly)
-- Scale for 10+ years of data
+**Non-Functional (Twitter / TinyURL Scale):**
+- **DAU:** 100M daily active users
+- **Write Load:** 500M URLs shortened/day (5,787 write QPS)
+- **Read Load:** 2B–2.5B accesses/day (23,148–28,935 read QPS; read-heavy)
+- **Latency:** Redirect `&lt; 100ms` for crisp user experience
+- **Availability:** 99.9% uptime
+- **Durability:** URLs never expire unless explicitly configured
+- **Retention:** Scale for 10+ years of data
 
 ### Back-of-Envelope Estimation
 
-```
-Calculations:
-
-1. DAU: 100M
-2. Per-user behavior:
-   - Create: 5 short URLs/day
-   - Access: 20 accesses/day per URL
-   - Total: 100M × 5 = 500M URLs created/day
-   - Total: 500M × 5 redirects = 2.5B accesses/day
-
-3. QPS:
-   - Write QPS = 500M / 86,400 = 5,787
-   - Read QPS = 2.5B / 86,400 = 28,935
-   - Peak: 3x = ~87K read QPS
-
-4. Storage (10 years):
-   - Data per URL:
-     ├─ short_url: 12 bytes
-     ├─ original_url: ~500 bytes average
-     ├─ created_at: 8 bytes
-     ├─ metadata: ~200 bytes
-     └─ Total: ~720 bytes per entry
-
-   - Total: 500M URLs/day × 720 bytes × 365 days × 10 years
-   - = 1.3 PB raw data
-   - With replication (3x): 3.9 PB
-   - With indexes: 5 PB
-
-5. Bandwidth:
-   - Write: 5,787 QPS × 500 bytes = 2.9 MB/s
-   - Read: 28,935 QPS × 300 bytes (redirect response) = 8.7 MB/s
-```
+| Metric | Calculation | Result |
+|---|---|---|
+| **DAU** | 100M users/day | 100M |
+| **Writes / Day** | 100M × 5 short URLs/user/day | 500M URLs/day |
+| **Redirects / Day** | 500M × 5 redirects (or 2B–2.5B total accesses/day) | 2.5B accesses/day |
+| **Write QPS** | 500M / 86,400 sec | ~5,787 QPS |
+| **Read QPS** | 2.5B / 86,400 sec (avg) · 3× peak | ~28,935 QPS (~87K peak) |
+| **Entry Size** | `short_url` (12B) + `original_url` (500B) + `created_at` (8B) + `metadata` (200B) | ~720 bytes/entry |
+| **10-Year Storage** | 500M × 720B × 365 × 10 = 1.3 PB raw · 3× replication = 3.9 PB | ~5 PB (with indexes) |
+| **Write Bandwidth** | 5,787 QPS × 500 bytes | 2.9 MB/s |
+| **Read Bandwidth** | 28,935 QPS × 300 bytes (redirect response) | 8.7 MB/s |
 
 ### High-Level Architecture
 
+```mermaid
+flowchart TB
+    C["Client: POST /shorten or GET /short_code"]
+    CDN["DNS &amp; CDN: Edge Redirect Cache"]
+    LB1["Load Balancer: US-EAST"]
+    LB2["Load Balancer: EU-WEST"]
+    LB3["Load Balancer: APAC"]
+    API1["API Server 1: Stateless"]
+    API2["API Server 2: Stateless"]
+    API3["API Server 3: Stateless"]
+    KGS["KGS / ID Range Allocator"]
+    REDIS["Redis Cache: Hot URLs"]
+    DB["Sharded DB: hash(short_code) % N"]
+
+    C --> CDN
+    CDN --> LB1
+    CDN --> LB2
+    CDN --> LB3
+    LB1 --> API1
+    LB2 --> API2
+    LB3 --> API3
+    API1 --> KGS
+    API2 --> KGS
+    API3 --> KGS
+    API1 --> REDIS
+    API2 --> REDIS
+    API3 --> REDIS
+    API1 --> DB
+    API2 --> DB
+    API3 --> DB
+
+    classDef client fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef edge fill:#0f172a,stroke:#818cf8,color:#e2e8f0,stroke-width:1.5px
+    classDef compute fill:#1e293b,stroke:#10b981,color:#f8fafc,stroke-width:1.5px
+    classDef data fill:#1e293b,stroke:#f59e0b,color:#f8fafc,stroke-width:1.5px
+
+    class C client
+    class CDN,LB1,LB2,LB3 edge
+    class API1,API2,API3,KGS compute
+    class REDIS,DB data
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Client                               │
-│           Shorten: POST /shorten                            │
-│           Redirect: GET /{short_code}                       │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │   DNS/      │
-                    │   CDN       │
-                    │  (cache     │
-                    │  redirects) │
-                    └──────┬──────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-              ▼            ▼            ▼
-        ┌──────────┐ ┌──────────┐ ┌──────────┐
-        │Load Bal. │ │Load Bal. │ │Load Bal. │
-        │(US-EAST) │ │(EU-WEST) │ │(APAC)    │
-        └────┬─────┘ └────┬─────┘ └────┬─────┘
-             │            │            │
-    ┌────────┴────────────┼────────────┴────────┐
-    │                     │                     │
-    ▼                     ▼                     ▼
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│API Server 1 │     │API Server 2 │     │API Server 3 │
-│Stateless    │     │Stateless    │     │Stateless    │
-└────┬────────┘     └────┬────────┘     └────┬────────┘
-     │                   │                   │
-     └───────────────────┼───────────────────┘
-                         │
-            ┌────────────┴────────────┐
-            ▼                         ▼
-        ┌──────────────┐     ┌──────────────┐
-        │Cache Layer   │     │DB Layer      │
-        │(Redis)       │     │(Sharded DB)  │
-        │Hot URLs      │     │              │
-        │High perf     │     │Persistent    │
-        └──────────────┘     └──────────────┘
+
+### Request Flow: Write & Read Paths
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as API Server
+    participant KGS as ID Range Allocator
+    participant Redis as Redis Cache
+    participant DB as Sharded DB
+
+    Note over Client,DB: Write Path (POST /shorten)
+    Client->>API: POST /shorten {long_url, custom_alias, expiration}
+    API->>KGS: Request local ID (or fetch next 10M-20M range)
+    KGS-->>API: Return unique sequential ID (e.g., 1001)
+    API->>API: Encode Base62(1001) -> "gj"
+    API->>DB: INSERT INTO shard[hash(code) % N]
+    DB-->>API: Ack
+    API->>Redis: SET code -> long_url (TTL 24h)
+    API-->>Client: 201 Created {short_url}
+
+    Note over Client,DB: Read Path (GET /{short_code})
+    Client->>API: GET /abc123
+    API->>Redis: GET abc123
+    alt Cache Hit (80-90%)
+        Redis-->>API: long_url (~1ms)
+    else Cache Miss (10-20%)
+        Redis-->>API: nil
+        API->>DB: SELECT long_url FROM shard WHERE short_code = 'abc123'
+        DB-->>API: long_url
+        API->>Redis: SET abc123 -> long_url (TTL 24h)
+    end
+    API-->>Client: 301/302 Redirect (Location: long_url)
 ```
+
+> [!IMPORTANT]
+> **301 vs 302 Redirect:** Use `301 Moved Permanently` when minimizing server load is the priority (browsers cache the redirect). Use `302 Found` (temporary) when you need accurate click analytics, since every access still hits your servers.
 
 ### API Design
 
-```
-1. Shorten URL
+1. **Shorten URL**
+```http
 POST /shorten
 Content-Type: application/json
 
@@ -130,16 +149,20 @@ Response (201 Created):
   "created_at": "2024-01-15T10:30:00Z",
   "expires_at": "2025-12-31T23:59:59Z"
 }
+```
 
-2. Redirect to Original URL
+2. **Redirect to Original URL**
+```http
 GET /{short_code}
 Host: tinyurl.com
 
 Response (301 Moved Permanently):
 Location: https://example.com/very/long/path?query=value
 Cache-Control: public, max-age=3600  // Cache redirect for 1 hour
+```
 
-3. Get URL Details
+3. **Get URL Details**
+```http
 GET /{short_code}/info
 
 Response (200 OK):
@@ -155,382 +178,160 @@ Response (200 OK):
 
 ### Data Model
 
-```
-URL Mapping Table:
-┌─────────┬──────────────┬─────────────────────────┬──────────────┬──────────────┐
-│short_id │short_code    │long_url                 │created_at    │expires_at    │
-├─────────┼──────────────┼─────────────────────────┼──────────────┼──────────────┤
-│1001     │abc123        │https://example.com/...  │2024-01-15    │2025-12-31    │
-│1002     │xyz789        │https://google.com/...   │2024-01-16    │NULL          │
-│1003     │my-code       │https://github.com/...   │2024-01-17    │2026-01-17    │
-└─────────┴──────────────┴─────────────────────────┴──────────────┴──────────────┘
+**URL Mapping Table:**
 
-Indexes:
-- PRIMARY KEY: short_id
-- UNIQUE INDEX: short_code (fast lookup by code)
-- INDEX: created_at (for analytics)
-- INDEX: expires_at (for cleanup/expiration)
+| `short_id` (PK) | `short_code` (UNIQUE) | `long_url` | `created_at` (INDEX) | `expires_at` (INDEX) |
+|---|---|---|---|---|
+| `1001` | `abc123` | `https://example.com/...` | `2024-01-15` | `2025-12-31` |
+| `1002` | `xyz789` | `https://google.com/...` | `2024-01-16` | `NULL` |
+| `1003` | `my-code` | `https://github.com/...` | `2024-01-17` | `2026-01-17` |
 
-Analytics Table (optional):
-┌─────────┬──────────┬──────────────┬──────────┬──────────────┐
-│short_id │timestamp │user_agent    │ip        │referer       │
-├─────────┼──────────┼──────────────┼──────────┼──────────────┤
-│1001     │2024-01.. │Mozilla/5.0.. │127.0.0.1│google.com    │
-└─────────┴──────────┴──────────────┴──────────┴──────────────┘
-```
+- **Primary Key:** `short_id`
+- **Unique Index:** `short_code` (fast lookup by code)
+- **Secondary Indexes:** `created_at` (analytics), `expires_at` (cleanup/expiration)
+
+**Analytics Table (Optional):**
+
+| `short_id` | `timestamp` | `user_agent` | `ip` | `referer` |
+|---|---|---|---|---|
+| `1001` | `2024-01-15T10:35:00Z` | `Mozilla/5.0...` | `127.0.0.1` | `google.com` |
 
 ### Deep Dive: Short Code Generation
 
-#### Option 1: Base62 Encoding
+| Approach | Mechanism | Space / Capacity | Pros | Cons |
+|---|---|---|---|---|
+| **Base62 Encoding (Recommended)** | Incrementing ID → Base62 (`0-9, a-z, A-Z`) | 6 chars = `62^6` (~57B, ~114 days at 5,787 QPS); 7+ chars = 362T+ | Deterministic, zero collisions, compact, reversible (`gj` → `1001`) | Predictable sequential IDs; needs distributed range allocator |
+| **MD5 Hash** | `MD5(long_url)[0:6]`, extend length on collision | 6 hex chars = `16^6` (4.3B); birthday paradox ~65K–98K URLs | Same URL → same code, unpredictable, no central counter | Collisions require DB check + extending slice (`[0:7]`, `[0:8]`) |
+| **Random Generation** | Random 6-char Base62 + DB uniqueness check | `62^6` (~57B) | Unpredictable, simple, multi-instance friendly | Non-deterministic; retry storms as keyspace fills (90% full ≈ 10 retries; 99% ≈ 100 retries) |
 
-```
-Algorithm:
-1. Assign incrementing ID to each URL
-2. Encode ID in base62 (0-9, a-z, A-Z = 62 chars)
-3. Use as short code
-
-Example:
+#### Option 1: Base62 Encoding (Example)
+```text
 ID 1001 in base62:
 1001 / 62 = 16 remainder 9   → 'j' (9)
-16 / 62 = 0 remainder 16     → 'g' (16)
+16 / 62   = 0  remainder 16  → 'g' (16)
 Result: "gj" (reverse order)
 
-Lookup:
-short_code "gj"
-'g' = 16, 'j' = 9
-Decode: 16 * 62 + 9 = 1001
-Query: SELECT * FROM urls WHERE short_id = 1001
-
-Pros:
-├─ Deterministic (same ID always → same code)
-├─ Sequential (no collisions)
-├─ Compact (6 chars = 62^6 = 56 trillion combinations)
-└─ Reversible (can get back to ID)
-
-Cons:
-├─ Predictable (user can guess next URL)
-├─ Exposes ID (sequential)
-├─ Need global counter (bottleneck)
-
-Calculation:
-6-character base62 codes:
-62^6 = 56,800,235,584 ≈ 57 billion unique codes
-
-Using sequentially (at 5,787 write QPS):
-57 billion / 5,787 QPS = 9.8 million seconds = ~114 days to exhaust!
-Long enough for most purposes, use 7+ chars for safety (362 trillion combinations)
+Decode: 'g' = 16, 'j' = 9 → 16 * 62 + 9 = 1001
+Query:  SELECT * FROM urls WHERE short_id = 1001
 ```
 
-#### Option 2: MD5 Hash
-
-```
-Algorithm:
-1. Hash long URL with MD5
-2. Take first 6 characters
-3. Use as short code
-
-Example:
-long_url = "https://example.com/very/long/path?query=value"
-hash = MD5(long_url) = "5d41402abc4b2a76b9719d911017c592"
-short_code = hash[0:6] = "5d4140"
-
-Pros:
-├─ Same long URL always → same short code
-├─ Unpredictable (secure)
-├─ No need for database lookup during generation
-└─ Distributed (no central counter)
-
-Cons:
-├─ Collisions possible (6 chars = 16^6 = 4.3 billion combos)
-├─ Birthday paradox: ~98K URLs before collision likely
-├─ Need collision handling
-
-Collision handling:
-If short_code exists:
-├─ Try hash[0:7]
-├─ If still collides: hash[0:8]
-├─ Keep extending until unique
-
-Implementation:
+#### Option 2: MD5 Hash with Collision Extension
+```python
 def generate_short_code(long_url):
     for length in range(6, 12):
         hash_value = hashlib.md5(long_url.encode()).hexdigest()
         short_code = hash_value[:length]
         if not exists_in_db(short_code):
             return short_code
-    raise "Too many collisions"
-
-Collision probability (birthday paradox):
-N items, M possible codes:
-P(collision) ≈ sqrt(M)
-
-With 6-char codes (16^6 = 4.3B):
-P(collision) ≈ sqrt(4.3B) ≈ 65,000 URLs before high collision rate
+    raise Exception("Too many collisions")
 ```
 
-#### Option 3: Random Generation
-
-```
-Algorithm:
-1. Generate random 6-character code
-2. Check if unique in database
-3. If collision: retry with new random code
-
-Example:
-random_code = generate_random_code(6)  // "aB3xZq"
-if not exists_in_db("aB3xZq"):
-    save("aB3xZq")
-else:
-    retry()
-
-Pros:
-├─ No predictability
-├─ Simple
-└─ Works with multi-instance (no coordination)
-
-Cons:
-├─ Retries on collision
-├─ As collision rate increases: exponentially more retries
-├─ Could reach 99% failure rate at high IDs
-├─ Not deterministic (same URL → different codes possible)
-
-Collision probability as codes used up:
-0%: Instant generation
-10% full: Low retry rate
-50% full: ~1 retry average
-90% full: ~10 retries average
-99% full: ~100 retries (unacceptable!)
-
-Not recommended unless:
-├─ Accept determinism loss
-├─ Use very long codes (10+ chars)
-└─ Accept complexity of collision handling
-```
-
-### Recommendation
-
-**Use base62 encoding with sequential IDs:**
-- Simplest implementation
-- No collisions
-- Deterministic
-- Only risk: predictability (acceptable for most use cases)
+> [!WARNING]
+> **Birthday Paradox & Retry Amplification:** With 6 hex characters (`16^6 = 4.3B`), `sqrt(4.3B) ≈ 65,000` URLs already produce a high collision probability. Similarly, random generation degrades exponentially as the keyspace fills (at 99% full, ~100 DB retries per insert). Prefer Base62 with 7+ characters (`62^7 ≈ 3.5T`) and range allocation.
 
 ### Scaling Considerations
 
-#### Single Point of Failure: ID Counter
+- **ID Counter Bottleneck → Range Allocation:** Instead of a single global counter on every write, an **ID Allocator DB** (`min_range`, `max_range`, `next_range_start`) assigns disjoint blocks (e.g., Server 1 gets `1–10M`, Server 2 gets `10M+1–20M`, Server 3 gets `20M+1–30M`). Servers increment locally in memory with zero lock contention and only call the allocator when a range is exhausted.
+- **Database Sharding:** A single DB maxes at ~10K QPS. Shard by `shard_id = hash(short_code) % num_shards`. With 10 shards, each shard handles ~3K write QPS (Master) and ~30K read QPS across 2 Read Replicas.
+- **Cache Layer (Redis):** Traffic follows a Pareto distribution (80% of clicks hit 20% of URLs). Cache-aside with a 24h TTL achieves an 80–90% hit rate, cutting 30K read QPS down to ~3K DB QPS (87% reduction).
 
-```
-Problem: Need global counter for sequential IDs
-┌────────────────┐
-│ID Counter      │
-│(single server) │
-└───────┬────────┘
-        │
-        └─ BOTTLENECK! All writes need counter
-
-Solution: Range allocation
-Each server gets range of IDs:
-
-Server 1: IDs 1-10,000,000
-Server 2: IDs 10,000,001-20,000,000
-Server 3: IDs 20,000,001-30,000,000
-
-┌────────────────┐
-│ID Allocator    │ (give out ranges)
-└───────┬────────┘
-        │
-    ┌───┼───┬───┐
-    ▼   ▼   ▼   ▼
-   S1  S2  S3  S4 (each gets range)
-
-Benefits:
-├─ No per-request coordination
-├─ No lock contention
-├─ Scales linearly
-└─ ID Allocator is still SPOF, but infrequent access
-
-Implementation:
-┌─────────────────────┐
-│ ID Allocator DB     │
-├─────────────────────┤
-│min_range: 1         │
-│max_range: 30M       │
-│next_range_start: 30M│
-└─────────────────────┘
-
-When server needs IDs:
-1. Call allocator: "Give me next range"
-2. Allocator: "Take 10M-20M" (atomic update)
-3. Server: Use range locally
-4. When range exhausted: request new range
-
-No contention on individual IDs!
-```
-
-#### Sharding by Short Code
-
-```
-Problem: Single database maxes at ~10K QPS
-
-Solution: Shard by short_code
-
-Hash function:
-shard_id = hash(short_code) % num_shards
-
-Lookup:
-short_code = "abc123"
-hash("abc123") % 10 = 3
-Query shard 3
-
-Write:
-generated_code = "xyz789"
-hash("xyz789") % 10 = 7
-Insert into shard 7
-
-Shards:
-┌──────────────┐
-│Shard 0-9      │
-│(0, 10, 20...) │
-└──────────────┘
-
-With 10 shards:
-Each shard: ~3K write QPS
-Manageable by single database
-
-Replication:
-Each shard: Master + 2 Replicas
-├─ Master: 3K write QPS
-├─ Replicas: 30K read QPS each
-└─ Total: Can handle 28K read QPS (plenty)
-```
-
-#### Cache Layer
-
-```
-Most short codes are accessed repeatedly:
-├─ Some URLs are popular (celebrity links)
-├─ Some URLs are rarely accessed
-
-Cache strategy:
-
-On redirect hit (GET /{code}):
-1. Check Redis cache
-   ├─ Hit: return (fast, ~1ms)
-   └─ Miss: query database
-
-2. Query database (if miss)
-   ├─ Get original URL
-   └─ Update cache (TTL = 24 hours)
-
-3. Return to client
-
-Cache hit rate: 80-90% (pareto distribution)
-└─ 80% of traffic on 20% of URLs
-
-Reduced load:
-With cache: 30K read QPS → 3K database QPS (87% reduction!)
-
-Cost: One Redis cluster (moderate cost)
-Benefit: 10x more capacity without adding database shards
-```
+> [!TIP]
+> **Preventing Predictability with Base62:** If sequential IDs expose business metrics or allow scraping, XOR the sequential ID with a secret bitmask or shuffle the Base62 alphabet per deployment—preserving zero collisions while hiding sequence order.
 
 ---
 
 ## Rate Limiter
 
-Design a rate limiting service (like Stripe, AWS API) that limits users to X requests per time window.
+Design a rate limiting service (like Stripe or AWS API Gateway) that limits users to `X` requests per time window.
 
 ### Requirements
 
 **Functional:**
-- Allow X requests per user per time window
-- Return rate limit exceeded error when exceeded
-- Support different limits for different users/tiers
-- Work across distributed systems
+- Allow `X` requests per user per time window
+- Return `429 Too Many Requests` when the limit is exceeded
+- Support tiered limits per user/plan (Basic, Standard, Premium)
+- Work consistently across distributed API servers
 
 **Non-Functional:**
-- Sub-millisecond latency (add minimal overhead)
-- High throughput (millions of rate limit checks/sec)
-- Accurate (minimal false positives/negatives)
-- Durability: No loss of rate limit state
+- **Latency:** `&lt; 1ms` overhead per check
+- **Throughput:** Millions of checks/sec across the fleet
+- **Accuracy:** Minimal false positives/negatives
+- **Durability:** No loss of rate limit state on single-node failure
 
-### Estimation
+### Estimation & Tier Limits
 
+| Metric / Tier | Value | Notes |
+|---|---|---|
+| **Daily Volume** | 1B API requests/day | Across 10M users (~1,000 req/user/hr avg) |
+| **Baseline / Peak QPS** | 11,574 QPS avg · 35,000 QPS peak (3×) | Must complete check in `&lt; 1ms` |
+| **Basic Tier** | 1,000 requests / hour | `capacity = 1000`, `window = 3600s` |
+| **Standard Tier** | 10,000 requests / hour | `capacity = 10000`, `window = 3600s` |
+| **Premium Tier** | 100,000 requests / hour | `capacity = 100000`, `window = 3600s` |
+
+### High-Level & Distributed Architecture
+
+```mermaid
+flowchart LR
+    Client["Client: GET /api/users/me with X-API-Key"]
+    RL["Rate Limiter Middleware"]
+    Hash["Consistent Hash: hash(user_id) % 10"]
+    R0["Redis Shard 0: Master + Replica"]
+    R3["Redis Shard 3: Master + Replica"]
+    RN["Redis Shard 9: Master + Replica"]
+    API["Main API Server"]
+    ERR["HTTP 429: Too Many Requests"]
+
+    Client --> RL
+    RL --> Hash
+    Hash --> R0
+    Hash --> R3
+    Hash --> RN
+    RL -- "Tokens &gt;= 1 (Add X-RateLimit-* Headers)" --> API
+    RL -- "Tokens &lt; 1" --> ERR
+
+    classDef client fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef logic fill:#1e293b,stroke:#10b981,color:#f8fafc,stroke-width:1.5px
+    classDef redis fill:#1e293b,stroke:#f59e0b,color:#f8fafc,stroke-width:1.5px
+    classDef reject fill:#450a0a,stroke:#ef4444,color:#fecaca,stroke-width:1.5px
+
+    class Client client
+    class RL,Hash,API logic
+    class R0,R3,RN redis
+    class ERR reject
 ```
-Scale:
-- 1B API requests/day
-- QPS: 1B / 86,400 = 11,574 baseline
-- Peak: 3x = 35,000 QPS for rate limit checks
 
-Latency: Must be < 1ms (else adds huge overhead)
+### Token Bucket Request Flow (Atomic Lua)
 
-Distribution:
-- 10M users
-- 1000 requests/user/hour average
-- Some users exceed limits (the ones we rate limit)
-```
+```mermaid
+sequenceDiagram
+    participant Client
+    participant RL as Rate Limiter
+    participant Redis as Redis Shard (Lua)
+    participant API as Main API Server
 
-### Algorithms (Revisited)
-
-See Building Blocks section for detailed explanations.
-
-**Recommendation: Token Bucket**
-- Allows controlled bursts
-- Smooth traffic
-- Industry standard (AWS, Google use this)
-
-### High-Level Architecture
-
-```
-┌──────────────────────────────────────────┐
-│Client Request to API                     │
-│GET /api/users/me                         │
-│X-API-Key: api_key_12345                  │
-└────────┬─────────────────────────────────┘
-         │
-         ▼
-┌──────────────────────────────────────────┐
-│Rate Limiter Service                      │
-│(before request hits main API)            │
-└────────┬─────────────────────────────────┘
-         │
-         ├─ Extract API key from request
-         ├─ Look up user's rate limit policy
-         ├─ Check tokens in Redis
-         │  ├─ Sufficient tokens? Decrement, allow request
-         │  └─ No tokens? Return 429 (rate limit exceeded)
-         │
-         ├─ If allowed:
-         │  └─ Add headers to response
-         │     ├─ X-RateLimit-Limit: 1000
-         │     ├─ X-RateLimit-Remaining: 487
-         │     └─ X-RateLimit-Reset: 1234567890
-         │
-         ▼
-    ┌─────────────────────┐
-    │Main API Server      │
-    │(only if allowed)    │
-    └─────────────────────┘
-         │
-         ▼
-    Response to client
+    Client->>RL: Request + X-API-Key
+    RL->>RL: Lookup user tier policy (capacity, refill_rate)
+    RL->>Redis: EVAL lua_token_bucket(key, now, needed)
+    Note over Redis: 1. HGETALL rate_limit:{user_id} · 2. Refill = (now - last_refill) * rate · 3. Clamp to capacity &amp; HSET
+    Redis-->>RL: {allowed, tokens_remaining, reset_time}
+    alt allowed == true
+        RL->>API: Forward request
+        API-->>RL: 200 OK
+        RL-->>Client: 200 OK + X-RateLimit-Limit / Remaining / Reset
+    else allowed == false
+        RL-->>Client: 429 Too Many Requests
+    end
 ```
 
 ### Implementation: Token Bucket with Redis
 
-```
-Redis data structure:
+**Recommendation: Token Bucket** — allows controlled bursts, smooths traffic, and is the industry standard (AWS, Google, Stripe).
 
-Key: "rate_limit:{user_id}"
-Value: {
-  "tokens": 95,           // tokens available
-  "last_refill": 1704067400,  // last refill time (unix timestamp)
-  "capacity": 100,        // max tokens
-  "refill_rate": 10       // tokens per second
-}
+- **Redis Hash Key:** `rate_limit:{user_id}`
+- **Fields:** `tokens`, `last_refill` (unix timestamp), `capacity`, `refill_rate` (tokens/sec)
+- **Response Headers (when allowed):** `X-RateLimit-Limit: 1000`, `X-RateLimit-Remaining: 487`, `X-RateLimit-Reset: 1234567890`
 
-Algorithm:
-
+```python
 def check_rate_limit(user_id, tokens_needed=1):
     key = f"rate_limit:{user_id}"
     current_time = time.time()
@@ -571,25 +372,10 @@ def check_rate_limit(user_id, tokens_needed=1):
         "tokens_remaining": result[0],
         "reset_time": current_time + (state["capacity"] - tokens) / state["refill_rate"]
     }
-
-Atomicity:
-├─ Use Lua script in Redis (atomic on Redis server)
-├─ No race conditions
-├─ Consistent state
-└─ All-or-nothing execution
 ```
 
-### Multi-User Rate Limiting
-
-```
-Different limits for different users:
-
-Basic tier: 1000 requests/hour
-Standard tier: 10,000 requests/hour
-Premium tier: 100,000 requests/hour
-
-Implementation:
-
+**Multi-User Tier Routing:**
+```python
 api_keys = {
     "api_key_user1": {"tier": "basic"},
     "api_key_user2": {"tier": "standard"},
@@ -608,58 +394,52 @@ def check_rate_limit(api_key):
     return check_token_bucket(api_key, limit)
 ```
 
-### Distributed Rate Limiting
+> [!IMPORTANT]
+> **Atomicity via Lua:** Performing `HGETALL` in application code followed by `HSET` introduces a read-modify-write race condition under concurrency. Executing the entire read-refill-decrement-write inside a Redis Lua script guarantees single-threaded atomic execution on the Redis server.
 
-```
-Problem: Rate limiter checks happening across multiple servers
-Can't coordinate in real-time → users bypass by hitting different servers
+### Distributed Scaling Comparison
 
-Solution 1: Centralized Redis
-├─ All servers query Redis
-├─ Single source of truth
-├─ Redis is bottleneck
-└─ At 35K QPS: single Redis is overloaded
+| Strategy | Architecture | Capacity at 35K QPS | Trade-Offs |
+|---|---|---|---|
+| **Centralized Single Redis** | All API servers query 1 Redis instance | Overloaded at 35K+ QPS | Single source of truth, but single bottleneck & SPOF |
+| **Redis Cluster (Recommended)** | Partition by `user_id` via consistent hashing (`hash("123") % 10`) | 10 nodes = 3.5K QPS & 100M users/node | Scales linearly; each shard has Master + 1 Replica for failover |
+| **Local In-Memory Counters** | Per-server counters synced periodically | Highest speed (`&lt; 0.1ms`) | Eventual consistency; users can bypass limits across servers |
 
-Solution 2: Redis Cluster
-├─ Partition rate limit data by user_id
-├─ user_id → Redis node using consistent hashing
-├─ No cross-node communication
-└─ Scales linearly
-
-Cluster setup:
-┌──────────────────────────────────────────────┐
-│API Server                                    │
-│rate_limit_check(user_id="123")               │
-└────┬─────────────────────────────────────────┘
-     │
-     ├─ hash("123") % 10 = 3 → Query Redis-3
-     │
-     ▼
-     ┌─────────────────────────────────────────┐
-     │Redis Cluster                            │
-     │┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐     │
-     ││Redis││Redis││Redis││Redis│ ...  │     │
-     ││-0   ││-1   ││-2   ││-3   │      │     │
-     │└──────┘ └──────┘ └──────┘ └──────┘     │
-     └─────────────────────────────────────────┘
-
-Each Redis node handles:
-- 1B users / 10 nodes = 100M users
-- 35K QPS / 10 nodes = 3.5K QPS per node
-- Easily handleable
-
-Replication:
-Each Redis shard: Master + 1 Replica
-├─ Master: handles writes
-├─ Replica: failover backup
-└─ If node fails: replica takes over
-```
+> [!WARNING]
+> **Fail-Open vs Fail-Closed:** If a Redis shard becomes unreachable, decide upfront whether to **fail-open** (allow traffic through to protect availability) or **fail-closed** (reject with 429/503 to protect downstream databases from overload).
 
 ---
 
 ## Consistent Hashing
 
-See Building Blocks section for detailed explanation. Here's how to implement:
+See the Building Blocks section for conceptual theory. Consistent hashing minimizes key remapping when nodes join or leave a distributed cluster.
+
+### Virtual Node Ring & Lookup Flow
+
+```mermaid
+flowchart LR
+    K["Key: user:123"] --> H["Hash Function: hash(key) mod 2^32"]
+    H --> R["Sorted Ring Positions: 0 .. 2^32 - 1"]
+    R --> N1["Clockwise Match: Node-B:v42 (Primary)"]
+    N1 --> N2["Next Distinct Node: Node-C:v17 (Replica 1)"]
+    N2 --> N3["Next Distinct Node: Node-D:v89 (Replica 2)"]
+
+    classDef input fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef ring fill:#1e293b,stroke:#a78bfa,color:#f8fafc,stroke-width:1.5px
+    classDef node fill:#1e293b,stroke:#10b981,color:#f8fafc,stroke-width:1.5px
+
+    class K,H input
+    class R ring
+    class N1,N2,N3 node
+```
+
+### Modulo Hashing vs Consistent Hashing
+
+| Strategy | Key Mapping Formula | Keys Moved on Add/Remove Node | Hot-Spot Risk |
+|---|---|---|---|
+| **Modulo Hashing** | `hash(key) % N` | `~ (N - 1) / N` (almost 100% of keys!) | Low if hash is uniform |
+| **Basic Consistent Hashing** | Clockwise on `2^32` ring | `~ 1 / N` keys | High with few physical nodes (uneven arcs) |
+| **Virtual Nodes (150+ vnodes)** | `hash(f"{node_id}:v{i}") % 2^32` | `~ 1 / N` keys | Very low; load balances smoothly across nodes |
 
 ### Implementation
 
@@ -728,6 +508,9 @@ class ConsistentHash:
         return replicas
 ```
 
+> [!TIP]
+> **Binary Search & Distinct Physical Replicas:** In production, replace the linear scan over `sorted_positions` with `bisect.bisect_left` for `O(log(V * N))` lookup. Also, always track a `seen` set of physical `node_id`s when walking the ring for replicas so multiple virtual nodes of the same physical server are not chosen as separate replicas.
+
 ---
 
 ## Key-Value Store
@@ -737,179 +520,169 @@ Design a distributed key-value store like DynamoDB or Cassandra.
 ### Requirements
 
 **Functional:**
-- get(key) → value
-- put(key, value)
-- delete(key)
-- Distributed (multiple servers)
+- `get(key)` → `value`
+- `put(key, value)`
+- `delete(key)`
+- Distributed across multiple servers
 
 **Non-Functional:**
-- High availability (99.99%)
-- Scalability (hundreds of TB)
-- Consistency: eventual (not strong)
-- Durability: durable (replication)
+- **Availability:** 99.99% (always writable/readable)
+- **Scalability:** Hundreds of TB across commodity nodes
+- **Consistency:** Eventual consistency (tunable via quorums)
+- **Durability:** Persistent storage with multi-node replication
 
-### Architecture
+### Partitioned & Replicated Architecture
 
-```
-┌──────────────────────────────────────────────────────┐
-│Client                                                │
-│get("user:123") → fetch user data                     │
-└────────┬─────────────────────────────────────────────┘
-         │
-         ▼
-┌──────────────────────────────────────────────────────┐
-│Coordinator Node                                      │
-│(route requests to right shard)                       │
-└────────┬────────────┬───────────────┬────────────────┘
-         │            │               │
-         ▼            ▼               ▼
-    ┌────────┐  ┌────────┐  ┌────────┐
-    │Shard 1 │  │Shard 2 │  │Shard 3 │
-    │(0-6)   │  │(7-13)  │  │(14-20) │
-    │┌──────┐│  │┌──────┐│  │┌──────┐│
-    ││Key:  ││  ││Key:  ││  ││Key:  ││
-    ││Value ││  ││Value ││  ││Value ││
-    │└──────┘│  │└──────┘│  │└──────┘│
-    └────┬───┘  └────┬───┘  └────┬───┘
-         │           │           │
-         ├─ Master node
-         ├─ Replica 1
-         └─ Replica 2 (replication for HA)
-```
+```mermaid
+flowchart TB
+    Client["Client: get('user:123') or put(key, val)"]
+    Coord["Coordinator Node: Consistent Hash Router"]
+    S1["Shard 1: Ring 0-6"]
+    S2["Shard 2: Ring 7-13"]
+    S3["Shard 3: Ring 14-20"]
+    M1["Primary: Node-B"]
+    R1["Replica 1: Node-C"]
+    R2["Replica 2: Node-D"]
 
-### Partitioning with Consistent Hashing
+    Client --> Coord
+    Coord --> S1
+    Coord --> S2
+    Coord --> S3
+    S1 --> M1
+    M1 -- "Async Replication" --> R1
+    M1 -- "Async Replication" --> R2
 
-```
-Ring of 16 positions (simplified, real: 2^32):
+    classDef client fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef coord fill:#1e293b,stroke:#a78bfa,color:#f8fafc,stroke-width:1.5px
+    classDef shard fill:#1e293b,stroke:#10b981,color:#f8fafc,stroke-width:1.5px
+    classDef rep fill:#1e293b,stroke:#f59e0b,color:#f8fafc,stroke-width:1.5px
 
-         Node-A
-       /        \
-      /          \
-    Node-D       Node-B
-      \          /
-       \        /
-         Node-C
-
-Key distribution:
-key="user:123"
-hash("user:123") % 16 = 5
-
-Clockwise from position 5:
-5 → 8 → 12 → 0 → ... (find next node)
-
-Suppose nodes at positions:
-Node-A: position 0
-Node-B: position 5
-Node-C: position 10
-Node-D: position 14
-
-key="user:123" (hash=5):
-├─ Position 5 is exactly Node-B
-├─ Primary: Node-B
-├─ Replica 1: Next clockwise = Node-C
-└─ Replica 2: Next = Node-D
-
-Write path:
-PUT key="user:123", value="Alice"
-1. Route to primary (Node-B)
-2. Node-B writes to local disk
-3. Node-B replicates to Node-C, Node-D (async)
-4. Return to client (from primary only)
-
-Read path (quorum):
-GET key="user:123"
-1. Read from any replica (Node-B, Node-C, or Node-D)
-2. If versions differ: use conflict resolution (LWW)
-3. Return value
+    class Client client
+    class Coord coord
+    class S1,S2,S3,M1 shard
+    class R1,R2 rep
 ```
 
-### Conflict Resolution
+### Partitioning, Write Path & Quorum Read Flow
 
+With a simplified 16-position ring (`Node-A: 0`, `Node-B: 5`, `Node-C: 10`, `Node-D: 14`), `hash("user:123") % 16 = 5` maps to **Node-B (Primary)**, with **Node-C (Replica 1)** and **Node-D (Replica 2)** clockwise.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant NodeB as Node-B (Primary, pos 5)
+    participant NodeC as Node-C (Replica 1, pos 10)
+    participant NodeD as Node-D (Replica 2, pos 14)
+
+    Note over Client,NodeD: Write Path: PUT user:123 = "Alice"
+    Client->>NodeB: Route to Primary (hash % 16 = 5)
+    NodeB->>NodeB: Write to local disk (WAL + MemTable/SSTable)
+    NodeB-->>Client: Ack (if W=1)
+    NodeB--)NodeC: Async replicate
+    NodeB--)NodeD: Async replicate
+
+    Note over Client,NodeD: Read Path: GET user:123 (with Read Repair)
+    Client->>NodeB: Request replicas
+    NodeB->>NodeC: Fetch version
+    NodeB->>NodeD: Fetch version
+    NodeC-->>NodeB: Old version (lagging)
+    NodeD-->>NodeB: Latest version
+    NodeB->>NodeB: Resolve conflict (LWW or Version Vector)
+    NodeB--)NodeC: Read Repair (push latest version)
+    NodeB-->>Client: Return latest value
 ```
-Scenario: Network partition
-Node-B (primary) receives write at t=100ms
-Node-C doesn't get update until t=200ms
 
-Meanwhile:
-Read from Node-C at t=150ms → sees old value!
-Read from Node-B at t=150ms → sees new value!
+> [!TIP]
+> **Quorum Tuning (`N, W, R`):** For `N = 3` replicas, setting `W + R > N` (e.g., `W = 2, R = 2`) guarantees at least one overlapping node holds the latest write for strong read consistency, while `W = 1, R = 1` maximizes availability and speed.
 
-Solutions:
+### Conflict Resolution Strategies
 
-1. Last-Write-Wins (LWW)
-   ├─ Each value has timestamp
-   ├─ Timestamp = wall clock
-   ├─ Higher timestamp wins
-   ├─ Problem: broken if clocks wrong
+During a network partition, `Node-B` receives a write at `t=100ms` while `Node-C` does not receive it until `t=200ms`. A read from `Node-C` at `t=150ms` sees stale data.
 
-   Version vectors:
-   ├─ Track causal history
-   ├─ Detect concurrent vs sequential updates
-   └─ Example: [Node-B: 5, Node-C: 3] > [Node-B: 4, Node-C: 3]
+| Strategy | How It Works | Pros | Cons |
+|---|---|---|---|
+| **Last-Write-Wins (LWW)** | Attach wall-clock timestamp; highest timestamp wins | Simple, zero client complexity | Broken if clocks drift; silently drops concurrent writes |
+| **Version Vectors** | Track causal history `[Node-B: 5, Node-C: 3] > [Node-B: 4, Node-C: 3]` | Detects concurrent vs sequential updates accurately | Vector size grows with nodes; needs sibling resolution |
+| **Application-Level Merging** | Store and return all conflicting sibling versions to client | Preserves all updates (e.g., merging shopping cart items) | Pushes conflict logic into application code |
+| **Read Repairs** | On read, compare all replicas and push latest version to lagging nodes | Self-healing eventual consistency without background scans | Adds latency/bandwidth to read path |
 
-2. Application-level merging
-   ├─ Store both versions
-   ├─ Return both to application
-   ├─ Application decides correct version
-   ├─ Example: shopping cart merges items from both versions
-
-3. Read repairs
-   ├─ On read: check all replicas
-   ├─ If versions differ: repair (write latest to lagging replicas)
-   └─ Ensures eventual consistency
-```
+> [!WARNING]
+> **Clock Skew in LWW:** Because physical wall clocks across servers are never perfectly synchronized (even with NTP), Last-Write-Wins can discard a newer write if the receiving node's clock lags behind another node.
 
 ---
 
 ## Unique ID Generator
 
-Design a service that generates globally unique IDs (like Snowflake at Twitter).
+Design a distributed service that generates globally unique, time-sortable 64-bit IDs (like Twitter Snowflake).
 
 ### Requirements
 
 **Functional:**
-- Generate unique IDs
-- IDs sortable by timestamp
-- No coordination between services
-- Fast (< 1ms)
+- Generate globally unique 64-bit integer IDs
+- IDs sortable by creation timestamp
+- Zero runtime coordination between generator nodes
+- Fast generation (`&lt; 1ms`)
 
 **Non-Functional:**
-- Distributed (no single server)
+- Distributed (no single server bottleneck)
 - High throughput (millions of IDs/sec)
-- No collisions
+- Zero collisions
 
-### Snowflake ID Format
+### Snowflake 64-Bit ID Format
 
+```mermaid
+flowchart LR
+    B0["Bit 63: 1 bit Padding (Always 0, signed bit)"]
+    B1["Bits 0-40: 41 bits Timestamp (ms since epoch, ~69 years)"]
+    B2["Bits 41-50: 10 bits Machine / Datacenter ID (1,024 nodes)"]
+    B3["Bits 51-62: 12 bits Sequence (4,096 IDs/ms/node)"]
+
+    B0 --> B1 --> B2 --> B3
+
+    classDef pad fill:#1e293b,stroke:#94a3b8,color:#e2e8f0,stroke-width:1.5px
+    classDef ts fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef mach fill:#1e293b,stroke:#a78bfa,color:#f8fafc,stroke-width:2px
+    classDef seq fill:#1e293b,stroke:#10b981,color:#f8fafc,stroke-width:2px
+
+    class B0 pad
+    class B1 ts
+    class B2 mach
+    class B3 seq
 ```
-Snowflake ID = 64 bits
 
-┌──────────────────┬─────────┬──────────────┬──────────┐
-│ Timestamp        │ Machine │ Sequence     │ Padding  │
-│ 41 bits          │ 10 bits │ 12 bits      │ 1 bit    │
-├──────────────────┼─────────┼──────────────┼──────────┤
-│ 0-40             │ 41-50   │ 51-62        │ 63       │
-└──────────────────┴─────────┴──────────────┴──────────┘
+**Bit Breakdown:**
+- **Timestamp (41 bits):** Milliseconds since custom epoch (`2^41` = ~2.2 trillion ms = **69 years**, e.g., until 2089 from 2020)
+- **Machine ID (10 bits):** Supports `2^10 = 1,024` machines (often split as 5-bit `datacenter_id` + 5-bit `machine_id`)
+- **Sequence (12 bits):** Per-millisecond counter supporting `2^12 = 4,096` IDs/ms per machine (**4M IDs/sec per node**, **4B IDs/sec** across 1,000 nodes)
+- **Padding (1 bit):** Unused sign bit kept as `0`
 
-Bit breakdown:
-- Timestamp (41 bits): Milliseconds since epoch
-  └─ Can represent 2^41 = 2 trillion ms = 69 years
-  └─ Good enough until year 2089
+> [!IMPORTANT]
+> **B-Tree Index Locality:** Because Snowflake IDs are monotonically increasing by timestamp, inserting them into clustered B-Tree indexes (MySQL InnoDB, Postgres) appends to the right edge of the index, avoiding random page splits caused by UUID v4.
 
-- Machine ID (10 bits): Which server generated this
-  └─ Supports 2^10 = 1024 machines
-  └─ Assigned at startup
+### Clock & Sequence Overflow Handling
 
-- Sequence (12 bits): Counter within same millisecond
-  └─ Supports 2^12 = 4096 IDs per ms per machine
-  └─ Resets every millisecond
+```mermaid
+flowchart TD
+    Start["generate() called under thread lock"] --> TS["Read current_timestamp = now_ms - epoch"]
+    TS --> CheckBack{"current_timestamp &lt; last_timestamp?"}
+    CheckBack -- "Yes (Clock Backward)" --> WaitBack["Spin/wait until clock catches up"]
+    WaitBack --> CheckSame
+    CheckBack -- "No" --> CheckSame{"current_timestamp == last_timestamp?"}
+    CheckSame -- "Yes (Same ms)" --> IncSeq["sequence = (sequence + 1) &amp; 0xFFF"]
+    IncSeq --> Overflow{"sequence == 0?"}
+    Overflow -- "Yes (4096 exhausted)" --> WaitNext["Wait for next millisecond"]
+    WaitNext --> Emit
+    Overflow -- "No" --> Emit
+    CheckSame -- "No (New ms)" --> ResetSeq["sequence = 0"]
+    ResetSeq --> Emit["Bit-shift &amp; OR: (ts &lt;&lt; 22) | (dc &lt;&lt; 17) | (mach &lt;&lt; 12) | seq"]
 
-- Padding (1 bit): Unused, kept as 0 (signed bit)
+    classDef step fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:1.5px
+    classDef decision fill:#1e293b,stroke:#f59e0b,color:#f8fafc,stroke-width:1.5px
+    classDef out fill:#1e293b,stroke:#10b981,color:#f8fafc,stroke-width:2px
 
-Example:
-┌─────────────────────────────────────────────────────────────────┐
-│ 01111111111 1001010101 101010101010 0                           │
-│ Timestamp   Machine    Sequence     Padding                      │
-└─────────────────────────────────────────────────────────────────┘
+    class Start,TS,WaitBack,IncSeq,WaitNext,ResetSeq step
+    class CheckBack,CheckSame,Overflow decision
+    class Emit out
 ```
 
 ### Implementation
@@ -965,57 +738,44 @@ generator = SnowflakeIDGenerator(machine_id=1, datacenter_id=1)
 user_id = generator.generate()  # Returns unique 64-bit integer
 ```
 
-### Advantages of Snowflake
+### ID Generation Trade-Offs
 
-```
-vs UUID:
-├─ Snowflake: 64 bits (sortable by time)
-└─ UUID: 128 bits (random, not sortable)
+| Approach | Size | Time-Sortable | Coordination | Collision Risk |
+|---|---|---|---|---|
+| **Snowflake (Recommended)** | 64-bit int | Yes (ms precision) | None at runtime | None (unique `(machine_id, seq)`) |
+| **UUID v4** | 128-bit string/bytes | No (random) | None | Negligible, but fragments B-Tree DB indexes |
+| **DB Auto-Increment** | 64-bit int | Yes | Central DB lock | None, but SPOF & write bottleneck |
+| **Timestamp + Random** | 64–128 bits | Partially | None | Possible under high concurrency |
 
-vs Database auto-increment:
-├─ Snowflake: Distributed (no coordination)
-└─ Database: Centralized (bottleneck, single point of failure)
-
-vs Unix timestamp + randomness:
-├─ Snowflake: Guaranteed unique
-└─ Random: Collision possible (though low probability)
-
-Properties:
-├─ Ordered by timestamp: Can sort by ID
-├─ Distributed: Each machine generates independently
-├─ Efficient: 64-bit integers (no strings)
-├─ High throughput: Millions per second
-└─ No coordination: Lock-free distributed generation
-```
-
-### Scaling Considerations
-
-```
-Throughput calculation:
-- Per machine: 4096 IDs/ms = 4M IDs/sec
-- 1000 machines: 4B IDs/sec
-- Plenty for most systems!
-
-Clock issues:
-- If system clock goes backwards: algorithm waits
-- If clock skew between machines: different sequence spaces
-  └─ No collision (different machine IDs)
-  └─ But might break ordering guarantee
-
-Solutions:
-├─ Use NTP (Network Time Protocol) to sync clocks
-├─ Handle clock adjustments gracefully
-└─ Monitor for abnormal clock behavior
-```
+> [!WARNING]
+> **NTP Clock Jumps:** If NTP steps the system clock backward, Snowflake waits until `current_timestamp >= last_timestamp` to prevent duplicate IDs. Monitor NTP drift closely and alert on abnormal clock adjustments.
 
 ---
 
 ## Key Takeaways
 
-1. **URL Shortener**: Base62 encoding + sequential IDs + sharding
-2. **Rate Limiter**: Token bucket in Redis + consistent hashing for distribution
-3. **Consistent Hashing**: Virtual nodes + rebalancing support
-4. **Key-Value Store**: Partitioning + replication + conflict resolution
-5. **Unique ID Generator**: Snowflake format (timestamp + machine + sequence)
+```mermaid
+flowchart LR
+    P["System Design Problem"] --> U["Read-Heavy Link Mapping: Base62 + Range KGS + Sharding + Redis"]
+    P --> R["API Abuse Protection: Token Bucket + Atomic Lua + Redis Cluster"]
+    P --> C["Dynamic Cluster Partitioning: Consistent Hashing + 150 Virtual Nodes"]
+    P --> K["High-Availability Storage: Partitioning + Quorum + Version Vectors"]
+    P --> I["Distributed PKs: Snowflake 64-bit (41b TS + 10b Node + 12b Seq)"]
 
-Each system has trade-offs. Know the constraints and choose wisely!
+    classDef root fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef item fill:#1e293b,stroke:#10b981,color:#f8fafc,stroke-width:1.5px
+
+    class P root
+    class U,R,C,K,I item
+```
+
+| System | Primary Bottleneck | Core Pattern | Scaling Mechanism | Key Trade-Off |
+|---|---|---|---|---|
+| **URL Shortener** | Read QPS (28.9K–87K) & ID generation | Base62 + Range KGS | `hash(code) % N` shards + Redis (80–90% hit) | `301` (cacheable) vs `302` (analytics) |
+| **Rate Limiter** | Sub-millisecond atomic checks | Token Bucket + Redis Lua | Redis Cluster sharded by `user_id` | Fail-open (availability) vs fail-closed (safety) |
+| **Consistent Hashing** | Mass key reshuffling on resize | `2^32` hash ring | 150+ virtual nodes per physical server | `O(log N)` lookup vs uniform load balance |
+| **Key-Value Store** | Partitioning & replication conflicts | Consistent ring + Quorums | Master + async replicas + Read Repair | LWW simplicity vs Version Vector accuracy |
+| **Unique ID Generator** | Central DB auto-increment lock | 64-bit Snowflake format | Independent node generation (4M IDs/s/node) | NTP clock dependency vs lock-free speed |
+
+> [!TIP]
+> **Interview Framing:** Always anchor your design on the bottleneck first—state the read/write QPS ratio, storage over 5–10 years, and the single point of failure before choosing a pattern. Each system has trade-offs; know the constraints and choose wisely!

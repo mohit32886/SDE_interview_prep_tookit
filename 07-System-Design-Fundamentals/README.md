@@ -1,364 +1,219 @@
 # System Design Interview Preparation (FAANG Level)
 
-**For:** Mid-level Java engineer with 5 years at Barclays (investment banking, monolith decomposition, data lake work)
+![System Design Fundamentals Animated Banner](./assets/00-system-design-banner.svg)
 
-**Goal:** Master system design interviews at FAANG companies in 45-60 minute sessions
-
----
-
-## What You'll Learn
-
-This comprehensive guide covers everything needed to ace system design interviews at Google, Amazon, Facebook, Apple, Microsoft, and other FAANG companies.
-
-### Included Materials
-
-#### 📚 Core Files (7,943 lines total)
-
-1. **01-System-Design-Basics.md** (690 lines)
-   - How FAANG interviews work (45-60 min format)
-   - The 5-step framework (Requirements → Estimation → Design → Deep Dive → Trade-offs)
-   - Back-of-envelope calculations with real examples
-   - Key metrics: QPS, latency, throughput, availability (99.9% = 8.76 hrs/year)
-   - CAP theorem with CP vs AP systems
-   - Consistency models: strong, eventual, causal
-   - SLAs, SLOs, SLIs explained with examples
-
-2. **02-Building-Blocks.md** (1,742 lines) ⭐ Most Detailed
-   - DNS & CDN (push vs pull CDN, cache invalidation)
-   - Load balancing (L4 vs L7, algorithms: round-robin, least connections, IP hash)
-   - Reverse proxy vs forward proxy
-   - Caching deep dive:
-     * Strategies: cache-aside, read-through, write-through, write-behind, write-around
-     * Eviction: LRU, LFU, TTL
-     * Problems: stampede, penetration, avalanche (with solutions)
-   - Database types: SQL vs NoSQL vs graph (when to use each)
-   - Consistent hashing (virtual nodes, rebalancing)
-   - Message queues (Kafka vs RabbitMQ vs SQS)
-   - Blob storage, search engines (Elasticsearch, inverted indexes)
-   - API design (REST vs gRPC vs GraphQL)
-   - Rate limiting (token bucket, leaky bucket, fixed/sliding window)
-
-3. **03-Scalability-and-Reliability.md** (1,180 lines)
-   - Horizontal vs vertical scaling strategies
-   - Stateless vs stateful services
-   - Database replication (master-slave, master-master, sync vs async)
-   - Database partitioning/sharding (range, hash, directory, consistent hashing)
-   - Handling hotspots in sharding
-   - Fault tolerance and failover (active-passive, active-active)
-   - Heartbeat mechanisms and failure detection
-   - RPO and RTO (recovery objectives)
-   - Checkpointing and recovery
-   - Write-ahead logging (WAL)
-   - Distributed consensus (Paxos, Raft simplified)
-
-4. **04-Classic-System-Designs.md** (1,021 lines)
-   - URL Shortener (TinyURL)
-     * Base62 encoding, MD5 hashing, random generation comparison
-     * Sharding strategy
-     * Cache layer optimization
-   - Rate Limiter
-     * Token bucket with Redis
-     * Multi-user rate limiting
-     * Distributed rate limiting with consistent hashing
-   - Consistent Hashing (implementation in pseudocode)
-   - Key-Value Store
-     * Partitioning with consistent hashing
-     * Replication and conflict resolution
-   - Unique ID Generator
-     * Snowflake ID format (timestamp + machine + sequence)
-     * Implementation with examples
-     * Clock adjustment handling
-
-5. **05-Advanced-System-Designs.md** (1,345 lines)
-   - Twitter/X Feed
-     * Fan-out on read vs fan-out on write
-     * Hybrid approach for celebrities
-     * Cache implementation with Redis sorted sets
-     * Fanout workers and message queues
-   - YouTube
-     * Upload pipeline and transcoding
-     * Adaptive bitrate streaming
-     * CDN distribution strategy
-     * GPU acceleration for transcoding
-   - WhatsApp/Chat System
-     * WebSocket connection management
-     * Message delivery guarantees (sent, delivered, read)
-     * Group chat fanout (1M+ users)
-     * Typing indicators
-     * Message persistence and tiering
-   - Google Search
-     * Web crawling and indexing
-     * Inverted indexes explained
-     * PageRank algorithm (simplified)
-     * Query autocomplete with Trie
-
-6. **06-Infra-and-DevOps-Design.md** (1,219 lines)
-   - Notification System
-     * Multi-channel: push, email, SMS
-     * Deduplication strategy
-     * Template system with versioning
-     * Rate limiting per channel
-   - Logging and Monitoring System
-     * Log collection and aggregation
-     * Elasticsearch indexing
-     * Real-time alerting
-     * Log retention and archival (hot/warm/cold storage)
-   - Distributed Task Scheduler
-     * Exactly-once execution with distributed locks
-     * Retry strategy (exponential backoff)
-     * Task state tracking
-   - CI/CD Pipeline
-     * Blue-green deployment (zero downtime)
-     * Rollback strategies
-     * Monitoring during deployment
-     * Canary releases
-
-7. **07-System-Design-Interview-Cheatsheet.md** (746 lines) ⭐ Quick Reference
-   - The 5-step framework (one-pager)
-   - Estimation formulas (memorize these!)
-   - Numbers every engineer should know
-   - Technology comparison table
-   - Decision trees for caching, sharding, rate limiting
-   - CAP theorem trade-off matrix
-   - Red flags (what NOT to do)
-   - How to handle "What if..." questions
-   - Top 20 system design questions ranked by frequency
-   - Fill-in-the-blank template for any system
-   - Interviewer evaluation criteria
-   - Interview day tips and tricks
-   - Post-interview guidance
+> [!NOTE]
+> **Target Profile:** Mid-level Java engineer with 5 years at Barclays (investment banking, monolith decomposition, data lake work). **Goal:** Pass FAANG-level system design interviews (`Good Hire` / `Strong Hire`) in 45–60 minute sessions across **17 guides (27,522 lines)**.
 
 ---
 
-## How to Use This Guide
+## 🗺️ Module Learning Roadmap
 
-### For Initial Learning (2-3 weeks)
+Follow the 4-pillar progression from core distributed systems theory to 10 production-grade architecture case studies.
 
-**Week 1:**
-- Day 1-2: Read 01-System-Design-Basics.md (understand framework)
-- Day 3-5: Read 02-Building-Blocks.md (learn components)
-- Day 6-7: Skim 07-System-Design-Interview-Cheatsheet.md (quick reference)
+```mermaid
+flowchart LR
+  P1["Pillar 1: 01-03 Foundations &amp; Scale"] --> P2["Pillar 2: 04-05 Classic &amp; Adv HLD"]
+  P2 --> P3["Pillar 3: 06-07 Infra &amp; Cheatsheet"]
+  P3 --> P4["Pillar 4: 08-17 10 Case Studies"]
+  P1 -. "Fast Track: 3 Weeks" .-> P2
+  P2 -. "Skip 01, 03, 06" .-> P3
 
-**Week 2:**
-- Day 1-3: Read 03-Scalability-and-Reliability.md (understand constraints)
-- Day 4-6: Read 04-Classic-System-Designs.md (practice basic designs)
-- Day 7: Review formulas and numbers from cheatsheet
+  classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:1.5px
+  classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1.5px
+  classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:1.5px
+  classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87,stroke-width:1.5px
 
-**Week 3:**
-- Day 1-3: Read 05-Advanced-System-Designs.md (practice complex designs)
-- Day 4-5: Read 06-Infra-and-DevOps-Design.md (infrastructure thinking)
-- Day 6-7: Practice 3 full interviews (1 hour each)
+  class P1 blue
+  class P2 green
+  class P3 amber
+  class P4 purple
+```
 
-### For Interview Prep (1 week before)
+### Core Foundations & Classic Designs (`01`–`07`, 7,943 lines)
 
-1. **Monday:** Deep dive on 1 system (e.g., URL Shortener) - 2 hours
-2. **Tuesday:** Deep dive on 1 system (e.g., Rate Limiter) - 2 hours
-3. **Wednesday:** Full mock interview (60 min, use cheatsheet as reference) - 1.5 hours
-4. **Thursday:** Full mock interview with different system - 1.5 hours
-5. **Friday:** Review cheatsheet, key trade-offs, and red flags - 1 hour
-6. **Saturday:** Practice 1 more interview (your weakest area) - 1.5 hours
-7. **Sunday:** Rest, review cheatsheet one more time - 30 min
-
-### For Interview Day
-
-1. **Night before:** Review 07-System-Design-Interview-Cheatsheet.md (memorize formulas)
-2. **Morning:** Light review (15 min), eat breakfast, be calm
-3. **Interview:** Follow the 5-step framework (it works!)
-4. **After:** Learn from feedback and adjust future practice
+| # | Guide | Lines | Core Topics Covered |
+| :---: | :--- | :---: | :--- |
+| **01** | [01-System-Design-Basics.md](./01-System-Design-Basics.md) | 690 | 45–60 min FAANG format, 5-step framework, back-of-envelope math, QPS/latency/throughput, CAP (CP vs AP), consistency models (strong/eventual/causal), SLAs/SLOs/SLIs |
+| **02** | [02-Building-Blocks.md](./02-Building-Blocks.md) ⭐ | 1,742 | DNS & CDN (push/pull), L4/L7 LB, proxies, caching (strategies, LRU/LFU/TTL, stampede/penetration/avalanche), SQL/NoSQL/Graph, consistent hashing, Kafka/RabbitMQ/SQS, blob/Elasticsearch, REST/gRPC/GraphQL, rate limiting |
+| **03** | [03-Scalability-and-Reliability.md](./03-Scalability-and-Reliability.md) | 1,180 | Horizontal vs vertical scaling, stateless vs stateful, replication (leader-follower, multi-leader, sync/async), sharding & hotspots, failover (active-passive/active-active), heartbeats, RPO/RTO, checkpointing, WAL, Paxos/Raft |
+| **04** | [04-Classic-System-Designs.md](./04-Classic-System-Designs.md) | 1,021 | URL Shortener (Base62, MD5, sharding, cache), Rate Limiter (Redis token bucket, distributed), Consistent Hashing pseudocode, Key-Value Store (partitioning, conflict resolution), Snowflake Unique ID Generator |
+| **05** | [05-Advanced-System-Designs.md](./05-Advanced-System-Designs.md) | 1,345 | Twitter/X Feed (fan-out read/write, celebrity hybrid, Redis sorted sets), YouTube (transcoding, ABR, CDN, GPU), WhatsApp Chat (WebSockets, delivery receipts, 1M+ group fanout), Google Search (crawler, inverted index, PageRank, Trie) |
+| **06** | [06-Infra-and-DevOps-Design.md](./06-Infra-and-DevOps-Design.md) | 1,219 | Multi-channel Notification System (dedup, templates, rate limits), Logging & Monitoring (Elasticsearch, alerting, hot/warm/cold), Distributed Task Scheduler (locks, backoff), CI/CD (blue-green, canary, rollbacks) |
+| **07** | [07-System-Design-Interview-Cheatsheet.md](./07-System-Design-Interview-Cheatsheet.md) ⭐ | 746 | 1-page 5-step framework, estimation formulas, latency/QPS numbers, tech matrix, decision trees, CAP matrix, red flags, "What if..." answers, top 20 questions, fill-in-the-blank template, evaluation rubric |
 
 ---
 
-## Key Concepts to Memorize
+## 🧱 System Design Building Blocks Map
 
-### Formulas
+Every FAANG architecture composes the same core primitives from [02-Building-Blocks.md](./02-Building-Blocks.md) and [03-Scalability-and-Reliability.md](./03-Scalability-and-Reliability.md).
+
+```mermaid
+flowchart TD
+  Client["Client Apps"] --> Edge["DNS + CDN: Push or Pull"]
+  Edge --> LB["L4 / L7 Load Balancer + Rate Limiter"]
+  LB --> API["Stateless API Services: REST, gRPC, WebSocket"]
+  API --> Cache["Redis Cache: Cache-Aside, LRU, Sorted Sets"]
+  API --> MQ["Message Queue: Kafka, RabbitMQ, SQS"]
+  API --> DB["Sharded DB: SQL CP or NoSQL AP + WAL"]
+  MQ --> Workers["Async Workers + Search: Elasticsearch"]
+  DB --> Rep["Replication + Failover: RPO and RTO"]
+
+  classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:1.5px
+  classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1.5px
+  classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:1.5px
+  classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:1.5px
+  classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87,stroke-width:1.5px
+
+  class Client,Edge blue
+  class LB,API green
+  class Cache,MQ amber
+  class DB,Rep red
+  class Workers purple
 ```
-QPS = Daily Operations / 86,400 seconds
-Storage = Daily Ops × Data Size × Retention × Replication
-Bandwidth = QPS × Payload Size
-Peak QPS = Average QPS × 2-3
-```
-
-### Important Numbers
-```
-L1 cache: 1 ns
-RAM: 100 ns
-Disk: 10 ms
-Network (same DC): 1 ms
-Network (cross-country): 100-200 ms
-
-Single DB: 1-5K QPS
-Redis: 50-100K QPS
-Message queue: 100K-1M QPS
-
-Availability: 99.9% = 8.76 hours/year downtime
-Availability: 99.99% = 52 minutes/year downtime
-```
-
-### The 5-Step Framework
-1. Requirements (5-10 min)
-2. Estimation (10-15 min)
-3. High-level design (10-15 min)
-4. Deep dive (15-20 min)
-5. Bottlenecks & scale (5-10 min)
 
 ### Technology Decision Matrix
+
+| Technology | Primary Strength | Trade-Off / Constraint | Best Fit In Interviews |
+| :--- | :--- | :--- | :--- |
+| **SQL (PostgreSQL / MySQL)** | ACID consistency + structured relations | Vertical scale limit; sharding adds complexity | Payments, order ledgers, seat inventory |
+| **NoSQL (Cassandra / DynamoDB)** | High availability + horizontal write scale | Eventual consistency; limited ad-hoc joins | Timelines, chat messages, telemetry |
+| **Redis** | Sub-ms in-memory caching & data structures | RAM cost; persistence/eviction trade-offs | Hot cache, rate limiting, leaderboards |
+| **Kafka** | High-throughput async decoupling & replay | Operational complexity; consumer lag handling | Event-driven OMS, fraud pipelines, logs |
+| **Elasticsearch** | Full-text search via inverted indexes | Eventual indexing; high memory/disk footprint | Search bars, log aggregation, autocomplete |
+| **CDN** | Geographic edge caching & low latency | Cache invalidation propagation delay | Video chunks, static assets, read-heavy feeds |
+
+---
+
+## 🎯 Production Case Study Selector (`08`–`17`)
+
+Use this decision router to pick from the **10 deep-dive case studies (19,579 lines)** based on the domain constraint your interviewer tests.
+
+```mermaid
+flowchart TD
+  Q{"Primary System Constraint?"}
+  Q -->|"Financial Integrity &amp; Events"| Fin["08 Payments | 10 OMS | 11 Fraud | 15 Trading"]
+  Q -->|"Strict Concurrency &amp; Locks"| Lock["12 Flash Sale | 13 BookMyShow | 14 Dist. Lock"]
+  Q -->|"Traffic &amp; Real-Time State"| RT["09 Rate Limiter | 16 Ride-Sharing | 17 Leaderboard"]
+
+  classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:1.5px
+  classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1.5px
+  classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:1.5px
+  classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87,stroke-width:1.5px
+
+  class Q amber
+  class Fin purple
+  class Lock blue
+  class RT green
 ```
-SQL: Consistency + structured data (vertical scale only)
-NoSQL: Availability + scale (eventual consistency)
-Redis: Caching + fast access (in-memory)
-Kafka: Async + decoupling (high throughput)
-Elasticsearch: Search + indexing (full-text)
-CDN: Content distribution (geographic scale)
+
+| # | Case Study | Lines | Key Architecture Focus |
+| :---: | :--- | :---: | :--- |
+| **08** | [08-Payment-Processing-System-Design.md](./08-Payment-Processing-System-Design.md) | 1,186 | Idempotency, double-entry ledger, PSP failover, strict consistency |
+| **09** | [09-Distributed-Rate-Limiter-Design.md](./09-Distributed-Rate-Limiter-Design.md) | 2,638 | Distributed token bucket, Redis Lua scripts, multi-region sync |
+| **10** | [10-Event-Driven-Order-Management-Design.md](./10-Event-Driven-Order-Management-Design.md) | 2,480 | Saga orchestration, outbox pattern, Kafka event sourcing |
+| **11** | [11-Real-Time-Fraud-Detection-Design.md](./11-Real-Time-Fraud-Detection-Design.md) | 2,265 | Low-latency feature store, streaming rules + ML scoring |
+| **12** | [12-Flash-Sale-Exactly-100-iPhones-Design.md](./12-Flash-Sale-Exactly-100-iPhones-Design.md) | 882 | Zero-oversell inventory, Redis atomic decrement, queue admission |
+| **13** | [13-Booking-System-BookMyShow-Design.md](./13-Booking-System-BookMyShow-Design.md) | 1,237 | Seat locking TTL, pessimistic vs optimistic concurrency, checkout |
+| **14** | [14-Distributed-Lock-Service-Design.md](./14-Distributed-Lock-Service-Design.md) | 1,116 | Fencing tokens, lease renewal, Raft/ZooKeeper coordination |
+| **15** | [15-Stock-Trading-Platform-Design.md](./15-Stock-Trading-Platform-Design.md) | 2,988 | Order matching engine, ultra-low latency market data fanout |
+| **16** | [16-Ride-Sharing-System-Design.md](./16-Ride-Sharing-System-Design.md) | 2,325 | Geospatial indexing (QuadTree/S2/H3), driver matching, ETA |
+| **17** | [17-Real-Time-Leaderboard-Design.md](./17-Real-Time-Leaderboard-Design.md) | 2,462 | Redis Sorted Sets, sharded top-K aggregation, live rank updates |
+
+> [!TIP]
+> **Barclays Background Alignment:** Leverage your monolith decomposition and data lake experience first on **Database Sharding** (`03`), **Message Queues** (`02`, `10`), **Logging & Monitoring** (`06`), and **Distributed Consensus / Payments** (`03`, `08`, `11`).
+
+---
+
+## ⏱️ 45-Min HLD Interview Loop & Quick Reference
+
+Structure every 45–60 minute session using the 5-step loop from [01-System-Design-Basics.md](./01-System-Design-Basics.md) and [07-System-Design-Interview-Cheatsheet.md](./07-System-Design-Interview-Cheatsheet.md).
+
+```mermaid
+flowchart LR
+  S1["1. Requirements: 5-10 min"] --> S2["2. Estimation: 10-15 min"]
+  S2 --> S3["3. High-Level Design: 10-15 min"]
+  S3 --> S4["4. Deep Dive: 15-20 min"]
+  S4 --> S5["5. Bottlenecks &amp; Scale: 5-10 min"]
+
+  classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:1.5px
+  classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1.5px
+  classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:1.5px
+  classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87,stroke-width:1.5px
+  classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:1.5px
+
+  class S1 blue
+  class S2 green
+  class S3 amber
+  class S4 purple
+  class S5 red
 ```
 
----
+### Formulas & Numbers to Memorize
 
-## Real Interview Tips
+| Category | Metric / Formula | Reference Value |
+| :--- | :--- | :--- |
+| **QPS** | `Daily Operations / 86,400 seconds` | `Peak QPS = Average QPS × 2–3` |
+| **Storage** | `Daily Ops × Data Size × Retention × Replication` | Factor `3×` for standard replication |
+| **Bandwidth** | `QPS × Payload Size` | Size ingress & egress separately |
+| **Latency** | L1 Cache / RAM / Disk | `1 ns` / `100 ns` / `10 ms` |
+| **Network** | Same DC / Cross-Country | `1 ms` / `100–200 ms` |
+| **Throughput** | Single DB / Redis / Message Queue | `1–5K QPS` / `50–100K QPS` / `100K–1M QPS` |
+| **Availability** | `99.9%` vs `99.99%` | `8.76 hrs/year` vs `52 mins/year` downtime |
 
-### What Interviewers Look For (Priority Order)
-1. **Clarification** - Do you ask the right questions?
-2. **Estimation** - Can you do math quickly and accurately?
-3. **Architecture** - Can you design at scale?
-4. **Decomposition** - Can you break complex into simple?
-5. **Technical depth** - Do you understand trade-offs?
-6. **Communication** - Can you explain clearly?
-7. **Trade-offs** - Do you know pros/cons?
-8. **Uncertainty** - Can you make reasonable assumptions?
+### Interviewer Priority & Execution Discipline
 
-### Common Mistakes to Avoid
-- ❌ Not asking clarifying questions
-- ❌ Designing without understanding requirements
-- ❌ Getting bogged down in details too early
-- ❌ Not drawing a clear architecture diagram
-- ❌ Refusing to adapt based on feedback
-- ❌ Claiming you don't know without offering to figure it out
+| Priority | Evaluation Signal | What to Do | Common Mistake to Avoid |
+| :---: | :--- | :--- | :--- |
+| **1** | **Clarification** | Ask clarifying questions up front | Designing without confirming scope |
+| **2** | **Estimation** | Estimate QPS, storage, bandwidth fast | Skipping math or guessing wildly |
+| **3** | **Architecture** | Draw end-to-end boxes early | Never drawing a clear diagram |
+| **4** | **Decomposition** | Break monoliths into focused services | Getting bogged down in details early |
+| **5** | **Technical Depth** | Go deep on 2–3 critical bottlenecks | Staying purely surface-level |
+| **6** | **Communication** | Think out loud and explain reasoning | Coding/drawing in silence |
+| **7** | **Trade-Offs** | Compare pros/cons and adapt on feedback | Refusing to adapt to hints |
+| **8** | **Uncertainty** | State assumptions; offer a structured approach | Saying "I don't know" and stopping |
 
-### What to Do Instead
-- ✓ Ask clarifying questions (show you care about requirements)
-- ✓ Always estimate (shows engineering thinking)
-- ✓ Draw early, discuss early (get feedback)
-- ✓ Explain your reasoning out loud (show thinking process)
-- ✓ Welcome feedback and adapt gracefully
-- ✓ Say "I'd need to research that, but here's my approach..."
+> [!IMPORTANT]
+> **Company Focus:** **Google** (search, indexing, distributed systems) · **Amazon** (scalability, CDN, storage) · **Meta** (feeds, real-time, massive scale) · **Microsoft** (data systems, cloud, APIs) · **Apple** (real-time, privacy-aware systems).
 
 ---
 
-## Content Highlights
+## 📅 Study Plans, Practice Projects & Resources
 
-### Most Useful for Your Background (Barclays)
-Given your experience with monolith decomposition and data lakes:
+### Study Schedules (35–55 Hours Total · 5–8 Weeks at 1 hr/day)
 
-1. **Database sharding** (03-Scalability-and-Reliability.md)
-   - You've seen monoliths, now learn how to split them horizontally
-   - Critical for handling 100B+ transactions
+| Track | Schedule | Target Materials |
+| :--- | :--- | :--- |
+| **Initial Learning (Week 1)** | Days 1–2 `01` · Days 3–5 `02` · Days 6–7 `07` (skim) | Framework, building blocks, quick reference |
+| **Initial Learning (Week 2)** | Days 1–3 `03` · Days 4–6 `04` · Day 7 `07` (formulas) | Scalability constraints & classic designs |
+| **Initial Learning (Week 3)** | Days 1–3 `05` · Days 4–5 `06` · Days 6–7 (3× 1-hr mocks) | Advanced HLD, infra thinking, live mocks |
+| **Fast Track (3 Weeks)** | Focus on core high-ROI guides only | `02`, `04`, `05`, and `07` |
+| **1-Week Sprint** | Mon–Tue: 2 deep dives (2h ea) · Wed–Thu: 2 mocks (1.5h ea) · Fri: cheatsheet/red flags (1h) · Sat: weak area mock (1.5h) · Sun: light review (30m) | Targeted case studies (`08`–`17`) + `07` |
+| **Interview Day** | Night before: `07` formulas · Morning: 15m light review · Interview: 5-step loop · After: log feedback | Execution & calm pacing |
 
-2. **Message queues** (02-Building-Blocks.md)
-   - Replace synchronous monolith calls with async
-   - Essential for decoupling at scale
+> [!WARNING]
+> **Time Allocation Trap:** Do not spend all 35–55 hours passively reading. Reserve **15–20 hrs** for reading, **10–15 hrs** for system deep dives, **5–10 hrs** for timed mock interviews, and **5–10 hrs** for optional hands-on coding.
 
-3. **Logging and monitoring** (06-Infra-and-DevOps-Design.md)
-   - Your data lake experience helps here
-   - Understand how to instrument at scale
+### Hands-On Practice Projects (1 Day Each, Optional)
 
-4. **Distributed systems** (03-Scalability-and-Reliability.md)
-   - Most complex topic, but critical for FAANG
-   - Consensus, replication, failure handling
+| Project | Core Implementation | Concepts Reinforced |
+| :--- | :--- | :--- |
+| **URL Shortener** | Local shortener service | Hashing/Base62, sharding, cache-aside |
+| **Rate Limiter** | Token bucket under high concurrency | Atomic counters, burst handling |
+| **Cache System** | LRU cache from scratch | Eviction policies, O(1) lookup/update |
+| **Mini-Search** | Simple inverted index | Tokenization, full-text ranking |
 
-### Most Commonly Asked at Each Company
-- **Google:** Search, indexing, distributed systems
-- **Amazon:** Scalability, CDN, storage
-- **Meta:** Feed systems, real-time, massive scale
-- **Microsoft:** Data systems, cloud, APIs
-- **Apple:** Real-time, privacy-aware systems
+### Success Metrics & External References
 
----
+- **Before:** Feeling lost in open-ended HLD prompts, unable to estimate at scale, unsure which datastore or queue fits.
+- **After:** Consistent 5-step execution, accurate QPS/storage/bandwidth math, clear technology trade-offs, and 2–3 deep-dive components per interview.
+- **Practice & Video:** LeetCode System Design, DesignGurus.io, Educative.io, YouTube (Tech Dummies, Gaurav Sen).
+- **Classic Papers:** *Dynamo* (Amazon KVS), *Bigtable* (Google data store), *MapReduce*, *GFS* (Google File System).
+- **Books:** *Designing Data-Intensive Applications* (Martin Kleppmann), *System Design Interview* (Alex Xu).
 
-## Practice Projects
-
-After reading, implement these (optional but recommended):
-
-1. **URL Shortener** (1 day)
-   - Build a simple version locally
-   - Understand hashing, sharding, caching
-
-2. **Rate Limiter** (1 day)
-   - Implement token bucket in code
-   - Test with high concurrency
-
-3. **Cache System** (1 day)
-   - Implement LRU cache
-   - Understand eviction policies
-
-4. **Mini-Search** (1 day)
-   - Build simple inverted index
-   - Understand full-text search
+> System design is a skill, not a trivia test. Focus on **Thinking** (trade-offs), **Communication** (clarity), **Adaptability** (feedback), and **Pragmatism** (constraints). **You can do this. Good luck! 🚀**
 
 ---
 
-## Estimated Time Investment
-
-- **Reading all materials:** 15-20 hours
-- **Deep dive on systems:** 10-15 hours
-- **Mock interviews:** 5-10 hours
-- **Practice coding:** 5-10 hours (optional)
-- **Total:** 35-55 hours (roughly 5-8 weeks at 1 hour/day)
-
-**Fast track (3 weeks before interview):** Focus on 02, 04, 05, and 07 only
-
----
-
-## Success Metrics
-
-**Before using this guide:**
-- You feel lost during system design interviews
-- You can't estimate at scale
-- You don't know what technologies to choose
-
-**After using this guide:**
-- You can follow the 5-step framework consistently
-- You can estimate QPS, storage, bandwidth accurately
-- You know when to use each technology
-- You can discuss trade-offs intelligently
-- You can go deep on 2-3 components
-- You're comfortable with distributed systems concepts
-
-**Goal:** Pass system design interviews at FAANG level (good hire / strong hire)
-
----
-
-## Additional Resources
-
-**Practice sites:**
-- LeetCode System Design (paid)
-- DesignGurus.io (paid)
-- Educative.io (paid)
-- YouTube: Tech Dummies, Gaurav Sen (free)
-
-**Papers to read (after preparation):**
-- Dynamo (Amazon's KVS)
-- Bigtable (Google's data store)
-- MapReduce (Google's processing)
-- GFS (Google's file system)
-
-**Books:**
-- "Designing Data-Intensive Applications" by Martin Kleppmann (best book)
-- "System Design Interview" by Alex Xu (very similar to this, more concise)
-
----
-
-## Final Notes
-
-System design is a skill, not a test of knowledge. You're not expected to know everything. What matters is:
-
-1. **Thinking** - Can you reason about trade-offs?
-2. **Communication** - Can you explain your thinking clearly?
-3. **Adaptability** - Can you adjust your design based on feedback?
-4. **Pragmatism** - Do you make reasonable choices given constraints?
-
-This guide gives you the vocabulary and patterns. The rest is practice.
-
-**You can do this. Good luck! 🚀**
-
----
-
-Generated: 2024-01-15 | Lines of content: 7,943 | Reading time: ~12 hours
+*Last updated: Module 07 Visual Hub · 17 guides (27,522 lines) · Core `01`–`07` (7,943 lines) + Case Studies `08`–`17` (19,579 lines)*

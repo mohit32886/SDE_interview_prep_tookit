@@ -28,18 +28,32 @@ This is the #1 system design question for Java engineers interviewing at fintech
 
 **Don't jump into architecture.** Start structured:
 
-```
-Minute 0-5:   Clarify requirements (functional + non-functional)
-Minute 5-10:  Back-of-envelope estimation (QPS, storage, latency)
-Minute 10-20: High-level architecture (draw the boxes)
-Minute 20-35: Deep dive on 2-3 critical components
-Minute 35-45: Discuss trade-offs, fault tolerance, scaling
+```mermaid
+flowchart LR
+    P1["Minute 0-5: Clarify Requirements"] --> P2["Minute 5-10: Back-of-Envelope Estimation"]
+    P2 --> P3["Minute 10-20: High-Level Architecture"]
+    P3 --> P4["Minute 20-35: Critical Component Deep Dive"]
+    P4 --> P5["Minute 35-45: Trade-offs & Fault Tolerance"]
+
+    classDef phase fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef focus fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    class P1,P2,P3 phase
+    class P4,P5 focus
 ```
 
-**Key mindset shift:** The interviewer doesn't want you to design Stripe. They want to see HOW you think about:
-- Data consistency in distributed systems
-- Handling failures gracefully (what happens when things go wrong)
-- Trade-offs you make and WHY
+| Time Window | Phase | Primary Goal |
+|-------------|-------|--------------|
+| Minute 0–5 | Clarify Requirements | Lock down functional scope, SLAs, consistency, and PCI-DSS boundaries |
+| Minute 5–10 | Back-of-Envelope Estimation | Derive average/peak TPS, daily storage, and 500ms latency budget |
+| Minute 10–20 | High-Level Architecture | Draw CQRS write/read split, state machine, ledger, DB, Kafka, Redis |
+| Minute 20–35 | Deep Dive (2–3 Components) | Walk through State Machine, Double-Entry Ledger, Saga, and Idempotency |
+| Minute 35–45 | Trade-offs & Scaling | Cover circuit breakers, locking, partitioning, and reconciliation |
+
+> [!IMPORTANT]
+> **Key mindset shift:** The interviewer doesn't want you to design Stripe. They want to see **HOW** you think about:
+> - Data consistency in distributed systems
+> - Handling failures gracefully (what happens when things go wrong)
+> - Trade-offs you make and **WHY**
 
 ---
 
@@ -63,87 +77,81 @@ Minute 35-45: Discuss trade-offs, fault tolerance, scaling
 
 ### Back-of-Envelope Estimation
 
-```
-Daily transactions:     10 million
-QPS (average):          10M / 86400 ≈ 116 TPS
-QPS (peak, 10x):        ~1,200 TPS
-QPS (Black Friday, 50x): ~6,000 TPS
+```mermaid
+flowchart LR
+    GW["API Gateway: 10ms"] --> AUTH["Auth & Validation: 20ms"]
+    AUTH --> PROC["Payment Processing: 200ms"]
+    PROC --> EXT["External Gateway: 200ms"]
+    EXT --> DB["DB Write: 30ms"]
+    DB --> TOT["Total: ~460ms (&lt; 500ms target)"]
 
-Per transaction size:   ~2 KB (request + metadata)
-Daily storage:          10M × 2KB = 20 GB/day
-Yearly storage:         ~7.3 TB/year
-
-Latency budget:
-  API Gateway:          10ms
-  Auth/Validation:      20ms
-  Payment Processing:   200ms
-  External Gateway:     200ms (network call to Visa/MC)
-  DB Write:             30ms
-  Total:                ~460ms ✓ (under 500ms target)
+    classDef step fill:#1e293b,stroke:#64748b,stroke-width:1.5px,color:#f8fafc
+    classDef ext fill:#312e81,stroke:#818cf8,stroke-width:1.5px,color:#eef2ff
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class GW,AUTH,PROC,DB step
+    class EXT ext
+    class TOT ok
 ```
 
-**Interview tip:** Say these numbers out loud. The interviewer wants to see you THINK about scale, not memorize formulas.
+| Metric | Calculation / Value | Notes |
+|--------|---------------------|-------|
+| Daily transactions | 10 million | Baseline daily volume |
+| QPS (average) | `10M / 86400 ≈ 116 TPS` | Steady-state baseline |
+| QPS (peak, 10x) | `~1,200 TPS` | Normal peak traffic hours |
+| QPS (Black Friday, 50x) | `~6,000 TPS` | Extreme burst load test target |
+| Per transaction size | `~2 KB` | Request payload + metadata |
+| Daily storage | `10M × 2 KB = 20 GB/day` | Requires monthly table partitioning |
+| Yearly storage | `~7.3 TB/year` | Archive receipts to S3 |
+| Latency budget | `10 + 20 + 200 + 200 + 30 = ~460ms` | Under 500ms authorization target |
+
+> [!TIP]
+> **Interview tip:** Say these numbers out loud. The interviewer wants to see you **THINK** about scale, not memorize formulas.
 
 ---
 
 ## 3. Step 2: High-Level Architecture
 
-```
-                         ┌─────────────────┐
-                         │   API Gateway    │
-                         │ (Rate Limiting,  │
-                         │  Auth, TLS)      │
-                         └────────┬─────────┘
-                                  │
-                    ┌─────────────┼──────────────┐
-                    ▼             ▼               ▼
-            ┌──────────┐  ┌──────────┐   ┌──────────────┐
-            │ Payment  │  │  Query   │   │   Webhook    │
-            │ Service  │  │ Service  │   │   Service    │
-            │(writes)  │  │(reads)   │   │(notifications│
-            └────┬─────┘  └────┬─────┘   └──────┬───────┘
-                 │             │                 │
-                 ▼             │                 │
-        ┌────────────┐        │                 │
-        │  Payment   │        │                 │
-        │State Machine│       │                 │
-        └────┬───────┘        │                 │
-             │                │                 │
-    ┌────────┼────────┐       │                 │
-    ▼        ▼        ▼       │                 │
-┌───────┐┌───────┐┌───────┐  │                 │
-│Ledger ││Payment││ Audit │  │                 │
-│Service││Gateway││  Log  │  │                 │
-│       ││Adapter││       │  │                 │
-└───┬───┘└───┬───┘└───┬───┘  │                 │
-    │        │        │       │                 │
-    ▼        ▼        ▼       ▼                 ▼
-┌──────────────────────────────────────────────────┐
-│                  PostgreSQL                       │
-│         (Primary + Read Replicas)                 │
-│  ┌─────────┐ ┌───────────┐ ┌──────────────┐     │
-│  │payments │ │ledger_    │ │payment_      │     │
-│  │         │ │entries    │ │audit_log     │     │
-│  └─────────┘ └───────────┘ └──────────────┘     │
-└──────────────────────────────────────────────────┘
-              │
-    ┌─────────┼──────────┐
-    ▼         ▼          ▼
-┌───────┐ ┌───────┐ ┌────────┐
-│ Kafka │ │ Redis │ │  S3    │
-│(events│ │(cache,│ │(receipts│
-│  bus) │ │ idem- │ │ archive)│
-│       │ │ potency│ │        │
-└───────┘ └───────┘ └────────┘
+```mermaid
+flowchart TD
+    GW["API Gateway (Rate Limiting, Auth, TLS)"] --> PS["Payment Service (Writes)"]
+    GW --> QS["Query Service (Reads)"]
+    GW --> WS["Webhook Service (Notifications)"]
+
+    PS --> SM["Payment State Machine"]
+    SM --> LS["Ledger Service"]
+    SM --> PGA["Payment Gateway Adapter"]
+    SM --> AL["Audit Log"]
+
+    LS --> PG["PostgreSQL (Primary + Read Replicas: payments, ledger_entries, payment_audit_log)"]
+    PGA --> PG
+    AL --> PG
+    QS --> PG
+    WS --> PG
+
+    PG --> K["Kafka (Events Bus)"]
+    PG --> R["Redis (Cache &amp; Idempotency)"]
+    PG --> S3["S3 (Receipts Archive)"]
+
+    classDef edge fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef core fill:#0f172a,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    classDef store fill:#312e81,stroke:#818cf8,stroke-width:1.5px,color:#eef2ff
+    class GW edge
+    class PS,QS,WS,SM,LS,PGA,AL core
+    class PG,K,R,S3 store
 ```
 
 ### Why This Architecture?
 
-- **CQRS:** Separate write (Payment Service) and read (Query Service) paths — writes need strong consistency, reads can use replicas
-- **Event-driven:** Kafka decouples payment processing from notifications, settlement, analytics
-- **Payment State Machine:** Core business logic — ensures valid state transitions only
-- **Ledger Service:** Double-entry bookkeeping — every debit has a credit, balances always reconcile
-- **Adapter pattern for gateways:** Stripe, Visa, Mastercard all behind one interface
+| Architectural Choice | Responsibility | Why It Matters |
+|----------------------|----------------|----------------|
+| **CQRS** | Separate write (`Payment Service`) and read (`Query Service`) paths | Writes need strong consistency; reads scale horizontally via replicas |
+| **Event-driven** | `Kafka` event bus | Decouples payment processing from notifications, settlement, and analytics |
+| **Payment State Machine** | Core business logic | Enforces valid state transitions only and enables partial-failure recovery |
+| **Ledger Service** | Double-entry bookkeeping | Every debit has a matching credit so balances always reconcile |
+| **Adapter pattern** | `PaymentGateway` interface | Stripe, Visa, Mastercard, and UPI sit behind one uniform contract |
+
+> [!IMPORTANT]
+> Separating the write path (`Payment Service` → Primary PostgreSQL) from the read path (`Query Service` → Read Replicas) prevents heavy merchant dashboard queries from contending with latency-sensitive payment writes.
 
 ---
 
@@ -153,36 +161,28 @@ Latency budget:
 
 This is the HEART of the system. Every payment goes through well-defined states:
 
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED
+    CREATED --> VALIDATED : validate
+    CREATED --> REJECTED : validation failed
+    VALIDATED --> AUTHORIZED : authorize
+    VALIDATED --> DECLINED : risk check failed
+    AUTHORIZED --> CAPTURED : capture
+    AUTHORIZED --> AUTH_FAILED : auth timeout / fail
+    CAPTURED --> SETTLED : settle
+    CAPTURED --> CAPTURE_FAILED : capture failed
+    SETTLED --> REFUNDED : refund request
+    SETTLED --> CHARGEBACK : dispute
 ```
-    ┌──────────┐
-    │ CREATED  │ ──── Validation failed ────▶ REJECTED
-    └────┬─────┘
-         │ validate
-         ▼
-    ┌──────────┐
-    │VALIDATED │ ──── Risk check failed ────▶ DECLINED
-    └────┬─────┘
-         │ authorize
-         ▼
-    ┌──────────┐
-    │AUTHORIZED│ ──── Auth timeout/fail ────▶ AUTH_FAILED
-    └────┬─────┘
-         │ capture
-         ▼
-    ┌──────────┐
-    │ CAPTURED │ ──── Capture failed ────────▶ CAPTURE_FAILED
-    └────┬─────┘
-         │ settle
-         ▼
-    ┌──────────┐
-    │ SETTLED  │ ──── Dispute ──────────────▶ CHARGEBACK
-    └──────────┘
-         │ refund request
-         ▼
-    ┌──────────┐
-    │ REFUNDED │
-    └──────────┘
-```
+
+| Current State | Event | Next State | Meaning |
+|---------------|-------|------------|---------|
+| `CREATED` | `VALIDATE` / `REJECT` | `VALIDATED` / `REJECTED` | Schema and basic validation |
+| `VALIDATED` | `AUTHORIZE` / `DECLINE` | `AUTHORIZED` / `DECLINED` | Risk check + gateway authorization |
+| `AUTHORIZED` | `CAPTURE` / `AUTH_TIMEOUT` | `CAPTURED` / `AUTH_FAILED` | Funds captured or auth timed out |
+| `CAPTURED` | `SETTLE` / `CAPTURE_FAIL` | `SETTLED` / `CAPTURE_FAILED` | Merchant payout settled or failed |
+| `SETTLED` | `REFUND` / `DISPUTE` | `REFUNDED` / `CHARGEBACK` | Post-settlement reversal |
 
 **Java Implementation:**
 
@@ -248,6 +248,25 @@ public class PaymentStateMachine {
 
 Every financial system needs double-entry bookkeeping. For every debit, there's a credit. Money is never created or destroyed.
 
+```mermaid
+flowchart LR
+    REQ["Payment Request ($50)"] --> FACTORY["PaymentGatewayFactory"]
+    FACTORY --> VISA["VisaGateway"]
+    FACTORY --> MC["MastercardGateway / UPI"]
+    VISA --> TX["@Transactional LedgerService"]
+    TX --> DEBIT["DEBIT: Customer Account (-$50)"]
+    TX --> CREDIT["CREDIT: Merchant Account (+$50)"]
+    DEBIT --> RECON["verifyBalance(): SUM(DEBIT) == SUM(CREDIT)"]
+    CREDIT --> RECON
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef deb fill:#4c0519,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    classDef cred fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    class REQ,FACTORY,VISA,MC,TX svc
+    class DEBIT deb
+    class CREDIT,RECON cred
+```
+
 ```java
 @Service
 @Transactional
@@ -304,7 +323,8 @@ public class LedgerService {
 }
 ```
 
-**Interview tip:** When you mention double-entry bookkeeping, the interviewer immediately knows you understand financial systems. This is rare among candidates and makes you stand out.
+> [!TIP]
+> **Interview tip:** When you mention double-entry bookkeeping, the interviewer immediately knows you understand financial systems. This is rare among candidates and makes you stand out.
 
 ---
 
@@ -381,19 +401,42 @@ This is where most candidates fail. The interviewer is testing whether you under
 
 ### The Problem: What can go wrong?
 
-```
-1. You debit the customer    ✓ Success
-2. You call Visa to authorize ✓ Success
-3. You credit the merchant    ✗ Database crash!
-   → Customer charged, merchant never got money. MONEY LOST.
+| Failure Scenario | Root Cause | Consequence Without Safeguards |
+|------------------|------------|--------------------------------|
+| **Partial DB crash** | Customer debited + Visa authorized, then DB crashes before crediting merchant | Customer charged, merchant never got money (**MONEY LOST**) |
+| **Ambiguous gateway timeout** | Visa authorized, but network times out before response returns | Blind retry charges the customer twice |
+| **Dual-write inconsistency** | DB commits payment, but Kafka publish fails | Downstream notifications & settlement never fire |
 
-Or worse:
-1. You call Visa to authorize ✓ Success
-2. Network timeout — you don't know if it succeeded or failed
-   → Do you retry? What if Visa already charged the customer?
-```
+> [!WARNING]
+> **Never retry a `GatewayTimeoutException` blindly.** You do not know whether Visa already authorized the charge. Move the payment to `PENDING_VERIFICATION` and query the gateway status asynchronously.
 
 ### Solution 1: The Saga Pattern with Compensation
+
+```mermaid
+sequenceDiagram
+    participant S as PaymentSaga
+    participant DB as PostgreSQL
+    participant GW as External Gateway
+    participant K as Kafka
+
+    S->>DB: Save VALIDATED
+    S->>GW: authorize(request)
+    alt Approved
+        GW-->>S: Auth ID
+        S->>DB: Save AUTHORIZED + Double-Entry Ledger
+        S->>GW: capture(authId, amount)
+        GW-->>S: Captured
+        S->>DB: Save CAPTURED
+        S->>K: Publish PaymentCapturedEvent
+    else GatewayTimeoutException
+        GW--xS: Timeout
+        S->>DB: Save PENDING_VERIFICATION
+        S->>K: Publish VerifyPaymentEvent
+    else Failure after Auth/Capture
+        S->>GW: Compensate via refund()
+        S->>DB: Reverse Ledger + Save AUTH_FAILED
+    end
+```
 
 ```java
 @Service
@@ -504,6 +547,20 @@ public class PaymentSaga {
 
 For publishing events reliably (ensuring DB write + Kafka publish are atomic):
 
+```mermaid
+flowchart LR
+    SVC["OutboxPaymentService (@Transactional)"] --> P["Update payments (CAPTURED)"]
+    SVC --> OB["Insert outbox_events (published=false)"]
+    OB --> POLL["Outbox Poller (every 100ms)"]
+    POLL --> KAFKA["Kafka Topic"]
+    KAFKA --> CONS["Idempotent Consumers (Notify / Settle)"]
+
+    classDef tx fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    classDef async fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    class SVC,P,OB tx
+    class POLL,KAFKA,CONS async
+```
+
 ```java
 @Service
 public class OutboxPaymentService {
@@ -557,13 +614,37 @@ public void publishOutboxEvents() {
 }
 ```
 
-**Interview tip:** When you mention the Outbox pattern, say: "This guarantees at-least-once delivery. Combined with idempotent consumers, we get effectively-once processing."
+> [!TIP]
+> **Interview tip:** When you mention the Outbox pattern, say: *"This guarantees at-least-once delivery. Combined with idempotent consumers, we get effectively-once processing."*
 
 ---
 
 ## 6. Step 5: Fault Tolerance & Resilience
 
-### Circuit Breaker for External Gateways
+### Circuit Breaker States Explained
+
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED
+    CLOSED --> OPEN : failure rate &gt;= 50% (100-call window)
+    OPEN --> HALF_OPEN : wait 30s elapsed
+    HALF_OPEN --> CLOSED : 10 test calls succeed
+    HALF_OPEN --> OPEN : test calls fail
+```
+
+| Resilience4j Setting | Configured Value | Purpose |
+|----------------------|------------------|---------|
+| `sliding-window-size` | `100` | Evaluate failure rate over last 100 calls |
+| `failure-rate-threshold` | `50` | Open circuit when 50% of calls fail |
+| `wait-duration-in-open-state` | `30s` | Fail fast for 30s before probing |
+| `permitted-number-of-calls-in-half-open-state` | `10` | Allow 10 probe requests in `HALF-OPEN` |
+| `retry.max-attempts` | `3` | Exponential backoff: `500ms`, `1s`, `2s` |
+| `timelimiter.timeout-duration` | `3s` | Bound external gateway wait time |
+
+> [!WARNING]
+> Always configure `ignore-exceptions: com.payment.DeclinedException` in Resilience4j. A customer card decline is a valid business outcome, **not** a gateway outage — counting declines would trip the circuit breaker unnecessarily.
+
+### Circuit Breaker Configuration for External Gateways
 
 ```java
 // application.yml — Resilience4j configuration
@@ -596,33 +677,6 @@ resilience4j:
     instances:
       visa:
         timeout-duration: 3s
-```
-
-### Circuit Breaker States Explained
-
-```
-     ┌──────────────────────────────────────┐
-     │         CLOSED (normal)              │
-     │   Requests pass through.             │
-     │   Failures counted.                  │
-     │   failure rate < 50% → stay CLOSED   │
-     └────────────┬─────────────────────────┘
-                  │ failure rate >= 50%
-                  ▼
-     ┌──────────────────────────────────────┐
-     │         OPEN (blocking)              │
-     │   All requests fail fast.            │
-     │   No calls to Visa.                  │
-     │   Wait 30 seconds...                 │
-     └────────────┬─────────────────────────┘
-                  │ 30s elapsed
-                  ▼
-     ┌──────────────────────────────────────┐
-     │      HALF-OPEN (testing)             │
-     │   Allow 10 test requests through.    │
-     │   If they succeed → back to CLOSED   │
-     │   If they fail → back to OPEN        │
-     └──────────────────────────────────────┘
 ```
 
 ### Fallback Strategy: Gateway Routing
@@ -660,12 +714,19 @@ public class ResilientPaymentProcessor {
 
 ### Graceful Degradation Hierarchy
 
-```
-Level 1: Primary gateway works         → Process normally
-Level 2: Primary down, fallback works   → Route to secondary
-Level 3: All gateways down              → Queue with Kafka, process later
-Level 4: Kafka down too                 → Write to local disk, alert ops
-Level 5: Everything is on fire          → Return 503, show maintenance page
+```mermaid
+flowchart TD
+    L1["Level 1: Primary gateway works → Process normally"] --> L2["Level 2: Primary down, fallback works → Route to secondary"]
+    L2 --> L3["Level 3: All gateways down → Queue with Kafka, process later"]
+    L3 --> L4["Level 4: Kafka down too → Write to local disk, alert ops"]
+    L4 --> L5["Level 5: Everything on fire → Return 503, show maintenance page"]
+
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    classDef warn fill:#78350f,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    classDef crit fill:#4c0519,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    class L1 ok
+    class L2,L3 warn
+    class L4,L5 crit
 ```
 
 ---
@@ -674,13 +735,38 @@ Level 5: Everything is on fire          → Return 503, show maintenance page
 
 ### The Problem: Double-Charging
 
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1
+    participant DB as Account Balance ($100)
+    participant T2 as Thread 2
+
+    T1->>DB: Read balance ($100)
+    T2->>DB: Read balance ($100)
+    T1->>DB: Charge $50, write balance = $50
+    T2->>DB: Charge $50, write balance = $50
+    Note over T1,T2: Customer charged $100, balance only decreased by $50!
 ```
-Thread 1: Read balance = $100
-Thread 2: Read balance = $100
-Thread 1: Balance >= $50? Yes. Charge $50. Write balance = $50
-Thread 2: Balance >= $50? Yes. Charge $50. Write balance = $50
-→ Customer charged $100 but balance only decreased by $50!
+
+### Choosing the Right Concurrency Strategy
+
+```mermaid
+flowchart LR
+    CONC["Concurrent Balance Update"] --> OPT["Optimistic (@Version): Low contention, @Retryable"]
+    CONC --> PESS["Pessimistic (SELECT FOR UPDATE): Transfers, ordered locks"]
+    CONC --> ATOM["Atomic SQL UPDATE: High concurrency single-row debit"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef strat fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    class CONC root
+    class OPT,PESS,ATOM strat
 ```
+
+| Strategy | Best For | Mechanism | Trade-off |
+|----------|----------|-----------|-----------|
+| **Optimistic Locking** | General updates with low contention | `@Version` column + `@Retryable` | Retries under heavy contention |
+| **Pessimistic Locking** | Multi-account transfers | `SELECT ... FOR UPDATE` in sorted ID order | Holds row locks; requires lock ordering |
+| **Atomic SQL Update** | High-concurrency single-account debits | `UPDATE ... WHERE balance &gt;= :amount` | Zero Java read-modify-write race |
 
 ### Solution: Optimistic Locking with JPA
 
@@ -758,7 +844,8 @@ public void transferFunds(String fromId, String toId, BigDecimal amount) {
 }
 ```
 
-**Interview point:** "I lock accounts in alphabetical ID order to prevent deadlocks. If Thread 1 locks A then B, and Thread 2 also locks A then B, they can't deadlock. But if Thread 2 locked B then A, deadlock is possible."
+> [!IMPORTANT]
+> **Interview point:** *"I lock accounts in alphabetical ID order to prevent deadlocks. If Thread 1 locks A then B, and Thread 2 also locks A then B, they can't deadlock. But if Thread 2 locked B then A, deadlock is possible."*
 
 ### Solution: Database-Level Atomic Operation (Best for High Concurrency)
 
@@ -794,6 +881,37 @@ int debitAtomic(@Param("accountId") String accountId,
 Client → "Charge $50"  → Server processes → Network timeout → Client never gets response
 Client → "Charge $50" (retry) → Server processes AGAIN → Customer charged $100!
 ```
+
+![Idempotent Payment Processing and Double-Entry Ledger](./assets/08-payment-idempotency-ledger.svg)
+
+```mermaid
+flowchart TD
+    REQ["POST /v1/payments + Idempotency-Key"] --> CACHE{"Cached in Redis?"}
+    CACHE -- "Yes" --> RET["Return Cached 200 OK (No Charge)"]
+    CACHE -- "No" --> LOCK{"Redis SET NX Lock (30s)?"}
+    LOCK -- "No" --> CONF["Return 409 Conflict (In Progress)"]
+    LOCK -- "Yes" --> SAGA["Run PaymentSaga + Ledger + Outbox"]
+    SAGA --> SAVE["Save Response in Redis (24h TTL)"]
+    SAVE --> UNLOCK["Release Redis Lock &amp; Return 200 OK"]
+
+    classDef req fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef hit fill:#78350f,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    classDef err fill:#4c0519,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    class REQ,CACHE,LOCK req
+    class RET hit
+    class CONF err
+    class SAGA,SAVE,UNLOCK ok
+```
+
+| Request Scenario | Redis State | HTTP Response | Gateway / Ledger Impact |
+|------------------|-------------|---------------|-------------------------|
+| First request | Cache miss, lock acquired | `200 OK` | Processed once, cached for 24h |
+| Concurrent duplicate click | Cache miss, lock held | `409 Conflict` | Blocked before saga runs |
+| Timeout retry | Cache hit | `200 OK` (cached) | Zero gateway calls, zero ledger writes |
+
+> [!TIP]
+> Pair Redis `SET NX` with a PostgreSQL `UNIQUE` constraint on `payments.idempotency_key`. Redis stops duplicate bursts in under 2ms, while the DB constraint guarantees safety even if Redis evicts a key.
 
 ### The Idempotency Key Pattern
 
@@ -882,6 +1000,51 @@ If the request times out, the client retries with the SAME idempotency key. Serv
 
 ### Core Schema
 
+```mermaid
+erDiagram
+    PAYMENTS ||--o{ LEDGER_ENTRIES : "records"
+    PAYMENTS ||--o{ PAYMENT_AUDIT_LOG : "tracks"
+    PAYMENTS {
+        varchar id PK
+        varchar idempotency_key UK
+        varchar customer_id
+        varchar merchant_id
+        decimal amount
+        varchar currency
+        varchar state
+        bigint version
+        timestamptz created_at
+    }
+    LEDGER_ENTRIES {
+        bigserial id PK
+        varchar transaction_ref
+        varchar payment_id FK
+        varchar account_id
+        varchar entry_type
+        decimal amount
+        varchar currency
+        timestamptz created_at
+    }
+    PAYMENT_AUDIT_LOG {
+        bigserial id PK
+        varchar payment_id FK
+        varchar previous_state
+        varchar new_state
+        varchar event
+        jsonb metadata
+        timestamptz created_at
+    }
+```
+
+| Table | Mutation Pattern | Key Indexes & Constraints |
+|-------|------------------|---------------------------|
+| `payments` | Write-heavy + state updates | `UNIQUE(idempotency_key)`, `(customer_id, created_at DESC)`, partial index on `AUTHORIZED` / `PENDING_VERIFICATION` |
+| `ledger_entries` | Append-only (never updated) | `CHECK (entry_type IN ('DEBIT', 'CREDIT'))`, `(payment_id)`, `(account_id, created_at DESC)` |
+| `payment_audit_log` | Immutable compliance trail | `(payment_id, created_at)` |
+
+> [!IMPORTANT]
+> `ledger_entries` and `payment_audit_log` are **append-only**. Never `UPDATE` or `DELETE` a ledger row — corrections must be recorded as new compensating entries.
+
 ```sql
 -- Payment table (write-heavy, indexed for lookups)
 CREATE TABLE payments (
@@ -959,6 +1122,21 @@ List<Payment> findByCustomerId(String customerId);
 
 ### Partitioning for Scale
 
+```mermaid
+flowchart LR
+    Q["Query: created_at in 2025-06"] --> PARENT["payments (PARTITION BY RANGE created_at)"]
+    PARENT -. "Pruned" .-> P1["payments_2025_01"]
+    PARENT -. "Pruned" .-> P2["payments_2025_02"]
+    PARENT --> P6["payments_2025_06 (Scanned)"]
+
+    classDef parent fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef pruned fill:#0f172a,stroke:#475569,stroke-width:1px,color:#94a3b8
+    classDef active fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class Q,PARENT parent
+    class P1,P2 pruned
+    class P6 active
+```
+
 ```sql
 -- Partition payments by month for fast range queries and easy archival
 CREATE TABLE payments (
@@ -983,6 +1161,28 @@ AND customer_id = 'cust_789';
 ---
 
 ## 10. Step 9: JVM Performance Tuning
+
+```mermaid
+flowchart LR
+    HEAP["Fixed Heap (-Xms4g -Xmx4g)"] --> G1["G1GC (MaxGCPauseMillis=50, 8m regions)"]
+    G1 --> CACHE["Caffeine Cache Monitor (&gt; 100k alert)"]
+    CACHE --> HIKARI["HikariCP Pool (size=10, 3s timeout, 30s leak detect)"]
+
+    classDef jvm fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef pool fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    class HEAP,G1,CACHE jvm
+    class HIKARI pool
+```
+
+| Layer | Configuration | Target / Benefit |
+|-------|---------------|------------------|
+| **Heap** | `-Xms4g -Xmx4g`, `MetaspaceSize=256m` | Eliminates dynamic heap resizing pauses |
+| **GC** | `-XX:+UseG1GC -XX:MaxGCPauseMillis=50` | Keeps GC stop-the-world pauses under 50ms |
+| **Strings & Refs** | `-XX:+UseStringDeduplication`, `-XX:+ParallelRefProcEnabled` | Reduces memory pressure from JSON/UUID strings |
+| **HikariCP** | `maximum-pool-size: 10`, `connection-timeout: 3000` | Prevents DB thread thrashing; fails fast in 3s |
+
+> [!TIP]
+> Use the HikariCP sizing formula: `connections = (core_count * 2) + effective_spindle_count`. For a 4-core server with SSD, `(4 * 2) + 1 = 9` (rounded to `10`) outperforms oversized pools that cause context-switching overhead.
 
 ### GC Configuration for Low-Latency Payment Processing
 
@@ -1048,19 +1248,29 @@ spring:
 
 ### PCI-DSS Requirements (Senior-Level Answer)
 
+```mermaid
+flowchart LR
+    CLIENT["Client Card (4242-xxxx-4242)"] -- "TLS 1.3" --> GW["Gateway Tokenization Vault (Stripe / Visa)"]
+    GW -- "Returns tok_abc123 + last4" --> APP["Isolated Payment Network"]
+    APP -- "AES-256 Encrypted" --> DB["PostgreSQL (Stores token + last4 only)"]
+    APP --> AUDIT["Immutable Access Audit Log"]
+
+    classDef sec fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef vault fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    class CLIENT,APP,AUDIT sec
+    class GW,DB vault
 ```
-1. NEVER store raw card numbers in your database
-   → Use tokenization: "4242-xxxx-xxxx-4242" → "tok_abc123"
-   → The payment gateway (Stripe/Visa) stores the actual number
 
-2. Encrypt data at rest (AES-256) and in transit (TLS 1.3)
+| # | PCI-DSS Requirement | Concrete Implementation |
+|---|---------------------|-------------------------|
+| 1 | **Never store raw card numbers** | Tokenize via gateway (`tok_abc123` + `last4` only) |
+| 2 | **Encrypt at rest & in transit** | AES-256 for PII fields + TLS 1.3 everywhere |
+| 3 | **Log all payment data access** | Immutable `payment_audit_log` |
+| 4 | **Network segmentation** | Isolate payment processing in its own VPC/subnet |
+| 5 | **Key rotation** | Rotate encryption keys every 90 days |
 
-3. All access to payment data must be logged (audit trail)
-
-4. Separate payment processing into its own isolated network segment
-
-5. Rotate encryption keys regularly (90 days)
-```
+> [!WARNING]
+> **NEVER** store raw PANs (card numbers) or CVVs in your database. Tokenizing at the gateway keeps your core database out of full PCI-DSS Cardholder Data Environment (CDE) scope.
 
 ```java
 // Tokenization — never handle raw card numbers
@@ -1092,6 +1302,23 @@ public class Payment {
 
 ## 12. The Senior Engineer Answers vs Mid-Level Answers
 
+```mermaid
+flowchart LR
+    Q["Interview Pressure Point"] --> MID["Mid-Level: Single-Node / Textbook"]
+    Q --> SEN["Senior: Distributed / Failure-First"]
+    SEN --> S1["Optimistic + Pessimistic + Atomic SQL"]
+    SEN --> S2["Saga + Outbox + Reconciliation"]
+    SEN --> S3["Circuit Breaker + Fallback + Kafka Queue"]
+    SEN --> S4["Idempotency Keys + Tokenization"]
+
+    classDef q fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef mid fill:#78350f,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    classDef sen fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    class Q q
+    class MID mid
+    class SEN,S1,S2,S3,S4 sen
+```
+
 | Question | Mid-Level Answer | Senior Answer |
 |----------|-----------------|---------------|
 | "How do you handle concurrent payments?" | "I use synchronized blocks" | "Optimistic locking with @Version for most cases, pessimistic locking (SELECT FOR UPDATE) for transfers, and atomic SQL updates for balance changes. Lock ordering prevents deadlocks." |
@@ -1101,6 +1328,9 @@ public class Payment {
 | "How do you scale?" | "Add more servers" | "Stateless services behind a load balancer, read replicas for query traffic, partitioned payments table by date, Redis cache for hot data, CQRS to separate read/write paths." |
 | "How do you store card numbers?" | "Encrypt them in the database" | "We never store card numbers. Tokenization via the gateway — we store only tokens and last4 for display. PCI-DSS compliance requires us to minimize cardholder data exposure." |
 
+> [!TIP]
+> Notice the pattern in every Senior answer: **layered defense**. Never rely on a single mechanism (e.g., Redis alone or `@Transactional` alone) — pair fast-path guards with durable database guarantees and async reconciliation.
+
 ---
 
 ## 13. Follow-Up Questions & Answers
@@ -1108,6 +1338,25 @@ public class Payment {
 ### "How would you handle a payment that's stuck in AUTHORIZED state?"
 
 "I'd run a scheduled reconciliation job every 5 minutes that queries the payment gateway for the actual status of any payment stuck in AUTHORIZED for more than 15 minutes. Based on the gateway response, I'd either capture, void, or mark for manual review. This handles network timeouts and dropped responses."
+
+```mermaid
+flowchart TD
+    JOB["Scheduled Job (every 5 min)"] --> FIND["Query AUTHORIZED &gt; 15 min"]
+    FIND --> GW["gw.checkStatus(authorizationId)"]
+    GW -- "CAPTURED" --> FIN["finalizeCapture(payment)"]
+    GW -- "VOIDED" --> VOID["markVoided(payment)"]
+    GW -- "PENDING" --> WAIT["Check again next cycle"]
+    GW -- "NOT_FOUND" --> FAIL["markFailed(payment)"]
+
+    classDef job fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5
+    classDef warn fill:#78350f,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    classDef err fill:#4c0519,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    class JOB,FIND,GW job
+    class FIN ok
+    class VOID,WAIT warn
+    class FAIL err
+```
 
 ```java
 @Scheduled(fixedRate = 300_000) // Every 5 minutes
@@ -1137,6 +1386,9 @@ public void reconcileStuckPayments() {
 
 "I store amounts in the smallest unit (cents/paise) as BIGINT to avoid floating-point errors. For cross-currency, I fetch rates from a rate service, store both the original and converted amounts, and lock the rate at authorization time so the customer isn't surprised at capture."
 
+> [!WARNING]
+> **NEVER** use `double` or `float` for money (`0.1 + 0.2 = 0.30000000000000004`). Always use `BigDecimal` in Java and `BIGINT` (smallest currency unit) or `DECIMAL(19,4)` in SQL.
+
 ```java
 // NEVER use double for money
 BigDecimal amount = new BigDecimal("19.99");  // ✓
@@ -1148,38 +1400,26 @@ long amountInCents = amount.multiply(new BigDecimal(100)).longValueExact();
 
 ### "What metrics would you monitor?"
 
-```
-Business metrics:
-- Payment success rate (target: >99.5%)
-- Authorization approval rate by gateway
-- Average payment latency (P50, P95, P99)
-- Refund rate
-
-System metrics:
-- Gateway response time per provider
-- Circuit breaker state changes
-- Database connection pool utilization
-- Kafka consumer lag (are events being processed?)
-- JVM GC pause times
-
-Alerting rules:
-- Success rate drops below 99% for 5 minutes → Page on-call
-- P99 latency exceeds 2 seconds → Warning
-- Circuit breaker opens → Alert
-- Reconciliation mismatches found → Critical
-```
+| Category | Metric / Alert Rule | Target / Action |
+|----------|---------------------|-----------------|
+| **Business** | Payment success rate | Target `> 99.5%`; `< 99%` for 5m → Page on-call |
+| **Business** | Authorization approval rate by gateway | Detect silent issuer/gateway degradation |
+| **Business** | Payment latency (`P50`, `P95`, `P99`) & refund rate | `P99 > 2s` → Warning |
+| **System** | Gateway response time & Circuit breaker state | Circuit breaker opens → Alert |
+| **System** | DB pool utilization, Kafka consumer lag, JVM GC pauses | Detect backpressure before timeouts |
+| **Integrity** | Daily ledger & gateway reconciliation mismatches | Any mismatch → **Critical alert** |
 
 ### "How would you test this system?"
 
-```
-Unit tests:        State machine transitions, validation logic, amount calculations
-Integration tests: Database operations with Testcontainers (real PostgreSQL)
-Contract tests:    Gateway adapter against mock gateway (WireMock)
-E2E tests:         Full payment flow in staging with test card numbers
-Load tests:        K6/Gatling simulating 6000 TPS (Black Friday scenario)
-Chaos tests:       Kill a database replica mid-transaction, observe recovery
-Reconciliation:    Daily job comparing our records vs gateway records
-```
+| Test Layer | Scope & Tooling | What It Proves |
+|------------|-----------------|----------------|
+| **Unit tests** | State machine transitions, validation logic, amount math | Core invariants and `BigDecimal` accuracy |
+| **Integration tests** | Database operations with Testcontainers (real PostgreSQL) | Locking, constraints, and `JOIN FETCH` queries |
+| **Contract tests** | Gateway adapter against mock gateway (WireMock) | Timeouts, 5xx responses, and payload mapping |
+| **E2E tests** | Full payment flow in staging with test card numbers | End-to-end saga + outbox + webhook flow |
+| **Load tests** | K6 / Gatling simulating 6,000 TPS | Black Friday burst readiness |
+| **Chaos tests** | Kill a database replica mid-transaction | Failover and recovery without data loss |
+| **Reconciliation** | Daily job comparing our records vs gateway records | Zero silent financial drift |
 
 ---
 

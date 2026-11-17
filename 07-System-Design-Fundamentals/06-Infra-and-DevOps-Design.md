@@ -4,1216 +4,408 @@
 1. [Notification System](#notification-system)
 2. [Logging and Monitoring System](#logging-and-monitoring-system)
 3. [Distributed Task Scheduler](#distributed-task-scheduler)
-4. [CI/CD Pipeline](#cicd-pipeline)
+4. [CI/CD Pipeline & Kubernetes Rollout](#cicd-pipeline--kubernetes-rollout)
+5. [Multi-Region Cloud Infra & Zero-Trust Security](#multi-region-cloud-infra--zero-trust-security)
+6. [Key Takeaways](#key-takeaways)
 
 ---
 
 ## Notification System
 
-Design a notification service that sends push, SMS, and email notifications at scale.
+Design a multi-channel notification service that delivers **10B notifications/day** across Push, Email, and SMS with **99.9% reliability** and **&lt; 1 minute** delivery latency.
 
-### Requirements
+### Requirements & Capacity Estimation
 
-**Functional:**
-- Send notifications via multiple channels: push, SMS, email
-- Support batch sending (e.g., daily digest)
-- Track delivery status
-- Support notification templates
-- User notification preferences (opt-in/out)
-
-**Non-Functional:**
-- 1B DAU
-- 10B notifications/day
-- Delivery latency: < 1 minute
-- Reliability: 99.9% (must deliver)
-- Deduplication: prevent duplicate sends
-- Rate limiting: per user, per channel
-
-### Estimation
-
-```
-Scale:
-- 10B notifications/day
-- QPS: 10B / 86,400 = 115.7K write QPS
-- Peak: 3x = 350K QPS
-
-Channel breakdown:
-- Push (50%): 5B/day = 57.9K QPS
-- Email (30%): 3B/day = 34.7K QPS
-- SMS (20%): 2B/day = 23.1K QPS
-
-Each notification:
-├─ Push: 1 KB
-├─ Email: 50 KB (includes HTML, images)
-└─ SMS: 0.1 KB
-
-Storage (1 year):
-- Notification records: 10B × 50 bytes = 500 GB
-- Email bodies: 3B × 50KB = 150 TB
-- Total: ~150 TB
-```
+| Dimension | Target / Estimate | Notes |
+| :--- | :--- | :--- |
+| **Scale** | 1B DAU, 10B notifications/day | 115.7K avg write QPS, **350K peak QPS (3x)** |
+| **Push (50%)** | 5B/day (57.9K QPS), ~1 KB/msg | FCM (Android) & APNS (iOS) |
+| **Email (30%)** | 3B/day (34.7K QPS), ~50 KB/msg | HTML + images; 150 TB/year body storage |
+| **SMS (20%)** | 2B/day (23.1K QPS), ~0.1 KB/msg | Carrier-routed; strict per-user rate limits |
+| **Metadata Storage** | 10B × 50 bytes = 500 GB/year | Total 1-year storage: **~150 TB** |
+| **SLOs** | &lt; 1 min latency, 99.9% delivery | Idempotent deduplication + per-channel rate limits |
 
 ### Architecture
 
+```mermaid
+flowchart TD
+    App["Application Service (trigger_notification)"] --> API["Notification API (Dedup, Prefs, Template, Priority)"]
+    API --> Redis["Redis Dedup &amp; Prefs Cache"]
+    API --> Kafka["Kafka Topics (push / email / sms)"]
+
+    Kafka --> PushW["Push Workers (FCM / APNS)"]
+    Kafka --> EmailW["Email Workers (SendGrid / SES)"]
+    Kafka --> SmsW["SMS Workers (Twilio / SNS)"]
+    Kafka --> InAppW["In-App Workers (WebSocket)"]
+
+    PushW --> DB["Notification DB (Delivery Status)"]
+    EmailW --> DB
+    SmsW --> DB
+    InAppW --> DB
+
+    classDef service fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef queue fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef store fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class App,API,PushW,EmailW,SmsW,InAppW service
+    class Kafka queue
+    class Redis,DB store
 ```
-┌─────────────────────────────────────────────────┐
-│Application Service                             │
-│(decides to send notification)                   │
-│trigger_notification(user_id, type, context)    │
-└──────────┬──────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────┐
-│Notification Service (API)                       │
-│                                                  │
-│- Deduplication (prevent duplicate sends)        │
-│- User preferences (respect opt-outs)            │
-│- Template rendering                            │
-│- Priority classification                        │
-└──────────┬───────────────────────────────────────┘
-           │
-           ├─ Check user preferences
-           ├─ Check deduplication cache
-           ├─ Render template
-           ├─ Calculate priority
-           │
-           ▼
-┌──────────────────────────────────────────────────┐
-│Notification Queue (Kafka)                       │
-│                                                  │
-│Topics:                                          │
-│├─ notifications.push (high throughput)          │
-│├─ notifications.email (lower throughput)        │
-│└─ notifications.sms (critical, rate-limited)    │
-└──────────┬──────────────────────┬───────────────┘
-           │                      │
-           ├──────────┬───────────┼─────────┐
-           ▼          ▼           ▼         ▼
-    ┌──────────┐┌──────────┐┌──────────┐┌──────────┐
-    │Push      ││Email     ││SMS       ││In-App    │
-    │Service   ││Service   ││Service   ││Service   │
-    │(workers) ││(workers) ││(workers) ││(workers) │
-    └────┬─────┘└────┬─────┘└────┬─────┘└────┬─────┘
-         │           │           │           │
-         ├─ Call FCM/APNS    ├─ Call SendGrid  ├─ Call Twilio
-         │                   │                 │
-         │                   └─ Check bounce   └─ Respect rate limit
-         │                     list
-         │
-         ├─ Retry on failure
-         └─ Track delivery status
-              │
-              ▼
-         ┌──────────────────────┐
-         │Notification DB       │
-         │(delivery status)     │
-         │                      │
-         │notification_id       │
-         │user_id               │
-         │type (push/email/sms) │
-         │status (sent/failed)  │
-         │timestamp             │
-         └──────────────────────┘
-```
+
+- **Notification API**: Checks user opt-in/quiet-hours preferences, validates the `request_id` deduplication cache, renders the versioned template, and classifies priority before publishing to channel-isolated Kafka topics.
+- **Channel Isolation**: Separate Kafka topics (`notifications.push`, `notifications.email`, `notifications.sms`) prevent slow third-party email/SMS providers from blocking high-throughput push delivery.
+
+> [!IMPORTANT]
+> Isolating channels into separate Kafka topics and worker pools prevents head-of-line blocking: a 5-second SMTP/carrier slowdown will never starve real-time 1-second push notifications.
 
 ### Channels: Push, Email, SMS
 
-```
-PUSH NOTIFICATIONS
-──────────────────
-Providers: Firebase Cloud Messaging (FCM), Apple Push Notification (APNS)
+| Channel | Providers | Latency | Cost (per 1B) | Key Constraints & Controls |
+| :--- | :--- | :--- | :--- | :--- |
+| **Push** | FCM, APNS | ~1s online (24h offline hold) | **~$0** (free) | App required; max **5/user/hour**; respect quiet hours (9 PM–8 AM) |
+| **Email** | SendGrid, Mailgun, AWS SES | Seconds to minutes | **~$100K** ($0.03/email) | 50 KB payload; spam filters; track **hard/soft bounce lists** |
+| **SMS** | Twilio, AWS SNS, Nexmo | Seconds (98% open rate) | **~$10M** ($0.05/SMS) | 160-char limit; **max 1/user/hour**; reserve for 2FA & critical alerts |
 
-Flow:
-1. Server sends to FCM/APNS
-2. FCM/APNS delivers to user's device
-3. Device is offline? FCM holds message, delivers when online
+### Deduplication & Template System
 
-Request:
-{
-  "user_id": "12345",
-  "title": "Order confirmed",
-  "body": "Your order #999 is confirmed",
-  "data": {
-    "order_id": "999",
-    "deep_link": "myapp://orders/999"
-  }
-}
+```mermaid
+sequenceDiagram
+    participant App as Application Service
+    participant API as Notification API
+    participant Redis as Redis Dedup Cache
+    participant Tpl as Template Engine
+    participant Q as Kafka Queue
 
-Delivery: ~1 second if device online, up to 24 hours if offline
-
-Pros:
-├─ Fast (seconds)
-├─ High engagement (user sees notification)
-└─ Can trigger app actions
-
-Cons:
-├─ User must have app installed
-├─ Can be annoying (users disable)
-└─ Depends on third-party (FCM/APNS availability)
-
-Rate limiting:
-├─ Max 5 push notifications per user per hour
-├─ Batch multiple actions into single notification
-└─ Respect user quiet hours (e.g., no notifs 9 PM - 8 AM)
-
-EMAIL NOTIFICATIONS
-───────────────────
-Providers: SendGrid, Mailgun, AWS SES
-
-Flow:
-1. Server sends to email service
-2. Email service delivers to user's inbox
-3. Can take seconds to minutes (depends on ISP)
-
-Request:
-{
-  "to": "user@example.com",
-  "template": "order_confirmation",
-  "data": {
-    "order_id": "999",
-    "items": [...],
-    "total": "$99.99"
-  }
-}
-
-Delivery: Seconds to minutes (depends on email provider)
-
-Pros:
-├─ No installation required (everyone has email)
-├─ Good for important notifications
-├─ Can be long-form (order details, receipts)
-└─ Trackable (open rate, click rate)
-
-Cons:
-├─ Slower than push
-├─ Can be marked as spam
-├─ Depends on email provider rate limits
-├─ Large payloads (50 KB vs 1 KB for push)
-
-Bounce handling:
-├─ Hard bounces: email doesn't exist (mark invalid)
-├─ Soft bounces: temporary issue (retry later)
-├─ Track bounce list to prevent future sends
-
-SMS NOTIFICATIONS
-─────────────────
-Providers: Twilio, AWS SNS, Nexmo
-
-Flow:
-1. Server sends to SMS provider
-2. SMS provider sends to carrier
-3. Carrier delivers to user's phone
-
-Request:
-{
-  "phone": "+1-555-123-4567",
-  "message": "Your code is 123456"
-}
-
-Delivery: Seconds (very fast)
-
-Pros:
-├─ Fast (seconds)
-├─ High engagement (98% open rate vs email)
-├─ Works on any phone
-├─ Good for time-sensitive (2FA, alerts)
-
-Cons:
-├─ Expensive ($0.01-0.10 per SMS)
-├─ Limited length (160 characters)
-├─ Can be intrusive (costs user money on pre-paid plans)
-├─ Requires phone number (privacy concern)
-
-Rate limiting:
-├─ Max 1 SMS per user per hour (expensive!)
-├─ Batch multiple updates into single SMS
-├─ Use only for critical alerts
-
-Cost comparison (per 1B notifications):
-├─ Push: ~$0 (FCM free)
-├─ Email: ~$100K (at $0.03 per email)
-└─ SMS: ~$10M (at $0.05 per SMS)
+    App->>API: POST /notify (request_id, user_id, template_id, data)
+    API->>Redis: GET dedup:{request_id}
+    alt Found within TTL (5-60 min)
+        Redis-->>API: Cached status "sent"
+        API-->>App: 200 OK (Idempotent, no resend)
+    else Not found or expired
+        API->>Tpl: Fetch (template_id, version, user_lang)
+        Tpl-->>API: Rendered subject + body
+        API->>Q: Publish to channel topic
+        API->>Redis: SETEX dedup:{request_id} TTL "sent"
+        API-->>App: 202 Accepted
+    end
 ```
 
-### Deduplication Strategy
+- **Deduplication**: Clients pass an idempotency key (`request_id`). Redis stores `dedup:{request_id}` with a **5–60 minute TTL**. At 350K QPS with a 5-minute window, ~1M active keys require only **~100 MB RAM**.
+- **Template Engine**: Stores `(template_id, version, language)` in `templates` (`subject`, `body_text`, `body_html`). Supports **multi-language** lookup from user profile and **50/50 A/B testing** (tracking open/click rates before promoting the winner).
 
-```
-Problem: Same notification sent twice (retry, duplicate request, etc.)
-
-Example:
-User1 follows User2
-Order notification triggered twice (service retried)
-User1 gets 2 identical "User2 just posted" notifications
-
-Solution: Deduplication via request ID
-
-Request:
-{
-  "request_id": "abc123-def456",  // idempotency key
-  "user_id": "12345",
-  "type": "follow_notification",
-  "data": {...}
-}
-
-Server-side:
-1. Hash the request_id
-2. Check deduplication cache:
-   dedup_cache[abc123-def456] = {
-     "status": "sent",
-     "timestamp": 1704067400
-   }
-
-3. If found and sent recently (< 5 minutes):
-   └─ Return cached response (don't resend)
-
-4. If not found or expired:
-   └─ Send notification
-   └─ Store in cache with TTL
-
-Benefits:
-├─ Prevents duplicate sends
-├─ Idempotent (safe to retry)
-├─ Minimal overhead (cache lookup)
-
-Cache implementation:
-├─ Redis: key="dedup:{request_id}", value=response
-├─ TTL: 5 minutes (if request retried after 5 min, OK to resend)
-└─ At 350K QPS: need 1M entries = 100MB RAM (small!)
-
-Trade-off:
-TTL too short: duplicates possible
-TTL too long: legitimate re-sends blocked
-Sweet spot: 5-60 minutes depending on use case
-```
-
-### Template System
-
-```
-Problem: Hardcoding notification text = inflexible
-
-Solution: Template engine
-
-Template storage:
-
-templates table:
-├─ template_id: "order_confirmed"
-├─ subject: "Order {{order_id}} confirmed"
-├─ body_text: "Your order {{order_id}} for {{total}} has been placed..."
-├─ body_html: "<html><body>..."
-├─ created_at: 2024-01-15
-└─ version: 1
-
-Rendering:
-
-Template: "Hello {{user_name}}, your order {{order_id}} is ready"
-
-Input: {
-  "user_name": "Alice",
-  "order_id": "999"
-}
-
-Output: "Hello Alice, your order 999 is ready"
-
-Template versioning:
-├─ template_id: "order_confirmed"
-├─ version: 1 (old)
-│  └─ body: "Your order has been confirmed"
-├─ version: 2 (current)
-│  └─ body: "Your order has been confirmed! Track: {{tracking_url}}"
-└─ All notifications reference (template_id, version)
-   └─ Prevents issues if template changes
-
-Multi-language support:
-
-templates table:
-├─ template_id: "order_confirmed"
-├─ language: "en"
-├─ subject: "Order {{order_id}} confirmed"
-├─ language: "es"
-├─ subject: "Pedido {{order_id}} confirmado"
-└─ language: "fr"
-├─ subject: "Commande {{order_id}} confirmée"
-
-On send:
-1. Get user's preferred language (from user profile)
-2. Fetch template with that language
-3. Render with user data
-4. Send
-
-A/B testing:
-├─ Template A: "Order ready!"
-├─ Template B: "Your order is waiting"
-├─ Randomly show 50/50
-├─ Track open rate, click rate
-├─ Winner gets rolled out to all users
-```
+> [!TIP]
+> Always bind sent notifications to an explicit `(template_id, version)` pair rather than `latest`. Otherwise, a template edit mid-flight can corrupt queued or retried notifications.
 
 ---
 
 ## Logging and Monitoring System
 
-Design a centralized logging and monitoring system like ELK stack or Datadog.
+Design a centralized observability platform (ELK + Prometheus + OpenTelemetry) ingesting **1B log events/day** with **&lt; 1 second** query latency and **99.9% availability**.
 
-### Requirements
+### Requirements & Capacity Estimation
 
-**Functional:**
-- Collect logs from all services
-- Store logs for querying
-- Real-time alerting
-- Dashboards for metrics
-- Root cause analysis
+| Dimension | Estimate | Notes |
+| :--- | :--- | :--- |
+| **Log Volume** | 1,000+ services × 100K/day = **1B events/day** | 11.5K avg logs/sec, **35K peak logs/sec** |
+| **Storage Size** | 500 bytes/line = **500 GB/day** | 15 TB/month, **180 TB/year** |
+| **Query Latency** | &lt; 1 second (50–200ms hot) | Full-text, time-range, aggregations, `request_id` trace |
+| **Retention Tiers** | 30d Hot (SSD), 90d Warm (HDD), 1yr Cold (S3) | Total annual cost: **~$672K/year (~$0.000002/event)** |
 
-**Non-Functional:**
-- 1B log events/day
-- Query latency: < 1 second
-- Retention: 30 days hot, 1 year archive
-- Availability: 99.9%
-- Cost-effective
+### Architecture: Logs, Metrics & Distributed Tracing
 
-### Estimation
+```mermaid
+flowchart LR
+    Svc["App Services (stdout/stderr + OTel SDK)"] --> Agent["Collector (Filebeat / OTel Collector)"]
+    Agent -->|Batch 1000 or 5s| Kafka["Kafka (logs-ingest, partitioned by service)"]
+    Kafka --> Stream["Stream Processor (Kafka Streams / Spark)"]
 
-```
-Scale:
-- 1000+ services
-- Each service: 100K log events/day
-- Total: 1B log events/day
+    Stream -->|Full-text index| ES["Elasticsearch (10 Shards, 2 Replicas)"]
+    Stream -->|Error spike rules| Alert["Alert Correlation Engine (PagerDuty / Slack)"]
+    Svc -->|Scrape /metrics| Prom["Prometheus (TSDB: Counters, Histograms)"]
+    Svc -->|Spans trace_id| Trace["Tracing Backend (Jaeger / Tempo)"]
 
-QPS:
-- Ingest: 1B / 86,400 = 11.5K logs/second
-- Peak: 3x = 35K logs/second
+    ES --> Graf["Grafana Dashboards &amp; Log Tail"]
+    Prom --> Graf
+    Trace --> Graf
 
-Log size:
-- Average log line: 500 bytes
-- Daily volume: 1B × 500 bytes = 500 GB/day
-- Monthly: 15 TB/month
-- Yearly: 180 TB/year
-
-Query patterns:
-- Full-text search: "error" in logs
-- Time-range queries: logs from last 1 hour
-- Aggregation: count of error vs warning logs
-- Tracing: logs for specific request_id
+    classDef src fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef pipe fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef store fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef ui fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    class Svc,Agent src
+    class Kafka,Stream pipe
+    class ES,Prom,Trace store
+    class Alert,Graf ui
 ```
 
-### Architecture
+- **Three Pillars of Observability**:
+  - **Logs (Elasticsearch)**: Structured JSON logs collected from `stdout`/`stderr`, buffered locally, and batched (1,000 events or 5s) into Kafka. Inverted indexes map tokens (`"authenticate"`, `level="ERROR"`, `user_id="12345"`) to posting lists for millisecond intersections across **10 parallel shards** (`hash(id) % 10`, ~3.5K logs/shard/sec).
+  - **Metrics (Prometheus)**: Time-series counters, gauges, and histograms tracking **RED** (Rate, Errors, Duration — P95/P99) and **USE** (Utilization, Saturation, Errors).
+  - **Distributed Tracing (OpenTelemetry)**: Propagates `trace_id` and `span_id` via HTTP/gRPC headers across microservices to pinpoint latency bottlenecks and correlate logs to a single failing request.
 
-```
-┌─────────────────────────────────────────────────┐
-│Application Services                             │
-│(microservices, API servers, workers)            │
-│                                                  │
-│stdout/stderr:                                    │
-│├─ [INFO] Request received: GET /api/users      │
-│├─ [ERROR] Database connection failed            │
-│└─ [DEBUG] Processing item 123                  │
-└──────────────────┬──────────────────────────────┘
-                   │
-                   ├─ Write logs to stdout/stderr
-                   │ (container/orchestrator captures)
-                   │
-                   ▼
-        ┌──────────────────────┐
-        │Log Collector         │
-        │(Filebeat/Logstash)   │
-        │                      │
-        │- Tail log files      │
-        │- Parse structured    │
-        │- Batch events        │
-        └────────┬─────────────┘
-                 │
-                 ├─ Buffer logs locally
-                 ├─ Batch: 1000 events or 5 seconds
-                 │
-                 ▼
-    ┌────────────────────────────────────┐
-    │Message Queue (Kafka)               │
-    │                                    │
-    │Topic: logs-ingest                  │
-    │- Partitioned by service            │
-    │- High throughput (100K/sec)        │
-    └────────┬───────────────────────────┘
-             │
-             ├─ Buffer for consumer lag
-             ├─ Durability: replicated
-             │
-             ▼
-    ┌────────────────────────────────────┐
-    │Stream Processing                   │
-    │(Kafka Streams / Spark Streaming)   │
-    │                                    │
-    │- Parse JSON logs                   │
-    │- Extract fields                    │
-    │- Normalize timestamps              │
-    │- Add metadata                      │
-    └────────┬───────────────────────────┘
-             │
-             ├─ Real-time rules engine
-             │  (fire alerts)
-             │
-             ├─ Aggregate metrics
-             │  (count, avg, p99)
-             │
-             ▼
-    ┌────────────────────────────────────┐
-    │Search Index (Elasticsearch)        │
-    │                                    │
-    │- Inverted index of logs            │
-    │- Full-text search                  │
-    │- Field-level queries               │
-    │                                    │
-    │Shards: 10 (parallelized queries)   │
-    │Replicas: 2 (high availability)     │
-    └────────┬───────────────────────────┘
-             │
-             ├─ Store hot (SSD): 30 days
-             ├─ Store warm (HDD): 1 year (archive)
-             │
-             ▼
-    ┌────────────────────────────────────┐
-    │Metrics Store (Prometheus)          │
-    │                                    │
-    │- Time-series database              │
-    │- Counters, gauges, histograms      │
-    │- 1 year retention                  │
-    └────────────────────────────────────┘
-             │
-             ▼
-    ┌────────────────────────────────────┐
-    │Dashboards & Alerts                 │
-    │(Grafana, custom UI)                │
-    │                                    │
-    │- Real-time charts                  │
-    │- Alert notifications               │
-    │- Log tailing                       │
-    └────────────────────────────────────┘
+### Alerting & Tiered Retention
+
+```mermaid
+flowchart TD
+    Ingest["Kafka Streams (1-min tumbling window)"] --> Check{"error_count &gt; 100/min?"}
+    Check -->|No| Reset["Reset spike_duration = 0"]
+    Check -->|Yes| Inc["Increment spike_duration"]
+    Inc --> Sustained{"spike_duration &gt; 5 min?"}
+    Sustained -->|No| Wait["Continue monitoring"]
+    Sustained -->|Yes| Corr["Correlation Engine (Group Service A, B, C)"]
+    Corr --> Route["Route by Severity (Critical → PagerDuty, Warn → Ticket, Info → Dashboard)"]
+
+    classDef proc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef gate fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef alert fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+    class Ingest,Reset,Inc,Wait proc
+    class Check,Sustained gate
+    class Corr,Route alert
 ```
 
-### Log Indexing and Search
+- **Alert Correlation & Fatigue Prevention**: Groups simultaneous error spikes across dependent services (e.g., Service A, B, C failing within 2 minutes → root cause `"DB connection pool exhausted"`). Tunes thresholds historically, deduplicates repeats, and enforces severity tiers:
+  - **Critical**: Error rate &gt; 1% → immediate PagerDuty/SMS page.
+  - **Warning**: Error rate &gt; 0.1% → create ticket / Slack notice.
+  - **Info**: Error rate &gt; 0.01% → dashboard visibility only.
 
-```
-Problem: 500 GB of logs/day
-Need to search across all logs in < 1 second
+| Storage Tier | Medium | Retention | Volume | Query Latency | Monthly Cost |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Hot** | Elasticsearch SSD | Days 1–30 | 15 TB | 50–100 ms | **$50K/mo** (90% of queries) |
+| **Warm** | HDD Archive (gzip 10:1) | Days 31–90 | 30 TB | 500–1,000 ms | **$5K/mo** (9% of queries) |
+| **Cold** | S3 Glacier | Days 91–365 | 135 TB | 5–60 sec | **$1K/mo** (1% compliance) |
 
-Solution: Elasticsearch (inverted index)
-
-Inverted index for logs:
-
-Log:
-{
-  "timestamp": "2024-01-15T10:30:00Z",
-  "service": "auth-service",
-  "level": "ERROR",
-  "message": "Failed to authenticate user",
-  "user_id": "12345",
-  "error": "Invalid token"
-}
-
-Inverted index:
-├─ "failed" → [log1, log234, log5678, ...]
-├─ "authenticate" → [log1, log23, log567, ...]
-├─ "user" → [log1, log2, log3, ..., all logs]
-├─ "invalid" → [log1, log99, log876, ...]
-├─ "token" → [log1, log45, log56, ...]
-├─ service="auth-service" → [log1, log2, ..., many logs]
-├─ level="ERROR" → [log234, log567, ..., some logs]
-└─ user_id="12345" → [log1, log999, ...]
-
-Query: "authenticate user error"
-1. Find logs with "authenticate": [log1, log23, ...]
-2. Find logs with "user": [log1, log2, ...]
-3. Find logs with "error": [log1, log234, ...]
-4. Intersection: [log1]
-5. Return log1 (instant!)
-
-Query: service="auth-service" AND level="ERROR"
-1. Find logs with service="auth-service": [many]
-2. Find logs with level="ERROR": [some]
-3. Intersection: [error logs from auth-service]
-4. Return (milliseconds)
-
-Elasticsearch sharding:
-
-10 shards for parallelization:
-
-┌──────────────────────────────────────┐
-│Elasticsearch Cluster                 │
-├─────────┬─────────┬──────────────────┤
-│Shard 0  │Shard 1  │Shard 2   ... S9  │
-│         │         │                  │
-│Logs from│Logs from│Logs from         │
-│hash(id) │hash(id) │hash(id)          │
-│% 10=0   │% 10=1   │% 10=2            │
-└─────────┴─────────┴──────────────────┘
-
-Query "authenticate":
-1. Parallel query to all 10 shards
-2. Each shard searches its inverted index
-3. Results aggregated
-4. Top 100 results returned
-5. Total time: 50-200ms
-
-Indexing 500 GB/day:
-├─ 35K logs/second
-├─ Each log indexed immediately
-├─ Distributed across 10 shards: 3.5K logs/shard/sec
-├─ SSD throughput: easily 100K+ logs/sec
-└─ No bottleneck
-```
-
-### Alerting
-
-```
-Scenario: Error rate spike detected
-
-Alert rule:
-IF error_count > 100/minute for duration 5 minutes
-THEN send alert
-
-Implementation:
-
-1. Real-time stream processing:
-   Kafka Streams consumes logs
-   └─ Window: 1-minute buckets
-   └─ Count errors per minute
-   └─ Aggregate across services
-
-2. Check condition:
-   current_errors > threshold (100)
-   └─ If true: increment spike_duration counter
-   └─ If false: reset spike_duration to 0
-
-3. If spike_duration > 5 minutes:
-   └─ Alert fired!
-   └─ Send to alerting system
-
-4. Alerting channels:
-   ├─ PagerDuty (incident management)
-   ├─ Slack (chat notification)
-   ├─ SMS (critical alerts)
-   ├─ Email (detailed information)
-   └─ Webhook (custom integration)
-
-Alert correlation:
-Multiple errors in different services
-├─ Service-A: Error spike
-├─ Service-B: Error spike (1 min later)
-├─ Service-C: Error spike (2 min later)
-└─ Likely: shared dependency failure (database)
-
-Correlation engine:
-├─ Group alerts with similar timestamp
-├─ Identify common pattern
-├─ Root cause: "Database connection pool exhausted"
-├─ Route to on-call DBA
-
-Alert tuning:
-Problem: Too many alerts (alert fatigue)
-├─ Alert threshold too low
-├─ Alert fires on every minor issue
-└─ On-call team ignores (misses real issues)
-
-Solution: Smart alerting
-├─ Threshold tuning (based on historical data)
-├─ Deduplication (don't repeat alert)
-├─ Aggregation (combine related alerts)
-├─ Severity levels (critical, warning, info)
-└─ Only page on critical alerts
-
-Severity levels:
-├─ Critical: immediate paging (error rate > 1%)
-├─ Warning: ticket created (error rate > 0.1%)
-├─ Info: logged, visible in dashboard (error rate > 0.01%)
-```
-
-### Log Retention and Archival
-
-```
-Cost optimization:
-
-Hot storage (Elasticsearch SSD): 30 days
-├─ Cost: $50K/month
-├─ Used for: most queries (90%)
-├─ Retention: 30 days
-└─ Total: 15 TB
-
-Warm storage (HDD): 90 days
-├─ Cost: $5K/month
-├─ Used for: occasional queries (9%)
-├─ Retention: 60 additional days
-└─ Total: 30 TB
-
-Cold storage (S3 Glacier): 1 year
-├─ Cost: $1K/month
-├─ Used for: rare queries, compliance (1%)
-├─ Retention: 275 additional days
-└─ Total: 135 TB
-
-Lifecycle:
-Day 1-30: Hot (SSD)  → Query latency: 50-100ms
-Day 31-90: Warm (HDD) → Query latency: 500-1000ms
-Day 91-365: Cold (S3)  → Query latency: 5-60 seconds (retrieval from archive)
-
-Archival process:
-
-Day 31: Move logs to warm storage
-1. Export from Elasticsearch
-2. Compress (gzip): 500 GB → 50 GB
-3. Upload to HDD archive
-4. Delete from Elasticsearch
-
-Day 91: Move logs to cold storage
-1. Read from HDD
-2. Re-compress if needed
-3. Upload to S3 Glacier
-4. Delete from HDD
-
-Cost breakdown (per year):
-├─ Hot (SSD): $50K × 12 = $600K
-├─ Warm (HDD): $5K × 12 = $60K
-├─ Cold (S3): $1K × 12 = $12K
-└─ Total: ~$672K per year
-
-For 1B logs/day * 365 days = 365B events/year
-Cost per event: $672K / 365B = ~$0.000002 (very cheap!)
-```
+> [!WARNING]
+> Never index raw, unbounded high-cardinality fields (like full request payloads or dynamic UUIDs) as Prometheus metric labels. High cardinality explodes TSDB memory and crashes scraping; keep high-cardinality IDs in logs and traces.
 
 ---
 
 ## Distributed Task Scheduler
 
-Design a system to schedule and execute periodic tasks (like cron).
+Design a distributed cron/task execution platform managing **1M scheduled tasks** and **100M executions/day** with **exactly-once execution** and **&lt; 1 minute** scheduling latency.
 
-### Requirements
+### Requirements & Capacity Estimation
 
-**Functional:**
-- Schedule tasks to run at specific times
-- Support recurring tasks (daily, hourly, etc.)
-- Execute tasks on available workers
-- Retry on failure
-- Monitor task execution
+| Dimension | Estimate | Notes |
+| :--- | :--- | :--- |
+| **Scale** | 1M tasks × 100 runs/day = **100M runs/day** | **1.16K tasks/sec** |
+| **Storage** | 1M × 1 KB = **1 GB** metadata | 100M × 10 KB logs = **1 TB/year** |
+| **Worker Fleet** | 1.16K QPS × 10s avg = 11.6K concurrent | **~1.5K workers** (at 8 concurrent tasks/worker) |
 
-**Non-Functional:**
-- 1M tasks
-- 100K task executions per day
-- Exactly-once execution (no duplicates)
-- Task execution latency: < 1 minute
-- Availability: 99.9%
+### Architecture & Exactly-Once Execution
 
-### Estimation
+```mermaid
+flowchart LR
+    Sched["Scheduler (Poll next_run_time &lt;= NOW)"] --> Q["Task Queue (Consistent Hash by task_id)"]
+    Q --> W["Worker Pool (1.5K Workers)"]
+    W -->|"SET lock:{task_id}:{run_id} NX EX 60"| Redis["Redis Distributed Lock"]
+    W --> DB["Task Execution DB (tasks &amp; task_executions)"]
 
-```
-Scale:
-- 1M scheduled tasks
-- Average: 100 executions/day per task
-- Total: 1M × 100 = 100M task executions/day
-- QPS: 100M / 86,400 = 1.16K tasks/second
-
-Task payload:
-- Task metadata: 1 KB
-- Log output: 10 KB
-- Database storage: 1M tasks × 1KB = 1 GB
-- Execution logs (1 year): 100M × 10KB = 1 TB
-
-Execution time:
-- Avg task: 10 seconds
-- Workers needed: 1.16K QPS × 10 sec = 11.6K concurrent tasks
-- Assuming 8 concurrent tasks per worker: 1.5K workers
+    classDef ctrl fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef queue fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef store fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class Sched,W ctrl
+    class Q queue
+    class Redis,DB store
 ```
 
-### Architecture
+- **Consistent Hashing**: Partitioning the queue by `task_id` routes the same task to the same worker pool, improving locality and simplifying concurrency control.
+- **Distributed Lock (`NX` + `EX`)**: Prevents duplicate execution when a worker crashes or a message is redelivered:
 
-```
-┌─────────────────────────────────────────────────┐
-│Scheduler                                        │
-│(periodic trigger)                               │
-│                                                  │
-│At each minute:                                   │
-│- Query DB for tasks due now                     │
-│- Enqueue them                                   │
-└──────────────┬──────────────────────────────────┘
-               │
-               ├─ Check tasks table:
-               │  next_run_time <= NOW()
-               │
-               ▼
-    ┌──────────────────────────────┐
-    │Tasks to Execute Queue        │
-    │(distributed message queue)   │
-    │                              │
-    │Format:                       │
-    │{                             │
-    │  "task_id": "daily_backup",  │
-    │  "run_id": "run_12345",      │
-    │  "params": {...},            │
-    │  "retry_count": 0            │
-    │}                             │
-    └────────────┬─────────────────┘
-                 │
-                 ├─ Partitioned by task_id (consistent hashing)
-                 │  └─ Same task always goes to same worker pool
-                 │  └─ Enables exactly-once semantics
-                 │
-                 ▼
-    ┌──────────────────────────────┐
-    │Workers (processes tasks)     │
-    │                              │
-    │Worker-1, Worker-2, ...       │
-    │                              │
-    │For each task:                │
-    │1. Acquire distributed lock   │
-    │2. Execute task               │
-    │3. Record result              │
-    │4. Release lock               │
-    └────────────┬─────────────────┘
-                 │
-                 ├─ Execute task code
-                 ├─ Capture output
-                 ├─ Track execution time
-                 │
-                 ▼
-    ┌──────────────────────────────┐
-    │Task Execution DB             │
-    │                              │
-    │task_executions table:        │
-    │├─ run_id                     │
-    │├─ task_id                    │
-    │├─ status (success/failed)    │
-    │├─ start_time                 │
-    │├─ end_time                   │
-    │├─ output                     │
-    │└─ error_message              │
-    │                              │
-    │tasks table:                  │
-    │├─ task_id                    │
-    │├─ cron_expression            │
-    │├─ next_run_time              │
-    │└─ retry_count (current)      │
-    └──────────────────────────────┘
-```
-
-### Exactly-Once Execution
-
-```
-Problem: Task might be executed twice (worker crashes after execution)
-
-Scenario:
-1. Worker picks up task
-2. Worker executes task (successfully)
-3. Worker crashes before updating DB
-4. Task retried → executed twice!
-
-Solution: Distributed lock + idempotency
-
-Implementation:
-
-Distributed lock (Redis):
-
+```python
 def execute_task(task_id, run_id):
     lock_key = f"lock:{task_id}:{run_id}"
     lock_value = generate_unique_id()
 
-    # Try to acquire lock (non-blocking)
     if redis.set(lock_key, lock_value, NX=True, EX=60):
-        # Lock acquired!
         try:
             result = run_task_code(task_id)
             db.update_execution(run_id, status="success", result=result)
         except Exception as e:
             db.update_execution(run_id, status="failed", error=str(e))
         finally:
-            # Release lock
             redis.delete(lock_key)
-    else:
-        # Lock held by another worker
-        # Don't execute (let other worker finish)
-        pass
-
-Benefits:
-├─ Only one worker executes task per run_id
-├─ If worker crashes: lock expires after 60 seconds
-├─ Next worker (or retry) picks up task
-└─ No duplicate execution
-
-Idempotency: Task must be idempotent
-├─ Running twice should produce same result
-├─ Example: "Delete all files in /tmp" (idempotent)
-├─ Counter-example: "Increment counter" (not idempotent)
-
-Making tasks idempotent:
-├─ Check before modifying: "Already done? Skip"
-├─ Store results in database: "Return cached result"
-├─ Use update not increment: "Set X = 100" not "Add 1 to X"
-└─ Document assumptions clearly
 ```
 
-### Retry Strategy
+> [!IMPORTANT]
+> Distributed locks prevent *concurrent* execution, while **task idempotency** protects against *sequential* retries after a post-execution crash. Design tasks to check state first or use idempotent writes (`SET X = 100`, not `X = X + 1`).
 
+### Retry Strategy & Exponential Backoff
+
+```mermaid
+sequenceDiagram
+    participant W as Worker
+    participant T as Task Code
+    participant DB as Execution DB
+    participant Alert as On-Call Alert
+
+    W->>T: Attempt 1
+    T-->>W: TemporaryError (500 / Timeout)
+    W->>W: Sleep backoff (1s * 2^1 +/- 10% jitter)
+    W->>T: Attempt 2
+    T-->>W: TemporaryError
+    W->>W: Sleep backoff (1s * 2^2 +/- 10% jitter)
+    W->>T: Attempt 3
+    alt PermanentError (404 / 403) or Max Retries (3)
+        T-->>W: Failed
+        W->>DB: Update status="failed", retry_count=3
+        W->>Alert: Escalate persistent failure to On-Call
+    else Success
+        T-->>W: Result OK
+        W->>DB: Update status="success"
+    end
 ```
-Task execution failed (e.g., network timeout)
 
-Retry logic:
-
-def execute_with_retry(task, max_retries=3):
-    for attempt in range(1, max_retries + 1):
-        try:
-            result = execute_task(task)
-            return result
-        except TemporaryError as e:
-            if attempt < max_retries:
-                wait_time = exponential_backoff(attempt)
-                sleep(wait_time)
-            else:
-                raise
-
-exponential_backoff(attempt):
-    base_delay = 1  # 1 second
-    max_delay = 60  # 1 minute
-    delay = min(base_delay * (2 ** attempt), max_delay)
-    # Add jitter: ±10%
-    jitter = delay * random.uniform(0.9, 1.1)
-    return jitter
-
-Backoff example:
-Attempt 1: fail immediately
-Attempt 2: wait 1-3 seconds, retry
-Attempt 3: wait 2-6 seconds, retry
-Attempt 4: wait 4-12 seconds, give up
-
-Benefits:
-├─ Handles transient failures (temporary outage)
-├─ Exponential backoff: don't hammer service
-├─ Jitter: prevent thundering herd
-└─ Eventually: give up (don't retry forever)
-
-Retry limits:
-├─ Permanent errors (404, 403): don't retry
-├─ Temporary errors (500, timeout): retry
-├─ Unknown errors: retry conservatively
-
-Task status tracking:
-
-task_executions:
-├─ Status: pending, in_progress, success, failed, retrying
-├─ retry_count: 0, 1, 2, 3...
-├─ next_retry_time: when to retry again
-└─ last_error: reason for failure
-
-Alert on persistent failure:
-├─ If task fails 3 times in a row
-├─ Notify on-call team
-├─ Escalate for manual intervention
-```
+- **Backoff Formula**: `delay = min(1 * (2 ** attempt), 60) * random.uniform(0.9, 1.1)` — caps at 60s and adds **±10% jitter** to prevent thundering herds.
+- **Error Classification**: Retry **temporary errors** (`500`, network timeout); fail fast on **permanent errors** (`403`, `404`); escalate to on-call after **3 consecutive failures**.
+- **State Machine**: `pending` → `in_progress` → `success` | `retrying` → `failed`.
 
 ---
 
-## CI/CD Pipeline
+## CI/CD Pipeline & Kubernetes Rollout
 
-Design a continuous integration and continuous deployment pipeline.
+Design an automated GitOps CI/CD pipeline delivering builds in **&lt; 5 min**, tests in **&lt; 10 min**, and zero-downtime Kubernetes deployments with **&gt; 99% success rate**.
 
-### Requirements
+![GitOps CI/CD and Kubernetes Canary Rollout](./assets/06-k8s-cicd-observability.svg)
 
-**Functional:**
-- Build code on push to repository
-- Run tests automatically
-- Deploy to staging/production
-- Rollback on failure
-- Track deployment history
+### End-to-End Pipeline Stages
 
-**Non-Functional:**
-- Build time: < 5 minutes
-- Test time: < 10 minutes
-- Deployment latency: < 5 minutes
-- Success rate: > 99%
-- Availability: 99.9%
+```mermaid
+flowchart LR
+    Git["Git Push &amp; Webhook"] --> S1["1. Build (3-5m: Compile, Docker OCI, Push)"]
+    S1 --> S2["2. Test (5-10m: Parallel Unit, Int, E2E)"]
+    S2 --> S3["3. Security Scan (2-3m: SAST, Deps, Image)"]
+    S3 --> S4["4. Staging (3-5m: Smoke &amp; Load Tests)"]
+    S4 --> S5["5. Manual Approval Gate"]
+    S5 --> S6["6. Prod Canary (20-30m: 5% → 50% → 100%)"]
 
-### Pipeline Stages
-
-```
-┌──────────────────────────────────────────────────────────┐
-│Developer pushes code to GitHub                           │
-│git push origin feature/new-feature                       │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-                       ▼
-        ┌──────────────────────────────┐
-        │GitHub Webhook                │
-        │(triggers CI/CD)              │
-        └──────────────┬───────────────┘
-                       │
-                       ▼
-        ┌──────────────────────────────┐
-        │Stage 1: Build                │
-        │(compile, create artifacts)   │
-        │                              │
-        │- Checkout code               │
-        │- Compile (Java, Go, etc)     │
-        │- Build Docker image          │
-        │- Push to artifact registry   │
-        │                              │
-        │Time: 3-5 minutes             │
-        └──────────────┬───────────────┘
-                       │
-        ┌──────────────▼───────────────┐
-        │Stage 2: Test                 │
-        │(unit, integration, E2E)      │
-        │                              │
-        │- Run unit tests              │
-        │- Run integration tests       │
-        │- Run E2E tests               │
-        │                              │
-        │Time: 5-10 minutes            │
-        │Parallel: multiple test suites│
-        └──────────────┬───────────────┘
-                       │
-        ┌──────────────▼───────────────┐
-        │Stage 3: Security Scan        │
-        │(check for vulnerabilities)   │
-        │                              │
-        │- SAST (static code analysis) │
-        │- Dependency scanning         │
-        │- Container image scan        │
-        │                              │
-        │Time: 2-3 minutes             │
-        └──────────────┬───────────────┘
-                       │
-        ┌──────────────▼───────────────┐
-        │Stage 4: Deploy to Staging    │
-        │(test in production-like env) │
-        │                              │
-        │- Create staging environment  │
-        │- Deploy image                │
-        │- Run smoke tests             │
-        │- Run load tests              │
-        │                              │
-        │Time: 3-5 minutes             │
-        └──────────────┬───────────────┘
-                       │
-        ┌──────────────▼───────────────┐
-        │Stage 5: Manual Approval      │
-        │(human decision)              │
-        │                              │
-        │- Review deployment           │
-        │- Check metrics/alerts        │
-        │- Click "Approve"             │
-        │                              │
-        │Time: minutes to hours        │
-        └──────────────┬───────────────┘
-                       │
-        ┌──────────────▼───────────────┐
-        │Stage 6: Deploy to Production │
-        │(blue-green deployment)       │
-        │                              │
-        │- Deploy to canary (5% users) │
-        │- Monitor (5-10 minutes)      │
-        │- If OK: shift 50% traffic    │
-        │- Monitor (5-10 minutes)      │
-        │- If OK: shift 100% traffic   │
-        │                              │
-        │Total time: 20-30 minutes     │
-        └──────────────┬───────────────┘
-                       │
-                       ▼
-        ┌──────────────────────────────┐
-        │Deployment Complete           │
-        │                              │
-        │- Alert team: "Deployed"      │
-        │- Record in deployment DB     │
-        │- Start monitoring            │
-        │                              │
-        │If errors spike:              │
-        │- Auto-rollback               │
-        │- Page on-call team           │
-        └──────────────────────────────┘
+    classDef dev fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef sec fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef prod fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class Git,S1,S2 dev
+    class S3,S4,S5 sec
+    class S6 prod
 ```
 
-### Blue-Green Deployment
+- **Docker & Container Best Practices**: Use **multi-stage builds** (`golang:alpine` → `distroless`/`scratch`), pin base image digests, run as **non-root**, and scan layers (Trivy/Grype) before pushing immutable SHA-tagged images to the OCI registry.
+- **Kubernetes GitOps Rollout**: ArgoCD/Flux watches the Git manifest repo and reconciles `Deployment` / `ReplicaSet` state. **HPA** (Horizontal Pod Autoscaler) scales pods on CPU/custom metrics, while **Ingress / Service Mesh** shifts weighted traffic during Canary rollouts.
 
-```
-Zero-downtime deployment strategy
+### Blue-Green vs. Canary Deployment
 
-Setup:
-┌──────────────────────────────────────────────┐
-│Load Balancer / API Gateway                   │
-│Currently routing 100% traffic to Blue        │
-└─────────────────┬────────────────────────────┘
-                  │
-        ┌─────────┴──────────┐
-        ▼                    ▼
-    ┌────────────┐      ┌────────────┐
-    │Blue (v1)   │      │Green (idle)│
-    │Running     │      │Not running │
-    │100% traffic│      │            │
-    └────────────┘      └────────────┘
+| Strategy | Traffic Shift | Rollback Speed | Blast Radius | Resource Cost | Best For |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Blue-Green** | Instant 0% → 100% LB swap | **&lt; 1 second** (flip LB to Blue) | 100% of users on cutover | **2x compute** during deploy | Stateful/schema-coupled releases needing instant cutover |
+| **Canary** | Gradual 1% → 5% → 10% → 50% → 100% | **&lt; 1 minute** (drain canary weight) | **1–5% of users** initially | **~1.05–1.1x** compute | High-traffic microservices with strong SLO monitoring |
 
-Deploy new version:
-1. Bring up Green with new code (v2)
-   └─ No traffic yet
+```mermaid
+flowchart TD
+    LB["Load Balancer / Ingress"] -->|Blue-Green: 100% swap| BG{"Blue (v1) vs Green (v2)"}
+    LB -->|Canary: 95% / 5% split| CAN["Canary Pool (v2: 5% → 50% → 100%)"]
+    CAN --> Gate{"Prometheus SLO Gate"}
+    Gate -->|"Err &lt; 1% and P99 &lt; 750ms"| Promote["Promote v2 to 100%"]
+    Gate -->|"Err &gt; 1% for 5m"| Rollback["Auto-Rollback to v1 (~6m total) + Page"]
 
-2. Run tests against Green
-   └─ Health checks, sanity tests
-   └─ Load tests (ramp up traffic to 10%)
-
-3. If tests pass: Switch traffic
-   ├─ Load balancer sends 100% traffic to Green
-   └─ Blue remains running (backup)
-
-4. Monitor Green
-   └─ Error rate, latency, resource usage
-   └─ If anything goes wrong: switch back to Blue
-
-5. If all good for 1 hour:
-   └─ Stop Blue
-   └─ Blue becomes new backup
-   └─ Next deployment uses Green as old version
-
-Benefits:
-├─ Zero downtime (no traffic loss)
-├─ Instant rollback (switch to Blue immediately)
-├─ Easy testing (test Green before switching)
-└─ No state migration (each version has own data)
-
-Timeline:
-├─ Deploy Green: 2 minutes
-├─ Run tests: 3 minutes
-├─ Switch traffic: < 1 second
-├─ Monitor Green: 5 minutes
-└─ Total: ~10 minutes
-
-Rollback:
-If error spike detected in Green:
-├─ Immediately switch 100% traffic back to Blue
-├─ Page on-call team
-├─ Investigate Green
-└─ Fix and redeploy
-
-Canary deployment (safer than blue-green):
-
-Instead of switching all traffic at once:
-├─ Route 1% traffic to Green
-├─ Monitor for 5 minutes
-├─ If errors: rollback (99% still on Blue)
-├─ If OK: route 5% to Green
-├─ Keep increasing percentage
-└─ Takes longer (20-30 min) but safer
+    classDef lb fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef fail fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+    class LB,BG,CAN,Gate lb
+    class Promote ok
+    class Rollback fail
 ```
 
-### Rollback Strategy
+### Automated Rollback & Deployment Monitoring
 
-```
-Scenario: Deployed new version, error spike detected
+| Metric | Baseline (1h prior) | Auto-Rollback / Alert Threshold | Why It Matters |
+| :--- | :--- | :--- | :--- |
+| **Error Rate (5xx)** | 0.05% | **&gt; baseline + 2x** (0.1%) or **&gt; 1%** for 5m | Triggers auto-rollback (~5m detection + &lt; 1m revert = **~6m total**) |
+| **P95 / P99 Latency** | 200ms / 500ms | **P99 &gt; baseline + 50%** (750ms) or **&gt; 2s** | Catches tail-latency regressions &amp; slow DB queries |
+| **CPU / Memory** | 60% / 70% | **CPU &gt; 90%** or **Memory &gt; 85%** | Prevents OOMKills and cascading pod evictions |
+| **Business Metrics** | Baseline order/auth rate | Custom anomaly thresholds | Detects silent logic bugs (e.g., failed checkouts) |
 
-Automatic rollback:
+- **Preventive Testing Pyramid**: Unit tests (catch **70%** of bugs) → Integration tests (**20%**) → E2E tests (**5%**) → Code review (**3–5%**) → Staging (**1%**) → Production monitoring (**1%** that slip through).
 
-1. Monitoring system detects error rate spike
-   ├─ Error rate > 1% (threshold)
-   ├─ Sustained for 5 minutes
-   └─ Alert triggered
+> [!TIP]
+> Always record a 1-hour pre-deploy baseline before shifting canary traffic. Comparing canary error rates and P99 latency against a live baseline eliminates false positives during normal daily traffic spikes.
 
-2. Rollback triggered automatically
-   ├─ Switch traffic back to previous stable version
-   ├─ Stop new version
-   └─ Page on-call team
+---
 
-3. Notify team
-   ├─ Slack: "Deployment rolled back due to error spike"
-   ├─ PagerDuty: incident created
-   └─ Save logs for postmortem
+## Multi-Region Cloud Infra & Zero-Trust Security
 
-Rollback timeline:
-├─ Error detection: 5 minutes
-├─ Execution: < 1 minute
-├─ Total: ~6 minutes from error to rollback
+Design resilient multi-region cloud infrastructure and defense-in-depth Zero-Trust security for global production workloads.
 
-Manual rollback:
+### Multi-Region Cloud Architecture
 
-On-call team notices issue (not auto-detected):
-1. Look at deployment history
-   ├─ Current: v2.1.3 (deployed 10 min ago)
-   └─ Previous: v2.1.2 (stable)
+```mermaid
+flowchart TD
+    User["Global Users"] --> DNS["Geo-DNS / Anycast (Route53 / Cloudflare)"]
+    DNS -->|Region A Active| LB1["Regional LB + WAF (us-east)"]
+    DNS -->|Region B Active/Standby| LB2["Regional LB + WAF (eu-west)"]
 
-2. Click "Rollback" button
-   ├─ Load balancer switches to v2.1.2
-   └─ Blue-green: just swap routing
+    LB1 --> K1["K8s Cluster (Multi-AZ: AZ1, AZ2, AZ3)"]
+    LB2 --> K2["K8s Cluster (Multi-AZ: AZ1, AZ2, AZ3)"]
 
-3. Verify
-   ├─ Check error rate dropped
-   ├─ Check latency normalized
-   └─ Confirm rollback successful
+    K1 --> DB1["Primary DB + Read Replicas"]
+    K2 --> DB2["Cross-Region Replica / Multi-Master"]
+    DB1 <-->|Async / Sync Replication| DB2
 
-4. Investigate
-   ├─ Why did v2.1.3 fail?
-   ├─ Review code change
-   ├─ Check test coverage
-   └─ Plan fix
-
-Preventive measures:
-├─ Unit tests (catch 70% of bugs)
-├─ Integration tests (catch 20% of bugs)
-├─ E2E tests (catch 5% of bugs)
-├─ Code review (catch 3-5% of bugs)
-├─ Staging deployment (catch 1% of bugs)
-└─ Monitoring (detect 1% that slip through)
+    classDef edge fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef k8s fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef db fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class User,DNS,LB1,LB2 edge
+    class K1,K2 k8s
+    class DB1,DB2 db
 ```
 
-### Monitoring Deployment
+| Topology | RPO (Data Loss) | RTO (Recovery Time) | Cost & Complexity | Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **Multi-AZ (Single Region)** | 0 (sync replication) | Seconds–Minutes | 1x–1.5x | Protects against rack/datacenter failure |
+| **Active-Passive (Warm Standby)** | Seconds–Minutes (async) | Minutes (DNS + DB promote) | ~1.5x | Disaster recovery &amp; compliance |
+| **Active-Active (Multi-Region)** | ~0–Seconds | **&lt; 1 second** (DNS failover) | 2x+ (conflict resolution) | Global low-latency apps (1B+ DAU) |
 
+### Zero-Trust Security & Supply-Chain Controls
+
+```mermaid
+flowchart LR
+    Client["External Client"] -->|TLS 1.3 + WAF| Edge["API Gateway (Rate Limit + JWT Auth)"]
+    Edge -->|"mTLS (SPIFFE ID)"| PodA["Pod A (RBAC + Non-Root)"]
+    PodA -->|"NetworkPolicy Allow"| PodB["Pod B (Least Privilege)"]
+    PodB -->|Short-lived Lease| Vault["Secrets Manager (Vault / KMS)"]
+
+    classDef net fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef sec fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    class Client,Edge,PodA,PodB net
+    class Vault sec
 ```
-Before deployment:
-Record baseline metrics (last 1 hour)
-├─ Error rate: 0.05%
-├─ P95 latency: 200ms
-├─ P99 latency: 500ms
-├─ CPU usage: 60%
-└─ Memory usage: 70%
 
-During deployment (canary, 5% traffic on new version):
+- **Zero-Trust Principles**: *Never trust, always verify* — replace perimeter-only firewalls with **mTLS** (Istio/Linkerd + SPIFFE/SPIRE identities) for all pod-to-pod traffic.
+- **Kubernetes Hardening**: Enforce **NetworkPolicies** (default-deny ingress/egress), **RBAC** least privilege, non-root `securityContext`, and read-only root filesystems.
+- **Secrets & Supply Chain**: Store secrets in **HashiCorp Vault / Cloud KMS** with dynamic short-lived leases (never in Git or plain ConfigMaps); sign container images (**Cosign**) and generate **SBOMs** during CI.
 
-Metrics dashboard:
-├─ Error rate on canary: 0.08% (small increase, OK)
-├─ P95 latency: 210ms (2ms increase, OK)
-├─ P99 latency: 520ms (2% increase, OK)
-├─ CPU usage: 65% (within limit)
-└─ Memory usage: 72% (within limit)
-
-Continue ramping up traffic (10%, 25%, 50%, 100%)
-
-After 100% deployment:
-
-Monitor for 1 hour:
-├─ Error rate: stable at 0.05%
-├─ Latency: stable
-├─ Resource usage: stable
-└─ No anomalies
-
-Alert thresholds:
-
-Error rate spike:
-├─ Alert if error rate > baseline + 2x
-├─ Or if error rate > 1%
-└─ Example: baseline 0.05%, alert if > 0.1%
-
-Latency spike:
-├─ Alert if P99 > baseline + 50%
-├─ Or if P99 > 2 seconds
-└─ Example: baseline 500ms, alert if > 750ms
-
-Resource spike:
-├─ Alert if CPU > 90% (before it maxes out)
-├─ Alert if memory > 85%
-└─ Prevents cascading failures
-
-Custom metrics:
-├─ Application-specific errors (e.g., "auth failures")
-├─ Business metrics (e.g., "failed orders")
-├─ Performance metrics (e.g., "slow database queries")
-└─ Configure alerts on these too
-```
+> [!WARNING]
+> Relying solely on cluster perimeter firewalls leaves east-west traffic exposed: if a single public-facing pod is compromised, an attacker can pivot laterally to databases unless **mTLS** and **NetworkPolicies** enforce strict service-to-service authorization.
 
 ---
 
 ## Key Takeaways
 
-1. **Notification System**: Multi-channel (push/email/SMS), deduplication, template-based
-2. **Logging**: Elasticsearch for indexing, real-time alerting, tiered storage (hot/warm/cold)
-3. **Task Scheduler**: Distributed locks for exactly-once execution, exponential backoff for retries
-4. **CI/CD**: Blue-green deployment for zero-downtime, automatic rollback on errors, comprehensive monitoring
+```mermaid
+flowchart LR
+    CICD["CI/CD &amp; GitOps"] -->|Safe Canary| K8s["Multi-Region K8s + Zero-Trust"]
+    K8s -->|Logs, Metrics, Traces| Obs["Observability &amp; Alerting"]
+    Obs -->|SLO Breach| CICD
+    Obs -->|Critical Incidents| Notif["Notification System"]
+    Sched["Distributed Task Scheduler"] -->|Archival &amp; Batch| Obs
+
+    classDef core fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef obs fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef sec fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class CICD,Sched,Notif core
+    class Obs obs
+    class K8s sec
+```
+
+| System | Core Mechanism | Critical Interview Trade-Off |
+| :--- | :--- | :--- |
+| **Notification System** | Channel-isolated Kafka topics + Redis `request_id` dedup + versioned templates | Push (~$0) vs SMS (~$10M/1B); TTL window (5–60 min) balances dedup vs valid resends |
+| **Logging & Monitoring** | Kafka → Stream Processing → Elasticsearch (inverted index) + Prometheus + OTel | Hot SSD ($50K/mo) vs Warm HDD ($5K/mo) vs Cold S3 ($1K/mo); avoid high-cardinality metric labels |
+| **Task Scheduler** | Consistent-hashed queue + Redis `NX EX` lock + idempotent tasks + jittered backoff | Distributed lock prevents concurrent runs; idempotency prevents duplicate post-crash runs |
+| **CI/CD & Kubernetes** | Multi-stage Docker + GitOps (ArgoCD) + Canary SLO gate + instant rollback (~6m) | Blue-Green (instant cutover, 2x cost) vs Canary (1–5% blast radius, 20–30m rollout) |
+| **Multi-Region & Zero-Trust** | Geo-DNS + Multi-AZ K8s + mTLS (SPIFFE) + NetworkPolicies + Vault/KMS | Active-Active (&lt; 1s RTO, conflict complexity) vs Active-Passive (cheaper, minute-scale RTO) |

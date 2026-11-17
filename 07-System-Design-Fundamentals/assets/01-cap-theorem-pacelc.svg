@@ -1,0 +1,257 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%" role="img" aria-labelledby="cap-title cap-desc">
+  <title id="cap-title">CAP Theorem and PACELC Trade-offs</title>
+  <desc id="cap-desc">Animated diagram contrasting CP (linearizable, blocks minority writes) vs AP (available on both sides, eventual consistency with conflict resolution) during a network partition, plus the PACELC latency vs consistency trade-off during normal operation.</desc>
+
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="cp-header" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1d4ed8" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="ap-header" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#059669" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#0d9488" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="pacelc-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#1e293b" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#d97706" stop-opacity="0.25"/>
+    </linearGradient>
+
+    <style>
+      .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace; }
+
+      @keyframes partitionPulse {
+        0%, 100% { stroke-opacity: 0.95; stroke-width: 2.5; }
+        50% { stroke-opacity: 0.35; stroke-width: 3.5; }
+      }
+      @keyframes packetFlowRight {
+        0% { opacity: 0; transform: translateX(0px); }
+        15% { opacity: 1; }
+        85% { opacity: 1; }
+        100% { opacity: 0; transform: translateX(58px); }
+      }
+      @keyframes packetBlock {
+        0%, 20% { opacity: 0; transform: translateX(0px); }
+        40% { opacity: 1; transform: translateX(26px); }
+        60% { opacity: 1; transform: translateX(20px); }
+        80%, 100% { opacity: 0; transform: translateX(20px); }
+      }
+      @keyframes badgePulse {
+        0%, 100% { opacity: 0.85; }
+        50% { opacity: 1; }
+      }
+      @keyframes healSweep {
+        0% { stroke-dashoffset: 48; }
+        100% { stroke-dashoffset: 0; }
+      }
+      @keyframes cardGlow {
+        0%, 100% { stroke-opacity: 0.45; }
+        50% { stroke-opacity: 0.9; }
+      }
+
+      .partition-line {
+        stroke: #f43f5e;
+        stroke-dasharray: 6 5;
+        animation: partitionPulse 1.8s ease-in-out infinite;
+      }
+      .packet-ok {
+        animation: packetFlowRight 2.6s ease-in-out infinite;
+      }
+      .packet-err {
+        animation: packetBlock 2.6s ease-in-out infinite;
+      }
+      .warn-pulse {
+        animation: badgePulse 2s ease-in-out infinite;
+      }
+      .heal-arc {
+        stroke-dasharray: 6 4;
+        animation: healSweep 2.4s linear infinite;
+      }
+      .pacelc-box {
+        animation: cardGlow 3s ease-in-out infinite;
+      }
+    </style>
+  </defs>
+
+  <!-- Main Background Card -->
+  <rect x="0" y="0" width="960" height="620" rx="16" fill="url(#bg-grad)"/>
+  <rect x="1" y="1" width="958" height="618" rx="15" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="32" y="38" class="sans" font-size="20" font-weight="700" fill="#f8fafc">CAP Theorem &amp; PACELC Trade-offs</text>
+  <text x="32" y="58" class="sans" font-size="12.5" fill="#94a3b8">Network Partition (P) forces Consistency vs Availability; Normal Operation (Else) trades Latency vs Consistency</text>
+  <rect x="745" y="22" width="185" height="28" rx="14" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <circle cx="763" cy="36" r="4.5" fill="#f43f5e">
+    <animate attributeName="opacity" values="1;0.3;1" dur="1.6s" repeatCount="indefinite"/>
+  </circle>
+  <text x="775" y="40" class="mono" font-size="11" fill="#e2e8f0">PARTITION ACTIVE (P)</text>
+
+  <!-- ==================== LEFT PANEL: CP SYSTEM ==================== -->
+  <rect x="24" y="76" width="444" height="286" rx="12" fill="#0f172a" stroke="#1e40af" stroke-width="1.5"/>
+  <rect x="24" y="76" width="444" height="44" rx="12" fill="url(#cp-header)"/>
+  <line x1="24" y1="120" x2="468" y2="120" stroke="#1e3a8a" stroke-width="1"/>
+  <text x="42" y="103" class="sans" font-size="15" font-weight="700" fill="#60a5fa">CP: Consistency + Partition Tolerance</text>
+  <text x="342" y="103" class="mono" font-size="11" fill="#93c5fd">Spanner / HBase</text>
+
+  <!-- Majority Quorum Zone -->
+  <rect x="38" y="134" width="232" height="148" rx="10" fill="#1e293b" fill-opacity="0.6" stroke="#3b82f6" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="48" y="152" class="mono" font-size="10.5" fill="#93c5fd">MAJORITY QUORUM (2/3)</text>
+
+  <!-- Client 1 -> N1 -->
+  <rect x="48" y="176" width="56" height="32" rx="6" fill="#1e293b" stroke="#64748b" stroke-width="1.2"/>
+  <text x="76" y="196" text-anchor="middle" class="mono" font-size="11" fill="#e2e8f0">Client 1</text>
+  <line x1="104" y1="192" x2="146" y2="192" stroke="#38bdf8" stroke-width="1.5"/>
+  <circle cx="108" cy="192" r="4" fill="#38bdf8" class="packet-ok"/>
+
+  <!-- Node 1 (Leader) -->
+  <circle cx="172" cy="192" r="24" fill="#1e3a8a" stroke="#60a5fa" stroke-width="2"/>
+  <text x="172" y="189" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#f8fafc">N1</text>
+  <text x="172" y="203" text-anchor="middle" class="mono" font-size="9.5" fill="#93c5fd">X = 2</text>
+
+  <!-- Sync Replication N1 -> N2 -->
+  <line x1="172" y1="216" x2="172" y2="236" stroke="#38bdf8" stroke-width="1.5"/>
+  <circle cx="172" cy="226" r="3" fill="#34d399">
+    <animate attributeName="cy" values="216;236" dur="1.3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;1;0" dur="1.3s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Node 2 (Follower) -->
+  <circle cx="172" cy="256" r="20" fill="#1e293b" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="172" y="254" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#f8fafc">N2</text>
+  <text x="172" y="266" text-anchor="middle" class="mono" font-size="9" fill="#93c5fd">X = 2</text>
+
+  <!-- CP Success Badge -->
+  <rect x="48" y="226" width="96" height="24" rx="5" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+  <text x="96" y="242" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#34d399">200 OK (Sync)</text>
+
+  <!-- Partition Wall (CP) -->
+  <line x1="286" y1="132" x2="286" y2="286" class="partition-line"/>
+  <rect x="261" y="196" width="50" height="20" rx="4" fill="#4c0519" stroke="#f43f5e" stroke-width="1"/>
+  <text x="286" y="210" text-anchor="middle" class="mono" font-size="9.5" font-weight="700" fill="#fda4af">SPLIT</text>
+
+  <!-- Minority Side (N3) -->
+  <rect x="304" y="134" width="150" height="148" rx="10" fill="#1e293b" fill-opacity="0.4" stroke="#f43f5e" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="316" y="152" class="mono" font-size="10.5" fill="#fda4af">MINORITY (1/3)</text>
+
+  <circle cx="348" cy="192" r="22" fill="#1e293b" stroke="#f43f5e" stroke-width="1.8"/>
+  <text x="348" y="189" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#f8fafc">N3</text>
+  <text x="348" y="203" text-anchor="middle" class="mono" font-size="9.5" fill="#cbd5e1">X = 1</text>
+
+  <!-- Client 2 Blocked -->
+  <rect x="392" y="176" width="54" height="32" rx="6" fill="#1e293b" stroke="#64748b" stroke-width="1.2"/>
+  <text x="419" y="196" text-anchor="middle" class="mono" font-size="10.5" fill="#e2e8f0">Client 2</text>
+  <line x1="392" y1="192" x2="372" y2="192" stroke="#f43f5e" stroke-width="1.5"/>
+  <circle cx="390" cy="192" r="3.5" fill="#f43f5e" class="packet-err"/>
+
+  <rect x="314" y="230" width="130" height="28" rx="5" fill="#4c0519" stroke="#f43f5e" stroke-width="1"/>
+  <text x="379" y="248" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#fda4af">503 WRITE BLOCKED</text>
+
+  <!-- CP Footer Summary -->
+  <rect x="38" y="294" width="416" height="54" rx="8" fill="#1e293b"/>
+  <text x="52" y="315" class="sans" font-size="12" font-weight="600" fill="#e2e8f0">Linearizable Guarantee: Never returns stale data.</text>
+  <text x="52" y="334" class="sans" font-size="11.5" fill="#94a3b8">Minority partition refuses writes/reads until quorum is restored.</text>
+
+  <!-- ==================== RIGHT PANEL: AP SYSTEM ==================== -->
+  <rect x="492" y="76" width="444" height="286" rx="12" fill="#0f172a" stroke="#047857" stroke-width="1.5"/>
+  <rect x="492" y="76" width="444" height="44" rx="12" fill="url(#ap-header)"/>
+  <line x1="492" y1="120" x2="936" y2="120" stroke="#065f46" stroke-width="1"/>
+  <text x="510" y="103" class="sans" font-size="15" font-weight="700" fill="#34d399">AP: Availability + Partition Tolerance</text>
+  <text x="790" y="103" class="mono" font-size="11" fill="#6ee7b7">DynamoDB / Cassandra</text>
+
+  <!-- Side A -->
+  <rect x="506" y="134" width="214" height="148" rx="10" fill="#1e293b" fill-opacity="0.6" stroke="#10b981" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="516" y="152" class="mono" font-size="10.5" fill="#6ee7b7">PARTITION A (2 NODES)</text>
+
+  <rect x="514" y="176" width="56" height="32" rx="6" fill="#1e293b" stroke="#64748b" stroke-width="1.2"/>
+  <text x="542" y="196" text-anchor="middle" class="mono" font-size="11" fill="#e2e8f0">Client 1</text>
+  <line x1="570" y1="192" x2="606" y2="192" stroke="#34d399" stroke-width="1.5"/>
+  <circle cx="574" cy="192" r="4" fill="#34d399" class="packet-ok"/>
+
+  <circle cx="632" cy="192" r="24" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+  <text x="632" y="189" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#f8fafc">N1</text>
+  <text x="632" y="203" text-anchor="middle" class="mono" font-size="9.5" fill="#6ee7b7">X = 2</text>
+
+  <circle cx="632" cy="254" r="20" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="632" y="252" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#f8fafc">N2</text>
+  <text x="632" y="264" text-anchor="middle" class="mono" font-size="9" fill="#6ee7b7">X = 2</text>
+
+  <rect x="514" y="226" width="88" height="24" rx="5" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+  <text x="558" y="242" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#34d399">200 OK (X=2)</text>
+
+  <!-- Partition Wall (AP) -->
+  <line x1="738" y1="132" x2="738" y2="286" class="partition-line"/>
+  <rect x="713" y="196" width="50" height="20" rx="4" fill="#4c0519" stroke="#f43f5e" stroke-width="1"/>
+  <text x="738" y="210" text-anchor="middle" class="mono" font-size="9.5" font-weight="700" fill="#fda4af">SPLIT</text>
+
+  <!-- Side B -->
+  <rect x="756" y="134" width="166" height="148" rx="10" fill="#1e293b" fill-opacity="0.6" stroke="#10b981" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="766" y="152" class="mono" font-size="10.5" fill="#6ee7b7">PARTITION B (1 NODE)</text>
+
+  <circle cx="800" cy="192" r="22" fill="#064e3b" stroke="#fbbf24" stroke-width="2"/>
+  <text x="800" y="189" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#f8fafc">N3</text>
+  <text x="800" y="203" text-anchor="middle" class="mono" font-size="9.5" fill="#fde68a">X = 3</text>
+
+  <rect x="858" y="176" width="54" height="32" rx="6" fill="#1e293b" stroke="#64748b" stroke-width="1.2"/>
+  <text x="885" y="196" text-anchor="middle" class="mono" font-size="10.5" fill="#e2e8f0">Client 2</text>
+  <line x1="858" y1="192" x2="824" y2="192" stroke="#34d399" stroke-width="1.5"/>
+
+  <rect x="766" y="230" width="146" height="28" rx="5" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+  <text x="839" y="248" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#34d399">200 OK (X=3 Local)</text>
+
+  <!-- Heal / Conflict Arrow -->
+  <path d="M 656 184 Q 726 150 778 184" fill="none" stroke="#fbbf24" stroke-width="1.6" class="heal-arc"/>
+
+  <!-- AP Footer Summary -->
+  <rect x="506" y="294" width="416" height="54" rx="8" fill="#1e293b"/>
+  <text x="520" y="315" class="sans warn-pulse" font-size="12" font-weight="600" fill="#fbbf24">Eventual Consistency: Both sides stay writable (X=2 vs X=3).</text>
+  <text x="520" y="334" class="sans" font-size="11.5" fill="#94a3b8">On partition heal, resolve conflicts via LWW timestamps or Vector Clocks.</text>
+
+  <!-- ==================== BOTTOM PANEL: PACELC THEOREM ==================== -->
+  <rect x="24" y="378" width="912" height="220" rx="12" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+  <rect x="24" y="378" width="912" height="40" rx="12" fill="url(#pacelc-grad)"/>
+  <line x1="24" y1="418" x2="936" y2="418" stroke="#334155" stroke-width="1"/>
+  <text x="42" y="403" class="sans" font-size="15" font-weight="700" fill="#f8fafc">PACELC Theorem: Beyond CAP (What happens when there is NO partition?)</text>
+  <text x="720" y="403" class="mono" font-size="11.5" fill="#cbd5e1">if (P) → A|C  else (E) → L|C</text>
+
+  <!-- P Branch -->
+  <rect x="42" y="432" width="276" height="86" rx="8" fill="#1e293b" stroke="#a855f7" stroke-width="1.2" class="pacelc-box"/>
+  <text x="56" y="454" class="mono" font-size="12" font-weight="700" fill="#c084fc">IF PARTITION (P)</text>
+  <text x="56" y="474" class="sans" font-size="12" fill="#e2e8f0">Trade-off: Availability (A) vs Consistency (C)</text>
+  <text x="56" y="494" class="sans" font-size="11" fill="#94a3b8">Rare failure mode, but dictates fault behavior.</text>
+
+  <!-- Arrow between P and E -->
+  <path d="M 326 475 L 354 475" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="354,470 364,475 354,480" fill="#64748b"/>
+
+  <!-- E Branch -->
+  <rect x="372" y="432" width="546" height="86" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.2" class="pacelc-box"/>
+  <text x="386" y="454" class="mono" font-size="12" font-weight="700" fill="#fbbf24">ELSE — NORMAL OPERATION (E)</text>
+  <text x="386" y="474" class="sans" font-size="12" fill="#e2e8f0">Trade-off: Low Latency (L) vs Strong Consistency (C)</text>
+  <text x="386" y="494" class="sans" font-size="11" fill="#94a3b8">99.9%+ of runtime: sync quorum replication adds RTT latency (C); async replication is fast (L).</text>
+
+  <!-- Classification Pills -->
+  <rect x="42" y="532" width="208" height="50" rx="8" fill="#1e293b" stroke="#10b981" stroke-width="1"/>
+  <text x="54" y="553" class="mono" font-size="12" font-weight="700" fill="#34d399">PA / EL</text>
+  <text x="116" y="553" class="sans" font-size="11.5" fill="#e2e8f0">DynamoDB, Cassandra</text>
+  <text x="54" y="571" class="sans" font-size="10.5" fill="#94a3b8">Fast &amp; available; eventual reads</text>
+
+  <rect x="266" y="532" width="208" height="50" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="1"/>
+  <text x="278" y="553" class="mono" font-size="12" font-weight="700" fill="#60a5fa">PC / EC</text>
+  <text x="340" y="553" class="sans" font-size="11.5" fill="#e2e8f0">Spanner, HBase, ZK</text>
+  <text x="278" y="571" class="sans" font-size="10.5" fill="#94a3b8">Strict consistency; pays RTT cost</text>
+
+  <rect x="490" y="532" width="208" height="50" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1"/>
+  <text x="502" y="553" class="mono" font-size="12" font-weight="700" fill="#fbbf24">PA / EC</text>
+  <text x="564" y="553" class="sans" font-size="11.5" fill="#e2e8f0">MongoDB (default)</text>
+  <text x="502" y="571" class="sans" font-size="10.5" fill="#94a3b8">Available on split; sync in normal</text>
+
+  <rect x="714" y="532" width="204" height="50" rx="8" fill="#1e293b" stroke="#a855f7" stroke-width="1"/>
+  <text x="726" y="553" class="mono" font-size="12" font-weight="700" fill="#c084fc">PC / EL</text>
+  <text x="788" y="553" class="sans" font-size="11.5" fill="#e2e8f0">Yahoo PNUTS</text>
+  <text x="726" y="571" class="sans" font-size="10.5" fill="#94a3b8">Consistent on split; fast in normal</text>
+</svg>

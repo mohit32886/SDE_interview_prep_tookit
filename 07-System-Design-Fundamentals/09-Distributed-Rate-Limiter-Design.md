@@ -20,9 +20,31 @@
 
 ## 1. Problem Statement & Requirements
 
-### Why Rate Limiting Matters
+### Architecture Overview: Why Rate Limiting Matters
 
 Rate limiting is a cornerstone of API design and infrastructure protection. Here's why it's critical:
+
+```mermaid
+flowchart LR
+    C1["DDoS / Abusive Client"] --> RL["Edge Rate Limiter"]
+    C2["Legitimate Free Tier (100/m)"] --> RL
+    C3["Premium Tier (10k/m)"] --> RL
+    RL -->|"429 Too Many Requests"| REJ["Fast Edge Rejection"]
+    RL -->|"200 OK (Protected)"| API["Upstream Microservices & DB"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class C1 red
+    class C2 amber
+    class C3 blue
+    class RL purple
+    class REJ red
+    class API green
+```
 
 #### 1. **DDoS Protection**
 A single attacker sending 1000 requests/second can take down your service. Rate limiting immediately rejects requests beyond a threshold.
@@ -38,6 +60,9 @@ Different tiers (free: 100 req/min, premium: 1000 req/min) enable business model
 
 #### 5. **Service Degradation Prevention**
 Graceful rejection at the API layer is far better than cascading failures deep in your system.
+
+> [!IMPORTANT]
+> In distributed architectures, **rate limiting chooses Availability + Partition Tolerance (AP)** over strict consistency. Accepting <1% over-limit requests during brief sync windows is far cheaper than adding cross-node 2PC latency to every API call.
 
 ### Functional Requirements
 
@@ -80,6 +105,32 @@ Graceful rejection at the API layer is far better than cascading failures deep i
 ---
 
 ## 2. Rate Limiting Algorithms
+
+### Algorithm Selection Decision Tree
+
+```mermaid
+flowchart TD
+    START["Choose Rate Limiting Algorithm"] --> Q1{"Need Burst Allowance?"}
+    Q1 -->|"Yes (up to bucket capacity)"| TB["Token Bucket (O(1) space, 95% acc)"]
+    Q1 -->|"No (smooth constant outflow)"| LB["Leaky Bucket (Queue, 90% acc)"]
+    START --> Q2{"Need 100% Exact Audit?"}
+    Q2 -->|"Yes &amp; small limit (&lt;1k)"| SL["Sliding Window Log (O(limit) space)"]
+    Q2 -->|"No (99%+ accuracy at scale)"| SC["Sliding Window Counter (Production Standard)"]
+    START --> Q3{"Educational / Loose Only?"}
+    Q3 -->|"Yes (avoid in prod)"| FW["Fixed Window Counter (2x Boundary Burst)"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class START purple
+    class Q1,Q2,Q3 blue
+    class TB,SC green
+    class LB,SL amber
+    class FW red
+```
 
 ### 2.1 Token Bucket
 
@@ -418,6 +469,9 @@ public class LeakyBucketExample {
 ### 2.3 Fixed Window Counter
 
 Simplest approach; watch out for boundary burst.
+
+> [!WARNING]
+> **Critical Flaw — 2x Boundary Burst:** A client can send `limit` requests at `t=9.9s` (end of Window 1) and `limit` more requests at `t=10.1s` (start of Window 2), achieving **2x the allowed rate** within 0.2 seconds. Never use Fixed Window for strict production SLAs.
 
 #### How It Works
 
@@ -766,6 +820,30 @@ public class SlidingWindowLogExample {
 
 Balances accuracy and efficiency. **This is what most production systems use.**
 
+> [!TIP]
+> **Production Standard:** Sliding Window Counter combines the O(1) memory of Fixed Window with 99%+ accuracy by weighting the previous window's count by the overlap percentage.
+
+```mermaid
+flowchart LR
+    PREV["Previous Bucket [20-30s]: 4 reqs"] --> W["Overlap Weight = 1 - (elapsed / bucketSize)"]
+    CURR["Current Bucket [30-40s]: 3 reqs"] --> SUM["Estimated = current + ceil(previous * weight)"]
+    W --> SUM
+    SUM -->|"5 &lt; 10 limit"| OK["200 OK (Allowed)"]
+    SUM -->|"11 &gt; 10 limit"| REJ["429 Too Many Requests"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class PREV,CURR blue
+    class W amber
+    class SUM purple
+    class OK green
+    class REJ red
+```
+
 #### How It Works
 
 The idea: combine current and previous window counts with a weighted formula.
@@ -990,6 +1068,25 @@ public class SlidingWindowCounterExample {
 
 Here's the critical issue: in a distributed system with multiple load-balanced servers, each server maintains its own counter.
 
+```mermaid
+flowchart LR
+    U["User (Limit: 100/min)"] --> LB["Load Balancer"]
+    LB --> S1["Server 1 (Local: 34)"]
+    LB --> S2["Server 2 (Local: 35)"]
+    LB --> S3["Server 3 (Local: 34)"]
+    S1 --> TOT["Total = 103 &gt; 100 Limit Bypassed!"]
+    S2 --> TOT
+    S3 --> TOT
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class U,LB blue
+    class S1,S2,S3 amber
+    class TOT red
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │              Single User, Multiple Servers                  │
@@ -1025,6 +1122,11 @@ Here's the critical issue: in a distributed system with multiple load-balanced s
 ### Solution 1: Centralized Rate Limiter with Redis
 
 Use a single source of truth for all counters.
+
+![Distributed Rate Limiter Redis Lua Token Bucket](./assets/09-distributed-rate-limiter-redis.svg)
+
+> [!IMPORTANT]
+> **Use `EVALSHA` in Production:** Pre-load the Lua script into Redis with `SCRIPT LOAD` and invoke it via `EVALSHA <sha1>`. This avoids transmitting the full script body on every request while guaranteeing atomic, lock-free execution in Redis's single-threaded event loop.
 
 #### Redis Implementation with Lua Script
 
@@ -1183,6 +1285,28 @@ public class ApiController {
 #### Why Lua Scripts?
 
 Without Lua, there's a race condition:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T1 as Gateway Thread 1
+    participant T2 as Gateway Thread 2
+    participant R as Redis (Single-Threaded)
+
+    Note over T1,R: WITHOUT LUA (Race Condition — Broken)
+    T1->>R: GET rate_limit:user:123
+    T2->>R: GET rate_limit:user:123
+    R-->>T1: 99
+    R-->>T2: 99
+    T1->>R: SET rate_limit:user:123 = 100 (Allowed)
+    T2->>R: SET rate_limit:user:123 = 100 (Allowed — Bug!)
+
+    Note over T1,R: WITH LUA EVALSHA (Atomic — Fixed)
+    T1->>R: EVALSHA (INCR + EXPIRE check)
+    T2->>R: EVALSHA (queued behind T1)
+    R-->>T1: {1, 100} (Allowed)
+    R-->>T2: {0, 101} (429 Rejected)
+```
 
 ```
 Without Lua (BROKEN):
@@ -1366,6 +1490,34 @@ public class LocalRateLimiterWithSync {
 ## 4. Multi-Level Rate Limiting
 
 Real systems need multiple limits simultaneously.
+
+```mermaid
+flowchart TD
+    REQ["Incoming Request"] --> P1["Priority 1: Per-User Tier (100/min)"]
+    P1 -->|"Fail"| R429["429 Too Many Requests + Retry-After"]
+    P1 -->|"Pass (45/100)"| P2["Priority 2: Endpoint (/expensive 10/min)"]
+    P2 -->|"Fail"| R429
+    P2 -->|"Pass (8/10)"| P3["Priority 3: Per-IP (500/min)"]
+    P3 -->|"Fail"| R429
+    P3 -->|"Pass (250/500)"| P99["Priority 99: Global Circuit Breaker (100k/min)"]
+    P99 -->|"Fail"| R429
+    P99 -->|"Pass (75k/100k)"| OK["200 OK → Forward to Backend"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class REQ blue
+    class P1,P2,P3 amber
+    class P99 purple
+    class OK green
+    class R429 red
+```
+
+> [!TIP]
+> **Fail-Fast Priority Ordering:** Always evaluate the most specific, strictest rules first (e.g., `user:{userId}` or `/expensive` endpoint at priority 1–2) and the `global` circuit breaker last (priority 99). Short-circuiting early avoids unnecessary Redis round trips.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -1563,6 +1715,13 @@ public class RulesConfig {
 
 Different user tiers get different limits:
 
+| Tier | Per Minute | Per Hour | Per Day | Use Case |
+|---|---|---|---|---|
+| **FREE** | 100 | 100 | 5,000 | Trial & public developers |
+| **BASIC** | 1,000 | 1,000 | 50,000 | Small production apps |
+| **PRO** | 10,000 | 50,000 | 500,000 | High-throughput SaaS |
+| **ENTERPRISE** | Unlimited (`MAX_VALUE`) | Unlimited | Unlimited | Dedicated SLA contracts |
+
 ```java
 @Data
 public class UserTier {
@@ -1600,6 +1759,31 @@ public class UserTier {
 ### Failure Modes: Redis Down?
 
 What happens when your rate limiter Redis instance fails?
+
+| Strategy | Behavior on Redis Failure | Availability | DDoS Protection | Best For |
+|---|---|---|---|---|
+| **Fail Open** | Allow all requests | 100% (No 503s) | None (Exposed) | Non-critical public reads |
+| **Fail Closed** | Reject all requests (`503`) | 0% (Outage) | Full | Payment, auth, billing APIs |
+| **Hybrid (Recommended)** | Circuit breaker → local `limit / 3` → 80% shed | High (Graceful) | Partial-to-High | Production FAANG services |
+
+```mermaid
+flowchart TD
+    N["NORMAL (Redis Healthy)"] -->|"Redis Failures &gt; Threshold (Circuit Open)"| D["DEGRADED (Local Limiter at limit / 3)"]
+    D -->|"Local Limit Exceeded"| C["CRITICAL (Shed 80% of Traffic)"]
+    D -->|"Redis Recovers (Circuit Closed)"| N
+    C -->|"Redis Recovers (Circuit Closed)"| N
+
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class N green
+    class D amber
+    class C red
+```
+
+> [!WARNING]
+> **Never Fail Open Without a Local Backstop:** Pure Fail-Open turns a brief Redis blip into an unprotected DDoS window, while pure Fail-Closed turns a Redis blip into a total service outage (`503`). Use the **Hybrid Circuit Breaker** pattern.
 
 #### Strategy 1: Fail Open (Permissive)
 
@@ -1904,6 +2088,41 @@ public class RateLimiterMetrics {
 ## 6. Complete Spring Boot Implementation
 
 A complete, production-ready rate limiter.
+
+```mermaid
+flowchart LR
+    REQ["HTTP Request"] --> FLT["RateLimitingFilter (@Order(1))"]
+    FLT -->|"Path in /health, /metrics"| CTRL["ApiController (Bypass)"]
+    FLT -->|"Protected Path"| ENG["RateLimitRulesEngine"]
+    ENG -->|"EVALSHA Lua"| RED["RedisRateLimiter + MeterRegistry"]
+    RED -->|"Allowed"| ASP["RateLimitingAspect (@RateLimit)"]
+    RED -->|"Exceeded"| R429["429 + Retry-After Headers"]
+    ASP -->|"Allowed"| CTRL
+    ASP -->|"RateLimitExceededException"| EXH["GlobalExceptionHandler (429)"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class REQ,FLT blue
+    class ENG,RED purple
+    class ASP amber
+    class CTRL green
+    class R429,EXH red
+```
+
+| Component | Spring Stereotype | Responsibility |
+|---|---|---|
+| `RateLimitingFilter` | `OncePerRequestFilter` (`@Order(1)`) | Intercepts HTTP requests early, skips excluded paths, sets `X-RateLimit-*` & `Retry-After` headers |
+| `RateLimitRulesEngine` | `@Component` | Matches user tier/conditions, sorts rules by priority, short-circuits on first violation |
+| `RedisRateLimiter` | `@Component` | Executes atomic Lua script (`INCR` + `EXPIRE`), records Redis latency to `MeterRegistry` |
+| `RateLimitingAspect` | `@Aspect` | Enforces method-level `@RateLimit` annotations (e.g., `/api/expensive`) |
+| `GlobalExceptionHandler` | `@ControllerAdvice` | Translates `RateLimitExceededException` into `429 Too Many Requests` JSON |
+
+> [!TIP]
+> Always exclude `/health`, `/metrics`, and `/v3/api-docs` in `RateLimitingFilter` so Kubernetes liveness/readiness probes and Prometheus scrapers are never throttled during traffic spikes.
 
 ```java
 // ============================================

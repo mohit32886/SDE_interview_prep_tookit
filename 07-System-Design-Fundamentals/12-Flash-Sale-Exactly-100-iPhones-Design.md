@@ -12,43 +12,48 @@ This question is deceptively simple. The real challenge is handling extreme conc
 1. [Why This Problem Is Hard](#1-why-this-problem-is-hard)
 2. [The Naive Approach — And Why It Fails](#2-the-naive-approach--and-why-it-fails)
 3. [Solution Architecture](#3-solution-architecture)
-4. [Layer 1: Traffic Management — Surviving 10M Requests](#4-layer-1-traffic-management)
+4. [Layer 1: Traffic Management](#4-layer-1-traffic-management)
 5. [Layer 2: Redis — The Atomic Counter](#5-layer-2-redis--the-atomic-counter)
-6. [Layer 3: Order Processing — Exactly-Once Guarantee](#6-layer-3-order-processing)
-7. [Layer 4: Payment and Confirmation — Handling Failures](#7-layer-4-payment-and-confirmation)
-8. [The Complete Flow — End to End](#8-the-complete-flow)
+6. [Layer 3: Order Processing](#6-layer-3-order-processing)
+7. [Layer 4: Payment and Confirmation](#7-layer-4-payment-and-confirmation)
+8. [The Complete Flow](#8-the-complete-flow)
 9. [Database Schema](#9-database-schema)
 10. [Handling Edge Cases](#10-handling-edge-cases)
 11. [Why Not Just Use Database Locking?](#11-why-not-just-use-database-locking)
 12. [Senior-Level Talking Points](#12-senior-level-talking-points)
 13. [Interview Follow-Up Questions](#13-interview-follow-up-questions)
+14. [Summary: The One-Page Answer](#summary-the-one-page-answer)
 
 ---
 
 ## 1. Why This Problem Is Hard
 
+At `12:00:00.000 AM`, 10 million users hit **BUY** within a 1–2 second window. The system must guarantee **zero overselling**, **zero underselling**, and **sub-second responses** for every single user.
+
+```mermaid
+flowchart TD
+    U["10M Users Hit BUY (12:00:00.000 AM)"] --> B["1-2s Thundering Herd Spike"]
+    B --> W["Exactly 100 Succeed"]
+    B --> R["9,999,900 Rejected (&lt;10ms)"]
+    W --> G["Zero Oversell, Zero Undersell"]
+    R --> G
+
+    classDef surge fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    classDef rej fill:#2a0f18,stroke:#f43f5e,stroke-width:2px,color:#ffe4e6
+    class U,B surge
+    class W,G ok
+    class R rej
 ```
-10 Million users hit "BUY" at 12:00:00.000 AM
-     │
-     │  All 10M requests arrive within 1-2 seconds
-     │
-     ▼
-┌─────────────────────────────────────┐
-│   Only 100 should succeed.          │
-│   9,999,900 must be rejected.       │
-│   ZERO overselling.                 │
-│   ZERO underselling.                │
-│   Sub-second response for everyone. │
-└─────────────────────────────────────┘
-```
 
-**Three things can go wrong:**
+| Failure Mode | Root Cause | Business Impact | Prevention Mechanism |
+| :--- | :--- | :--- | :--- |
+| **Overselling (101+ sold)** | Concurrent threads read `stock = 1` before either writes | Customer charged with no iPhone to ship; refunds & lawsuits | Single-threaded Redis Lua `DECR &gt;= 0` + DB `CHECK` constraint |
+| **Underselling (99 sold)** | Payment fails or cart abandoned without releasing reservation | Stock stuck in limbo forever; lost revenue | 10-minute TTL auto-release + Redis↔DB reconciliation job |
+| **System Crash** | 10M req/s hits primary relational database directly | Total outage; nobody can buy | Multi-layer funnel: CDN, WAF, rate limiter, local flag, Redis |
 
-1. **Overselling (101+ sold):** Two threads read stock=1, both think they can buy, both decrement → stock goes to -1. Customer gets charged, but there's no iPhone to ship. Lawsuits follow.
-
-2. **Underselling (99 sold):** A user's payment fails or they abandon checkout, but the reserved stock is never released. 1 iPhone sits in limbo forever. Revenue lost.
-
-3. **System crash under load:** 10M requests/second kills the database. Nobody gets anything. Twitter explodes.
+> [!IMPORTANT]
+> **The Core Invariant:** At every point in time, `total = available + reserved + sold` must equal `100`, with `available >= 0`, `reserved >= 0`, and `sold >= 0`.
 
 ---
 
@@ -71,67 +76,73 @@ public boolean purchasePhone(String userId) {
 }
 ```
 
-**The race condition:**
-```
-Time    Thread A                    Thread B
-─────   ──────────────────          ──────────────────
-T1      SELECT stock → 1
-T2                                  SELECT stock → 1
-T3      stock > 0? YES
-T4                                  stock > 0? YES
-T5      UPDATE stock = 0
-T6                                  UPDATE stock = 0
-T7      INSERT order ✓
-T8                                  INSERT order ✓
-        ───────────────────────────────────────
-        Result: 2 orders created, but only 1 iPhone existed!
+### The Race Condition Timeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Thread A
+    participant B as Thread B
+    participant DB as PostgreSQL (stock = 1)
+
+    A->>DB: SELECT stock (reads 1)
+    B->>DB: SELECT stock (reads 1)
+    Note over A,B: Both pass check: stock > 0
+    A->>DB: UPDATE stock = 0
+    B->>DB: UPDATE stock = 0
+    A->>DB: INSERT order A (Success)
+    B->>DB: INSERT order B (Success)
+    Note over DB: 2 orders created for 1 iPhone!
 ```
 
-Even `@Transactional` doesn't save you here because READ COMMITTED isolation (the default) allows both threads to read the same value before either writes.
+| Isolation / Pattern | Reads Same `stock = 1`? | Outcome Under Concurrency | Verdict |
+| :--- | :--- | :--- | :--- |
+| **No Lock (`READ COMMITTED`)** | Yes | Lost update; 2+ orders created | **Oversells** |
+| **Application `synchronized`** | No (single JVM only) | Fails across multiple app instances | **Broken horizontally** |
+| **Atomic Counter (Redis Lua)** | No (single-threaded) | Check + decrement execute as one unit | **Safe & fast** |
+
+> [!WARNING]
+> Even `@Transactional` does not save you here because default `READ COMMITTED` isolation allows both threads to read `stock = 1` before either commits its `UPDATE`.
 
 ---
 
 ## 3. Solution Architecture
 
-```
-                    10 Million Users
-                         │
-                         ▼
-            ┌────────────────────────┐
-            │      CDN + WAF         │  ← Static assets cached, bot filtering
-            │   (CloudFront/Akamai)  │
-            └───────────┬────────────┘
-                        │
-            ┌───────────▼────────────┐
-    Layer 1 │     API Gateway /      │  ← Rate limit: 1 request/user/second
-            │     Load Balancer      │     Reject obvious duplicates
-            └───────────┬────────────┘
-                        │
-            ┌───────────▼────────────┐
-    Layer 2 │   Sale Eligibility     │  ← Redis DECR: atomic stock check
-            │   Service (Stateless)  │     Returns YES/NO in <5ms
-            │   (20 instances)       │     99.999% of users rejected HERE
-            └───────────┬────────────┘
-                        │ Only ~100-150 requests pass
-                        ▼
-            ┌────────────────────────┐
-    Layer 3 │   Order Service        │  ← Create order, reserve stock in DB
-            │   (Kafka Consumer)     │     Exactly-once with idempotency
-            └───────────┬────────────┘
-                        │
-            ┌───────────▼────────────┐
-    Layer 4 │   Payment Service      │  ← Charge ₹100, confirm or rollback
-            │                        │     TTL-based reservation expiry
-            └───────────┬────────────┘
-                        │
-            ┌───────────▼────────────┐
-            │   Confirmation +       │
-            │   Notification         │
-            └────────────────────────┘
+![Flash Sale Atomic Inventory Funnel](./assets/12-flash-sale-atomic-inventory.svg)
 
-Key Insight: Funnel 10M requests through cheap/fast layers first.
-             Only ~100 requests ever touch the database.
+Key Insight: Funnel 10M requests through cheap, fast edge layers first. Only ~100–150 winning requests ever reach Kafka and the database.
+
+```mermaid
+flowchart TD
+    U["10M Concurrent Users"] --> L0["Layer 0: CDN + WAF (Static UI, Bot Filter)"]
+    L0 --> L1["Layer 1: API Gateway / LB (Rate Limit &amp; Waiting Room)"]
+    L1 --> L2["Layer 2: Sale Eligibility (Redis Lua Atomic DECR)"]
+    L2 -->|"100 Winners (Result = 1)"| L3["Layer 3: Kafka + Order Service (Idempotent DB Reserve)"]
+    L2 -->|"9.9999M Rejected (Result = 0 or -1)"| R["HTTP 410 SOLD_OUT / 409 DUP (&lt;3ms)"]
+    L3 --> L4["Layer 4: Payment Service (10m TTL Reservation)"]
+    L4 -->|"Paid"| C["Order CONFIRMED + Notification"]
+    L4 -->|"Expired"| EX["Auto-Release Stock to DB &amp; Redis"]
+
+    classDef edge fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc
+    classDef core fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe
+    classDef win fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    classDef lose fill:#2a0f18,stroke:#f43f5e,stroke-width:2px,color:#ffe4e6
+    class U,L0,L1 edge
+    class L2 core
+    class L3,L4,C win
+    class R,EX lose
 ```
+
+| Layer | Component | Responsibility | Traffic Volume | Latency |
+| :--- | :--- | :--- | :--- | :--- |
+| **Layer 0** | CDN + WAF | Serve pre-rendered sale UI; drop bots | 10M → 6M | &lt;1ms |
+| **Layer 1** | API Gateway + Local Flag | Per-user rate limit (1 req/5s) + `saleActive` check | 6M → 3M | &lt;1ms |
+| **Layer 2** | Redis Lua Script | Single-threaded atomic `SISMEMBER` + `DECR` | 3M → 100 | ~2ms |
+| **Layer 3** | Kafka + Order Service | Async idempotent order creation + DB `CHECK` | ~100 | ~20ms |
+| **Layer 4** | Payment + TTL Reclaim | Charge ₹100; release unpaid stock after 10m | ~100 | Async |
+
+> [!TIP]
+> **Interview Framing:** Always emphasize the **Funnel Pattern** — shed load at the cheapest layer possible so your relational database never experiences the thundering herd.
 
 ---
 
@@ -141,24 +152,28 @@ Key Insight: Funnel 10M requests through cheap/fast layers first.
 
 **Strategy: Reject as early and cheaply as possible.**
 
+```mermaid
+flowchart LR
+    A["10,000,000 Requests"] -->|"CDN Static UI + WAF Bot Filter"| B["6,000,000 Human Requests"]
+    B -->|"Rate Limit: 1 req / user / 5s"| C["3,000,000 Unique Attempts"]
+    C -->|"Local volatile saleActive Flag"| D{"saleActive == true?"}
+    D -->|"false (0ms, no Redis)"| E["HTTP 410 SOLD_OUT"]
+    D -->|"true"| F["Layer 2: Redis Atomic Check"]
+
+    classDef node fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef dec fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+    classDef drop fill:#2a0f18,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    class A,B,C,F node
+    class D dec
+    class E drop
 ```
-10,000,000 requests
-    │
-    │ CDN serves static page (sale UI is pre-rendered)
-    │ Only "Buy" API call hits backend
-    │
-    ├─── Bot detection / CAPTCHA → Reject 40% bots
-    │    (6,000,000 remain)
-    │
-    ├─── Rate limit: 1 request per user per 5 seconds → Reject duplicates
-    │    (3,000,000 unique attempts)
-    │
-    ├─── "Sale ended" flag (once stock=0, all requests return instantly)
-    │    (Effective within milliseconds of selling out)
-    │
-    └─── Redis atomic check (Layer 2) → Only 100 pass
-         (2,999,900 get instant "SOLD OUT" response)
-```
+
+| Mitigation Technique | Where It Runs | What It Drops | Cost per Request |
+| :--- | :--- | :--- | :--- |
+| **Static Page Caching** | CDN Edge (CloudFront/Akamai) | HTML/JS/CSS asset fetches | ~0 (Edge) |
+| **Bot / CAPTCHA Challenge** | WAF / Edge | ~40% automated scalper bots | Low |
+| **Token-Bucket Rate Limit** | API Gateway (Spring Cloud GW) | Duplicate clicks / spam retries | ~1ms |
+| **In-Memory `saleActive` Flag** | App Server JVM (`volatile`) | All requests after stock hits 0 | **0ms (no network)** |
 
 **Implementation — API Gateway Rate Limiting:**
 
@@ -181,6 +196,7 @@ spring:
 ```
 
 **Pre-sale optimizations:**
+
 ```java
 // Serve "SOLD OUT" from a local boolean — no Redis call needed
 @RestController
@@ -209,6 +225,9 @@ public class FlashSaleController {
 }
 ```
 
+> [!IMPORTANT]
+> If an unpaid reservation expires in Layer 4, `saleController.markSaleActive()` must flip `saleActive` back to `true` across instances (e.g., via Redis Pub/Sub) so remaining units can be sold without underselling.
+
 ---
 
 ## 5. Layer 2: Redis — The Atomic Counter
@@ -222,6 +241,25 @@ Redis `DECR` is atomic. Even with 10M concurrent calls, it will NEVER go below 0
 - 100K+ operations per second on a single node
 - Sub-millisecond latency
 - `DECR` is O(1) and atomic
+
+```mermaid
+flowchart TD
+    S["Lua Script Starts (Single-Threaded)"] --> C1{"SISMEMBER buyers, user_id == 1?"}
+    C1 -->|"Yes"| R1["Return -1 (409 ALREADY_PURCHASED)"]
+    C1 -->|"No"| C2{"GET stock &gt; 0?"}
+    C2 -->|"No (nil or &lt;= 0)"| R0["Return 0 (410 SOLD_OUT)"]
+    C2 -->|"Yes"| OP["DECR stock + SADD buyers, user_id"]
+    OP --> R2["Return 1 (202 RESERVED)"]
+
+    classDef start fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef dec fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+    classDef win fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    classDef rej fill:#2a0f18,stroke:#f43f5e,stroke-width:2px,color:#ffe4e6
+    class S,OP start
+    class C1,C2 dec
+    class R2 win
+    class R1,R0 rej
+```
 
 ### The Lua Script — Atomic Stock Reservation
 
@@ -253,10 +291,13 @@ redis.call('SADD', user_set_key, user_id)
 return 1  -- Success! User got one.
 ```
 
-**Why Lua script instead of just DECR?**
-- Plain `DECR` can go negative (Thread 1 decrements to 0, Thread 2 also decrements to -1)
-- The Lua script checks AND decrements atomically — no gap between check and action
-- Also prevents the same user from buying twice (SISMEMBER + SADD in one atomic block)
+**Why Lua script instead of just `DECR`?**
+
+| Approach | Atomicity | Prevents Negative Stock? | Prevents Double-Buy? |
+| :--- | :--- | :--- | :--- |
+| **GET + DECR in App** | Non-atomic | No (TOCTOU race) | No |
+| **Plain `DECR`** | Atomic decrement only | No (can go to -1, -2...) | No |
+| **Redis Lua Script** | Atomic check + `DECR` + `SADD` | **Yes (`stock >= 0`)** | **Yes (`SISMEMBER`)** |
 
 ### Java Implementation
 
@@ -329,26 +370,35 @@ public class FlashSaleService {
 }
 ```
 
-### What the Numbers Look Like
+### What the Numbers Look Like (100th vs 101st Request)
 
-```
-Time 12:00:00.000 — Sale starts. Redis stock = 100.
+```mermaid
+sequenceDiagram
+    participant U100 as Request #100
+    participant U101 as Request #101
+    participant U10M as Request #10M
+    participant App as App Flag (saleActive)
+    participant Redis as Redis Lua (stock = 1)
 
-Request #1:    DECR → stock = 99  → return 1 (SUCCESS)
-Request #2:    DECR → stock = 98  → return 1 (SUCCESS)
-Request #3:    DECR → stock = 97  → return 1 (SUCCESS)
-...
-Request #100:  DECR → stock = 0   → return 1 (SUCCESS)
-Request #101:  CHECK → stock = 0  → return 0 (SOLD OUT)
-Request #102:  CHECK → stock = 0  → return 0 (SOLD OUT)
-...
-Request #10M:  saleActive = false → return 410 (never even hits Redis)
+    U100->>App: POST /buy (saleActive=true)
+    App->>Redis: EVAL reserve_stock.lua
+    Redis-->>App: DECR -> stock=0, return 1
+    App-->>U100: 202 RESERVED (~200ms elapsed)
 
-Total time: ~200ms to sell all 100
-Remaining 9,999,900 users: get "SOLD OUT" in <1ms each
+    U101->>App: POST /buy (saleActive=true)
+    App->>Redis: EVAL reserve_stock.lua
+    Redis-->>App: stock=0, return 0
+    App->>App: Flip saleActive = false
+    App-->>U101: 410 SOLD_OUT
+
+    U10M->>App: POST /buy (saleActive=false)
+    App-->>U10M: 410 SOLD_OUT (<1ms, skips Redis)
 ```
 
 **This guarantees EXACTLY 100 reservations — not 101, not 99.**
+
+> [!TIP]
+> Put `stock_key` and `user_set_key` on the same Redis Cluster hash slot using hash tags (e.g., `flash_sale:{iphone-100}:stock` and `flash_sale:{iphone-100}:buyers`) so multi-key Lua scripts never throw `CROSSSLOT` errors.
 
 ---
 
@@ -356,9 +406,35 @@ Remaining 9,999,900 users: get "SOLD OUT" in <1ms each
 
 ### Problem: What if the user reserves in Redis but the DB write fails?
 
-Redis said "yes" → stock decremented → but order creation in PostgreSQL fails → one iPhone is in limbo (underselling).
+Redis said "yes" → stock decremented → but order creation in PostgreSQL fails → one iPhone is in limbo (**underselling**).
 
 ### Solution: Kafka + Idempotent Order Creation
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as FlashSaleOrchestrator
+    participant K as Kafka (flash-sale-orders)
+    participant C as OrderCreationConsumer
+    participant DB as PostgreSQL (orders + inventory)
+
+    App->>K: Publish OrderRequest (key=userId)
+    App-->>App: Return HTTP 202 RESERVED
+    K->>C: Deliver OrderRequest (at-least-once)
+    C->>DB: existsById(orderId)?
+    alt Already Exists (Duplicate)
+        DB-->>C: true -> Skip safely
+    else New Order
+        C->>DB: INSERT orders (state=RESERVED, expires=+10m)
+        C->>DB: UPDATE inventory SET reserved+=1, available-=1 WHERE available >= 1
+    end
+```
+
+| Concern | Mechanism | Why It Matters |
+| :--- | :--- | :--- |
+| **Hot-Path Decoupling** | Kafka `flash-sale-orders` topic | Returns `202 Accepted` in ~5ms without waiting on DB |
+| **Duplicate Delivery** | `orderRepo.existsById(orderId)` + `UNIQUE(user_id, product_id)` | Kafka at-least-once delivery never creates 2 orders |
+| **Defensive DB Check** | `UPDATE inventory ... WHERE available >= :qty` | Last line of defense; restores Redis if DB rejects |
 
 ```java
 // After Redis reserves successfully, publish to Kafka
@@ -479,15 +555,44 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
 }
 ```
 
+> [!IMPORTANT]
+> Partition the `flash-sale-orders` Kafka topic by `userId` so retries or duplicate events for the same user land on the same consumer partition in order.
+
 ---
 
 ## 7. Layer 4: Payment and Confirmation
 
 ### The Reservation Timer Problem
 
-User reserves an iPhone but never pays → that unit is stuck forever → underselling.
+User reserves an iPhone but never pays → that unit is stuck forever → **underselling**.
 
-**Solution: TTL-based reservation with auto-release.**
+**Solution: 10-minute TTL reservation with automatic stock reclaim.**
+
+```mermaid
+flowchart TD
+    R["Order RESERVED (expiresAt = now + 10m)"] --> P{"Payment Within 10m?"}
+    P -->|"Gateway Success"| C["Order CONFIRMED + inventory.sold += 1"]
+    P -->|"Gateway Declined"| RT["Keep RESERVED (User Retries in TTL)"]
+    RT --> P
+    P -->|"TTL Expired (Scheduler every 30s)"| E["Order EXPIRED"]
+    E --> RS["Release DB Stock + INCR Redis + SREM Buyer + markSaleActive()"]
+
+    classDef state fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef dec fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+    classDef win fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    classDef exp fill:#2a0f18,stroke:#f43f5e,stroke-width:2px,color:#ffe4e6
+    class R,RT,RS state
+    class P dec
+    class C win
+    class E exp
+```
+
+| Event | Order State | `inventory` Change | Redis Change |
+| :--- | :--- | :--- | :--- |
+| **Reservation Created** | `RESERVED` | `available - 1`, `reserved + 1` | `DECR stock`, `SADD buyers` |
+| **Payment Succeeded** | `CONFIRMED` | `reserved - 1`, `sold + 1` | No change |
+| **Payment Declined (within TTL)** | `RESERVED` | No change (user can retry) | No change |
+| **10-Min TTL Expired** | `EXPIRED` | `reserved - 1`, `available + 1` | `INCR stock`, `SREM buyers` |
 
 ```java
 // Scheduled job: release expired reservations
@@ -574,55 +679,60 @@ public class PaymentService {
 }
 ```
 
+> [!WARNING]
+> **Race between Payment & Expiry Job:** Always guard both `processPayment()` and `releaseExpiredReservations()` with an optimistic version check or `UPDATE orders SET state = 'EXPIRED' WHERE id = :id AND state = 'RESERVED'` so a user paying at `9m 59s` is never double-booked with an expiry reclaim.
+
 ---
 
 ## 8. The Complete Flow
 
-```
-User clicks "BUY NOW"
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│ 1. API Gateway: Rate limit check (1 req/user/5s)       │ <1ms
-│    └─ If duplicate → 429 Too Many Requests              │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│ 2. Controller: Check local saleActive flag              │ <1ms
-│    └─ If false → 410 "SOLD OUT" (instant, no Redis)     │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│ 3. Redis Lua Script: Atomic stock check + decrement     │ ~2ms
-│    ├─ Already purchased? → 409 "ALREADY_PURCHASED"      │
-│    ├─ Stock = 0? → 410 "SOLD OUT"                       │
-│    └─ Stock > 0? → DECR + SADD → return SUCCESS         │
-└────────────────────────┬────────────────────────────────┘
-                         │ (Only ~100 requests reach here)
-┌────────────────────────▼────────────────────────────────┐
-│ 4. Kafka: Publish order creation event                  │ ~5ms
-│    └─ Return 202 "RESERVED — complete payment in 10min" │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│ 5. Order Consumer: Create order + DB stock reservation  │ ~20ms
-│    └─ Idempotent: skip if order already exists          │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│ 6. User completes payment (within 10-minute window)     │
-│    ├─ Payment SUCCESS → Order CONFIRMED                 │
-│    ├─ Payment FAILED → User retries (still within TTL)  │
-│    └─ Timer expires → Release reservation → restock     │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    S1["1. User Clicks BUY NOW"] --> S2["2. API Gateway: Rate Limit (1 req/user/5s, &lt;1ms)"]
+    S2 -->|"Duplicate"| E429["HTTP 429 Too Many Requests"]
+    S2 -->|"Allowed"| S3["3. Controller: Local saleActive Flag (&lt;1ms)"]
+    S3 -->|"false"| E410A["HTTP 410 SOLD_OUT (No Redis)"]
+    S3 -->|"true"| S4["4. Redis Lua: SISMEMBER + GET + DECR (~2ms)"]
+    S4 -->|"Already Bought"| E409["HTTP 409 ALREADY_PURCHASED"]
+    S4 -->|"Stock == 0"| E410B["HTTP 410 SOLD_OUT"]
+    S4 -->|"Stock &gt; 0 (100 pass)"| S5["5. Kafka Publish (~5ms) → HTTP 202 RESERVED"]
+    S5 --> S6["6. Order Consumer: Idempotent DB Write (~20ms)"]
+    S6 --> S7["7. Payment Within 10-Min TTL → CONFIRMED or Restock"]
+
+    classDef step fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef win fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    classDef err fill:#2a0f18,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    class S1,S2,S3,S4 step
+    class S5,S6,S7 win
+    class E429,E410A,E409,E410B err
 ```
 
-**Total latency for user who gets an iPhone: ~10ms**
-**Total latency for user who doesn't: <3ms**
+| User Outcome | Path Taken | End-to-End Latency | DB Queries |
+| :--- | :--- | :--- | :--- |
+| **Winner (100 users)** | Gateway → Local Flag → Redis Lua → Kafka `202` | **~10ms** (async DB ~20ms) | 1 order insert + 1 inventory update |
+| **Sold Out (9.99M users)** | Gateway → Local `saleActive = false` → `410` | **&lt;1ms** | **0** |
+| **Duplicate Click** | Gateway Rate Limit `429` or Redis `409` | **&lt;3ms** | **0** |
+
+> [!TIP]
+> Returning `202 Accepted` immediately after Kafka publish keeps the hot-path latency around **~10ms** while PostgreSQL persists the order asynchronously.
 
 ---
 
 ## 9. Database Schema
+
+```mermaid
+flowchart LR
+    AV["available (starts at 100)"] -->|"reserveStock()"| RS["reserved (10m payment TTL)"]
+    RS -->|"releaseStock() on expiry"| AV
+    RS -->|"confirmSale() on payment"| SL["sold (finalized)"]
+
+    classDef inv fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef res fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+    classDef sold fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    class AV inv
+    class RS res
+    class SL sold
+```
 
 ```sql
 -- Inventory table (source of truth)
@@ -666,11 +776,38 @@ CREATE INDEX idx_orders_expired ON orders (state, expires_at)
     WHERE state = 'RESERVED';
 ```
 
-**The CHECK constraint `total = available + reserved + sold` is your safety net.** If ANY bug causes inconsistency, the database itself will reject the write. This is your last line of defense.
+| Constraint / Index | Purpose | What It Prevents |
+| :--- | :--- | :--- |
+| `CHECK (total = available + reserved + sold)` | Hard conservation-of-inventory invariant | Any bug causing phantom stock or oversell |
+| `CHECK (available >= 0 AND reserved >= 0 AND sold >= 0)` | Non-negative counters | Negative stock under any race condition |
+| `UNIQUE (user_id, product_id)` | One unit per user at DB level | Double-buy even if Redis is bypassed |
+| `idx_orders_expired` (partial index) | Fast lookup of `state = 'RESERVED'` | Full table scans by the 30s expiry job |
+
+> [!IMPORTANT]
+> **The `CHECK` constraint `total = available + reserved + sold` is your safety net.** If any application bug causes inconsistency, PostgreSQL itself rejects the write.
 
 ---
 
 ## 10. Handling Edge Cases
+
+```mermaid
+flowchart TD
+    EC["Edge Cases"] --> R1["Redis Down"]
+    EC --> R2["Crash After Redis DECR Before Kafka"]
+    EC --> R3["Unpaid Reservation / Double-Click"]
+
+    R1 --> F1["Fallback: Atomic DB reserveStock()"]
+    R2 --> F2["Reconciliation Job: drift = (100 - redisStock) - (reserved + sold)"]
+    F2 -->|"drift &gt; 0"| F2B["INCR Redis Stock by drift"]
+    R3 --> F3["10m TTL Auto-Release + Lua SISMEMBER + DB UNIQUE"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef edge fill:#2a0f18,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    classDef fix fill:#052e16,stroke:#22c55e,stroke-width:1.5px,color:#dcfce7
+    class EC root
+    class R1,R2,R3 edge
+    class F1,F2,F2B,F3 fix
+```
 
 ### Edge Case 1: Redis Goes Down
 
@@ -690,12 +827,7 @@ public long attemptReserveFallback(String productId, String userId) {
 
 ### Edge Case 2: Server Crashes After Redis DECR but Before Kafka Publish
 
-```
-Redis stock: 99 (decremented)
-Kafka: never received the order
-DB: no order created
-→ One iPhone is lost! (underselling)
-```
+If Redis decrements `stock` to `99` and the app crashes before `kafka.send()`, one iPhone is lost (**underselling**).
 
 **Solution: Reconciliation job.**
 
@@ -723,11 +855,11 @@ public void reconcileRedisWithDB() {
 
 ### Edge Case 3: User Gets Reservation but Doesn't Pay
 
-Already handled by the TTL-based auto-release (Section 7). Reservation expires after 10 minutes, stock is restored to Redis and DB, another user can buy.
+Already handled by the TTL-based auto-release (Section 7). Reservation expires after 10 minutes, stock is restored to Redis and DB, and another user can buy.
 
 ### Edge Case 4: Double-Click / Network Retry
 
-Already handled:
+Already handled across 3 layers:
 1. Redis Lua script checks `SISMEMBER` — same user can't reserve twice
 2. API Gateway rate limits: 1 request per user per 5 seconds
 3. DB unique constraint on `(user_id, product_id)`
@@ -759,12 +891,38 @@ public void verifySaleIntegrity() {
 }
 ```
 
+| Edge Case | Failure Symptom | Recovery Mechanism |
+| :--- | :--- | :--- |
+| **Redis Outage** | `RedisConnectionFailureException` | Circuit breaker falls back to atomic DB `reserveStock()` |
+| **Crash Before Kafka** | Redis `100 - stock > reserved + sold` | 1-min reconciliation job restores `drift` to Redis |
+| **Abandoned Checkout** | Order stays `RESERVED` past 10m | 30s scheduler marks `EXPIRED`, restocks DB & Redis |
+| **Double-Click / Retry** | Duplicate `POST /buy` | Rate limit (`429`) + Lua `SISMEMBER` (`409`) + DB `UNIQUE` |
+| **Post-Sale Audit** | `confirmedOrders != inventory.sold` | Daily 1 AM integrity job triggers Ops alert |
+
+> [!WARNING]
+> **Reconciliation Timing:** Only adjust Redis stock when `drift > 0` has persisted across two consecutive checks (or after Kafka consumer lag is zero) so in-flight Kafka messages aren't mistaken for lost reservations.
+
 ---
 
 ## 11. Why Not Just Use Database Locking?
 
+```mermaid
+flowchart LR
+    T["10M req/s"] --> DB["Direct DB Lock (SELECT FOR UPDATE)"]
+    DB --> X["100-500 TPS Max → Connection Pool Exhausted / Crash"]
+    T --> RF["CDN + Gateway + Redis Lua Funnel"]
+    RF --> OK["100K+ TPS → Only ~100 Writes Hit DB"]
+
+    classDef bad fill:#2a0f18,stroke:#f43f5e,stroke-width:2px,color:#ffe4e6
+    classDef good fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    classDef neutral fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    class T neutral
+    class DB,X bad
+    class RF,OK good
+```
+
 | Approach | Can Handle 10M req/s? | Oversell Risk | Complexity |
-|----------|----------------------|---------------|------------|
+| :--- | :--- | :--- | :--- |
 | No locking (naive) | Yes | HIGH (race conditions) | Low |
 | Pessimistic lock (`SELECT FOR UPDATE`) | No — 100-500 TPS max | None | Low |
 | Optimistic lock (`@Version`) | 1000-5000 TPS | None (but high retry rate) | Medium |
@@ -775,108 +933,133 @@ public void verifySaleIntegrity() {
 
 The key insight: Use Redis to handle the 10M-to-100 reduction. The database only sees ~100 writes. This is why the layered architecture matters.
 
+> [!TIP]
+> If an interviewer asks "Why not optimistic locking?", point out that with 100 items and 10M contenders, **99.9999% of optimistic transactions fail version checks and retry**, creating a retry storm that still melts the DB.
+
 ---
 
 ## 12. Senior-Level Talking Points
 
+```mermaid
+flowchart TD
+    M["Mid-Level Answer: Use SELECT FOR UPDATE"] --> G["Fails at 10M req/s"]
+    S["Senior Answer: Layered Funnel + Redis Lua + Kafka + TTL + Reconciler"] --> W["10M+ TPS, Zero Oversell, Zero Undersell"]
+
+    classDef mid fill:#2a0f18,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    classDef sen fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    class M,G mid
+    class S,W sen
+```
+
 **What a mid-level says:**
-> "I'd use a database transaction with SELECT FOR UPDATE to lock the row."
+> "I'd use a database transaction with `SELECT FOR UPDATE` to lock the row."
 
 **What a senior says:**
 > "Database locks can't handle 10M concurrent requests. I'd use a multi-layered approach: CDN and rate limiting shed 99% of traffic, Redis atomic counters handle the stock reservation in sub-millisecond time, Kafka decouples order creation from the hot path, and the database only sees the ~100 confirmed orders. Redis Lua scripts ensure atomicity without race conditions, TTL-based reservations prevent underselling from abandoned checkouts, and a reconciliation job catches any drift between Redis and the database."
 
 ### Key Phrases That Impress Interviewers
 
-1. **"Funnel pattern"** — Shed load at each layer, cheapest layer first
-2. **"Atomic operations in Redis"** — Lua scripts for check-and-decrement
-3. **"Reservation with TTL"** — Solves underselling from abandoned carts
-4. **"Reconciliation"** — Catches any inconsistency between systems
-5. **"Database CHECK constraint as last defense"** — `total = available + reserved + sold`
-6. **"Idempotent consumers"** — Kafka at-least-once is fine with deduplication
-7. **"Eventual consistency between Redis and DB, but strong consistency for the count"**
+| Buzzword / Concept | What It Solves |
+| :--- | :--- |
+| **"Funnel pattern"** | Shed load at each layer, cheapest layer first |
+| **"Atomic operations in Redis"** | Lua scripts for check-and-decrement (`DECR >= 0`) |
+| **"Reservation with TTL"** | Solves underselling from abandoned carts |
+| **"Reconciliation"** | Catches any drift between Redis and PostgreSQL |
+| **"Database CHECK constraint as last defense"** | `total = available + reserved + sold` |
+| **"Idempotent consumers"** | Kafka at-least-once delivery is safe with deduplication |
+| **"Eventual consistency between Redis and DB"** | Strong consistency for the count, async persistence for orders |
+
+> [!IMPORTANT]
+> Always distinguish **consistency of the counter** (strong, single-threaded in Redis Lua + DB `CHECK`) from **persistence of the order** (eventually consistent via Kafka).
 
 ---
 
 ## 13. Interview Follow-Up Questions
 
+```mermaid
+flowchart LR
+    Q["Follow-Up Variants"] --> V1["Virtual Queue (Kafka Position #1..100)"]
+    Q --> V2["Multi-Region (70 India / 30 US Pre-Allocated)"]
+    Q --> V3["Strict Fairness (30s Lottery Window)"]
+
+    classDef q fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef v fill:#1e293b,stroke:#8b5cf6,stroke-width:1.5px,color:#f8fafc
+    class Q q
+    class V1,V2,V3 v
+```
+
+| Follow-Up Scenario | Recommended Architecture | Key Trade-Off |
+| :--- | :--- | :--- |
+| **Guaranteed Queue Position** | Kafka-backed Virtual Waiting Room assigning sequence numbers | Fairer UX ("You're #47"), but slower than instant reject |
+| **Multi-Region (India + US)** | Pre-allocated regional Redis buckets (e.g., 70 Mumbai, 30 Virginia) | Low latency per region; needs cross-region rebalance if one sells out |
+| **100,000 iPhones Instead of 100** | Partitioned `orders` table + more Kafka partitions + horizontal Payment | Redis `DECR` is still `O(1)`; DB & payment throughput become the bottleneck |
+| **Strict Fairness (Anti-Latency)** | 30-second lottery entry window → randomly pick 100 winners | Eliminates network proximity advantage; delays confirmation by 30s |
+
 ### "What if the user needs a guaranteed position in the queue instead of instant rejection?"
 
 Use a virtual queue:
-```
 1. All 10M users enter a Kafka-backed queue
 2. Assign position numbers
 3. Process first 100 in order
-4. Notify position to user: "You're #47 in line"
-5. Users #101+ get "Sorry, sold out" after processing
-```
-This is fairer but slower. Trade-off: fairness vs speed.
+4. Notify position to user: `"You're #47 in line"`
+5. Users #101+ get `"Sorry, sold out"` after processing
+
+This is fairer but slower. Trade-off: **fairness vs speed**.
 
 ### "What if we're selling across multiple regions (India + US)?"
 
-Two approaches:
-
-**Approach 1: Centralized Redis (simpler)**
-- Single Redis cluster (Mumbai region)
-- All regions talk to it
-- Problem: latency for US users (~200ms round trip)
-
-**Approach 2: Pre-allocated stock per region**
-```
-Total: 100 iPhones
-India: 70 units (Redis in Mumbai)
-US: 30 units (Redis in Virginia)
-```
-- Each region manages its own stock independently
-- If one region sells out, remaining stock from other region can be re-allocated
-- More complex but lower latency
+- **Approach 1: Centralized Redis (simpler)** — Single Redis cluster (Mumbai region); all regions talk to it. Problem: ~200ms round-trip latency for US users.
+- **Approach 2: Pre-allocated stock per region** — Total `100` iPhones split into India `70` units (Redis in Mumbai) and US `30` units (Redis in Virginia). Each region manages stock independently, with optional cross-region re-allocation of unsold units.
 
 ### "How would you test this system?"
 
-```
-1. Unit test:     Redis Lua script with concurrent threads (100 threads, 100 stock)
-2. Integration:   Testcontainers with Redis + PostgreSQL
-3. Load test:     Gatling/K6 simulating 10M requests in 2 seconds
-4. Chaos test:    Kill Redis mid-sale → verify fallback to DB works
-5. Reconciliation test: Inject drift → verify reconciliation job fixes it
-6. Edge case:     101st request must get SOLD OUT, not success
-```
+1. **Unit test:** Redis Lua script with concurrent threads (100+ threads, 100 stock)
+2. **Integration:** Testcontainers with Redis + PostgreSQL
+3. **Load test:** Gatling / k6 simulating 10M requests in 2 seconds
+4. **Chaos test:** Kill Redis mid-sale → verify fallback to DB works
+5. **Reconciliation test:** Inject drift → verify reconciliation job fixes it
+6. **Edge case:** 101st request must get `SOLD_OUT`, never success
 
 ### "What if it's not 100 iPhones but 100,000?"
 
-Same architecture, but:
-- Redis can handle it (DECR is O(1) regardless of count)
-- DB needs partitioned orders table
+Same architecture, with horizontal scaling:
+- Redis handles it (`DECR` is `O(1)` regardless of count)
+- DB needs a partitioned `orders` table
 - Kafka needs more partitions for parallel consumer processing
-- Payment service needs to scale horizontally
+- Payment service scales horizontally
 
 ### "What about fairness? First-come-first-served?"
 
-Redis processes commands in order (single-threaded), so it IS first-come-first-served at the Redis level. But network latency means users closer to the data center have an advantage. For strict fairness:
-- Use a lottery system: accept entries for 30 seconds, then randomly select 100 winners
-- This is what some companies do for high-demand limited sales
+Redis processes commands in order (single-threaded), so it IS first-come-first-served at the Redis level. However, network latency gives users closer to the data center an advantage. For strict fairness, use a **lottery system**: accept entries for 30 seconds, then randomly select 100 winners.
+
+> [!TIP]
+> When asked about **Testing**, mentioning **Chaos Testing (killing Redis mid-sale)** and **Drift Injection** immediately signals production maturity.
 
 ---
 
 ## Summary: The One-Page Answer
 
+```mermaid
+flowchart TD
+    P1["1. CDN + Rate Limiter Shed 99% Traffic"] --> P2["2. Redis Lua: Atomic Check + DECR + SADD"]
+    P2 --> P3["3. Kafka → Order Service (Idempotent DB + CHECK Constraint)"]
+    P3 --> P4["4. 10m Payment Window + TTL Auto-Release"]
+    P4 --> P5["5. Reconciliation Job Catches Redis↔DB Drift"]
+    P5 --> RES["Result: Exactly 100 Sold (Not 101, Not 99)"]
+
+    classDef pillar fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef done fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#dcfce7
+    class P1,P2,P3,P4,P5 pillar
+    class RES done
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    EXACTLY 100 iPhones                          │
-│                                                                 │
-│  1. CDN + Rate Limiter shed 99% of traffic before backend      │
-│                                                                 │
-│  2. Redis Lua script: ATOMIC check + decrement + buyer record  │
-│     └─ Guarantees exactly 100 reservations (not 101)           │
-│                                                                 │
-│  3. Kafka → Order Service: idempotent order creation in DB     │
-│     └─ Database CHECK constraint: total = avail + resv + sold  │
-│                                                                 │
-│  4. 10-minute payment window with TTL auto-release             │
-│     └─ Prevents underselling (restocks expired reservations)   │
-│                                                                 │
-│  5. Reconciliation job catches any Redis↔DB drift              │
-│     └─ Belt AND suspenders approach                            │
-│                                                                 │
-│  Result: Exactly 100 sold. Not 101. Not 99.                   │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+| Pillar | Guarantee |
+| :--- | :--- |
+| **1. Edge & Gateway Funnel** | Survives 10M req/s without touching DB |
+| **2. Redis Lua `DECR >= 0`** | Exactly 100 reservations, zero double-buys |
+| **3. Kafka + DB `CHECK`** | Zero lost orders, hard invariant enforcement |
+| **4. 10-Min TTL Auto-Release** | Zero stuck inventory from unpaid carts |
+| **5. Redis↔DB Reconciliation** | Belt-and-suspenders drift recovery |
+
+> [!IMPORTANT]
+> **Final Takeaway:** Redis Lua gives you **speed and exactness** under extreme contention; PostgreSQL `CHECK` constraints, 10-minute TTL reclaims, and the reconciliation job give you **durability and zero underselling**.

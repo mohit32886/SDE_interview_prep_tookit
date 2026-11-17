@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 440" width="100%" height="100%" role="img" aria-label="45-Minute System Design Interview Playbook">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .title { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 22px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 700; }
+      .card-title { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; fill: #f1f5f9; }
+      .card-item { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11.5px; fill: #cbd5e1; }
+      .axis-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .footer-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; fill: #64748b; }
+
+      @keyframes stagePulse1 {
+        0%, 18% { stroke: #38bdf8; stroke-width: 2.5; opacity: 1; }
+        22%, 100% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+      }
+      @keyframes stagePulse2 {
+        0%, 18% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+        20%, 38% { stroke: #a78bfa; stroke-width: 2.5; opacity: 1; }
+        42%, 100% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+      }
+      @keyframes stagePulse3 {
+        0%, 38% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+        40%, 58% { stroke: #34d399; stroke-width: 2.5; opacity: 1; }
+        62%, 100% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+      }
+      @keyframes stagePulse4 {
+        0%, 58% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+        60%, 78% { stroke: #fbbf24; stroke-width: 2.5; opacity: 1; }
+        82%, 100% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+      }
+      @keyframes stagePulse5 {
+        0%, 78% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+        80%, 98% { stroke: #fb7185; stroke-width: 2.5; opacity: 1; }
+        100% { stroke: #334155; stroke-width: 1.5; opacity: 0.85; }
+      }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+
+      .c1 { animation: stagePulse1 15s infinite ease-in-out; }
+      .c2 { animation: stagePulse2 15s infinite ease-in-out; }
+      .c3 { animation: stagePulse3 15s infinite ease-in-out; }
+      .c4 { animation: stagePulse4 15s infinite ease-in-out; }
+      .c5 { animation: stagePulse5 15s infinite ease-in-out; }
+      .flow-line { stroke-dasharray: 6 6; animation: dashFlow 1.2s linear infinite; }
+    </style>
+
+    <linearGradient id="timelineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="25%" stop-color="#a78bfa" />
+      <stop offset="50%" stop-color="#34d399" />
+      <stop offset="75%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#fb7185" />
+    </linearGradient>
+
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="0" y="0" width="1100" height="440" rx="16" class="bg" />
+  <rect x="12" y="12" width="1076" height="416" rx="12" fill="none" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Header -->
+  <text x="36" y="50" class="title">45-Minute System Design Interview Playbook</text>
+  <text x="36" y="72" class="subtitle">Time-boxed execution flow: Requirements &amp; Scope &#8594; Estimation &#8594; High-Level Boxes &#8594; Deep Dives &#8594; Bottlenecks &amp; Trade-offs</text>
+
+  <!-- 45-Minute Progress Track -->
+  <rect x="36" y="96" width="1028" height="10" rx="5" fill="#1e293b" />
+  <rect x="36" y="96" width="0" height="10" rx="5" fill="url(#timelineGrad)">
+    <animate attributeName="width" values="0;114;228;456;798;1028;1028" keyTimes="0;0.11;0.22;0.44;0.78;0.96;1" dur="15s" repeatCount="indefinite" />
+  </rect>
+
+  <!-- Time Tick Marks -->
+  <text x="36" y="124" class="axis-label">0m</text>
+  <text x="142" y="124" class="axis-label">5m</text>
+  <text x="254" y="124" class="axis-label">10m</text>
+  <text x="480" y="124" class="axis-label">20m</text>
+  <text x="820" y="124" class="axis-label">35m</text>
+  <text x="1036" y="124" class="axis-label">45m</text>
+
+  <!-- Stage 1: 0-5m Requirements & Scope -->
+  <g transform="translate(36, 146)">
+    <rect x="0" y="0" width="186" height="220" rx="10" class="panel c1" />
+    <rect x="12" y="14" width="84" height="24" rx="12" fill="#0c4a6e" />
+    <text x="54" y="30" text-anchor="middle" class="badge-text" fill="#38bdf8">0&#8211;5 MIN</text>
+    <text x="14" y="60" class="card-title">1. Requirements</text>
+    <text x="14" y="78" class="card-title">&amp; Scope</text>
+    <line x1="14" y1="92" x2="172" y2="92" stroke="#334155" stroke-width="1" />
+    <text x="14" y="114" class="card-item">&#8226; Functional features</text>
+    <text x="14" y="136" class="card-item">&#8226; Non-functional SLAs</text>
+    <text x="14" y="158" class="card-item">&#8226; Read vs Write ratio</text>
+    <text x="14" y="180" class="card-item">&#8226; CAP preference</text>
+    <text x="14" y="202" class="card-item">&#8226; Explicit out-of-scope</text>
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <line x1="224" y1="256" x2="244" y2="256" stroke="#64748b" stroke-width="2" class="flow-line" marker-end="url(#arrow)" />
+
+  <!-- Stage 2: 5-10m Estimation -->
+  <g transform="translate(246, 146)">
+    <rect x="0" y="0" width="186" height="220" rx="10" class="panel c2" />
+    <rect x="12" y="14" width="90" height="24" rx="12" fill="#2e1065" />
+    <text x="57" y="30" text-anchor="middle" class="badge-text" fill="#a78bfa">5&#8211;10 MIN</text>
+    <text x="14" y="60" class="card-title">2. Back-of-Envelope</text>
+    <text x="14" y="78" class="card-title">Estimation</text>
+    <line x1="14" y1="92" x2="172" y2="92" stroke="#334155" stroke-width="1" />
+    <text x="14" y="114" class="card-item">&#8226; Avg &amp; Peak QPS (3x)</text>
+    <text x="14" y="136" class="card-item">&#8226; Daily / 5-yr Storage</text>
+    <text x="14" y="158" class="card-item">&#8226; Ingress/Egress BW</text>
+    <text x="14" y="180" class="card-item">&#8226; Cache RAM (20% hot)</text>
+    <text x="14" y="202" class="card-item">&#8226; Sanity-check math</text>
+  </g>
+
+  <!-- Arrow 2 -> 3 -->
+  <line x1="434" y1="256" x2="454" y2="256" stroke="#64748b" stroke-width="2" class="flow-line" marker-end="url(#arrow)" />
+
+  <!-- Stage 3: 10-20m High-Level Boxes -->
+  <g transform="translate(456, 146)">
+    <rect x="0" y="0" width="186" height="220" rx="10" class="panel c3" />
+    <rect x="12" y="14" width="98" height="24" rx="12" fill="#064e3b" />
+    <text x="61" y="30" text-anchor="middle" class="badge-text" fill="#34d399">10&#8211;20 MIN</text>
+    <text x="14" y="60" class="card-title">3. High-Level</text>
+    <text x="14" y="78" class="card-title">Architecture</text>
+    <line x1="14" y1="92" x2="172" y2="92" stroke="#334155" stroke-width="1" />
+    <text x="14" y="114" class="card-item">&#8226; Core API contracts</text>
+    <text x="14" y="136" class="card-item">&#8226; Client &#8594; LB &#8594; App</text>
+    <text x="14" y="158" class="card-item">&#8226; DB + Cache + Queue</text>
+    <text x="14" y="180" class="card-item">&#8226; Data model &amp; schema</text>
+    <text x="14" y="202" class="card-item">&#8226; End-to-end happy path</text>
+  </g>
+
+  <!-- Arrow 3 -> 4 -->
+  <line x1="644" y1="256" x2="664" y2="256" stroke="#64748b" stroke-width="2" class="flow-line" marker-end="url(#arrow)" />
+
+  <!-- Stage 4: 20-35m Deep Dives -->
+  <g transform="translate(666, 146)">
+    <rect x="0" y="0" width="186" height="220" rx="10" class="panel c4" />
+    <rect x="12" y="14" width="98" height="24" rx="12" fill="#78350f" />
+    <text x="61" y="30" text-anchor="middle" class="badge-text" fill="#fbbf24">20&#8211;35 MIN</text>
+    <text x="14" y="60" class="card-title">4. Component</text>
+    <text x="14" y="78" class="card-title">Deep Dives</text>
+    <line x1="14" y1="92" x2="172" y2="92" stroke="#334155" stroke-width="1" />
+    <text x="14" y="114" class="card-item">&#8226; 2&#8211;3 critical subsystems</text>
+    <text x="14" y="136" class="card-item">&#8226; Sharding &amp; hot keys</text>
+    <text x="14" y="158" class="card-item">&#8226; Caching &amp; eviction</text>
+    <text x="14" y="180" class="card-item">&#8226; Async queues &amp; retries</text>
+    <text x="14" y="202" class="card-item">&#8226; Consistency protocol</text>
+  </g>
+
+  <!-- Arrow 4 -> 5 -->
+  <line x1="854" y1="256" x2="874" y2="256" stroke="#64748b" stroke-width="2" class="flow-line" marker-end="url(#arrow)" />
+
+  <!-- Stage 5: 35-45m Bottlenecks & Trade-offs -->
+  <g transform="translate(876, 146)">
+    <rect x="0" y="0" width="188" height="220" rx="10" class="panel c5" />
+    <rect x="12" y="14" width="98" height="24" rx="12" fill="#881337" />
+    <text x="61" y="30" text-anchor="middle" class="badge-text" fill="#fb7185">35&#8211;45 MIN</text>
+    <text x="14" y="60" class="card-title">5. Bottlenecks</text>
+    <text x="14" y="78" class="card-title">&amp; Trade-offs</text>
+    <line x1="14" y1="92" x2="174" y2="92" stroke="#334155" stroke-width="1" />
+    <text x="14" y="114" class="card-item">&#8226; Single points of failure</text>
+    <text x="14" y="136" class="card-item">&#8226; 10x traffic scaling</text>
+    <text x="14" y="158" class="card-item">&#8226; Multi-region failover</text>
+    <text x="14" y="180" class="card-item">&#8226; Metrics, alerts, SLIs</text>
+    <text x="14" y="202" class="card-item">&#8226; Cost vs latency trade-off</text>
+  </g>
+
+  <!-- Traveling Signal Dot -->
+  <circle cx="36" cy="101" r="6" fill="#f8fafc" stroke="#38bdf8" stroke-width="2">
+    <animate attributeName="cx" values="36;150;264;492;834;1064;1064" keyTimes="0;0.11;0.22;0.44;0.78;0.96;1" dur="15s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Footer -->
+  <text x="36" y="406" class="footer-text">RULE OF THUMB: Never jump to databases or microservices in minute 2. Lock scope + math first, then draw boxes, then go deep.</text>
+</svg>

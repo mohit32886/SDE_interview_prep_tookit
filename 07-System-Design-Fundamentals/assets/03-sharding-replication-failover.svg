@@ -1,0 +1,237 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">Multi-Region Active-Passive Failover and Leader Election</title>
+  <desc>Animated diagram showing Region A primary database failing health checks, Global Load Balancer rerouting traffic to Region B, and a follower being promoted to leader within RTO and RPO targets.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1.2; rx: 8; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .label { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 600; fill: #e2e8f0; }
+      .small { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; }
+
+      /* 10s cycle animations */
+      @keyframes regionAStroke {
+        0%, 28% { stroke: #10b981; }
+        32%, 94% { stroke: #ef4444; }
+        98%, 100% { stroke: #10b981; }
+      }
+      @keyframes regionAFill {
+        0%, 28% { fill: #064e3b; }
+        32%, 94% { fill: #450a0a; }
+        98%, 100% { fill: #064e3b; }
+      }
+      @keyframes regionAStatusHide {
+        0%, 28% { opacity: 1; }
+        32%, 94% { opacity: 0; }
+        98%, 100% { opacity: 1; }
+      }
+      @keyframes regionAFailShow {
+        0%, 28% { opacity: 0; }
+        32%, 94% { opacity: 1; }
+        98%, 100% { opacity: 0; }
+      }
+      @keyframes regionBStroke {
+        0%, 54% { stroke: #f59e0b; }
+        60%, 94% { stroke: #10b981; }
+        98%, 100% { stroke: #f59e0b; }
+      }
+      @keyframes regionBFill {
+        0%, 54% { fill: #451a03; }
+        60%, 94% { fill: #064e3b; }
+        98%, 100% { fill: #451a03; }
+      }
+      @keyframes standbyBadge {
+        0%, 44% { opacity: 1; }
+        48%, 94% { opacity: 0; }
+        98%, 100% { opacity: 1; }
+      }
+      @keyframes electingBadge {
+        0%, 44% { opacity: 0; }
+        48%, 58% { opacity: 1; }
+        62%, 100% { opacity: 0; }
+      }
+      @keyframes leaderBadge {
+        0%, 58% { opacity: 0; }
+        62%, 94% { opacity: 1; }
+        98%, 100% { opacity: 0; }
+      }
+      @keyframes routeAOpacity {
+        0%, 34% { opacity: 1; stroke: #38bdf8; }
+        38%, 94% { opacity: 0.18; stroke: #ef4444; }
+        98%, 100% { opacity: 1; stroke: #38bdf8; }
+      }
+      @keyframes routeBOpacity {
+        0%, 42% { opacity: 0.18; stroke: #475569; }
+        48%, 94% { opacity: 1; stroke: #10b981; }
+        98%, 100% { opacity: 0.18; stroke: #475569; }
+      }
+      @keyframes replStream {
+        0%, 28% { opacity: 0.9; }
+        32%, 94% { opacity: 0.15; }
+        98%, 100% { opacity: 0.9; }
+      }
+      @keyframes pulseFail {
+        0%, 30% { opacity: 0; transform: scale(0.95); }
+        45% { opacity: 0.6; transform: scale(1.04); }
+        60%, 92% { opacity: 0.15; transform: scale(1); }
+        100% { opacity: 0; }
+      }
+      @keyframes progressFill {
+        0% { width: 0px; }
+        100% { width: 840px; }
+      }
+      @keyframes phase1 { 0%, 29% { opacity: 1; } 30%, 100% { opacity: 0.25; } }
+      @keyframes phase2 { 0%, 29% { opacity: 0.25; } 30%, 47% { opacity: 1; } 48%, 100% { opacity: 0.25; } }
+      @keyframes phase3 { 0%, 47% { opacity: 0.25; } 48%, 61% { opacity: 1; } 62%, 100% { opacity: 0.25; } }
+      @keyframes phase4 { 0%, 61% { opacity: 0.25; } 62%, 95% { opacity: 1; } 96%, 100% { opacity: 0.25; } }
+
+      .anim-reg-a-box { animation: regionAStroke 10s linear infinite, regionAFill 10s linear infinite; stroke-width: 2; rx: 8; }
+      .anim-reg-a-ok { animation: regionAStatusHide 10s linear infinite; }
+      .anim-reg-a-fail { animation: regionAFailShow 10s linear infinite; }
+      .anim-reg-b-box { animation: regionBStroke 10s linear infinite, regionBFill 10s linear infinite; stroke-width: 2; rx: 8; }
+      .anim-standby { animation: standbyBadge 10s linear infinite; }
+      .anim-electing { animation: electingBadge 10s linear infinite; }
+      .anim-leader { animation: leaderBadge 10s linear infinite; }
+      .anim-route-a { animation: routeAOpacity 10s linear infinite; fill: none; stroke-width: 2.5; stroke-dasharray: 6 4; }
+      .anim-route-b { animation: routeBOpacity 10s linear infinite; fill: none; stroke-width: 2.5; stroke-dasharray: 6 4; }
+      .anim-repl { animation: replStream 10s linear infinite; }
+      .anim-progress { animation: progressFill 10s linear infinite; }
+      .p1 { animation: phase1 10s linear infinite; }
+      .p2 { animation: phase2 10s linear infinite; }
+      .p3 { animation: phase3 10s linear infinite; }
+      .p4 { animation: phase4 10s linear infinite; }
+    </style>
+
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="920" height="520" class="bg" rx="14" />
+
+  <!-- Header -->
+  <text x="28" y="38" class="title">Multi-Region Active-Passive Failover &amp; Leader Election</text>
+  <text x="28" y="58" class="subtitle">Region A Primary Health Failure → Global LB Reroute → Region B Quorum Promotion</text>
+
+  <!-- RPO / RTO Metric Pill -->
+  <rect x="650" y="20" width="242" height="44" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2" />
+  <text x="664" y="38" class="mono" fill="#38bdf8">RPO: ~0-5s (WAL Stream)</text>
+  <text x="664" y="54" class="mono" fill="#10b981">RTO: ~8s   (Auto Failover)</text>
+
+  <!-- Global Load Balancer / Geo-DNS -->
+  <rect x="310" y="84" width="300" height="68" class="card" stroke="#38bdf8" />
+  <text x="460" y="108" text-anchor="middle" class="label" fill="#38bdf8">Global Load Balancer / Geo-DNS</text>
+  <text x="460" y="126" text-anchor="middle" class="small">Health Check: /health every 1s (Timeout: 3s)</text>
+  <text x="460" y="142" text-anchor="middle" class="mono">api.example.com → Active Leader</text>
+
+  <!-- Routing Paths -->
+  <path id="pathA" d="M 380 152 L 220 215" class="anim-route-a" marker-end="url(#arrow-cyan)" />
+  <path id="pathB" d="M 540 152 L 700 215" class="anim-route-b" marker-end="url(#arrow-green)" />
+
+  <!-- Animated Traffic Dots to Region A (0s - 3.2s) -->
+  <circle r="4.5" fill="#38bdf8">
+    <animateMotion dur="10s" repeatCount="indefinite" path="M 380 152 L 220 215" keyPoints="0;1;0;1;0;1;0;0" keyTimes="0;0.12;0.13;0.25;0.26;0.32;0.33;1" calcMode="linear" />
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.31;0.33;1" dur="10s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Animated Traffic Dots to Region B (4.8s - 10s) -->
+  <circle r="4.5" fill="#10b981">
+    <animateMotion dur="10s" repeatCount="indefinite" path="M 540 152 L 700 215" keyPoints="0;0;1;0;1;0;1;0;1" keyTimes="0;0.48;0.58;0.59;0.72;0.73;0.85;0.86;1" calcMode="linear" />
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.47;0.49;0.94;0.98" dur="10s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Region A Container -->
+  <rect x="28" y="215" width="380" height="195" class="card" />
+  <text x="46" y="240" class="label">Region A (us-east-1)</text>
+  <text x="390" y="240" text-anchor="end" class="small">Original Primary Zone</text>
+
+  <!-- Region A Primary DB Node -->
+  <rect x="48" y="256" width="340" height="82" class="anim-reg-a-box" />
+  <text x="66" y="280" class="label">db-east-1 (Primary Node)</text>
+  <text x="66" y="298" class="mono">Accepts Reads + Writes | WAL Streamer</text>
+
+  <!-- Region A Status Badges -->
+  <g class="anim-reg-a-ok">
+    <rect x="66" y="308" width="126" height="20" rx="4" fill="#10b981" />
+    <text x="129" y="322" text-anchor="middle" class="badge-text" fill="#0f172a">HEALTHY: LEADER</text>
+  </g>
+  <g class="anim-reg-a-fail">
+    <rect x="66" y="308" width="176" height="20" rx="4" fill="#ef4444" />
+    <text x="154" y="322" text-anchor="middle" class="badge-text" fill="#ffffff">FAILED: HEARTBEAT LOST</text>
+  </g>
+
+  <!-- Region A Health Probe Status -->
+  <rect x="48" y="350" width="340" height="44" class="subcard" />
+  <text x="64" y="370" class="small">Health Monitor:</text>
+  <text x="152" y="370" class="mono anim-reg-a-ok" fill="#10b981">200 OK (12ms)</text>
+  <text x="152" y="370" class="mono anim-reg-a-fail" fill="#ef4444">ERR_TIMEOUT (3 missed)</text>
+  <text x="64" y="386" class="small">Fencing: STONITH / Lease Revoked on failure</text>
+
+  <!-- Replication Stream Arrow (Region A -> Region B) -->
+  <g class="anim-repl">
+    <path d="M 408 297 L 512 297" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3" fill="none" marker-end="url(#arrow-amber)" />
+    <text x="460" y="288" text-anchor="middle" class="small" fill="#fbbf24">WAL Replication</text>
+    <circle r="3.5" fill="#fbbf24">
+      <animateMotion dur="1.4s" repeatCount="indefinite" path="M 408 297 L 512 297" />
+    </circle>
+  </g>
+
+  <!-- Region B Container -->
+  <rect x="512" y="215" width="380" height="195" class="card" />
+  <text x="530" y="240" class="label">Region B (eu-west-1)</text>
+  <text x="874" y="240" text-anchor="end" class="small">Standby → Promoted Zone</text>
+
+  <!-- Region B Standby/Promoted DB Node -->
+  <rect x="532" y="256" width="340" height="82" class="anim-reg-b-box" />
+  <text x="550" y="280" class="label">db-west-1 (Replica → Leader)</text>
+  <text x="550" y="298" class="mono">Raft Quorum (3/3) | Term Incremented</text>
+
+  <!-- Region B Status Badges -->
+  <g class="anim-standby">
+    <rect x="550" y="308" width="146" height="20" rx="4" fill="#f59e0b" />
+    <text x="623" y="322" text-anchor="middle" class="badge-text" fill="#0f172a">FOLLOWER (STANDBY)</text>
+  </g>
+  <g class="anim-electing">
+    <rect x="550" y="308" width="176" height="20" rx="4" fill="#38bdf8" />
+    <text x="638" y="322" text-anchor="middle" class="badge-text" fill="#0f172a">CANDIDATE: ELECTING...</text>
+  </g>
+  <g class="anim-leader">
+    <rect x="550" y="308" width="176" height="20" rx="4" fill="#10b981" />
+    <text x="638" y="322" text-anchor="middle" class="badge-text" fill="#0f172a">PROMOTED: NEW LEADER</text>
+  </g>
+
+  <!-- Region B Quorum Peers -->
+  <rect x="532" y="350" width="164" height="44" class="subcard" />
+  <text x="544" y="369" class="small">Peer: db-west-2</text>
+  <text x="544" y="385" class="mono" fill="#10b981">Vote Granted (Term+1)</text>
+
+  <rect x="708" y="350" width="164" height="44" class="subcard" />
+  <text x="720" y="369" class="small">Witness: db-us-central</text>
+  <text x="720" y="385" class="mono" fill="#10b981">Quorum ACK (2/3)</text>
+
+  <!-- Bottom Timeline Bar -->
+  <rect x="28" y="428" width="864" height="72" class="card" />
+  <text x="44" y="448" class="small" fill="#cbd5e1">FAILOVER TIMELINE (10s Simulation Loop)</text>
+
+  <!-- Progress Track -->
+  <rect x="44" y="458" width="840" height="8" rx="4" fill="#0f172a" />
+  <rect x="44" y="458" height="8" rx="4" fill="#38bdf8" class="anim-progress" />
+
+  <!-- Phase Labels -->
+  <text x="44" y="486" class="mono p1" fill="#10b981">0s: Normal (Region A)</text>
+  <text x="270" y="486" class="mono p2" fill="#ef4444">3s: Primary Down</text>
+  <text x="465" y="486" class="mono p3" fill="#38bdf8">5s: LB Reroute + Election</text>
+  <text x="695" y="486" class="mono p4" fill="#10b981">6-8s: Region B Leader (RTO Met)</text>
+</svg>

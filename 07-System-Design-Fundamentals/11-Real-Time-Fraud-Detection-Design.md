@@ -25,6 +25,22 @@
 ### Business Context
 You're designing a fraud detection system for a global payment processor that handles card transactions, bank transfers, and digital wallets. The system must prevent financial fraud in real-time while minimizing customer friction.
 
+```mermaid
+flowchart LR
+    classDef input fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef constraint fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef outcome fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+
+    TXN["Payment Event (Card, Transfer, Wallet)"]:::input --> SLA["Sub-100ms P99 SLA (10K TPS Peak)"]:::constraint
+    SLA --> NOEXT["No External Sync APIs During Scoring"]:::constraint
+    SLA --> DRIFT["Concept Drift & Cold Start Handling"]:::constraint
+    NOEXT --> OUT["Explainable Decision + Audit Trail (PCI-DSS, GDPR)"]:::outcome
+    DRIFT --> OUT
+```
+
+> [!IMPORTANT]
+> The **&lt;100ms P99 latency budget** is the defining architectural constraint: you cannot make synchronous external HTTP calls (e.g., third-party IP enrichment or remote feature stores) on the hot path. Every feature and model artifact must reside in memory, local RocksDB state, or sub-5ms Redis caches.
+
 ### Functional Requirements
 1. **Real-time Transaction Scoring**: Analyze incoming transactions and produce a fraud risk score within 100ms
 2. **Blocking**: Automatically block transactions scoring >0.9 (90% fraud probability)
@@ -35,13 +51,16 @@ You're designing a fraud detection system for a global payment processor that ha
 7. **Explainability**: Track which rules triggered and what the model contributed to each decision
 8. **Feedback Loop**: Analyst decisions and true fraud labels feed back to retrain the model
 
-### Non-Functional Requirements
-1. **Latency**: <100ms P99 (end-to-end from Kafka ingestion to decision output)
-2. **Throughput**: Process 10,000 transactions/second (peak, handling Black Friday)
-3. **Availability**: 99.99% uptime (52 minutes/year downtime)
-4. **Consistency**: Exactly-once transaction processing (no duplicate blocks, no missed transactions)
-5. **Scalability**: Horizontal scaling with transaction volume
-6. **Audit**: Complete audit trail of every decision (for regulatory compliance: PCI-DSS, GDPR)
+### Non-Functional Requirements & SLA Targets
+
+| Dimension | Target | Architectural Implication |
+|-----------|--------|---------------------------|
+| **Latency** | `<100ms` P99 (ingestion to decision) | Embedded ONNX inference, Redis cache, no external sync calls |
+| **Throughput** | `10,000` TPS peak (Black Friday scale) | Partitioned Kafka topics by `cardId`, horizontal pod autoscaling |
+| **Availability** | `99.99%` uptime (~52 mins/year) | Multi-AZ Kafka + Redis, rule-only fallback if ML degrades |
+| **Consistency** | Exactly-once processing (EOS) | Kafka `EXACTLY_ONCE_V2`, idempotent decision sinks |
+| **Scalability** | Linear horizontal scaling | Stateless scoring pods + partitioned stateful stream processors |
+| **Audit & Compliance** | Complete decision lineage (PCI-DSS, GDPR) | Immutable `AuditLog` capturing triggered rules, scores, and model version |
 
 ### Key Constraints
 - **No external calls during scoring**: Latency budget is tight; can't call external APIs
@@ -49,91 +68,96 @@ You're designing a fraud detection system for a global payment processor that ha
 - **Concept drift**: Fraud patterns evolve; model must be updated regularly (but not in real-time)
 - **Geographic diversity**: System operates across US, EU, APAC with different regulations
 
+> [!TIP]
+> In an interview, anchor your design around the **two-speed reality** of fraud detection: the **hot path (`<100ms`)** must be deterministic, self-contained, and fail-safe, while the **cold path (hours/days)** handles heavy feature aggregation, analyst feedback, and model retraining.
+
 ---
 
 ## High-Level Architecture
 
+### Animated End-to-End Scoring Pipeline
+
+![Real-Time Fraud Detection Pipeline](./assets/11-fraud-flink-ml-pipeline.svg)
+
+> [!IMPORTANT]
+> Partitioning `transactions.raw` by `cardId` guarantees strict per-card event ordering. Every transaction for a given card lands on the same Kafka partition and stream task, enabling lock-free sliding window aggregations without cross-node coordination.
+
 ### System Overview Diagram
 
-```
-                        ┌─────────────────────────────────────────────────────┐
-                        │         PAYMENT PROCESSOR                           │
-                        │    (Credit cards, bank transfers, wallets)          │
-                        └──────────────┬──────────────────────────────────────┘
-                                       │ Raw Transaction
-                                       ▼
-                        ┌─────────────────────────────────────┐
-                        │   KAFKA TOPIC: transactions.raw     │
-                        │   (10K msgs/sec, partitioned by     │
-                        │    card ID for ordering)            │
-                        └────────────┬────────────────────────┘
-                                     │
-                 ┌───────────────────┼───────────────────┐
-                 │                   │                   │
-                 ▼                   ▼                   ▼
-        ┌──────────────┐    ┌──────────────┐   ┌──────────────┐
-        │   RULES      │    │   FEATURE    │   │   DECISION   │
-        │   ENGINE     │    │   ENRICHMENT │   │   ENGINE     │
-        │ (<30ms)      │    │   (<40ms)    │   │  (<20ms)     │
-        └──────┬───────┘    └──────┬───────┘   └──────┬───────┘
-               │ Rule Score        │ Features        │
-               │ (0-1)             │                 │
-               │                   ▼                 │
-               │          ┌──────────────────┐      │
-               │          │   ML MODEL       │      │
-               │          │   SCORING        │      │
-               │          │   (<30ms)        │      │
-               │          └─────────┬────────┘      │
-               │                    │               │
-               │          ML Score  │               │
-               │          (0-1)     │               │
-               │                    │               │
-               └────────────────────┼───────────────┘
-                                    │
-                                    ▼
-                    ┌───────────────────────────────┐
-                    │  DECISION RESULT              │
-                    │  - BLOCK (>0.9)               │
-                    │  - REVIEW (0.5-0.9)           │
-                    │  - ALLOW (<0.5)               │
-                    │  - Explainability data        │
-                    └───┬─────────────────────┬─────┘
-                        │                     │
-                ┌───────▼─────────┐   ┌──────▼────────────┐
-                │ Kafka: decisions │   │ Kafka: case-mgmt  │
-                │ (to auth service)│   │ (to analysts)     │
-                └─────────┬────────┘   └──────┬───────────┘
-                          │                    │
-                          ▼                    ▼
-                    ┌────────────────────────────────┐
-                    │  FEEDBACK LOOP                 │
-                    │  - Chargeback data             │
-                    │  - Manual analyst review       │
-                    │  - True labels after 30 days   │
-                    └───┬──────────────────────┬─────┘
-                        │                      │
-                        ▼                      ▼
-                    ┌──────────────────────────────┐
-                    │  FEATURE & MODEL RETRAINING  │
-                    │  (Batch job, daily)          │
-                    └──────────────────────────────┘
+```mermaid
+flowchart TD
+    classDef source fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef stream fill:#1e293b,stroke:#22d3ee,stroke-width:2px,color:#f8fafc
+    classDef compute fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef store fill:#0f172a,stroke:#64748b,stroke-width:2px,color:#e2e8f0
+    classDef decision fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
 
-    STORAGE LAYERS:
-    ├─ Redis: Real-time counters, feature cache
-    ├─ PostgreSQL: User profiles, merchant data, batch features
-    ├─ S3: Model artifacts, training datasets
-    └─ Elasticsearch: Audit logs, case history
+    PP["Payment Processor (Cards, Transfers, Wallets)"]:::source --> KRAW["Kafka: transactions.raw (10K msgs/sec, key=cardId)"]:::stream
+
+    KRAW --> RE["Rules Engine (&lt;30ms)"]:::compute
+    KRAW --> FE["Feature Enrichment: Kafka Streams &amp; FlinkCEP (&lt;40ms)"]:::compute
+    RE --> DE["Decision Engine (&lt;20ms)"]:::compute
+    FE --> ML["ML Model Scoring: Embedded ONNX (&lt;30ms)"]:::compute
+    ML --> DE
+
+    REDIS[("Redis: Velocity ZSETs &amp; Feature Cache")]:::store <--> RE
+    REDIS <--> FE
+    PG[("PostgreSQL: User Profiles &amp; Rule Configs")]:::store --> FE
+    S3[("S3: ONNX Model Artifacts &amp; Training Data")]:::store --> ML
+
+    DE --> OUT["Decision Result: BLOCK (&gt;0.9) | REVIEW (0.5-0.9) | ALLOW (&lt;0.5)"]:::decision
+    OUT --> KDEC["Kafka: fraud-decisions (Auth Service)"]:::stream
+    OUT --> KCASE["Kafka: fraud-cases-for-review (Analysts)"]:::stream
+    OUT --> ES[("Elasticsearch: Audit Logs &amp; Case History")]:::store
+
+    KCASE --> FB["Feedback Loop (Chargebacks &amp; Analyst Labels, 30d)"]:::compute
+    FB --> RETRAIN["Daily Batch Retraining (S3 → ONNX Hot-Reload)"]:::compute
+    RETRAIN --> S3
 ```
 
-### Component Breakdown
+### Hot-Path Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Payment Processor
+    participant K as Kafka (transactions.raw)
+    participant S as Stream Engine (Flink / Kafka Streams)
+    participant R as Redis Feature Store
+    participant E as Rules + ONNX ML
+    participant D as Decision & Audit Sink
+
+    P->>K: Publish Transaction (key = cardId)
+    K->>S: Consume event (~1ms)
+    par Parallel State & Feature Lookup
+        S->>S: Update FlinkCEP / RocksDB sliding window
+        S->>R: Fetch 60s ZSET velocity + batch features (2-5ms)
+    end
+    S->>E: Evaluate Rules (priority order) + ONNX inference
+    Note over E: Blacklist = 1.0 triggers immediate short-circuit
+    E->>D: Combine 0.6*Rule + 0.4*ML → APPROVE / CHALLENGE / BLOCK
+    D-->>K: Emit to fraud-decisions & audit log (&lt;100ms P99)
+```
+
+### Component Breakdown & Storage Layers
 
 | Component | Technology | Latency Budget | Responsibility |
 |-----------|-----------|-----------------|-----------------|
-| **Rule Engine** | Java, Redis | <30ms | Velocity, blacklist, geographic checks |
-| **Feature Enrichment** | Kafka Streams | <40ms | Compute sliding window features |
-| **ML Model Serving** | Spring Boot REST / ONNX | <30ms | Gradient boosting or NN inference |
-| **Decision Engine** | Java | <20ms | Combine scores, apply thresholds |
-| **Coordination** | Kafka Streams topology | <100ms (total) | Orchestrate entire flow |
+| **Rule Engine** | Java, Redis | `<30ms` | Velocity, blacklist, geographic checks |
+| **Feature Enrichment** | Kafka Streams / FlinkCEP | `<40ms` | Compute sliding window features |
+| **ML Model Serving** | Embedded ONNX / Spring Boot | `<30ms` | Gradient boosting or NN inference |
+| **Decision Engine** | Java | `<20ms` | Combine scores, apply thresholds |
+| **Coordination** | Kafka Streams / Flink topology | `<100ms` (total) | Orchestrate entire flow |
+
+| Storage Layer | Primary Workload | Access Pattern |
+|---------------|------------------|----------------|
+| **Redis** | Real-time velocity ZSETs, device/IP flags, batch feature cache | Sub-5ms key-value & sorted-set lookups on hot path |
+| **PostgreSQL** | User profiles, merchant metadata, dynamic `fraud_rules` | Periodic rule reload (`60s`) & cache-miss fallback |
+| **S3** | Versioned `.onnx` model artifacts & 30-day labeled training datasets | Startup / hot-reload fetch & daily batch training |
+| **Elasticsearch** | Immutable audit logs, explainability payloads, analyst case history | Async indexing & regulatory/analyst search |
+
+> [!TIP]
+> Keep **hot-path** storage (Redis + local RocksDB) strictly decoupled from **cold-path** analytics (PostgreSQL + Elasticsearch + S3). If Elasticsearch or PostgreSQL experiences a slowdown, the `<100ms` scoring pipeline remains completely unaffected.
 
 ---
 
@@ -145,6 +169,32 @@ You're designing a fraud detection system for a global payment processor that ha
 3. **Immediate**: Can block known patterns (blacklists, geographic impossibilities) instantly
 4. **Configurable**: Update rules without redeploying code
 5. **Fail-safe**: If ML system goes down, rules still work
+
+```mermaid
+flowchart TD
+    classDef start fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef rule fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef block fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+    classDef agg fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+
+    TXN["Incoming Transaction + UserProfile"]:::start --> BL["Priority 200: BlacklistRule (Card, IP, Device)"]:::rule
+    BL -->|"score == 1.0"| EXIT["Early Exit: Definite Fraud (1.0)"]:::block
+    BL -->|"null"| VEL["Priority 100: VelocityCheckRule (&gt;5 txns / 60s)"]:::rule
+    VEL --> GEO["Priority 90: GeographicImpossibilityRule (&gt;900 km/h)"]:::rule
+    GEO --> AMT["Amount Anomaly (&gt;3x avg) + High-Risk MCC"]:::rule
+    AMT --> MAX["Max-Pool Triggered Rule Scores (0.0 - 1.0)"]:::agg
+```
+
+| Rule | Priority | Trigger Condition | Score Contribution | Backing Store |
+|------|----------|-------------------|--------------------|---------------|
+| **Blacklist Check** | `200` | Compromised `cardId`, `ipAddress`, or `deviceFingerprint` | `1.0` (Early Exit) | Redis key lookup |
+| **Velocity Check** | `100` | `&gt;5` transactions for `cardId` in last `60s` | `+0.4` | Redis Sorted Set (`ZSET`) |
+| **Geographic Impossibility** | `90` | Speed between consecutive txns `&gt;900 km/h` | `+0.5` | `UserProfile` Haversine |
+| **Amount Anomaly** | `80` | `amount &gt; 3 × user_avg_amount` | `+0.3` | `UserProfile` / Batch cache |
+| **High-Risk MCC** | `70` | MCC in `{6211, 6051, 9211}` &amp; new for user | `+0.2` | Redis key / `UserProfile` |
+
+> [!IMPORTANT]
+> `RuleEngine` isolates each `FraudRule` inside a `try/catch` block. A single misconfigured rule or transient Redis timeout logs an error and continues evaluating remaining rules—never failing the entire scoring pipeline.
 
 ### Rules to Implement
 
@@ -486,9 +536,36 @@ public class SlidingWindowCounter {
 - Suitable for 10K txns/sec (Redis handles millions of ops/sec)
 - Alternative: Use Kafka Streams windowed aggregations (covered in section 6)
 
+> [!TIP]
+> In production, combine the `ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`, and `EXPIRE` operations inside a **Redis Lua script** or pipeline so the sliding window update executes atomically in a single network round-trip (`<2ms`).
+
 ---
 
 ## Feature Engineering for ML
+
+```mermaid
+flowchart LR
+    classDef rt fill:#0f172a,stroke:#22d3ee,stroke-width:2px,color:#f8fafc
+    classDef batch fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef vec fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+
+    TXN["Transaction Event"]:::rt --> RFS["Redis Feature Store (&lt;10ms)"]:::rt
+    TXN --> KFS["Kafka Streams / FlinkCEP Window (1h, 24h)"]:::rt
+    PG[("PostgreSQL / Data Warehouse")]:::batch -->|"Nightly Batch Job"| RCache["Redis Batch Cache (24h TTL)"]:::batch
+
+    RFS --> MERGE["AllFeatures.toFeatureVector()"]:::vec
+    KFS --> MERGE
+    RCache --> MERGE
+    MERGE --> ONNX["ONNX Model Input (double[])"]:::vec
+```
+
+| Feature Tier | Source | Serving Latency | Refresh Cadence | Key Examples |
+|--------------|--------|-----------------|-----------------|--------------|
+| **Real-Time Features** | Redis ZSETs + Kafka Streams / Flink | `<10ms` | Per-transaction (streaming) | `txnCountLast1Hour`, `isNewDevice`, `distanceFromLastTxnKm` |
+| **Batch Features** | PostgreSQL / S3 → Redis Cache | `2-5ms` (cache hit) | Nightly batch (`24h` TTL) | `accountAgeInDays`, `allTimeStdDevTxnAmount`, `historicalFraudRate` |
+
+> [!IMPORTANT]
+> **Training-Serving Skew Prevention**: The exact column order and normalization in `AllFeatures.toFeatureVector()` must match the schema used during Python/XGBoost/ONNX training. Version the feature schema alongside the `.onnx` artifact!
 
 ### Feature Categories
 
@@ -762,46 +839,44 @@ public class VelocityStreamBuilder {
 - **Redis sorted sets**: Simpler code, easier to query, but limited to single machine's memory
 - **Recommendation**: Use Kafka Streams for real-time aggregations at scale; use Redis for cache of recent computations
 
+> [!WARNING]
+> Avoid storing unbounded raw transaction histories in Redis Sorted Sets for high-volume cards (e.g., corporate or merchant test cards). Always enforce `ZREMRANGEBYSCORE` and key `TTL`s, or offload multi-hour sum aggregations to Kafka Streams / Flink RocksDB state stores.
+
 ---
 
 ## ML Model Integration
 
 ### Model Serving Options
 
-#### Option 1: Embedded Model (Fast, No Network Latency)
-```
-+──────────────────────────────────┐
-│ Fraud Detection Service          │
-│                                  │
-│  ┌─────────────────────────────┐ │
-│  │ Embedded ONNX Model         │ │
-│  │ (TensorFlow Serving Runtime) │ │
-│  └─────────────────────────────┘ │
-│           <5ms latency           │
-└──────────────────────────────────┘
+```mermaid
+flowchart LR
+    classDef svc fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef emb fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef rem fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef fb fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+
+    FEAT["Feature Vector (double[])"]:::svc --> EMB["Primary: Embedded ONNX Runtime (&lt;5ms)"]:::emb
+    EMB -->|"Success"| SCORE["ML Fraud Probability (0.0 - 1.0)"]:::emb
+    EMB -->|"OrtException"| CB{"Circuit Breaker Open?"}:::rem
+    CB -->|"Closed"| REM["Fallback: Remote Model Server (30ms timeout)"]:::rem
+    CB -->|"Open / Timeout"| DEF["Final Fallback: 0.50 + Rules-Only"]:::fb
+    REM --> SCORE
 ```
 
+| Serving Strategy | Latency | Deployment Coupling | Fault Tolerance | Best Used For |
+|------------------|---------|---------------------|-----------------|---------------|
+| **Embedded ONNX** | `<5ms` (in-process) | Coupled unless S3 hot-reloaded | Immune to network blips | Hot-path `<100ms` P99 scoring |
+| **Remote Serving (gRPC/REST)** | `25-30ms` (network + serde) | Independent model deploys | Needs Circuit Breaker + timeout | Heavy deep-learning models / GPU |
+| **Shadow / Canary (A/B)** | Same as primary | Feature-flag routed (`5%` canary) | Zero blast radius in shadow mode | Safe rollout of new `.onnx` models |
+
+> [!IMPORTANT]
+> **Embedded ONNX + S3 Hot-Reload** gives you the best of both worlds: `<5ms` in-memory inference without network hops, while `reloadModel(newModelPath)` swaps the `OrtSession` dynamically when a new validated model lands in S3.
+
+#### Option 1: Embedded Model (Fast, No Network Latency)
 **Pros**: Sub-5ms inference, no network latency
-**Cons**: Model updates require code redeployment, large JAR size, memory footprint
+**Cons**: Model updates require code redeployment (mitigated via S3 hot-reload), large JAR size, memory footprint
 
 #### Option 2: Remote Model Serving (Flexible, Network Latency)
-```
-┌──────────────────────────┐
-│ Fraud Detection Service  │
-│   (Feature preparation)  │
-└────────────┬─────────────┘
-             │ HTTP/gRPC
-             │ Feature vector
-             ▼
-┌──────────────────────────────────────┐
-│ Model Serving (TensorFlow Serving)   │
-│ Or: ML Flow, SageMaker, custom REST  │
-│                                      │
-│ Model inference <10ms                │
-│ Network + serialization: ~10-20ms    │
-└──────────────────────────────────────┘
-```
-
 **Pros**: Model updates independent of service deployment, can A/B test models
 **Cons**: Added latency (25-30ms total), network failure risk, need circuit breaker
 
@@ -810,6 +885,24 @@ public class VelocityStreamBuilder {
 1. Version model files separately from code
 2. Support hot-reload of model from S3 on startup/periodically
 3. Have fallback logic if model is corrupted
+
+```mermaid
+flowchart TD
+    classDef traffic fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef stable fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef canary fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef batch fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+
+    REQ["Scored Features + userId"]:::traffic --> FF{"Feature Flag: fraud_model_v3_canary"}:::traffic
+    FF -->|"95% Traffic"| V2["STABLE: fraud-detection-v2.onnx"]:::stable
+    FF -->|"5% Traffic"| V3["CANARY: fraud-detection-v3.onnx"]:::canary
+    V2 --> MET["Metrics: FP Rate, FN Rate, P99 Latency"]:::batch
+    V3 --> MET
+    MET -->|"Daily 2 AM Job"| RETRAIN["Collect 30d Labels → Train → S3 → Hot-Reload"]:::batch
+```
+
+> [!TIP]
+> Always run a new model in **Shadow Mode** for 7 days (logging its predictions without acting on them) before promoting it to a **5% Canary** via `ABTestingMLScorer`.
 
 ### Java Implementation with ONNX Runtime
 

@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440" role="img" aria-labelledby="title desc">
+  <title id="title">Flash Sale Atomic Inventory Funnel: 100,000 req/s to Exactly 100 Winners</title>
+  <desc id="desc">Animated architecture funnel showing CDN Edge, Waiting Room Token Queue, Redis Atomic Lua script decrementing stock from 100 to 0, 100 Winners routed to Kafka Order Queue, and 99,900 requests rejected with HTTP 410 or 429.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .card-highlight { fill: #1e293b; stroke: #38bdf8; stroke-width: 2; rx: 12; }
+      .card-green { fill: #052e16; stroke: #22c55e; stroke-width: 2; rx: 12; }
+      .card-red { fill: #2a0f18; stroke: #f43f5e; stroke-width: 1.8; rx: 12; }
+      .title-text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .node-title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700; fill: #f8fafc; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; fill: #cbd5e1; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 700; }
+      .metric-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; font-weight: 700; }
+      .flow-cyan { stroke: #38bdf8; stroke-width: 2.5; fill: none; stroke-dasharray: 7 6; animation: dashFlow 1.2s linear infinite; }
+      .flow-green { stroke: #22c55e; stroke-width: 2.5; fill: none; stroke-dasharray: 7 6; animation: dashFlow 1.1s linear infinite; }
+      .flow-red { stroke: #f43f5e; stroke-width: 2.2; fill: none; stroke-dasharray: 5 6; animation: dashFlow 0.9s linear infinite; }
+      .pulse-ring { fill: none; stroke: #38bdf8; stroke-width: 2; opacity: 0.6; animation: ringPulse 2.2s ease-out infinite; transform-origin: 515px 215px; }
+      .stock-glow { animation: stockGlow 2.4s ease-in-out infinite; }
+      @keyframes dashFlow {
+        from { stroke-dashoffset: 26; }
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes ringPulse {
+        0% { opacity: 0.75; transform: scale(0.97); }
+        70% { opacity: 0.1; transform: scale(1.04); }
+        100% { opacity: 0; transform: scale(1.04); }
+      }
+      @keyframes stockGlow {
+        0%, 100% { fill: #38bdf8; }
+        50% { fill: #fbbf24; }
+      }
+    </style>
+
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="960" height="440" rx="14"/>
+
+  <!-- Header -->
+  <text x="32" y="38" class="title-text">Flash Sale Atomic Inventory Funnel (100,000 req/s → Exactly 100 Winners)</text>
+  <text x="32" y="58" class="subtitle-text">Shed load at cheap edge layers first; only single-threaded Redis Lua decides stock ownership (DECR &gt;= 0)</text>
+
+  <!-- Top Legend Pills -->
+  <rect x="660" y="22" width="128" height="24" rx="12" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="676" cy="34" r="4" fill="#22c55e"/>
+  <text x="688" y="38" class="badge-text" fill="#86efac">100 Winners</text>
+
+  <rect x="798" y="22" width="134" height="24" rx="12" fill="#2a0f18" stroke="#f43f5e" stroke-width="1"/>
+  <circle cx="814" cy="34" r="4" fill="#f43f5e"/>
+  <text x="826" y="38" class="badge-text" fill="#fda4af">99,900 Shed</text>
+
+  <!-- Stage 1: CDN Edge + WAF -->
+  <rect class="card" x="28" y="145" width="152" height="140" rx="12"/>
+  <rect x="40" y="157" width="74" height="20" rx="6" fill="#0ea5e9" fill-opacity="0.18"/>
+  <text x="48" y="171" class="badge-text" fill="#38bdf8">LAYER 0</text>
+  <text x="40" y="198" class="node-title">CDN Edge + WAF</text>
+  <text x="40" y="218" class="node-sub">100,000 req/s</text>
+  <text x="40" y="236" class="node-sub">Static UI cached</text>
+  <text x="40" y="254" class="node-sub">Bot / CAPTCHA</text>
+  <text x="40" y="272" class="node-sub" fill="#fda4af">-40% bots dropped</text>
+
+  <!-- Connector 1 -> 2 -->
+  <path class="flow-cyan" d="M 180 215 L 224 215" marker-end="url(#arrow-cyan)"/>
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 180 215 L 224 215"/>
+  </circle>
+
+  <!-- Stage 2: Token Queue / Gateway -->
+  <rect class="card" x="228" y="145" width="166" height="140" rx="12"/>
+  <rect x="240" y="157" width="74" height="20" rx="6" fill="#8b5cf6" fill-opacity="0.2"/>
+  <text x="248" y="171" class="badge-text" fill="#c4b5fd">LAYER 1</text>
+  <text x="240" y="198" class="node-title">Token Queue &amp; GW</text>
+  <text x="240" y="218" class="node-sub">1 req / user / 5s</text>
+  <text x="240" y="236" class="node-sub">Virtual Waiting Rm</text>
+  <text x="240" y="254" class="node-sub">Local saleActive?</text>
+  <text x="240" y="272" class="node-sub" fill="#fbbf24">0ms if ended</text>
+
+  <!-- Connector 2 -> 3 -->
+  <path class="flow-cyan" d="M 394 215 L 434 215" marker-end="url(#arrow-cyan)"/>
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="1.2s" repeatCount="indefinite" path="M 394 215 L 434 215"/>
+  </circle>
+
+  <!-- Stage 3: Redis Atomic Lua -->
+  <rect class="pulse-ring" x="434" y="122" width="212" height="186" rx="14"/>
+  <rect class="card-highlight" x="438" y="126" width="204" height="178" rx="12"/>
+  <rect x="450" y="138" width="96" height="20" rx="6" fill="#0ea5e9" fill-opacity="0.22"/>
+  <text x="458" y="152" class="badge-text" fill="#38bdf8">LAYER 2 CORE</text>
+  <text x="450" y="178" class="node-title">Redis Atomic Lua</text>
+  <text x="450" y="197" class="node-sub">1. SISMEMBER user</text>
+  <text x="450" y="214" class="node-sub">2. GET stock &gt; 0</text>
+  <text x="450" y="231" class="node-sub">3. DECR + SADD</text>
+
+  <!-- Animated Stock Counter Box inside Redis -->
+  <rect x="450" y="246" width="180" height="44" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="460" y="264" class="node-sub" fill="#94a3b8">stock counter:</text>
+  <text x="460" y="282" class="metric-num stock-glow">100 → 99 → ... → 0</text>
+
+  <!-- Branch Top: 100 Winners to Kafka Order Queue -->
+  <path class="flow-green" d="M 642 178 C 684 178, 684 128, 722 128" marker-end="url(#arrow-green)"/>
+  <circle r="4.5" fill="#22c55e">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 642 178 C 684 178, 684 128, 722 128"/>
+  </circle>
+
+  <rect class="card-green" x="726" y="76" width="206" height="118" rx="12"/>
+  <rect x="738" y="88" width="108" height="20" rx="6" fill="#22c55e" fill-opacity="0.2"/>
+  <text x="746" y="102" class="badge-text" fill="#86efac">RESULT = 1 (PASS)</text>
+  <text x="738" y="128" class="node-title">100 Winners → Kafka</text>
+  <text x="738" y="146" class="node-sub">HTTP 202 RESERVED</text>
+  <text x="738" y="164" class="node-sub">Order DB + 10m TTL</text>
+  <text x="738" y="182" class="node-sub" fill="#86efac">Exactly 100 writes</text>
+
+  <!-- Branch Bottom: 99,900 Fast Sold-Out 410/429 -->
+  <path class="flow-red" d="M 642 252 C 684 252, 684 298, 722 298" marker-end="url(#arrow-red)"/>
+  <circle r="4" fill="#f43f5e">
+    <animateMotion dur="0.9s" repeatCount="indefinite" path="M 642 252 C 684 252, 684 298, 722 298"/>
+  </circle>
+  <circle r="4" fill="#fb7185">
+    <animateMotion dur="0.9s" begin="0.45s" repeatCount="indefinite" path="M 642 252 C 684 252, 684 298, 722 298"/>
+  </circle>
+
+  <rect class="card-red" x="726" y="236" width="206" height="122" rx="12"/>
+  <rect x="738" y="248" width="114" height="20" rx="6" fill="#f43f5e" fill-opacity="0.2"/>
+  <text x="746" y="262" class="badge-text" fill="#fda4af">RESULT = 0 / -1</text>
+  <text x="738" y="288" class="node-title">99,900 Fast Reject</text>
+  <text x="738" y="306" class="node-sub">HTTP 410 SOLD_OUT</text>
+  <text x="738" y="324" class="node-sub">HTTP 429 / 409 Dup</text>
+  <text x="738" y="342" class="node-sub" fill="#fda4af">&lt;1ms, 0 DB queries</text>
+
+  <!-- Bottom Invariant Strip -->
+  <rect x="28" y="382" width="904" height="40" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="44" y="407" class="node-sub" fill="#e2e8f0">INVARIANT: DB CHECK (total = available + reserved + sold)  |  Unpaid 10m TTL → Auto-Restock  |  Reconciler fixes Redis↔DB drift</text>
+</svg>

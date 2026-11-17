@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 460" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Hybrid Newsfeed Fan-out Architecture</title>
+  <desc>Animated diagram showing Fan-out-on-Write for normal users via Kafka into Redis timeline caches, and Fan-out-on-Read for celebrities merged at query time.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke-width: 1.8; rx: 10; }
+      .lane-bg { fill: #0b1220; stroke: #1e293b; stroke-width: 1.2; rx: 12; }
+      .title { font: 700 18px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 12.5px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #94a3b8; }
+      .lane-label { font: 700 11.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.6px; }
+      .node-title { font: 700 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f1f5f9; }
+      .node-sub { font: 400 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; }
+      .badge-text { font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .wire { fill: none; stroke-width: 2; stroke-linecap: round; }
+      .wire-dashed { fill: none; stroke-width: 1.8; stroke-dasharray: 5 5; }
+      @keyframes pulseNode {
+        0%, 100% { opacity: 0.85; }
+        50% { opacity: 1; }
+      }
+      @keyframes flowDash {
+        to { stroke-dashoffset: -20; }
+      }
+      .anim-dash {
+        animation: flowDash 1.2s linear infinite;
+      }
+      .pulse-box {
+        animation: pulseNode 2.8s ease-in-out infinite;
+      }
+    </style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a855f7"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2dd4bf"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg" x="0" y="0" width="920" height="460" rx="14" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text class="title" x="28" y="34">Hybrid Newsfeed Fan-out Architecture</text>
+  <text class="subtitle" x="28" y="54">Normal Users (&lt;1M followers) push to Redis on write  |  Celebrities (&gt;1M followers) merge on read</text>
+
+  <!-- Lane 1: Fan-out-on-Write -->
+  <rect class="lane-bg" x="20" y="70" width="880" height="162"/>
+  <text class="lane-label" x="36" y="90" fill="#38bdf8">PATH 1: FAN-OUT-ON-WRITE (REGULAR USERS — FAST READS)</text>
+
+  <!-- Lane 1 Nodes -->
+  <rect class="card" x="36" y="114" width="142" height="72" stroke="#38bdf8"/>
+  <text class="node-title" x="107" y="142" text-anchor="middle">Normal User</text>
+  <text class="node-sub" x="107" y="160" text-anchor="middle">~50 followers</text>
+  <text class="node-sub" x="107" y="176" text-anchor="middle" fill="#38bdf8">POST /tweet</text>
+
+  <rect class="card" x="228" y="114" width="152" height="72" stroke="#38bdf8"/>
+  <text class="node-title" x="304" y="142" text-anchor="middle">Tweet DB</text>
+  <text class="node-sub" x="304" y="160" text-anchor="middle">Persist original</text>
+  <text class="node-sub" x="304" y="176" text-anchor="middle">Is celebrity? NO</text>
+
+  <rect class="card" x="430" y="114" width="160" height="72" stroke="#a855f7"/>
+  <text class="node-title" x="510" y="142" text-anchor="middle">Kafka + Workers</text>
+  <text class="node-sub" x="510" y="160" text-anchor="middle">Batch Redis pipe</text>
+  <text class="node-sub" x="510" y="176" text-anchor="middle">100 writes/batch</text>
+
+  <rect class="card pulse-box" x="648" y="102" width="236" height="114" stroke="#22c55e"/>
+  <text class="node-title" x="766" y="123" text-anchor="middle">Redis Timeline Cache</text>
+  <rect x="662" y="132" width="208" height="22" rx="4" fill="#0f172a" stroke="#334155"/>
+  <text class="node-sub" x="670" y="147">user:1:feed → [t99, t42, ...]</text>
+  <rect x="662" y="159" width="208" height="22" rx="4" fill="#0f172a" stroke="#334155"/>
+  <text class="node-sub" x="670" y="174">user:2:feed → [t99, t18, ...]</text>
+  <text class="badge-text" x="766" y="202" text-anchor="middle" fill="#4ade80">ZADD + TTL 24h (~50ms read)</text>
+
+  <!-- Lane 1 Wires -->
+  <path id="w1" class="wire" stroke="#38bdf8" d="M 178 150 L 224 150" marker-end="url(#arrow-blue)"/>
+  <path id="w2" class="wire" stroke="#a855f7" d="M 380 150 L 426 150" marker-end="url(#arrow-purple)"/>
+  <path id="w3a" class="wire" stroke="#22c55e" d="M 590 142 L 644 142" marker-end="url(#arrow-green)"/>
+  <path id="w3b" class="wire" stroke="#22c55e" d="M 590 166 L 644 166" marker-end="url(#arrow-green)"/>
+
+  <!-- Animated Packets Lane 1 -->
+  <circle r="4.5" fill="#38bdf8">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 178 150 L 226 150"/>
+  </circle>
+  <circle r="4.5" fill="#c084fc">
+    <animateMotion dur="1.4s" begin="0.35s" repeatCount="indefinite" path="M 380 150 L 428 150"/>
+  </circle>
+  <circle r="4" fill="#4ade80">
+    <animateMotion dur="1.4s" begin="0.7s" repeatCount="indefinite" path="M 590 142 L 646 142"/>
+  </circle>
+  <circle r="4" fill="#4ade80">
+    <animateMotion dur="1.4s" begin="0.9s" repeatCount="indefinite" path="M 590 166 L 646 166"/>
+  </circle>
+
+  <!-- Lane 2: Fan-out-on-Read -->
+  <rect class="lane-bg" x="20" y="246" width="880" height="162"/>
+  <text class="lane-label" x="36" y="266" fill="#f59e0b">PATH 2: FAN-OUT-ON-READ (CELEBRITIES — AVOID 50M WRITES)</text>
+
+  <!-- Lane 2 Nodes -->
+  <rect class="card" x="36" y="292" width="142" height="72" stroke="#f59e0b"/>
+  <text class="node-title" x="107" y="320" text-anchor="middle">Celebrity User</text>
+  <text class="node-sub" x="107" y="338" text-anchor="middle">50M+ followers</text>
+  <text class="node-sub" x="107" y="354" text-anchor="middle" fill="#fbbf24">POST /tweet</text>
+
+  <rect class="card" x="228" y="292" width="152" height="72" stroke="#f59e0b"/>
+  <text class="node-title" x="304" y="320" text-anchor="middle">Celebrity DB</text>
+  <text class="node-sub" x="304" y="338" text-anchor="middle">Write once only</text>
+  <text class="node-sub" x="304" y="354" text-anchor="middle" fill="#f87171">Skip fan-out queue</text>
+
+  <rect class="card pulse-box" x="430" y="292" width="176" height="72" stroke="#2dd4bf"/>
+  <text class="node-title" x="518" y="318" text-anchor="middle">Feed Query Merger</text>
+  <text class="node-sub" x="518" y="336" text-anchor="middle">15 cached + 5 celeb</text>
+  <text class="node-sub" x="518" y="352" text-anchor="middle" fill="#2dd4bf">Sort by timestamp</text>
+
+  <rect class="card" x="664" y="292" width="220" height="72" stroke="#22c55e"/>
+  <text class="node-title" x="774" y="318" text-anchor="middle">Follower Home Feed</text>
+  <text class="node-sub" x="774" y="336" text-anchor="middle">Top 20 ranked tweets</text>
+  <text class="badge-text" x="774" y="354" text-anchor="middle" fill="#4ade80">Total latency: ~160ms</text>
+
+  <!-- Lane 2 Wires -->
+  <path class="wire" stroke="#f59e0b" d="M 178 328 L 224 328" marker-end="url(#arrow-amber)"/>
+  <path class="wire-dashed anim-dash" stroke="#f59e0b" d="M 380 328 L 426 328" marker-end="url(#arrow-amber)"/>
+  <path class="wire" stroke="#22c55e" d="M 606 328 L 660 328" marker-end="url(#arrow-green)"/>
+
+  <!-- Cross-lane Merge Wire (Redis Cache -> Feed Query Merger) -->
+  <path class="wire-dashed anim-dash" stroke="#2dd4bf" d="M 700 216 L 700 238 L 518 238 L 518 288" marker-end="url(#arrow-cyan)"/>
+  <rect x="546" y="226" width="136" height="18" rx="4" fill="#0f172a" stroke="#2dd4bf" stroke-width="1"/>
+  <text class="badge-text" x="614" y="239" text-anchor="middle" fill="#2dd4bf">Read-time merge</text>
+
+  <!-- Animated Packets Lane 2 -->
+  <circle r="4.5" fill="#fbbf24">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M 178 328 L 226 328"/>
+  </circle>
+  <circle r="4.5" fill="#fbbf24">
+    <animateMotion dur="1.8s" begin="0.4s" repeatCount="indefinite" path="M 380 328 L 428 328"/>
+  </circle>
+  <circle r="4" fill="#2dd4bf">
+    <animateMotion dur="2.0s" begin="0.2s" repeatCount="indefinite" path="M 700 216 L 700 238 L 518 238 L 518 288"/>
+  </circle>
+  <circle r="4.5" fill="#4ade80">
+    <animateMotion dur="1.6s" begin="0.9s" repeatCount="indefinite" path="M 606 328 L 662 328"/>
+  </circle>
+
+  <!-- Footer Metrics Bar -->
+  <rect x="20" y="420" width="880" height="28" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text class="badge-text" x="155" y="438" text-anchor="middle" fill="#38bdf8">80% Cache Storage Saved</text>
+  <text class="badge-text" x="460" y="438" text-anchor="middle" fill="#fbbf24">Zero 50M-Write Thundering Herd</text>
+  <text class="badge-text" x="765" y="438" text-anchor="middle" fill="#4ade80">Feed SLA: p95 &lt; 500ms</text>
+</svg>

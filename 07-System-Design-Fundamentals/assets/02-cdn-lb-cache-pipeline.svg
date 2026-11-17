@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">End-to-End Request Pipeline: DNS, CDN Edge, L7 Load Balancer, App Cluster, and Redis Cache-Aside</title>
+  <desc id="desc">Animated diagram showing a client request resolving DNS, hitting or missing CDN Edge, routing through an L7 Load Balancer to an App Cluster, and executing Redis Cache-Aside with database fallback on cache miss.</desc>
+
+  <style>
+    .bg-card { fill: #0f172a; }
+    .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .node-dns { fill: #1e293b; stroke: #38bdf8; stroke-width: 2; rx: 10; }
+    .node-cdn { fill: #1e293b; stroke: #34d399; stroke-width: 2; rx: 10; }
+    .node-lb { fill: #1e293b; stroke: #a78bfa; stroke-width: 2; rx: 10; }
+    .node-app { fill: #1e293b; stroke: #60a5fa; stroke-width: 2; rx: 10; }
+    .node-redis { fill: #1e293b; stroke: #f43f5e; stroke-width: 2; rx: 10; }
+    .node-db { fill: #1e293b; stroke: #fb923c; stroke-width: 2; rx: 10; }
+    .node-client { fill: #1e293b; stroke: #e2e8f0; stroke-width: 2; rx: 10; }
+
+    .title-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+    .subtitle-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: #94a3b8; }
+    .node-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; text-anchor: middle; }
+    .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; text-anchor: middle; }
+    .edge-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 600; }
+    .legend-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: #cbd5e1; }
+
+    .flow-line { fill: none; stroke-width: 2.2; stroke-linecap: round; }
+    .flow-dashed { fill: none; stroke-width: 2; stroke-dasharray: 6 6; stroke-linecap: round; animation: dashMove 1.8s linear infinite; }
+    .pulse-ring { animation: nodePulse 3s ease-in-out infinite; }
+
+    @keyframes dashMove {
+      to { stroke-dashoffset: -24; }
+    }
+    @keyframes nodePulse {
+      0%, 100% { stroke-opacity: 1; }
+      50% { stroke-opacity: 0.55; }
+    }
+  </style>
+
+  <defs>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399" />
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#60a5fa" />
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fb923c" />
+    </marker>
+    <marker id="arrow-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
+    </marker>
+  </defs>
+
+  <!-- Main Card -->
+  <rect x="0" y="0" width="1100" height="540" rx="16" class="bg-card" />
+
+  <!-- Header -->
+  <text x="36" y="42" class="title-text">Request Pipeline: DNS → CDN Edge → L7 Load Balancer → App → Redis Cache-Aside</text>
+  <text x="36" y="64" class="subtitle-text">Fast-path CDN Edge Hit (~20ms) vs. Dynamic Origin Path with Redis Cache Hit (~1ms) and Cache Miss DB Fallback (~15-50ms)</text>
+
+  <!-- Legend Bar -->
+  <rect x="36" y="478" width="1028" height="42" class="panel" />
+  <circle cx="64" cy="499" r="5" fill="#38bdf8" />
+  <text x="76" y="503" class="legend-text">DNS Lookup</text>
+
+  <circle cx="190" cy="499" r="5" fill="#34d399" />
+  <text x="202" y="503" class="legend-text">CDN Edge Hit (Fast-Path)</text>
+
+  <circle cx="388" cy="499" r="5" fill="#60a5fa" />
+  <text x="400" y="503" class="legend-text">Origin / L7 Routing</text>
+
+  <circle cx="566" cy="499" r="5" fill="#f43f5e" />
+  <text x="578" y="503" class="legend-text">Redis Cache Check / Populate</text>
+
+  <circle cx="798" cy="499" r="5" fill="#fb923c" />
+  <text x="810" y="503" class="legend-text">Cache Miss → DB Fetch</text>
+
+  <!-- Connection Paths -->
+  <!-- 1. Client -> DNS -->
+  <path d="M 165 170 L 218 170" class="flow-line" stroke="#38bdf8" marker-end="url(#arrow-cyan)" />
+  <text x="191" y="160" class="edge-label" fill="#38bdf8" text-anchor="middle">1. Query</text>
+
+  <!-- 2. DNS -> CDN Edge -->
+  <path d="M 358 170 L 410 170" class="flow-line" stroke="#38bdf8" marker-end="url(#arrow-cyan)" />
+  <text x="384" y="160" class="edge-label" fill="#38bdf8" text-anchor="middle">2. IP</text>
+
+  <!-- 3. CDN Edge Hit Fast-Path -> Client -->
+  <path d="M 485 130 Q 295 72 105 130" class="flow-dashed" stroke="#34d399" marker-end="url(#arrow-emerald)" />
+  <rect x="216" y="83" width="160" height="22" rx="6" fill="#064e3b" stroke="#34d399" stroke-width="1" />
+  <text x="296" y="98" class="edge-label" fill="#6ee7b7" text-anchor="middle">CDN HIT (~20ms)</text>
+
+  <!-- 4. CDN Edge (Miss) -> L7 LB -->
+  <path d="M 558 170 L 620 170" class="flow-line" stroke="#60a5fa" marker-end="url(#arrow-blue)" />
+  <text x="589" y="160" class="edge-label" fill="#93c5fd" text-anchor="middle">Miss</text>
+
+  <!-- 5. L7 LB -> App Cluster -->
+  <path d="M 780 170 L 842 170" class="flow-line" stroke="#60a5fa" marker-end="url(#arrow-blue)" />
+  <text x="811" y="160" class="edge-label" fill="#93c5fd" text-anchor="middle">Route</text>
+
+  <!-- 6. App Cluster <-> Redis Cache-Aside (GET / Hit) -->
+  <path d="M 905 212 L 905 280" class="flow-line" stroke="#f43f5e" marker-end="url(#arrow-rose)" />
+  <text x="875" y="250" class="edge-label" fill="#fda4af" text-anchor="end">GET key</text>
+
+  <path d="M 935 280 L 935 212" class="flow-dashed" stroke="#34d399" marker-end="url(#arrow-emerald)" />
+  <text x="945" y="250" class="edge-label" fill="#6ee7b7" text-anchor="start">HIT (~1ms)</text>
+
+  <!-- 7. Cache Miss -> Primary DB Fetch -->
+  <path d="M 850 198 L 690 385" class="flow-dashed" stroke="#fb923c" marker-end="url(#arrow-orange)" />
+  <text x="742" y="292" class="edge-label" fill="#fdba74" text-anchor="end">MISS → SQL</text>
+
+  <!-- 8. DB Result -> App -> Populate Redis -->
+  <path d="M 702 415 L 845 335" class="flow-dashed" stroke="#f43f5e" marker-end="url(#arrow-rose)" />
+  <text x="795" y="395" class="edge-label" fill="#fda4af" text-anchor="middle">SETEX (Populate TTL)</text>
+
+  <!-- Nodes -->
+  <!-- Client -->
+  <g>
+    <rect x="45" y="132" width="120" height="76" class="node-client pulse-ring" />
+    <text x="105" y="164" class="node-title">User / Client</text>
+    <text x="105" y="185" class="node-sub">Browser / App</text>
+  </g>
+
+  <!-- DNS -->
+  <g>
+    <rect x="223" y="132" width="135" height="76" class="node-dns pulse-ring" />
+    <text x="290" y="164" class="node-title">DNS Resolver</text>
+    <text x="290" y="185" class="node-sub">TTL=3600s · IP</text>
+  </g>
+
+  <!-- CDN Edge -->
+  <g>
+    <rect x="415" y="132" width="143" height="76" class="node-cdn pulse-ring" />
+    <text x="486" y="164" class="node-title">CDN Edge</text>
+    <text x="486" y="185" class="node-sub">Pull Cache · TLS</text>
+  </g>
+
+  <!-- L7 Load Balancer -->
+  <g>
+    <rect x="625" y="132" width="155" height="76" class="node-lb pulse-ring" />
+    <text x="702" y="164" class="node-title">L7 Load Balancer</text>
+    <text x="702" y="185" class="node-sub">URL / Host / WAF</text>
+  </g>
+
+  <!-- App Cluster -->
+  <g>
+    <rect x="847" y="132" width="150" height="76" class="node-app pulse-ring" />
+    <text x="922" y="164" class="node-title">App Cluster</text>
+    <text x="922" y="185" class="node-sub">Stateless API</text>
+  </g>
+
+  <!-- Redis Cache-Aside -->
+  <g>
+    <rect x="847" y="286" width="160" height="78" class="node-redis pulse-ring" />
+    <text x="927" y="319" class="node-title">Redis Cache-Aside</text>
+    <text x="927" y="340" class="node-sub">In-Memory · LRU</text>
+  </g>
+
+  <!-- Primary DB -->
+  <g>
+    <rect x="520" y="376" width="175" height="76" class="node-db pulse-ring" />
+    <text x="607" y="409" class="node-title">Primary DB (SQL)</text>
+    <text x="607" y="430" class="node-sub">Source of Truth</text>
+  </g>
+
+  <!-- Animated Packets (SMIL) -->
+  <!-- Packet 1: DNS -> CDN Edge Hit Fast-Path -->
+  <circle r="5.5" fill="#34d399">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 105 170 L 290 170 L 486 170 Q 295 72 105 135" />
+  </circle>
+
+  <!-- Packet 2: Dynamic Origin -> L7 LB -> App -> Redis Hit -->
+  <circle r="5.5" fill="#60a5fa">
+    <animateMotion dur="4.2s" begin="0.8s" repeatCount="indefinite" path="M 486 170 L 702 170 L 922 170 L 905 315 L 935 190" />
+  </circle>
+
+  <!-- Packet 3: Cache Miss -> DB Fetch -> Populate Redis -->
+  <circle r="5.5" fill="#fb923c">
+    <animateMotion dur="5.0s" begin="1.6s" repeatCount="indefinite" path="M 905 198 L 620 400 L 895 335" />
+  </circle>
+</svg>

@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Real-Time Fraud Detection Pipeline (&lt;100ms P99 SLA)</title>
+  <desc id="desc">Animated architecture diagram showing a payment transaction flowing through Kafka, Flink Sliding Window and Redis Feature Store, Rules Engine plus Embedded ONNX ML Model, and routing to APPROVE, CHALLENGE, or BLOCK within a 100ms P99 latency budget.</desc>
+
+  <defs>
+    <style>
+      .bg-canvas { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .card-accent-blue { fill: #1e293b; stroke: #38bdf8; stroke-width: 2; rx: 10; }
+      .card-accent-purple { fill: #1e293b; stroke: #a78bfa; stroke-width: 2; rx: 10; }
+      .card-accent-cyan { fill: #1e293b; stroke: #22d3ee; stroke-width: 2; rx: 10; }
+      .card-approve { fill: #064e3b; stroke: #10b981; stroke-width: 2; rx: 8; }
+      .card-challenge { fill: #451a03; stroke: #f59e0b; stroke-width: 2; rx: 8; }
+      .card-block { fill: #450a0a; stroke: #ef4444; stroke-width: 2; rx: 8; }
+      .title-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; fill: #94a3b8; }
+      .node-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; }
+      .sla-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .flow-line { fill: none; stroke: #475569; stroke-width: 2.2; }
+      .flow-anim { fill: none; stroke: #38bdf8; stroke-width: 2.2; stroke-dasharray: 8 6; animation: dashFlow 1.4s linear infinite; }
+      .flow-anim-purple { fill: none; stroke: #a78bfa; stroke-width: 2.2; stroke-dasharray: 8 6; animation: dashFlow 1.4s linear infinite; }
+      .flow-anim-green { fill: none; stroke: #10b981; stroke-width: 2; stroke-dasharray: 6 6; animation: dashFlow 1.6s linear infinite; }
+      .flow-anim-amber { fill: none; stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 6 6; animation: dashFlow 1.6s linear infinite; }
+      .flow-anim-red { fill: none; stroke: #ef4444; stroke-width: 2; stroke-dasharray: 6 6; animation: dashFlow 1.6s linear infinite; }
+      .pulse-node { animation: pulseStroke 2.6s ease-in-out infinite; }
+      .sla-bar-bg { fill: #1e293b; stroke: #334155; stroke-width: 1; rx: 8; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -28; }
+      }
+      @keyframes pulseStroke {
+        0%, 100% { stroke-opacity: 0.65; }
+        50% { stroke-opacity: 1; }
+      }
+    </style>
+
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg-canvas" x="0" y="0" width="1100" height="540" rx="14" />
+
+  <!-- Header -->
+  <text class="title-text" x="32" y="42">Real-Time Fraud Detection Pipeline</text>
+  <text class="subtitle-text" x="32" y="64">Sub-100ms P99 SLA | 10K-100K TPS | Kafka + FlinkCEP + Redis + Embedded ONNX</text>
+
+  <!-- SLA Pill -->
+  <rect x="860" y="24" width="208" height="36" rx="18" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.5" />
+  <text class="badge-text" x="964" y="46" text-anchor="middle" fill="#38bdf8">P99 LATENCY &lt; 100ms</text>
+
+  <!-- Connectors (static base + animated overlay) -->
+  <!-- 1. Transaction -> Kafka -->
+  <path id="p-txn-kafka" class="flow-anim" d="M 175 235 L 235 235" marker-end="url(#arrow-blue)" />
+
+  <!-- 2. Kafka -> Flink (top) -->
+  <path id="p-kafka-flink" class="flow-anim" d="M 375 215 C 405 215, 405 145, 435 145" marker-end="url(#arrow-blue)" />
+
+  <!-- 3. Kafka -> Redis (bottom) -->
+  <path id="p-kafka-redis" class="flow-anim" d="M 375 255 C 405 255, 405 325, 435 325" marker-end="url(#arrow-blue)" />
+
+  <!-- 4. Flink -> Rules+ML -->
+  <path id="p-flink-ml" class="flow-anim-purple" d="M 615 145 C 645 145, 645 215, 675 215" marker-end="url(#arrow-purple)" />
+
+  <!-- 5. Redis -> Rules+ML -->
+  <path id="p-redis-ml" class="flow-anim-purple" d="M 615 325 C 645 325, 645 255, 675 255" marker-end="url(#arrow-purple)" />
+
+  <!-- 6. Rules+ML -> APPROVE -->
+  <path id="p-ml-approve" class="flow-anim-green" d="M 855 210 C 885 210, 885 130, 915 130" marker-end="url(#arrow-green)" />
+
+  <!-- 7. Rules+ML -> CHALLENGE -->
+  <path id="p-ml-challenge" class="flow-anim-amber" d="M 855 235 L 915 235" marker-end="url(#arrow-amber)" />
+
+  <!-- 8. Rules+ML -> BLOCK -->
+  <path id="p-ml-block" class="flow-anim-red" d="M 855 260 C 885 260, 885 340, 915 340" marker-end="url(#arrow-red)" />
+
+  <!-- Animated Data Packets (SMIL) -->
+  <circle r="4.5" fill="#38bdf8">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 175 235 L 235 235" />
+  </circle>
+  <circle r="4.5" fill="#22d3ee">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 375 215 C 405 215, 405 145, 435 145" />
+  </circle>
+  <circle r="4.5" fill="#22d3ee">
+    <animateMotion dur="1.8s" begin="0.4s" repeatCount="indefinite" path="M 375 255 C 405 255, 405 325, 435 325" />
+  </circle>
+  <circle r="4.5" fill="#a78bfa">
+    <animateMotion dur="1.8s" begin="0.2s" repeatCount="indefinite" path="M 615 145 C 645 145, 645 215, 675 215" />
+  </circle>
+  <circle r="4.5" fill="#a78bfa">
+    <animateMotion dur="1.8s" begin="0.6s" repeatCount="indefinite" path="M 615 325 C 645 325, 645 255, 675 255" />
+  </circle>
+  <circle r="4" fill="#10b981">
+    <animateMotion dur="2.1s" repeatCount="indefinite" path="M 855 210 C 885 210, 885 130, 915 130" />
+  </circle>
+  <circle r="4" fill="#f59e0b">
+    <animateMotion dur="2.1s" begin="0.7s" repeatCount="indefinite" path="M 855 235 L 915 235" />
+  </circle>
+  <circle r="4" fill="#ef4444">
+    <animateMotion dur="2.1s" begin="1.4s" repeatCount="indefinite" path="M 855 260 C 885 260, 885 340, 915 340" />
+  </circle>
+
+  <!-- Node 1: Transaction -->
+  <rect class="card-accent-blue" x="32" y="185" width="143" height="100" />
+  <text class="node-title" x="103" y="216" text-anchor="middle">Transaction</text>
+  <text class="node-sub" x="103" y="236" text-anchor="middle">Card / Transfer</text>
+  <text class="node-sub" x="103" y="252" text-anchor="middle">Wallet Event</text>
+  <rect x="55" y="262" width="96" height="16" rx="4" fill="#0f172a" />
+  <text class="badge-text" x="103" y="274" text-anchor="middle" fill="#38bdf8">10K-100K TPS</text>
+
+  <!-- Node 2: Kafka -->
+  <rect class="card-accent-blue" x="235" y="185" width="140" height="100" />
+  <text class="node-title" x="305" y="216" text-anchor="middle">Kafka Broker</text>
+  <text class="node-sub" x="305" y="236" text-anchor="middle">transactions.raw</text>
+  <text class="node-sub" x="305" y="252" text-anchor="middle">Key: cardId</text>
+  <rect x="262" y="262" width="86" height="16" rx="4" fill="#0f172a" />
+  <text class="badge-text" x="305" y="274" text-anchor="middle" fill="#38bdf8">~1ms Ingest</text>
+
+  <!-- Node 3a: Flink Sliding Window -->
+  <rect class="card-accent-cyan" x="435" y="95" width="180" height="100" />
+  <text class="node-title" x="525" y="124" text-anchor="middle">Flink Sliding Window</text>
+  <text class="node-sub" x="525" y="144" text-anchor="middle">FlinkCEP + RocksDB</text>
+  <text class="node-sub" x="525" y="160" text-anchor="middle">1h / 24h Aggregations</text>
+  <rect x="470" y="170" width="110" height="16" rx="4" fill="#0f172a" />
+  <text class="badge-text" x="525" y="182" text-anchor="middle" fill="#22d3ee">EOS | 10-15ms</text>
+
+  <!-- Node 3b: Redis Feature Store -->
+  <rect class="card-accent-cyan" x="435" y="275" width="180" height="100" />
+  <text class="node-title" x="525" y="304" text-anchor="middle">Redis Feature Store</text>
+  <text class="node-sub" x="525" y="324" text-anchor="middle">ZSET Velocity (60s)</text>
+  <text class="node-sub" x="525" y="340" text-anchor="middle">Batch + Device Cache</text>
+  <rect x="470" y="350" width="110" height="16" rx="4" fill="#0f172a" />
+  <text class="badge-text" x="525" y="362" text-anchor="middle" fill="#22d3ee">2-5ms Lookup</text>
+
+  <!-- Node 4: Rules + ML Model -->
+  <rect class="card-accent-purple pulse-node" x="675" y="175" width="180" height="120" />
+  <text class="node-title" x="765" y="204" text-anchor="middle">Rules + ML Model</text>
+  <text class="node-sub" x="765" y="224" text-anchor="middle">Rules: Blacklist, Geo</text>
+  <text class="node-sub" x="765" y="240" text-anchor="middle">ML: ONNX v3 (Canary)</text>
+  <text class="node-sub" x="765" y="256" text-anchor="middle">0.6*Rule + 0.4*ML</text>
+  <rect x="705" y="268" width="120" height="16" rx="4" fill="#0f172a" />
+  <text class="badge-text" x="765" y="280" text-anchor="middle" fill="#a78bfa">20-35ms Score</text>
+
+  <!-- Node 5a: APPROVE -->
+  <rect class="card-approve" x="915" y="95" width="153" height="70" />
+  <text class="node-title" x="991" y="122" text-anchor="middle" fill="#34d399">APPROVE</text>
+  <text class="node-sub" x="991" y="140" text-anchor="middle" fill="#a7f3d0">Score &lt; 0.50</text>
+  <text class="node-sub" x="991" y="154" text-anchor="middle" fill="#6ee7b7">fraud-decisions</text>
+
+  <!-- Node 5b: CHALLENGE -->
+  <rect class="card-challenge" x="915" y="200" width="153" height="70" />
+  <text class="node-title" x="991" y="227" text-anchor="middle" fill="#fbbf24">CHALLENGE</text>
+  <text class="node-sub" x="991" y="245" text-anchor="middle" fill="#fde68a">0.50 - 0.90 | OTP/3DS</text>
+  <text class="node-sub" x="991" y="259" text-anchor="middle" fill="#fcd34d">cases-for-review</text>
+
+  <!-- Node 5c: BLOCK -->
+  <rect class="card-block" x="915" y="305" width="153" height="70" />
+  <text class="node-title" x="991" y="332" text-anchor="middle" fill="#f87171">BLOCK</text>
+  <text class="node-sub" x="991" y="350" text-anchor="middle" fill="#fecaca">Score &gt; 0.90 | Rule 1.0</text>
+  <text class="node-sub" x="991" y="364" text-anchor="middle" fill="#fca5a5">Immediate Reject</text>
+
+  <!-- Bottom Latency Budget Breakdown Bar -->
+  <rect class="sla-bar-bg" x="32" y="415" width="1036" height="96" />
+  <text class="node-title" x="52" y="442">End-to-End Latency Budget (&lt;100ms P99 Target)</text>
+
+  <!-- Segmented Progress Bar -->
+  <rect x="52" y="456" width="80" height="22" rx="4" fill="#0284c7" />
+  <text class="badge-text" x="92" y="471" text-anchor="middle" fill="#f8fafc">1ms</text>
+
+  <rect x="136" y="456" width="210" height="22" rx="4" fill="#0891b2" />
+  <text class="badge-text" x="241" y="471" text-anchor="middle" fill="#f8fafc">15-25ms Flink + Redis</text>
+
+  <rect x="350" y="456" width="220" height="22" rx="4" fill="#7c3aed" />
+  <text class="badge-text" x="460" y="471" text-anchor="middle" fill="#f8fafc">20-25ms Rules Engine</text>
+
+  <rect x="574" y="456" width="220" height="22" rx="4" fill="#9333ea" />
+  <text class="badge-text" x="684" y="471" text-anchor="middle" fill="#f8fafc">15-25ms ONNX ML</text>
+
+  <rect x="798" y="456" width="150" height="22" rx="4" fill="#059669" />
+  <text class="badge-text" x="873" y="471" text-anchor="middle" fill="#f8fafc">5-10ms Decision</text>
+
+  <rect x="952" y="456" width="96" height="22" rx="4" fill="#334155" />
+  <text class="badge-text" x="1000" y="471" text-anchor="middle" fill="#cbd5e1">15ms Jitter</text>
+
+  <text class="sla-label" x="52" y="498">Kafka Ingest</text>
+  <text class="sla-label" x="180" y="498">Stateful Feature Enrichment</text>
+  <text class="sla-label" x="395" y="498">Deterministic Rules</text>
+  <text class="sla-label" x="625" y="498">Embedded Inference</text>
+  <text class="sla-label" x="815" y="498">Audit + Sink</text>
+  <text class="sla-label" x="962" y="498">Headroom</text>
+</svg>

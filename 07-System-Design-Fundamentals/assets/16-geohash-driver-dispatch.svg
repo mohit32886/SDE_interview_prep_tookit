@@ -1,0 +1,215 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="auto" role="img" aria-label="Geospatial Driver Dispatch Animation">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 8; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .section-hdr { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #38bdf8; letter-spacing: 0.4px; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 600; fill: #e2e8f0; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .mono-bright { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; fill: #34d399; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #0f172a; }
+
+      .hex-neighbor { fill: #1e293b; stroke: #475569; stroke-width: 1.5; }
+      .hex-center { fill: #1e3a8a; stroke: #60a5fa; stroke-width: 2; }
+      .hex-outer { fill: #0f172a; stroke: #334155; stroke-width: 1; stroke-dasharray: 3,3; }
+
+      @keyframes pulseRing {
+        0% { transform: scale(0.85); opacity: 0.9; }
+        70% { transform: scale(1.35); opacity: 0; }
+        100% { transform: scale(1.35); opacity: 0; }
+      }
+      @keyframes cellGlow {
+        0%, 15% { fill: #1e293b; stroke: #475569; }
+        30%, 60% { fill: #164e63; stroke: #22d3ee; }
+        75%, 100% { fill: #1e293b; stroke: #475569; }
+      }
+      @keyframes lockPulse {
+        0%, 45% { stroke: #475569; fill: #0f172a; }
+        55%, 85% { stroke: #34d399; fill: #064e3b; }
+        100% { stroke: #475569; fill: #0f172a; }
+      }
+      @keyframes wsFlash {
+        0%, 60% { opacity: 0.25; }
+        70%, 92% { opacity: 1; }
+        100% { opacity: 0.25; }
+      }
+      @keyframes flowDash {
+        to { stroke-dashoffset: -24; }
+      }
+
+      .neighbor-glow { animation: cellGlow 6s infinite ease-in-out; }
+      .lock-box { animation: lockPulse 6s infinite ease-in-out; }
+      .ws-box { animation: wsFlash 6s infinite ease-in-out; }
+      .flow-line { stroke-dasharray: 6,6; animation: flowDash 1.2s linear infinite; }
+      .ping-ring { transform-box: fill-box; transform-origin: center; animation: pulseRing 2.4s infinite ease-out; }
+    </style>
+
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399" />
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" x="0" y="0" width="960" height="540" rx="14" />
+
+  <!-- Header -->
+  <text class="title" x="28" y="36">Geospatial Driver Dispatch: 9-Cell Query &amp; Atomic Lock</text>
+  <text class="subtitle" x="28" y="56">Drivers stream GPS every 4s into Redis GEO / H3 cells → Rider queries 9 neighbor cells → Dispatch locks nearest driver &amp; pushes via WebSocket</text>
+
+  <!-- Step 1: Drivers Streaming GPS Pings -->
+  <rect class="card" x="24" y="76" width="236" height="378" rx="12" />
+  <text class="section-hdr" x="40" y="102">1. GPS PINGS (EVERY 4s)</text>
+
+  <!-- Driver 1 -->
+  <rect class="subcard" x="38" y="120" width="208" height="84" rx="8" />
+  <circle cx="62" cy="148" r="11" fill="#064e3b" stroke="#34d399" stroke-width="1.5" />
+  <circle class="ping-ring" cx="62" cy="148" r="14" fill="none" stroke="#34d399" stroke-width="1.5" />
+  <text class="label" x="82" y="146">Driver D-104 (4.9★)</text>
+  <text class="mono" x="82" y="164">19.0762°N, 72.8781°E</text>
+  <text class="mono-bright" x="48" y="190">GEOADD drivers:geo 0.3km</text>
+
+  <!-- Driver 2 -->
+  <rect class="subcard" x="38" y="220" width="208" height="84" rx="8" />
+  <circle cx="62" cy="248" r="11" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.5" />
+  <circle class="ping-ring" cx="62" cy="248" r="14" fill="none" stroke="#60a5fa" stroke-width="1.5" />
+  <text class="label" x="82" y="246">Driver D-209 (4.7★)</text>
+  <text class="mono" x="82" y="264">19.0830°N, 72.8840°E</text>
+  <text class="mono" x="48" y="290">GEOADD drivers:geo 1.4km</text>
+
+  <!-- Driver 3 -->
+  <rect class="subcard" x="38" y="320" width="208" height="84" rx="8" />
+  <circle cx="62" cy="348" r="11" fill="#334155" stroke="#94a3b8" stroke-width="1.5" />
+  <text class="label" x="82" y="346">Driver D-318 (4.6★)</text>
+  <text class="mono" x="82" y="364">19.1150°N, 72.9010°E</text>
+  <text class="mono" x="48" y="390">Outside 2km radius (4.8km)</text>
+
+  <text class="mono" x="40" y="434">POST /api/driver/location → Kafka</text>
+
+  <!-- Animated GPS Pings from Drivers to Grid -->
+  <path id="pingPath1" d="M 246 162 L 320 232" fill="none" stroke="#34d399" stroke-width="2" class="flow-line" marker-end="url(#arrowGreen)" />
+  <path id="pingPath2" d="M 246 262 L 320 262" fill="none" stroke="#38bdf8" stroke-width="2" class="flow-line" marker-end="url(#arrowBlue)" />
+  <circle r="4" fill="#34d399">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 246 162 L 320 232" />
+  </circle>
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="2.1s" repeatCount="indefinite" path="M 246 262 L 320 262" />
+  </circle>
+
+  <!-- Step 2: Redis GEO / H3 9-Cell Grid -->
+  <rect class="card" x="304" y="76" width="352" height="378" rx="12" />
+  <text class="section-hdr" x="322" y="102">2. REDIS GEO / H3 9-CELL INDEX</text>
+  <text class="mono" x="322" y="120">kRing(center_cell, 1) / GEORADIUS 2 km</text>
+
+  <!-- 3x3 Cell Grid representing Center + 8 Neighbors -->
+  <g transform="translate(334, 144)">
+    <!-- Row 1 -->
+    <rect class="neighbor-glow" x="0" y="0" width="92" height="68" rx="8" />
+    <text class="mono" x="10" y="20">u34sr0</text>
+    <text class="mono" x="10" y="36">NW Cell</text>
+
+    <rect class="neighbor-glow" x="100" y="0" width="92" height="68" rx="8" />
+    <text class="mono" x="110" y="20">u34sr1</text>
+    <text class="mono" x="110" y="36">N Cell</text>
+    <circle cx="164" cy="48" r="6" fill="#60a5fa" />
+    <text class="mono" x="110" y="54">D-209</text>
+
+    <rect class="neighbor-glow" x="200" y="0" width="92" height="68" rx="8" />
+    <text class="mono" x="210" y="20">u34sr4</text>
+    <text class="mono" x="210" y="36">NE Cell</text>
+
+    <!-- Row 2 -->
+    <rect class="neighbor-glow" x="0" y="76" width="92" height="68" rx="8" />
+    <text class="mono" x="10" y="96">u34sr2</text>
+    <text class="mono" x="10" y="112">W Cell</text>
+
+    <rect class="hex-center" x="100" y="76" width="92" height="68" rx="8" />
+    <text class="label" x="112" y="96">u34sr3 ★</text>
+    <circle cx="122" cy="122" r="7" fill="#fbbf24" />
+    <text class="mono" x="134" y="126" fill="#fef3c7">RIDER</text>
+
+    <rect class="neighbor-glow" x="200" y="76" width="92" height="68" rx="8" />
+    <text class="mono" x="210" y="96">u34sr5</text>
+    <text class="mono" x="210" y="112">E Cell</text>
+    <circle cx="264" cy="124" r="6" fill="#34d399" />
+    <text class="mono-bright" x="210" y="128">D-104</text>
+
+    <!-- Row 3 -->
+    <rect class="neighbor-glow" x="0" y="152" width="92" height="68" rx="8" />
+    <text class="mono" x="10" y="172">u34sqc</text>
+    <text class="mono" x="10" y="188">SW Cell</text>
+
+    <rect class="neighbor-glow" x="100" y="152" width="92" height="68" rx="8" />
+    <text class="mono" x="110" y="172">u34sqf</text>
+    <text class="mono" x="110" y="188">S Cell</text>
+
+    <rect class="neighbor-glow" x="200" y="152" width="92" height="68" rx="8" />
+    <text class="mono" x="210" y="172">u34sqg</text>
+    <text class="mono" x="210" y="188">SE Cell</text>
+  </g>
+
+  <!-- Radius Ring Overlay -->
+  <circle cx="480" cy="254" r="106" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,5" opacity="0.8">
+    <animate attributeName="r" values="20;108;108" keyTimes="0;0.45;1" dur="6s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0.9;0.85;0" keyTimes="0;0.6;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <rect class="subcard" x="322" y="380" width="316" height="58" rx="8" />
+  <text class="label" x="336" y="402">Candidate Set: [D-104 (0.3km), D-209 (1.4km)]</text>
+  <text class="mono" x="336" y="422">O(log N + M) lookup • Filters 50k → ~20 drivers</text>
+
+  <!-- Step 3: Dispatch Service & WebSocket Push -->
+  <rect class="card" x="700" y="76" width="236" height="378" rx="12" />
+  <text class="section-hdr" x="716" y="102">3. DISPATCH &amp; LOCK</text>
+
+  <!-- Rider Request -->
+  <rect class="subcard" x="714" y="120" width="208" height="68" rx="8" stroke="#fbbf24" />
+  <text class="label" x="726" y="144">Rider Request #R-42</text>
+  <text class="mono" x="726" y="162">POST /api/rides (Bandra)</text>
+  <text class="mono" x="726" y="178">Batch window: 2s</text>
+
+  <!-- Scoring & Lock -->
+  <rect class="lock-box" x="714" y="212" width="208" height="114" rx="8" stroke-width="1.5" />
+  <text class="label" x="726" y="236">Dispatch Scoring &amp; Lock</text>
+  <text class="mono-bright" x="726" y="256">1. D-104 → Score 0.94 ★</text>
+  <text class="mono" x="726" y="274">2. D-209 → Score 0.71</text>
+  <text class="mono" x="726" y="294">LOCK driver:D-104 (TTL 10s)</text>
+  <text class="mono" x="726" y="312">version = version + 1</text>
+
+  <!-- WebSocket Push -->
+  <rect class="ws-box" x="714" y="350" width="208" height="86" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1.5" />
+  <text class="label" x="726" y="374">Trip Accepted (WS Push)</text>
+  <text class="mono-bright" x="726" y="394">ws://topic/ride/42/driver</text>
+  <text class="mono" x="726" y="412" fill="#d1fae5">ETA: 2 min • D-104 Locked</text>
+  <text class="mono" x="726" y="426" fill="#d1fae5">Offer expires in 10s if idle</text>
+
+  <!-- Connecting arrows between Grid and Dispatch -->
+  <path d="M 714 154 L 656 224" fill="none" stroke="#fbbf24" stroke-width="2" class="flow-line" marker-end="url(#arrowAmber)" />
+  <path d="M 656 274 L 714 274" fill="none" stroke="#34d399" stroke-width="2" class="flow-line" marker-end="url(#arrowGreen)" />
+  <circle r="4" fill="#fbbf24">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 714 154 L 656 224" />
+  </circle>
+  <circle r="4" fill="#34d399">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 656 274 L 714 274" />
+  </circle>
+
+  <!-- Bottom Latency Budget Bar -->
+  <rect class="card" x="24" y="470" width="912" height="48" rx="10" />
+  <text class="label" x="44" y="499">End-to-End SLA (&lt; 3.0s):</text>
+  <rect x="206" y="483" width="128" height="22" rx="6" fill="#1e3a8a" />
+  <text class="mono" x="216" y="498" fill="#bfdbfe">GPS Ping: 4s async</text>
+  <rect x="348" y="483" width="142" height="22" rx="6" fill="#164e63" />
+  <text class="mono" x="358" y="498" fill="#a5f3fc">9-Cell Query: &lt; 5ms</text>
+  <rect x="504" y="483" width="176" height="22" rx="6" fill="#064e3b" />
+  <text class="mono" x="514" y="498" fill="#a7f3d0">Batch + Lock: ~2.04s</text>
+  <rect x="694" y="483" width="150" height="22" rx="6" fill="#78350f" />
+  <text class="mono" x="704" y="498" fill="#fde68a">WS Push: &lt; 50ms</text>
+</svg>

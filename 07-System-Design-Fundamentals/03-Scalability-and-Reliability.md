@@ -4,959 +4,418 @@
 1. [Scaling Strategies](#scaling-strategies)
 2. [Stateless vs Stateful Services](#stateless-vs-stateful-services)
 3. [Database Replication](#database-replication)
-4. [Database Partitioning](#database-partitioning)
+4. [Database Partitioning (Sharding)](#database-partitioning-sharding)
 5. [Fault Tolerance and Failover](#fault-tolerance-and-failover)
 6. [Recovery and Durability](#recovery-and-durability)
 7. [Distributed Consensus](#distributed-consensus)
+8. [Backpressure and Load Shedding](#backpressure-and-load-shedding)
+9. [Key Takeaways](#key-takeaways)
 
 ---
 
 ## Scaling Strategies
 
+Scaling increases a system's capacity to handle growing traffic, data volume, and compute demands while maintaining target latency and availability.
+
+```mermaid
+flowchart LR
+    subgraph V["Vertical Scaling (Scale Up)"]
+        V1["Single Server: 8 CPUs, 32GB RAM"] -->|"Upgrade Hardware"| V2["Single Server: 128 CPUs, 512GB RAM"]
+    end
+
+    subgraph H["Horizontal Scaling (Scale Out)"]
+        LB["Load Balancer"] --> H1["Server 1 (33% Load)"]
+        LB --> H2["Server 2 (33% Load)"]
+        LB --> H3["Server 3 (33% Load)"]
+    end
+
+    classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef upgraded fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef lb fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    class V1,H1,H2,H3 primary
+    class V2 upgraded
+    class LB lb
+```
+
 ### Vertical Scaling (Scale Up)
+Adding more CPU, memory, or disk to a single machine (e.g., upgrading from `8 CPUs, 32GB RAM, 1TB disk` to `128 CPUs, 512GB RAM, 50TB disk`).
 
-```
-Definition: Add more CPU, memory, or disk to single server
-
-Before:
-┌──────────────────────┐
-│ Single Server        │
-│ 8 CPUs, 32GB RAM     │
-│ 1TB disk             │
-└──────────────────────┘
-
-After:
-┌──────────────────────┐
-│ Single Server        │
-│ 128 CPUs, 512GB RAM  │
-│ 50TB disk            │
-└──────────────────────┘
-
-Pros:
-├─ Simple (no distributed logic)
-├─ No sharding complexity
-├─ Transactions still ACID
-└─ Good for stateful services
-
-Cons:
-├─ Hardware limits (max 1000s of CPUs per machine)
-├─ Downtime during upgrade
-├─ High cost ($100k+ for massive server)
-├─ Single point of failure
-└─ Diminishing returns (eventually CPU doesn't help)
-
-When to use:
-├─ Early stage (simple)
-├─ Stateful services (databases, caches)
-├─ Until you hit hardware limits
-└─ Typically: scale vertically until 50K QPS, then horizontal
-```
+- **Pros:** Simple (no distributed logic), no sharding complexity, transactions remain ACID, and well-suited for stateful services.
+- **Cons:** Hard hardware limits (max ~1000s of CPUs per machine), downtime during upgrades, high cost (`$100k+` for massive servers), single point of failure (SPOF), and diminishing returns.
+- **When to use:** Early-stage products, stateful services (databases, caches), and until hitting hardware limits (typically scale vertically up to ~50K QPS, then horizontally).
 
 ### Horizontal Scaling (Scale Out)
+Adding more commodity servers/machines behind a Load Balancer so each node handles a fraction of total traffic.
 
-```
-Definition: Add more servers/machines to cluster
+- **Pros:** Virtually unlimited scaling, zero-downtime capacity additions, built-in redundancy (if one server fails, others continue), and cost-effective commodity hardware.
+- **Cons:** Higher complexity (load balancing, sharding, consensus), eventual consistency across replicas, network overhead for distributed calls, and harder debugging.
+- **When to use:** High-traffic systems (100K–millions of QPS), high-availability workloads requiring redundancy, stateless web/API tiers, and most modern cloud architectures.
 
-Before:
-┌──────────────────┐
-│ Server 1         │
-│ Processing 100%  │
-└──────────────────┘
+> [!TIP]
+> Start with vertical scaling to ship fast and avoid premature distributed-systems complexity, then transition to horizontal scaling before hitting single-machine hardware or SPOF limits.
 
-After:
-┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ Server 1         │    │ Server 2         │    │ Server 3         │
-│ Processing 33%   │    │ Processing 33%   │    │ Processing 33%   │
-└──────────────────┘    └──────────────────┘    └──────────────────┘
-        ▲                       ▲                       ▲
-        └───────────────────────┼───────────────────────┘
-                                │
-                        Load Balancer
+### Traffic Scale Progression
 
-Pros:
-├─ Unlimited scaling (add servers indefinitely)
-├─ No downtime (add servers while running)
-├─ Redundancy (if one fails, others work)
-└─ Cost-effective (commodity hardware)
+```mermaid
+flowchart TD
+    T0["t=0: 1 Server (8 core, 32GB) → 500 QPS"] -->|"Scale Up"| T1["t=1yr: 1 Server (128 core, 512GB) → 50K QPS"]
+    T1 -->|"Vertical Limit Reached: Scale Out"| T2["t=2yr: 10 Servers (128 core, 512GB) → 500K QPS"]
+    T2 -->|"Multi-Region + Sharding"| T3["t=3yr: 100 Servers (128 core, 512GB) → 5M QPS"]
 
-Cons:
-├─ Complex (load balancing, sharding, consensus)
-├─ Eventual consistency (replicas might lag)
-├─ Network overhead (distributed calls)
-└─ Debugging harder (distributed systems)
-
-When to use:
-├─ High traffic (millions of QPS)
-├─ Need redundancy
-├─ Stateless services (web servers, API servers)
-└─ Most modern systems
+    classDef step fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef limit fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef scale fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    class T0 step
+    class T1 limit
+    class T2,T3 scale
 ```
 
-### Comparison: When to Use What
+| Traffic Scale | Recommended Approach | Primary Characteristics |
+| :--- | :--- | :--- |
+| **1–10K QPS** | Vertical scaling | Single node, simple ACID transactions, minimal ops overhead |
+| **10–100K QPS** | Hybrid (Vertical + Horizontal) | Scale app tier horizontally; scale DB vertically + read replicas |
+| **100K+ QPS** | Horizontal scaling | Stateless app clusters, DB sharding, distributed caching |
+| **1M+ QPS** | Horizontal + Advanced | Multi-region active-active, edge CDN, consistent hashing, async queues |
 
-```
-Traffic Scale       Recommended Approach
-─────────────────────────────────────────
-1-10K QPS           Vertical scaling
-10-100K QPS         Mix: vertical + horizontal
-100K+ QPS           Horizontal scaling
-1M+ QPS             Horizontal + advanced techniques
-
-Example progression:
-t=0:    1 server (8 core, 32GB) → 500 QPS
-t=1yr:  1 server (128 core, 512GB) → 50K QPS (vertical limit)
-t=2yr:  10 servers (128 core, 512GB each) → 500K QPS
-t=3yr:  100 servers (128 core, 512GB each) → 5M QPS
-```
+> [!IMPORTANT]
+> Scaling the application tier horizontally is straightforward only if services are **stateless**; otherwise, local state traps requests on specific nodes and breaks elastic scaling.
 
 ---
 
 ## Stateless vs Stateful Services
 
+```mermaid
+flowchart LR
+    subgraph SL["Stateless Architecture"]
+        C1["Client"] --> LB1["Load Balancer (Round-Robin)"]
+        LB1 --> S1["App Server A"]
+        LB1 --> S2["App Server B"]
+        S1 --> DB1["Shared Database"]
+        S2 --> DB1
+    end
+
+    subgraph SF["Externalized State (Stateless App + Redis)"]
+        C2["Client (user_123)"] --> LB2["Load Balancer"]
+        LB2 --> A1["Server 1"]
+        LB2 --> A2["Server 2"]
+        LB2 --> A3["Server 3"]
+        A1 --> R["Redis Session Store"]
+        A2 --> R
+        A3 --> R
+    end
+
+    classDef client fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef node fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef store fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    class C1,C2,LB1,LB2 client
+    class S1,S2,A1,A2,A3 node
+    class DB1,R store
+```
+
 ### Stateless Services
+A service is stateless when it stores **no local client session data** between requests. Each request is independent (e.g., `POST /users` followed by `GET /users/1` can hit any server).
 
-```
-Definition: No local storage of client data between requests
-Each request is independent (or session data in external store)
+- **Properties:** Symmetric servers, simple load balancing (round-robin), trivial horizontal scaling (add/remove nodes anytime).
+- **Best for:** Web API servers, microservices, and frontend-facing tiers.
 
-Example: Web API server
-
-Request 1: POST /users
-├─ Read from database
-├─ Return response
-└─ No memory of session
-
-Request 2: GET /users/1
-├─ Can go to any server
-├─ Reads fresh data from database
-└─ Doesn't care which server handled request 1
-
-Scaling:
-┌──────────┐
-│ Request  │
-│ (POST)   │
-└────┬─────┘
-     │
-     ├─→ Load Balancer ─→ Server A (or B, or C, or any)
-     │
-┌────▼─────┐
-│ Response │
-└──────────┘
-
-Properties:
-├─ Can add/remove servers anytime
-├─ Load balancer can use simple algorithms (round-robin)
-├─ Horizontal scaling is simple
-└─ Each server identical (symmetric)
-
-Best for:
-├─ Web servers (API endpoints)
-├─ Microservices
-├─ Anything frontend-facing
-```
+> [!TIP]
+> Keep compute tiers stateless and push state down into purpose-built data stores (PostgreSQL, Redis, S3) that natively handle replication and durability.
 
 ### Stateful Services
+A service is stateful when it stores **client data locally** between requests (e.g., `Server A` holds `{user_123: {cart: [item1, item2]}}` in memory).
 
+- **Sticky Sessions:** The load balancer must route `user_123` back to `Server A` using IP hashing or cookies.
+- **Scaling Problem:** Adding `Server C` leaves existing sessions on `Server A` and `Server B`, causing uneven distribution. If `Server A` crashes, all its active sessions are lost.
+- **Solutions:**
+  1. **Replication:** Replicate session state across multiple servers so a replica survives primary failure.
+  2. **External Session Store (Redis):** Move session state out of application servers into a shared store like Redis, effectively converting the app tier into a stateless service.
+
+```mermaid
+flowchart TD
+    Req["Request from user_123"] --> LB["Sticky LB (Cookie / IP Hash)"]
+    LB -->|"Pinned to Server A"| SA["Server A (Local Session)"]
+    SA -->|"Node Crash"| Loss["Session Lost!"]
+    Req2["Request from user_123"] --> LB2["Stateless LB (Any Node)"]
+    LB2 -->|"Routed to Any Server"| SB["Server B or C"]
+    SB -->|"Read/Write"| Redis["Centralized Redis Cluster"]
+
+    classDef req fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef warn fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    class Req,Req2,LB,LB2,SA,SB req
+    class Loss warn
+    class Redis ok
 ```
-Definition: Stores client data locally between requests
-Client must connect to same server (sticky sessions)
 
-Example: In-memory cache (Redis) session storage
+| Dimension | Stateless Service | Stateful Service (Local) | Externalized State (App + Redis) |
+| :--- | :--- | :--- | :--- |
+| **Routing** | Any node (Round-Robin) | Sticky sessions (IP/Cookie hash) | Any node (Round-Robin) |
+| **Node Failure** | Zero session loss | Active local sessions lost | Zero session loss (if Redis replicated) |
+| **Auto-Scaling** | Instant, symmetric | Uneven load on new nodes | Instant, symmetric |
+| **Best Use Case** | REST/gRPC APIs, workers | Databases, caches, brokers | Authenticated web apps |
 
-Session stored locally on server:
-Server A: {user_123: {cart: [item1, item2], login_time: ...}}
-Server B: {user_456: {...}}
-
-Request from user_123:
-├─ Must go to Server A (has session data)
-├─ Load balancer uses sticky sessions (hash IP or cookie)
-└─ If Server A dies → session lost!
-
-Scaling problem:
-Add Server C
-├─ Old data still on Server A + Server B
-├─ New data goes to Server C
-├─ Uneven distribution
-└─ Session loss if server dies
-
-Solutions:
-1. Replication
-   └─ Replicate session to multiple servers
-   └─ If primary dies, replica has copy
-
-2. Session store (Redis)
-   ├─ Move session out of server
-   ├─ All servers query Redis for session
-   └─ Effective: make stateless service
-
-Example (better architecture):
-┌──────────────────────┐
-│ Client (user_123)    │
-└────────┬─────────────┘
-         │
-         ├─→ Load Balancer
-         │
-    ┌────┼────────────────────┐
-    ▼    ▼                    ▼
- Server1 Server2 Server3
-    │    │        │
-    └────┴────┬───┘
-               ▼
-            Redis (session store)
-               │
-     user_123_session: {cart: [...]}
-
-Now stateless: any server can handle user_123 requests
-
-Best for:
-├─ Data stores (databases, caches)
-├─ If you need sticky sessions, architect differently
-```
+> [!WARNING]
+> Relying on sticky sessions for application servers creates hotspots and causes user session loss during deployments or node crashes. Always externalize ephemeral session state to Redis or JWTs.
 
 ---
 
 ## Database Replication
 
+Database replication maintains copies of data across multiple nodes to improve read scalability, fault tolerance, and geographic locality.
+
+```mermaid
+flowchart LR
+    subgraph MS["Master-Replica (Single Leader)"]
+        M["Master (Reads + Writes)"] -->|"Replication Stream"| S1["Replica 1 (Read-Only)"]
+        M -->|"Replication Stream"| S2["Replica 2 (Read-Only)"]
+        M -->|"Replication Stream"| S3["Replica 3 (Read-Only)"]
+    end
+
+    subgraph MM["Master-Master (Active-Active)"]
+        M1["Master 1 (Reads + Writes)"] <-->|"Bi-Directional Sync"| M2["Master 2 (Reads + Writes)"]
+    end
+
+    classDef leader fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef replica fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    class M,M1,M2 leader
+    class S1,S2,S3 replica
+```
+
 ### Master-Slave (Master-Replica)
+- **Write Flow:** Client writes to Master → Master updates local disk → Master streams updates to Replicas → Replicas apply updates.
+- **Read Flow:** Clients read from Replicas (faster, horizontally scaled) or from Master (always latest).
+- **Replication Lag:** If Master executes `INSERT user WHERE id=1001` at `t=0ms`, Replica 1 may apply at `t=6ms` while Replica 2 applies at `t=10ms`. A read on Replica 2 at `t=7ms` returns stale data.
+- **Pros:** Simple single source of truth, strong write consistency on Master, high read scalability, replica failure has minimal impact.
+- **Cons:** Master is a write bottleneck and SPOF requiring failover, replicas see stale data, and cascading replication (`Master → Replica → Replica`) increases lag.
+- **Failover & Data Loss:** When Master dies (missed heartbeats), a Replica is promoted and clients redirect. If Master died before replicating a committed write, that write is lost unless quorum ACKs are required.
 
-```
-Topology:
-           ┌─────────────────────────┐
-           │ Master                  │
-           │ Accepts reads + writes  │
-           └────────────┬────────────┘
-                        │
-                        │ Replication stream
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-    ┌────────┐     ┌────────┐     ┌────────┐
-    │Slave 1 │     │Slave 2 │     │Slave 3 │
-    │Read    │     │Read    │     │Read    │
-    │only    │     │only    │     │only    │
-    └────────┘     └────────┘     └────────┘
-
-Write flow:
-1. Client writes to Master
-2. Master updates local disk
-3. Master sends update to Slaves
-4. Slaves apply update (eventually)
-
-Read flow:
-1. Client reads from Slave (faster, distributed)
-2. Or reads from Master (always latest, slower)
-
-Replication lag:
-Master: INSERT user WHERE id=1001 at t=0ms
-Slave 1: Receives at t=5ms, applies at t=6ms
-Slave 2: Receives at t=8ms, applies at t=10ms
-
-If client reads Slave 1 at t=7ms → sees update ✓
-If client reads Slave 2 at t=7ms → doesn't see update ✗
-
-Pros:
-├─ Simple (single source of truth)
-├─ Good read scalability (many slaves)
-├─ Slave failure: no impact (still have master)
-└─ Write consistency: guaranteed on master
-
-Cons:
-├─ Master failure: need failover
-├─ Write bottleneck: all writes go to master
-├─ Replication lag: slaves see stale data
-└─ Cascading replication: master→slave→slave (slower)
-
-Failover process (Master dies):
-1. Detect master is dead (no heartbeat)
-2. Promote one slave to master
-3. Redirect all clients to new master
-4. Other slaves replicate from new master
-
-Problem: Potential data loss
-├─ If master dies after write but before replicating to chosen slave
-├─ That write is lost (chosen slave becomes new master without it)
-└─ Solution: wait for quorum ACK before acknowledging write
-```
+> [!IMPORTANT]
+> Semi-synchronous replication balances durability and latency: waiting for at least **one** replica ACK guarantees the write survives a single-node crash without blocking on every distant replica.
 
 ### Master-Master (Active-Active)
+Both nodes accept reads and writes and replicate bi-directionally.
 
-```
-Topology:
-    ┌─────────────┐         ┌─────────────┐
-    │Master-1     │◄───────▶│Master-2     │
-    │Accepts R+W  │Bi-direc-│Accepts R+W  │
-    └──────┬──────┘tional   └──────┬──────┘
-           │replication            │
-           │                       │
-     ┌─────▼──────┬────────────────▼─────┐
-     │             │                     │
-     ▼             ▼                     ▼
-  Client-1    Client-2              Client-3
+- **Pros:** Higher write availability, no single point of failure, and geographic distribution (local writes per region).
+- **Cons:** Conflict resolution complexity when both masters update the same key, higher write latency if synchronized, and **split-brain** risk during network partitions (e.g., Master-1 writes `A=1` while Master-2 writes `A=2`).
+- **Conflict Resolution Strategies:**
+  1. **Last-Write-Wins (LWW):** Attach timestamps; higher timestamp wins (e.g., `t=100` overwrites `t=95`). Risky if system clocks drift.
+  2. **Application-Level Merge:** Store both conflicting versions and let application logic merge fields.
+  3. **Quorum-Based:** Require a majority of masters to ACK writes; minority partition cannot accept writes, preventing split-brain.
 
-Write flow:
-Client-1 writes to Master-1 → Master-1 sends to Master-2
-Client-2 writes to Master-2 → Master-2 sends to Master-1
+### Synchronous vs Asynchronous vs Semi-Synchronous Replication
 
-Pros:
-├─ Fault tolerance (write to either master)
-├─ Geographic distribution (each region has master)
-├─ No single point of failure
-└─ Higher write availability
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant M as Master
+    participant S1 as Replica 1
+    participant S2 as Replica 2
 
-Cons:
-├─ Conflict resolution: what if both masters write same key?
-├─ Complex: requires distributed consensus
-├─ Higher latency: writes go to 2+ masters
-└─ Risk of split-brain: if network partition
+    Note over C,S2: Synchronous Replication (Strong Consistency, Higher Latency)
+    C->>M: WRITE (t=0ms)
+    M->>S1: Replicate (t=0ms)
+    S1-->>M: ACK after disk flush (t=15ms)
+    M-->>C: Success (t=15ms)
 
-Conflict resolution strategies:
-1. Last-Write-Wins (LWW)
-   └─ Timestamp on write
-   └─ Master-2 write (t=100) overwrites Master-1 write (t=95)
-   └─ Risk: correct version lost if clocks wrong
-
-2. Application-level merge
-   └─ Store both versions
-   └─ Application decides: "merge these changes"
-   └─ Example: document with different fields edited on each master
-
-3. Quorum-based
-   └─ Need majority of masters to ACK write
-   └─ If network partition, minority can't write
-   └─ Prevents split-brain
-
-Split-brain scenario (Master-Master without quorum):
-┌─────────────┐         Network          ┌─────────────┐
-│Master-1     │◄─ PARTITION ─┼─ ─→│Master-2     │
-│Write: A=1   │         ─┼─ ─ ─        │Write: A=2   │
-└─────────────┘                        └─────────────┘
-
-Both masters now have different data!
-When network heals, conflict: A should be 1 or 2?
+    Note over C,S2: Asynchronous Replication (Low Latency, Lag & Loss Risk)
+    C->>M: WRITE (t=0ms)
+    M->>M: Write disk & queue (t=1.5ms)
+    M-->>C: Success (t=2ms)
+    M-)S2: Async stream in background (t=100ms)
 ```
 
-### Synchronous vs Asynchronous Replication
+| Replication Mode | Write Latency | Data Loss Risk | Consistency | Best Used For |
+| :--- | :--- | :--- | :--- | :--- |
+| **Synchronous** | High (waits for replica disk + network ACK) | Zero (replica always has latest) | Strong | Banking, financial ledgers, critical state |
+| **Asynchronous** | Very low (ACKs after local Master write) | High if Master crashes before streaming | Eventual (replication lag) | Social feeds, logs, analytics, most web apps |
+| **Semi-Synchronous** | Moderate (waits for 1 replica ACK, others async) | Low (tolerates 1 node loss) | Tunable | Production MySQL/PostgreSQL HA clusters |
 
-```
-Synchronous Replication:
-Write flow:
-1. Client writes to Master
-2. Master waits for Slave ACK
-3. Master returns success to client
-
-Timeline:
-Master: WRITE at t=0
-   ├─ Send to Slave (t=0ms)
-   ├─ Wait for ACK (t=5ms for network, t=10ms for disk write)
-   ├─ Receive ACK (t=15ms)
-   └─ Return to client (t=15ms) [Slower!]
-
-Slave: Receive at t=5ms
-   └─ Write to disk at t=15ms
-   └─ Send ACK at t=15ms
-
-Pros:
-├─ Consistency: write always replicated before ACK
-├─ No data loss: slave always has latest
-└─ Strong guarantee: can query slave for latest data
-
-Cons:
-├─ Slow: wait for slave to ACK (1-100ms overhead)
-├─ If slave slow: blocks all writes
-├─ If network slow: timeout issues
-└─ Not suitable for interactive applications
-
-Use when:
-├─ Consistency critical (banking, transactions)
-├─ Data loss unacceptable
-└─ Can tolerate slower writes
-
-───────────────────────────────────────────────────────
-
-Asynchronous Replication:
-Write flow:
-1. Client writes to Master
-2. Master returns success to client (immediately!)
-3. Master sends to Slave asynchronously
-
-Timeline:
-Master: WRITE at t=0
-   ├─ Write to own disk (t=1ms)
-   ├─ Queue replication message (t=1.5ms)
-   ├─ Return to client (t=2ms) [Fast!]
-   └─ Send to Slave (t=100ms, in background)
-
-Slave: Receive at t=100ms
-   └─ Write to disk at t=115ms
-
-Pros:
-├─ Fast: return to client immediately
-├─ High throughput: don't wait for slaves
-└─ Suitable for interactive apps
-
-Cons:
-├─ Replication lag: slave lags behind master
-├─ Data loss risk: if master dies before replicating
-├─ Eventual consistency: slaves see stale data
-└─ Must tolerate stale reads
-
-Use when:
-├─ Performance critical (high write rate)
-├─ Some data loss acceptable (logs, analytics)
-├─ Can tolerate eventual consistency
-└─ Most web applications
-
-Hybrid approach (Semi-synchronous):
-1. Write to Master
-2. Master sends to Slave 1 (and waits for ACK)
-3. Master sends to Slave 2 (doesn't wait)
-└─ Return to client
-└─ Somewhere between: tolerance for 1 slave down, but fast writes
-```
+> [!WARNING]
+> In Master-Master replication without quorum enforcement, a network partition creates a **split-brain** state where both masters accept conflicting writes (`A=1` vs `A=2`), causing silent data corruption upon recovery.
 
 ---
 
 ## Database Partitioning (Sharding)
 
-### Sharding Basics
+Sharding distributes a large dataset (e.g., `100M users`) across multiple independent databases (**shards**), where each shard stores a subset of records (e.g., `10M users` per shard across 10 shards).
 
+```mermaid
+flowchart TD
+    Req["Client Request: Get user_id = 5123456"] --> Router{"Shard Router"}
+    Router -->|"Range: ID / 1M + 1"| R["Shard 6 (Range-Based)"]
+    Router -->|"Hash: hash(id) % 10"| H["Shard 9 (Hash-Based)"]
+    Router -->|"Lookup Table"| D["Shard 4 (Directory-Based)"]
+
+    classDef req fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef router fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef shard fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    class Req req
+    class Router router
+    class R,H,D shard
 ```
-Definition: Distribute data across multiple databases (shards)
-Each shard stores subset of data (partition)
 
-Example: User database with 100M users
-
-No sharding:
-┌────────────────────────────────────┐
-│ User Database                      │
-│ 100M users                         │
-│ Single server: maxes at ~10K QPS   │
-└────────────────────────────────────┘
-
-With 10 shards:
-Shard 1: Users 1-10M
-Shard 2: Users 10-20M
-Shard 3: Users 20-30M
-...
-Shard 10: Users 90-100M
-
-Architecture:
-┌──────────────────┐
-│ Client request   │
-│ "Get user 5M"    │
-└────────┬─────────┘
-         │
-         ├─ Shard key: user_id = 5M
-         ├─ Hash/range/directory lookup: goes to Shard 1
-         │
-         ▼
-┌────────────────────────────────┐
-│ Shard 1                        │
-│ Users 1-10M (fast, 1M records) │
-└────────────────────────────────┘
-
-Benefits:
-├─ Linear scalability: 10 shards = 10x capacity
-├─ Parallel queries: query all shards simultaneously
-└─ Smaller dataset per shard: faster queries
-
-Challenges:
-├─ Shard key selection: must be good distribution
-├─ Cross-shard queries: need to hit multiple shards
-├─ Rebalancing: add shard, move data (complex!)
-├─ Hotspots: some shards busier than others
-└─ Consistency: transactions within shard only
-```
+- **Benefits:** Linear capacity scaling (`10 shards = 10x capacity`), parallel query execution, and smaller per-shard indexes for faster lookups.
+- **Challenges:** Shard key selection, cross-shard queries/joins, complex rebalancing when adding shards, hotspots, and single-shard transaction boundaries.
 
 ### Sharding Strategies
 
-#### Range-Based Sharding
+| Strategy | Routing Logic | Pros | Cons |
+| :--- | :--- | :--- | :--- |
+| **Range-Based** | Partition by value ranges (e.g., `1–1M → Shard 1`) | Simple, efficient range scans | Hotspots on newest/active ranges; uneven distribution |
+| **Hash-Based** | `shard = hash(key) % num_shards` | Uniform distribution, avoids hotspots | Rebalancing nightmare (`% 10` vs `% 11` moves ~90% of keys) |
+| **Consistent Hashing** | Hash ring with virtual nodes | Minimal key movement (`1/N`) on scale-out | Slightly more complex routing metadata |
+| **Directory-Based** | Lookup table (`key range → shard`) | Flexible custom distributions, easy partial rebalancing (e.g., move 25%) | Extra lookup hop, directory can become a bottleneck/SPOF |
 
-```
-Shard by range of values
+> [!WARNING]
+> Modulo hashing (`hash(key) % N`) causes a massive data migration storm whenever `N` changes (e.g., `hash("alice") % 10 = 3` shifts to `% 11 = 2`). Always use **consistent hashing** or **directory-based** partitioning for elastic clusters.
 
-Example: User ID ranges
-Shard 1: IDs 1 to 1M
-Shard 2: IDs 1M+1 to 2M
-Shard 3: IDs 2M+1 to 3M
+### Handling Cross-Shard Operations & Hotspots
 
-Lookup:
-user_id = 5123456
-shard = (user_id / 1M) + 1 = Shard 6
+```mermaid
+flowchart LR
+    subgraph Cross["Cross-Shard Solutions"]
+        CS1["Denormalization (Store Follower Posts Locally)"]
+        CS2["Parallel Fan-Out + App Merge"]
+        CS3["Aggregate Microservice + Materialized View"]
+    end
 
-Pros:
-├─ Simple logic (no hash function needed)
-├─ Range queries efficient (users 1-10K on same shard)
-└─ Easy to find record
+    subgraph Hot["Hotspot Mitigation (Celebrity user_id)"]
+        HK["Hot Key: 1B Followers"] --> HS1["Split Key (v1..vN across Shards)"]
+        HK --> HS2["Aggressive Read Caching (Redis)"]
+        HK --> HS3["Dedicated High-Capacity Shard"]
+    end
 
-Cons:
-├─ Uneven distribution: some IDs more popular
-├─ Hotspots: early IDs (1-1M) created first, more active
-├─ Sequential IDs: new users all go to latest shard
-└─ Rebalancing hard: ranges shift when adding shard
-
-Real-world problem:
-Shard 1 (IDs 1-1M): 10K QPS, lots of old data
-Shard 2 (IDs 1M-2M): 5K QPS
-Shard N (IDs (N-1)M-NM): 50K QPS (new users, hot!)
-└─ Uneven load: can't just add shard to fix
-```
-
-#### Hash-Based Sharding
-
-```
-Shard by hash of key
-
-Example:
-shard = hash(user_id) % num_shards
-
-Calculation:
-user_id = 5123456
-hash(5123456) = 314159 (SHA256 first bytes, for example)
-shard = 314159 % 10 = Shard 9
-
-Pros:
-├─ Uniform distribution (hashing spreads values)
-├─ No hotspots (random distribution)
-├─ Simple implementation
-└─ Works well for many use cases
-
-Cons:
-├─ Rebalancing nightmare: adding shard changes ALL hashes!
-├─ Old: shard = 314159 % 10 = 9
-├─ New: shard = 314159 % 11 = 8 (moved!)
-└─ Almost all keys need to move (expensive!)
-
-Example of rebalancing problem:
-num_shards = 10
-key = "alice"
-hash("alice") % 10 = 3 → Shard 3
-
-Add new shard (num_shards = 11)
-hash("alice") % 11 = 2 → Shard 2 (different!)
-
-Millions of keys rehash to different shards
-Need to copy data from old shards to new shards
-During migration: inconsistency, complexity
-
-Solution: Use consistent hashing (see Building Blocks section)
+    classDef cs fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef hot fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+    classDef fix fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    class CS1,CS2,CS3 cs
+    class HK hot
+    class HS1,HS2,HS3 fix
 ```
 
-#### Directory-Based Sharding
+1. **Cross-Shard Operations** (e.g., *"Get all posts from users I follow"*):
+   - **Denormalization:** Pre-store follower posts with the user (single-shard read, higher write/storage cost).
+   - **Fan-Out Query:** Query all shards in parallel and merge in the application tier.
+   - **Aggregate Microservice:** Dedicated service maintaining an eventually consistent materialized view.
+   - **Schema Design:** Design shard keys to co-locate related entities and avoid cross-shard joins.
+2. **Hotspot Problem** (e.g., celebrity `user_id = 1000000001` with `1B` followers overloading `Shard 1`):
+   - **Split Hot Key:** Replicate `user:1000000001:v1` to Shard 1 and `:v2` to Shard 2; reads pick randomly, writes update all versions.
+   - **Aggressive Caching:** Serve celebrity reads from Redis/CDN so the shard only handles cache misses.
+   - **Dedicated Shard:** Isolate hot keys onto a high-capacity shard.
+   - **Application-Tier Handling:** Bypass standard user-ID sharding for known celebrity accounts.
 
-```
-Maintain lookup table: key → shard
-
-Example:
-┌────────────────┬─────────┐
-│ User ID Range  │ Shard   │
-├────────────────┼─────────┤
-│ 1-1M           │ Shard 1 │
-│ 1M-2M          │ Shard 2 │
-│ 2M-3M          │ Shard 3 │
-│ 3M-5M          │ Shard 4 │  (expanded after growth)
-└────────────────┴─────────┘
-
-Lookup:
-user_id = 5123456
-SELECT shard FROM user_shard_directory WHERE user_id BETWEEN 1 AND 5M
-Result: Shard 4
-
-Pros:
-├─ Flexible: can rebalance without formula change
-├─ No hash collisions
-├─ Can create custom distributions
-└─ Easy to add/remove shards
-
-Cons:
-├─ Requires lookup (extra query)
-├─ Directory itself is bottleneck if not cached
-├─ Must keep directory consistent
-└─ Operational overhead
-
-Real-world example:
-Rebalance by changing directory entry:
-Old: user_id 3M-5M → Shard 4
-New: user_id 3M-4M → Shard 4
-New: user_id 4M-5M → Shard 5 (new shard)
-
-Only data in 4M-5M range needs to move (25% instead of all)
-```
-
-### Handling Cross-Shard Operations
-
-```
-Problem: Need to read/write across multiple shards
-
-Example: "Get all posts from users I follow"
-├─ Get user's followers (might be in different shards)
-├─ For each follower, get their posts (more shards)
-└─ Merge results
-
-Solution 1: Denormalization
-├─ Store follower posts with user
-├─ Single shard read
-├─ Trade: storage increase + write complexity
-
-Solution 2: Fan-out query
-├─ Query all shards in parallel
-├─ Merge results in application
-
-Solution 3: Aggregate microservice
-├─ Dedicated service for cross-shard queries
-├─ Maintains materialized view
-├─ Eventual consistency
-
-Solution 4: Avoid cross-shard
-├─ Design schema/queries to avoid need
-├─ Store denormalized data
-├─ Accept some redundancy
-```
-
-### Hotspot Problem
-
-```
-Definition: Some shards get more traffic than others
-
-Example:
-Shard: user_id % 10 = shard_id
-
-Celebrity user_id = 1000000001
-hash(1000000001) % 10 = 1 → Shard 1
-
-1B followers all request updates from this user
-All requests go to Shard 1 → overloaded
-
-Solutions:
-
-1. Split hot key (replicate)
-   ├─ Replicate hot key to multiple shards
-   ├─ user:1000000001:v1 → Shard 1
-   ├─ user:1000000001:v2 → Shard 2
-   ├─ Read: randomly pick v1 or v2
-   ├─ Write: update all versions
-   └─ Trade: write load increases
-
-2. Cache
-   ├─ Cache celebrity data aggressively
-   ├─ Most reads served from cache
-   ├─ Shard only handles cache misses
-   └─ Trade: stale data possible
-
-3. Separate shard for hot data
-   ├─ Move hot keys to dedicated high-capacity shard
-   ├─ Regular shards handle cold data
-   └─ Trade: operational complexity
-
-4. Distribute hot key differently
-   ├─ Don't shard by user_id for celebrity accounts
-   ├─ Handle in application tier
-   └─ Trade: application complexity
-```
+> [!TIP]
+> Pick a shard key with high cardinality and uniform access frequency (e.g., `tenant_id` or `user_id` paired with hot-key caching) to avoid hotspots and cross-shard scatter-gather queries.
 
 ---
 
 ## Fault Tolerance and Failover
 
-### Redundancy
+Fault tolerance ensures a system continues operating despite hardware crashes, network partitions, or regional outages by eliminating single points of failure through **redundancy** and automated **failover**.
 
-```
-Definition: Duplicate critical components so failure doesn't break system
+![Multi-Region Active-Passive Failover and Leader Election](./assets/03-sharding-replication-failover.svg)
 
-Architecture without redundancy:
-┌──────────────────┐
-│ Single Database  │
-└────────┬─────────┘
-         │
-      Dies! No backup!
-         │
-      CRASH
-     (Data loss?)
+### Redundancy Tiers & Placement
 
-Architecture with redundancy:
-┌────────────────────────────┐
-│Primary Database            │
-└────────┬───────────────────┘
-         │
-         ├─ Active replication (master-master)
-         │
-         ▼
-┌────────────────────────────┐
-│Secondary Database          │
-│(Replica)                   │
-└────────────────────────────┘
+| Architecture | Availability SLA | Annual Downtime | Fault Tolerance |
+| :--- | :--- | :--- | :--- |
+| **Single Server** | `99%` | ~35 hours/year | None (unacceptable for production) |
+| **Master + 1 Replica** | `99.9%` | ~8.7 hours/year | Tolerates 1 server failure |
+| **Master + 3 Replicas** | `99.99%` | ~52 minutes/year | Tolerates up to 3 staggered failures |
+| **Master + 5 Replicas + Geo** | `99.999%` | ~5 minutes/year | Tolerates simultaneous failures + regional outages |
 
-If primary fails:
-├─ Secondary takes over (failover)
-├─ Client traffic redirected
-└─ System continues (downtime: seconds)
+- **Placement Hierarchy:** Spread replicas across different servers → racks → datacenters/AZs → geographic regions → cloud providers (highest cost, ultimate resilience).
 
-Redundancy levels:
-1. Single server
-   ├─ Availability: 99% (35 hours downtime/year)
-   └─ Unacceptable for production
+### Active-Passive vs Active-Active Failover
 
-2. Master + 1 Replica
-   ├─ Availability: 99.9% (8.7 hours downtime/year)
-   └─ Can tolerate: one server failure
+```mermaid
+flowchart LR
+    subgraph AP["Active-Passive Failover"]
+        VIP["Virtual IP / Geo-DNS"] -->|"All Traffic"| P["Primary (Active)"]
+        P -.->|"Heartbeat (100ms) + Replication"| S["Secondary (Passive Standby)"]
+        VIP -.->|"Failover at t=6s"| S
+    end
 
-3. Master + 3 Replicas
-   ├─ Availability: 99.99% (52 minutes downtime/year)
-   └─ Can tolerate: up to 3 failures if staggered
+    subgraph AA["Active-Active Failover"]
+        LB["Global Load Balancer"] -->|"50% Traffic"| A["Server A (Active)"]
+        LB -->|"50% Traffic"| B["Server B (Active)"]
+        A <-->|"Bi-Directional Sync"| B
+    end
 
-4. Master + 5 Replicas + Geographic distribution
-   ├─ Availability: 99.999% (5 minutes downtime/year)
-   └─ Can tolerate: multiple simultaneous failures + regional outages
-
-Redundancy placement:
-├─ Across different servers
-├─ Across different racks
-├─ Across different datacenters
-├─ Across different geographic regions
-└─ Across different cloud providers (expensive, but ultimate redundancy)
+    classDef active fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef passive fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef route fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    class P,A,B active
+    class S passive
+    class VIP,LB route
 ```
 
-### Failover: Active-Passive
+| Failover Mode | Resource Utilization | Failover Speed | Complexity & Risks |
+| :--- | :--- | :--- | :--- |
+| **Active-Passive** | Standby sits idle for writes | Seconds (e.g., 5s timeout + VIP/DNS switch) | Split-brain, false positives on network jitter, async data loss |
+| **Active-Active** | 100% active (no idle capacity) | Near-instant (remove failed node from pool) | Distributed consensus, write conflicts, higher operational overhead |
 
-```
-Setup:
-┌──────────────────────────┐    ┌──────────────────────────┐
-│ Primary (Active)         │    │Secondary (Passive)       │
-│ ┌────────────────────┐   │    │ ┌────────────────────┐   │
-│ │ Accepts all traffic│   │    │ │ Idle, synchronized│   │
-│ │ Heartbeat: ✓      │   │    │ │ by replication     │   │
-│ └────────────────────┘   │    │ └────────────────────┘   │
-└──────────────────────────┘    └──────────────────────────┘
-         ▲                                  │
-         │ Heartbeat (every 100ms)         │
-         └──────────────────────────────────┘
+> [!IMPORTANT]
+> Most real-world outages stem not from the initial node failure, but from **failover bugs** (split-brain, thundering herds, or untested promotion scripts). Always test automated failover in staging or chaos-engineering drills.
 
-Failover Process:
-t=0:  Primary sends heartbeat "I'm alive"
-      Secondary receives: Primary OK
+### Heartbeat Mechanism & Failure Detection
 
-t=1:  Primary crashes (network issue)
-      Secondary doesn't receive heartbeat
-
-t=5:  Secondary times out (no heartbeat for 5 seconds)
-      Secondary detects failure
-
-t=6:  Secondary takes VIP (virtual IP)
-      └─ Assumes identity of primary
-      └─ Client connections redirect to secondary
-
-t=7:  Secondary is now active
-      └─ Accepts writes, serves reads
-
-Problems:
-1. Split-brain: if network partition
-   ├─ Primary thinks secondary dead
-   ├─ Secondary thinks primary dead
-   ├─ Both become "active"
-   └─ Conflicting writes!
-
-2. False positives
-   ├─ Network slow (not dead)
-   ├─ Secondary assumes primary failed
-   ├─ Causes unnecessary failover
-   └─ Costs: consistency issues, client disruption
-
-3. Data loss
-   ├─ Primary crash before replicating recent writes
-   ├─ Secondary becomes primary
-   ├─ Lost writes never recovered
+```mermaid
+stateDiagram-v2
+    [*] --> Healthy: Heartbeat Received (1s interval)
+    Healthy --> Healthy: Reset Timeout Timer
+    Healthy --> Suspected: Missed Heartbeat (&gt;3s)
+    Suspected --> Healthy: Heartbeat Restored
+    Suspected --> Dead: Quorum Confirms Timeout (5s)
+    Dead --> Failover: Promote Standby + Fence Old Primary
+    Failover --> [*]
 ```
 
-### Failover: Active-Active
+- **Payload:** Periodic (every `1s`) JSON heartbeat `{server_id, timestamp, healthy, seq_num}` over a dedicated network interface separate from the data path.
+- **Challenges:**
+  1. **False Positives:** Network jitter triggers unnecessary failover → solve with **quorum** (e.g., 2 of 3 nodes must declare death).
+  2. **Cascading Failures:** Asymmetric network partitions trigger simultaneous failovers → solve with **consensus** (Raft/Paxos) and fencing (STONITH).
+  3. **Timeout Tuning:** Too short causes false positives; too long inflates downtime (typical: `1s` interval, `3–5s` timeout).
+- **Best Practices:** Exponential backoff on retries, randomized **jitter** to prevent thundering herds, dedicated heartbeat NICs, and continuous monitoring of heartbeat loss rate/latency.
 
-```
-Setup:
-┌──────────────────────────┐    ┌──────────────────────────┐
-│ Server A (Active)        │    │ Server B (Active)        │
-│ ┌────────────────────┐   │    │ ┌────────────────────┐   │
-│ │ Accepts traffic    │   │    │ │ Accepts traffic    │   │
-│ │ Heartbeat: ✓      │   │    │ │ Heartbeat: ✓      │   │
-│ └────────────────────┘   │    │ └────────────────────┘   │
-└──────────────────────────┘    └──────────────────────────┘
-         ▲                                  ▲
-         │ Bi-directional replication      │
-         └──────────────────────────────────┘
-
-Pros:
-├─ No idle server (efficient resource use)
-├─ Faster failover (already active)
-└─ Load distribution (spread traffic)
-
-Cons:
-├─ Complex (distributed consensus needed)
-├─ Conflict resolution (both received writes)
-└─ Higher operational overhead
-
-Failover:
-If Server A fails:
-└─ Server B already active, continues serving
-└─ No failover needed!
-└─ Just remove A from pool
-```
-
-### Heartbeat Mechanism
-
-```
-Server A sends periodic heartbeat to Server B
-
-Heartbeat message (every 1 second):
-┌──────────────────────────┐
-│ {                        │
-│   "server_id": "A",      │
-│   "timestamp": 1234567,  │
-│   "healthy": true,       │
-│   "seq_num": 5678        │
-│ }                        │
-└──────────────────────────┘
-
-Server B processes:
-├─ If received: update last_heartbeat_time
-├─ If not received for 5 seconds: declare A dead
-├─ If received: A is healthy
-
-Challenges:
-
-1. False positives (network glitch)
-   ├─ Heartbeat lost due to network hiccup
-   ├─ Server B declares A dead
-   ├─ Causes failover (unnecessary)
-   └─ Solution: Use quorum (3 servers, need 2 to declare dead)
-
-2. Cascading failures
-   ├─ If Server B heartbeats to Server C
-   ├─ And network partitions C from B
-   ├─ C might declare B dead
-   ├─ B might declare A dead
-   ├─ Both failovers trigger simultaneously
-   └─ Solution: Use distributed consensus (Raft, Paxos)
-
-3. Timeout tuning
-   ├─ Too short: false positives (network jitter)
-   ├─ Too long: slow detection (high downtime)
-   └─ Typical: 3-5 seconds timeout, 1 second heartbeat interval
-
-Best practices:
-├─ Use exponential backoff for retries
-├─ Monitor heartbeat metrics (loss rate, latency)
-├─ Separate heartbeat from data path
-├─ Use dedicated network interface for heartbeats
-└─ Implement jitter (randomize heartbeat timing to avoid thundering herd)
-```
+> [!WARNING]
+> Never promote a standby node without **fencing** the old primary (revoking its lease or network access); otherwise, a temporarily partitioned primary can wake up and corrupt data.
 
 ---
 
 ## Recovery and Durability
 
-### RPO (Recovery Point Objective)
+Recovery and durability define how much data and time a system can afford to lose during a disaster, and the storage mechanisms that guarantee committed writes survive crashes.
 
-```
-Definition: Maximum data loss you can tolerate (measured in time)
+### RPO vs RTO
 
-Examples:
-RPO = 1 hour
-└─ Can lose up to 1 hour of data
-└─ If system fails at 10:30, recover data from 09:30
+```mermaid
+flowchart LR
+    Crash["Failure Occurs (t_fail)"] -->|"Look Back: RPO (Data Loss Window)"| LastBackup["Last Replicated/Backed-Up State"]
+    Crash -->|"Look Forward: RTO (Downtime Window)"| Restored["Service Restored &amp; Serving"]
 
-RPO = 1 minute
-└─ Can lose up to 1 minute of data
-└─ Requires frequent backups (every minute)
-└─ More expensive infrastructure
-
-RPO = 0 (zero)
-└─ Cannot lose any data
-└─ Requires synchronous replication to multiple sites
-└─ Very expensive
-
-Achieving different RPOs:
-RPO = 24 hours: Nightly backups
-RPO = 1 hour: Hourly backups
-RPO = 1 minute: Continuous replication (or snapshots every minute)
-RPO = 0: Synchronous replication to 2+ sites
-
-Cost vs RPO:
-RPO = 24h: 1x cost (bare minimum)
-RPO = 1h: 3x cost (more infrastructure)
-RPO = 5min: 5x cost (continuous replication)
-RPO = 0: 10x cost (synchronous replication, multiple sites)
+    classDef fail fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef state fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    class Crash fail
+    class LastBackup state
+    class Restored ok
 ```
 
-### RTO (Recovery Time Objective)
+- **RPO (Recovery Point Objective):** Maximum acceptable data loss measured in time.
+- **RTO (Recovery Time Objective):** Maximum acceptable downtime to restore service.
 
-```
-Definition: Maximum downtime you can tolerate (time to recover)
-
-Examples:
-RTO = 4 hours
-└─ Acceptable downtime: 4 hours
-└─ After failure, can take up to 4 hours to restore service
-└─ Acceptable for: analytics, batch systems
-
-RTO = 15 minutes
-└─ Unacceptable downtime: 15 minutes
-└─ After failure, restore service in < 15 minutes
-└─ Acceptable for: web services, critical apps
-
-RTO = 0 (zero)
-└─ Zero downtime
-└─ Instant failover
-└─ Requires: hot standby + redundancy
-└─ Very expensive
-
-Achieving different RTOs:
-RTO = 4 hours: Manual recovery (run restore scripts)
-RTO = 1 hour: Automated recovery + alerts
-RTO = 5 minutes: Hot standby + quick failover
-RTO = 0: Redundant active-active + instant failover
-
-Typical costs:
-RTO = 4h: Cheap (no redundancy)
-RTO = 1h: Medium (single backup)
-RTO = 5min: Expensive (hot standby)
-RTO = 0: Very expensive (multiple active nodes)
-```
+| Target Tier | RPO Mechanism | RTO Mechanism | Relative Cost |
+| :--- | :--- | :--- | :--- |
+| **Basic (`RPO 24h / RTO 4h`)** | Nightly backups | Manual restore scripts | `1x` (Cheap) |
+| **Standard (`RPO 1h / RTO 1h`)** | Hourly snapshots | Automated recovery + alerts | `3x` (Medium) |
+| **High (`RPO 1–5m / RTO 5–15m`)** | Continuous async replication | Hot standby + automated failover | `5x` (Expensive) |
+| **Mission-Critical (`RPO 0 / RTO 0`)** | Synchronous multi-site replication | Redundant active-active + instant routing | `10x` (Very Expensive) |
 
 ### Checkpointing and Recovery
+Long-running batch jobs (e.g., processing `1M` items over 1 hour) save periodic checkpoints to durable storage (Database, HDFS, or S3—never in-memory) so a crash at item `500K` resumes at `500K + 1` instead of restarting from `0`.
 
-```
-Definition: Periodically save system state to recover from failures
-
-Naive approach (no checkpointing):
-Process starts
-├─ Read 1M items from database
-├─ Process each item (takes 1 hour)
-├─ Crashes at item 500K (halfway through!)
-└─ Must restart from beginning → waste 30 minutes
-
-With checkpointing:
-Process starts
-├─ Read batch of 10K items
-├─ Process items
-├─ Save checkpoint: "processed items 1-10K" to durable storage
-├─ Repeat
-├─ Crashes after processing 500K items
-└─ Restart: read checkpoint → resume from item 500K+1
-
-Checkpoint design:
-
-Checkpoint format:
-{
-  "process_id": "batch-processor-1",
-  "last_item_id": 500000,
-  "last_update_time": "2024-01-15T10:30:00Z",
-  "processing_state": {...}
-}
-
-Frequency trade-off:
-├─ Checkpoint every 10K items: fast recovery, overhead on writes
-├─ Checkpoint every 100K items: slower recovery, less overhead
-└─ Typical: checkpoint interval = 1-5% of total time
-
-Implementation:
+```python
 def process_items(items):
     checkpoint = load_checkpoint()
     start_index = checkpoint.last_item_id + 1
@@ -964,217 +423,167 @@ def process_items(items):
     for i in range(start_index, len(items)):
         process(items[i])
         if i % 10000 == 0:
-            save_checkpoint(i)  // Every 10K items
-
-Durability:
-Checkpoint MUST be on durable storage:
-├─ Database
-├─ Distributed file system (HDFS)
-├─ Blob storage (S3)
-└─ NOT in-memory (lost on crash!)
+            save_checkpoint(i)  # Persist every 10K items (1-5% of total time)
 ```
+
+> [!TIP]
+> Aim for a checkpoint interval equal to **1–5% of total job duration**—frequent enough to bound rework on crash, infrequent enough to avoid write amplification.
 
 ### Write-Ahead Logging (WAL)
 
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant WAL as WAL (Sequential Disk)
+    participant Mem as DB Memory Buffer
+    participant Data as Data Files (Disk)
+
+    App->>WAL: 1. Append "UPDATE user SET name=Alice WHERE id=1"
+    WAL-->>App: Durable Flush (t=10ms)
+    App->>Mem: 2. Update In-Memory State (t=20ms)
+    Mem-->>App: 3. Return Success to Client (t=30ms)
+    Note over Mem,Data: Crash at t=50ms before background flush!
+    WAL->>Data: 4. Recovery: Replay WAL entries to restore state
 ```
-Definition: Log all writes to durable storage BEFORE applying to database
 
-Problem (without WAL):
-┌─────────────────┐
-│ Application     │
-└────────┬────────┘
-         │ "UPDATE user SET name=Alice WHERE id=1"
-         │
-         ▼
-┌─────────────────┐
-│ Database        │
-│ Updates memory  │
-│ (t=0ms)         │
-│                 │
-│ Flushes to disk │
-│ (t=100ms)       │
-│                 │
-│ CRASH at t=50ms │◄─ Updated memory, but not disk!
-└─────────────────┘
-         │
-    Restart
-         │
-    ▼ Memory lost! Update lost!
+- **Why WAL:** Without WAL, updating memory at `t=0ms` and crashing at `t=50ms` before the `t=100ms` disk flush loses the committed update.
+- **Pros:** Guarantees durability before client ACK, fast sequential disk I/O, and simple crash recovery via log replay.
+- **Cons:** Disk I/O overhead per write unless batched, potential log-disk bottleneck, and requires log rotation/compaction.
+- **Best Practices:** Batch log flushes, use SSDs, separate log disk from data disk for parallel I/O, and archive/rotate old logs.
 
-Solution (WAL):
-Application writes to database:
-
-1. Write to log (durable, sequential, fast)
-   └─ Log: "UPDATE user SET name=Alice WHERE id=1"
-   └─ Flush to disk (t=10ms)
-
-2. Write to in-memory database (fast)
-   └─ Update memory (t=20ms)
-
-3. Return to application
-   └─ Client: operation succeeded (t=30ms)
-
-4. Async: Flush to disk
-   └─ Write actual data to disk (background)
-
-Crash scenario:
-┌─────────────────────┐
-│ Application         │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ Log (WAL)           │
-│ Write: "..."        │◄─ Always durable
-│ Durability: ✓       │
-└─────────────────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ Database Memory     │
-│ Updated            │
-└─────────────────────┘
-          │
-       CRASH!
-          │
-          ▼
-      Recovery:
-      1. Read log
-      2. Replay all operations
-      3. Restore to consistent state
-
-Pros:
-├─ Data durability (write persists before ACK)
-├─ Fast (log is sequential)
-└─ Simple recovery (replay log)
-
-Cons:
-├─ Disk I/O for every write (unless batched)
-├─ Log disk can become bottleneck
-└─ Requires log cleanup (remove old entries)
-
-Best practices:
-├─ Batch writes: accumulate writes, flush once
-├─ Use SSD (fast sequential writes)
-├─ Separate log disk from data disk (parallel I/O)
-└─ Implement log rotation (archive old logs, reclaim space)
-```
+> [!IMPORTANT]
+> Checkpoints and WALs only provide durability if flushed (`fsync`) to **persistent storage** (local SSD, replicated DB, or object storage). In-memory buffers vanish on power loss.
 
 ---
 
 ## Distributed Consensus
 
-### Why Consensus Matters
+When multiple servers must agree on a single source of truth (e.g., Master A has `balance = 100` vs Master B `balance = 150`, or electing a single leader), **distributed consensus** prevents data corruption and split-brain.
 
-```
-Problem: Multiple servers must agree on value
+### Raft State Machine & Log Replication
 
-Scenario: Two master databases, both receive writes
-├─ Master A: "balance = 100"
-├─ Master B: "balance = 150"
-├─ Which is correct? Need consensus!
+> [!IMPORTANT]
+> Never implement custom consensus or leader-election protocols from scratch. Use battle-tested Raft/Paxos systems like **etcd**, **Consul**, **ZooKeeper**, or **CockroachDB**.
 
-Without consensus: data corruption, financial loss, chaos
-
-With consensus: all servers agree on one truth
-```
-
-### Paxos (High Level)
-
-```
-Simplified explanation (real Paxos very complex):
-
-Problem: 3 servers, each gets different value
-Server A: "balance = 100"
-Server B: "balance = 150"
-Server C: "balance = 120"
-
-Paxos stages:
-
-Stage 1 (Prepare):
-├─ Proposer announces: "I propose value 100"
-├─ Acceptors promise: "We won't accept lower proposals"
-└─ Guarantees: no earlier proposal takes precedence
-
-Stage 2 (Accept):
-├─ Proposer sends: "Accept value 100"
-├─ Acceptors accept if they didn't promise higher
-├─ Once majority accepts → value is committed
-└─ Guarantees: no contradiction
-
-Result:
-├─ All servers learn committed value
-├─ Consensus reached!
-
-Pros:
-├─ Provably safe (never violates safety)
-└─ Works with network partitions
-
-Cons:
-├─ Very complex (hundreds of edge cases)
-├─ Slow (multiple rounds of messages)
-├─ Hard to implement correctly
-└─ Even Lamport (inventor) said "Paxos is not intuitive"
+```mermaid
+stateDiagram-v2
+    [*] --> Follower: Boot / Start
+    Follower --> Candidate: Election Timeout (No Heartbeat)
+    Candidate --> Candidate: Split Vote (New Term)
+    Candidate --> Leader: Receives Majority Votes
+    Leader --> Follower: Discovers Higher Term
+    Candidate --> Follower: Discovers Current Leader or Higher Term
 ```
 
-### Raft (More Intuitive)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as Leader (Term 2)
+    participant F1 as Follower 1
+    participant F2 as Follower 2
 
+    C->>L: Write Command (x=5)
+    L->>L: Append to Local Log
+    par Replicate to Quorum
+        L->>F1: AppendEntries(x=5)
+        L->>F2: AppendEntries(x=5)
+    end
+    F1-->>L: ACK
+    Note over L,F1: Majority (2/3) Reached → Entry Committed!
+    L-->>C: Success
+    L->>F1: Heartbeat (Commit Index Updated)
+    L->>F2: AppendEntries / Commit Index Updated
 ```
-Raft consensus algorithm (simpler than Paxos)
 
-Key idea: Leader election + log replication
+### Paxos vs Raft
 
-Servers have states:
-├─ Leader (one per term): receives requests, replicates log
-├─ Follower: follows leader
-└─ Candidate: candidate for leader
+| Dimension | Paxos | Raft |
+| :--- | :--- | :--- |
+| **Core Mechanism** | Two-phase: **Stage 1 (Prepare/Promise)** + **Stage 2 (Accept/Accepted)** | **Leader Election** + **Log Replication** with monotonic terms |
+| **Understandability** | Notoriously complex, many edge cases | Designed for clarity and teachability |
+| **Safety** | Provably safe across network partitions | Only 1 leader/term; majority log before commit; never loses committed entries |
+| **Fault Tolerance** | Tolerates `(N - 1) / 2` failures | `3` nodes → 1 failure; `5` nodes → 2 failures; `7` nodes → 3 failures |
+| **Production Usage** | Google Chubby, Apache Cassandra (LWT) | `etcd` (Kubernetes), Consul, CockroachDB |
 
-Leader election:
-1. Start: all followers
-2. Follower times out (no heartbeat)
-3. Becomes candidate, increments term
-4. Requests votes from other servers
-5. If gets majority votes: becomes leader
-6. Sends heartbeats to all followers
+> [!WARNING]
+> Always deploy consensus clusters with an **odd number of nodes** (`3`, `5`, or `7`). A 4-node cluster has the exact same fault tolerance (`1` failure) as a 3-node cluster while requiring a larger quorum (`3` vs `2`).
 
-Log replication:
-┌─────────┐
-│ Leader  │ (has all logs)
-└────┬────┘
-     │
-     ├─ Send log entries to Follower A
-     ├─ Send log entries to Follower B
-     └─ Send log entries to Follower C
+---
 
-Followers append to log, reply with ACK
-Once majority ACKs → commit entry
+## Backpressure and Load Shedding
 
-Safety guarantees:
-├─ Only one leader per term
-├─ Logs replica on majority before commit
-├─ If leader crashes, state recovers from logs
-└─ Never loses committed entries
+When downstream services or databases slow down, unbounded request queues exhaust memory and cause cascading latency spikes across the entire system. **Backpressure** and **load shedding** protect system stability under overload.
 
-Typical Raft deployment:
-├─ 3 servers (can tolerate 1 failure)
-├─ 5 servers (can tolerate 2 failures)
-├─ 7 servers (can tolerate 3 failures)
+```mermaid
+flowchart LR
+    Client["Incoming Traffic"] --> Gate{"Rate Limiter / Concurrency Gate"}
+    Gate -->|"Within Capacity"| Queue["Bounded Queue (Max N)"]
+    Gate -->|"Overload: Shed Load"| Reject["HTTP 429 / 503 + Retry-After"]
+    Queue -->|"Consumer Pulls at Safe Rate"| Worker["Worker Pool"]
+    Worker -->|"Queue Full Signal"| Gate
 
-Used in production:
-├─ etcd (Kubernetes configuration)
-├─ Consul (service discovery)
-├─ CockroachDB (database)
-└─ Many others
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef gate fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef drop fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+    classDef node fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    class Client,Worker ok
+    class Gate gate
+    class Reject drop
+    class Queue node
 ```
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed: Normal Operation
+    Closed --> Open: Error / Timeout Threshold Exceeded
+    Open --> HalfOpen: Cooldown Timer Expires
+    HalfOpen --> Closed: Probe Requests Succeed
+    HalfOpen --> Open: Probe Requests Fail
+```
+
+- **Backpressure (Slow Down Upstream):** Propagate congestion signals upstream using bounded queues, TCP flow control, reactive streams (pull-based demand), or adaptive concurrency limits (AIMD).
+- **Load Shedding (Drop Excess Work):** When capacity is saturated, immediately reject low-priority requests (returning `HTTP 429 Too Many Requests` or `503 Service Unavailable` with `Retry-After`) so high-priority traffic succeeds with low latency.
+- **Circuit Breakers:** Stop calling a failing downstream dependency (`Open` state) to prevent thread-pool exhaustion and allow recovery before probing again (`Half-Open`).
+
+> [!WARNING]
+> Unbounded queues are a reliability anti-pattern: they hide overload until memory is exhausted or request latencies exceed client timeouts, causing clients to retry and amplify the outage (**retry storm**).
+
+| Mechanism | Action Under Overload | Primary Goal | Example |
+| :--- | :--- | :--- | :--- |
+| **Bounded Queues** | Cap buffer size; block or reject when full | Prevent OOM crashes | Kafka consumer poll limits, fixed thread-pool queues |
+| **Backpressure** | Signal producer to slow emission rate | Match producer rate to consumer capacity | gRPC flow control, Reactive Streams |
+| **Load Shedding** | Drop excess/low-priority requests early | Preserve latency for admitted requests | Returning `503` at API Gateway |
+| **Circuit Breaker** | Fail fast without calling degraded dependency | Prevent cascading thread exhaustion | Resilience4j, Envoy outlier detection |
+
+> [!TIP]
+> Pair load shedding with **randomized exponential backoff + jitter** on clients so rejected callers do not synchronize and overwhelm the server again simultaneously.
 
 ---
 
 ## Key Takeaways
 
-1. **Scale horizontally** when possible (more servers, not bigger servers)
-2. **Redundancy is essential** - single server = guaranteed failure
-3. **Replication strategy matters** (sync vs async, master-slave vs master-master)
-4. **Failover needs testing** - most outages from failover bugs
-5. **Consensus is hard** - use proven libraries (Raft, not home-grown)
-6. **RPO and RTO** drive infrastructure costs
-7. **Checkpointing and logging** enable recovery
+```mermaid
+flowchart LR
+    S["1. Scale Horizontally"] --> ST["2. Keep Tiers Stateless"]
+    ST --> SH["3. Shard &amp; Replicate Data"]
+    SH --> CO["4. Proven Consensus (Raft)"]
+    CO --> FT["5. Redundancy &amp; Tested Failover"]
+    FT --> BP["6. Backpressure, WAL &amp; RPO/RTO"]
+
+    classDef step fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef endnode fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    class S,ST,SH,CO,FT step
+    class BP endnode
+```
+
+1. **Scale horizontally** when possible (more commodity servers, not bigger single servers).
+2. **Keep compute stateless** by externalizing session data to Redis or shared stores.
+3. **Redundancy is essential** — a single server is a guaranteed point of failure.
+4. **Replication strategy matters** (sync vs async vs semi-sync; master-replica vs master-master).
+5. **Failover needs testing** — most outages stem from failover bugs, split-brain, or missing fencing.
+6. **Consensus is hard** — use proven libraries (`Raft`, `etcd`, `Consul`), never home-grown protocols.
+7. **RPO and RTO** directly drive infrastructure architecture and cost (`1x` to `10x`).
+8. **Checkpointing, WAL, and Backpressure** enable fast crash recovery and prevent cascading overload.
+
+> [!TIP]
+> In system design interviews, always tie your reliability choices back to explicit **RPO/RTO targets**, **SLA nines** (`99.9%` vs `99.999%`), and **graceful degradation** under load.

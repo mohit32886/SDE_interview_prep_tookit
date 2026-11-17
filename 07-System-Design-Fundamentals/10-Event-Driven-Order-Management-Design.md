@@ -53,6 +53,34 @@ You're designing the order management backbone for a high-scale e-commerce platf
 | **Temporal Queries** | "Show me all order state changes on 2024-01-15" (event sourcing!) |
 | **Scalability** | Horizontal scaling of each service independently |
 
+### Scale & Capacity Estimations
+
+| Metric | Baseline | Peak (Flash Sale 3x) | Design Implication |
+|--------|----------|----------------------|--------------------|
+| **Order Throughput** | 50,000 orders/hr (~14/sec) | 150,000 orders/hr (~42/sec) | 10 Kafka partitions per core topic easily handles 10k+ msg/sec |
+| **Order Placement Latency** | < 100ms (p99) | < 100ms (p99) | Async Saga via Kafka; synchronous path only writes Event Store + Outbox (~7ms) |
+| **Availability SLA** | 99.99% (~52 min/yr downtime) | 99.99% | Replication factor 3, `min.insync.replicas=2`, multi-AZ Postgres |
+| **Event Fan-out** | ~5 events/order (~70 events/sec) | ~5 events/order (~210 events/sec) | Separate consumer groups for Saga, CQRS Read Model, and Notifications |
+
+```mermaid
+flowchart LR
+    Scale["50K-150K orders/hr &lt;100ms SLA"] --> Async["Async Event-Driven Write Path"]
+    Async --> ES["Append-Only Event Store (~2ms)"]
+    Async --> Outbox["Transactional Outbox + Kafka"]
+    Outbox --> Saga["Orchestrated Saga Workers"]
+    Outbox --> CQRS["CQRS Read Model (&lt;1ms reads)"]
+
+    classDef driver fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef core fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    classDef store fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    class Scale driver
+    class Async,Saga core
+    class ES,Outbox,CQRS store
+```
+
+> [!IMPORTANT]
+> The `<100ms` order placement SLA is only achievable because the synchronous HTTP request **never waits** for Payment, Inventory, or Shipping. It appends `OrderCreated` + an Outbox row in one local ACID transaction and returns `202 Accepted` (or `PENDING` status) immediately.
+
 ---
 
 ## High-Level Architecture
@@ -143,6 +171,78 @@ You're designing the order management backbone for a high-scale e-commerce platf
             └─> sends email "Your order is on the way!"
 ```
 
+### Visual Architecture & Happy-Path Sequence
+
+```mermaid
+flowchart TD
+    Client["API Gateway / Client (REST/gRPC)"] --> OrderSvc["Order Service (Event Store + Saga)"]
+    Client --> QuerySvc["Query Service (Read Model DB)"]
+    OrderSvc --> EventDB[("Order Event Store (PostgreSQL)")]
+    OrderSvc --> Kafka["Kafka Event Bus (3+ Brokers, Key: order_id)"]
+
+    Kafka --> InvSvc["Inventory Service (DLQ)"]
+    Kafka --> PaySvc["Payment Service (DLQ)"]
+    Kafka --> ShipSvc["Shipping Service (DLQ)"]
+    Kafka --> NotifSvc["Notification Service (DLQ)"]
+    Kafka --> ReadBuilder["CQRS Read Model Builder"]
+
+    InvSvc --> InvDB[("Inventory DB (PostgreSQL)")]
+    PaySvc --> PayDB[("Payment DB (PostgreSQL)")]
+    ShipSvc --> ShipDB[("Shipping DB (PostgreSQL)")]
+    NotifSvc --> Redis[("Notification Cache (Redis)")]
+    ReadBuilder --> QuerySvc
+
+    classDef gateway fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef service fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    classDef broker fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef db fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    class Client,QuerySvc gateway
+    class OrderSvc,InvSvc,PaySvc,ShipSvc,NotifSvc,ReadBuilder service
+    class Kafka broker
+    class EventDB,InvDB,PayDB,ShipDB,Redis db
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant Order as Order Service
+    participant Kafka as Kafka Event Bus
+    participant Saga as Saga Orchestrator
+    participant Inv as Inventory Service
+    participant Pay as Payment Service
+    participant Ship as Shipping Service
+    participant Notif as Notification Service
+
+    Client->>Order: POST /orders (idempotency_key)
+    Order->>Kafka: Publish OrderCreated
+    Order-->>Client: 202 Accepted (PENDING)
+    Kafka->>Saga: Consume OrderCreated
+    Saga->>Inv: Command: ReserveInventory
+    Inv->>Kafka: Publish InventoryReserved
+    Kafka->>Saga: Consume InventoryReserved
+    Saga->>Pay: Command: ProcessPayment
+    Pay->>Kafka: Publish PaymentProcessed
+    Kafka->>Saga: Consume PaymentProcessed
+    Saga->>Ship: Command: InitiateShipping
+    Ship->>Kafka: Publish OrderShipped
+    Kafka->>Notif: Consume OrderShipped -> Send Email
+```
+
+### Service Boundaries & Isolation
+
+| Component | Owned Data Store | Kafka Topics Produced | Kafka Topics Consumed |
+|-----------|------------------|-----------------------|-----------------------|
+| **Order Service** | `order_events`, `order_snapshots` | `order-events` | `saga-events` |
+| **Saga Orchestrator** | `saga_states` (PostgreSQL) | `inventory-commands`, `payment-commands`, `shipping-commands`, `saga-dlq` | `order-events`, `inventory-events`, `payment-events`, `shipping-events` |
+| **Inventory Service** | `inventory`, `inventory_reservations` | `inventory-events` | `inventory-commands` |
+| **Payment Service** | `payment_deduplication`, `outbox` | `payment-events` | `payment-commands` |
+| **Shipping Service** | `shipments` (PostgreSQL) | `shipping-events` | `shipping-commands` |
+| **Read Model Builder** | `order_view`, `order_list_view`, `order_status_aggregation` | `read-model-dlq` | `order-events`, `inventory-events`, `payment-events`, `shipping-events` |
+
+> [!TIP]
+> Emphasize **database-per-service** in interviews: no service ever joins across another service's tables. Cross-service state synchronization happens strictly via immutable Kafka events keyed by `order_id`.
+
 ---
 
 ## Event Sourcing Implementation
@@ -163,6 +263,58 @@ You're designing the order management backbone for a high-scale e-commerce platf
 - Event store queries are harder (can't just `SELECT * WHERE status = 'SHIPPED'`) → need read models (CQRS)
 - Event versioning complexity (schema evolution)
 - Storage overhead (all events vs. current state only)
+
+### Event-Driven Order State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : OrderCreated
+    PENDING --> INVENTORY_RESERVED : InventoryReserved
+    PENDING --> CANCELLED : OrderCancelled
+    INVENTORY_RESERVED --> PAYMENT_PROCESSING : PaymentCommandSent
+    INVENTORY_RESERVED --> CANCELLED : OrderCancelled
+    PAYMENT_PROCESSING --> PAID : PaymentProcessed (SUCCESS)
+    PAYMENT_PROCESSING --> PAYMENT_FAILED : PaymentProcessed (FAILED)
+    PAYMENT_FAILED --> CANCELLED : CompensationCompleted
+    PAID --> SHIPPED : OrderShipped
+    PAID --> REFUNDED : PaymentRefunded
+    SHIPPED --> DELIVERED : OrderDelivered
+    DELIVERED --> REFUNDED : ReturnRefunded
+```
+
+### Snapshot + Tail Event Replay Optimization
+
+```mermaid
+flowchart LR
+    Req["Load OrderAggregate(orderId)"] --> SnapCheck{"Snapshot Exists?"}
+    SnapCheck -- "Yes (v=100)" --> LoadSnap["Load order_snapshots (1 row)"]
+    SnapCheck -- "No" --> LoadAll["Load all order_events (v=1..N)"]
+    LoadSnap --> LoadTail["Load tail events (version &gt; 100)"]
+    LoadTail --> Replay["Apply tail events → Current State (~5ms)"]
+    LoadAll --> ReplayAll["Apply full history → Current State (~50ms)"]
+
+    classDef trigger fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef fast fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    classDef slow fill:#0f172a,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    class Req trigger
+    class SnapCheck decision
+    class LoadSnap,LoadTail,Replay fast
+    class LoadAll,ReplayAll slow
+```
+
+### Event Sourcing vs. Traditional CRUD
+
+| Dimension | Event Sourcing (`order_events`) | Traditional CRUD (`orders` row update) |
+|-----------|---------------------------------|----------------------------------------|
+| **Write Pattern** | Append-only `INSERT` (~2ms sequential) | In-place `UPDATE` (row locks, overwrites history) |
+| **Audit & Compliance** | Built-in immutable log of every transition | Requires separate audit triggers or CDC |
+| **Concurrency Control** | `UNIQUE (order_id, aggregate_version)` optimistic check | Row-level locking / `version` column |
+| **Read Queries** | Slow via replay alone; fast with CQRS projections | Fast single-table `SELECT` |
+| **Time-Travel / Debug** | Replay events up to any `timestamp` or `version` | Impossible without external snapshots |
+
+> [!NOTE]
+> The `UNIQUE (order_id, aggregate_version)` constraint in `order_events` acts as a built-in **optimistic concurrency guard**. If two threads attempt to append version `4` to the same order simultaneously, PostgreSQL rejects the second write with a unique constraint violation.
 
 ### Event Store Schema (PostgreSQL)
 
@@ -739,6 +891,68 @@ OrderSaga listens, commands Shipping Service: "Ship order"
 
 **For this design, we use orchestration** (clearer for interviews).
 
+### Animated Saga & Outbox Flow
+
+![Order Saga & Outbox Flow](./assets/10-order-saga-outbox-flow.svg)
+
+### Choreography vs. Orchestration Comparison
+
+| Dimension | Choreography (Event-Driven) | Orchestration (Centralized `OrderSaga`) |
+|-----------|-----------------------------|-----------------------------------------|
+| **Control Flow** | Implicit across service listeners | Explicit state machine in `OrderSaga` |
+| **Coupling** | Low service coupling; high topic coupling | Services only know commands/events; orchestrator knows workflow |
+| **Debugging & Visibility** | Hard to trace end-to-end without distributed tracing | Single `saga_states` table shows exact step & age |
+| **Timeout & Compensation** | Difficult to coordinate multi-step rollbacks | Clean `@Scheduled` timeout detection + reverse compensation |
+| **Failure Risk** | Cyclic event loops possible | Central orchestrator must be HA & stateless/DB-backed |
+
+### Saga Orchestration & Compensation Flow
+
+```mermaid
+flowchart TD
+    Start["OrderCreated Event"] --> Step1["RESERVING_INVENTORY"]
+    Step1 -- "InventoryReserved" --> Step2["PROCESSING_PAYMENT"]
+    Step1 -- "InventoryFailed" --> Fail1["Saga Failed (No Compensation Needed)"]
+    Step2 -- "PaymentProcessed (SUCCESS)" --> Step3["PROCESSING_SHIPPING"]
+    Step2 -- "PaymentProcessed (FAILED)" --> Comp1["COMPENSATING: CancelInventory"]
+    Step3 -- "OrderShipped" --> Done["COMPLETED"]
+    Step3 -- "ShippingInitiationFailed" --> Comp2["COMPENSATING: RefundPayment + CancelInventory"]
+    Comp1 --> Cancelled["Order CANCELLED"]
+    Comp2 --> Cancelled
+
+    classDef happy fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    classDef step fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef comp fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef fail fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fee2e2
+    class Start,Step1,Step2,Step3 step
+    class Done happy
+    class Comp1,Comp2 comp
+    class Fail1,Cancelled fail
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Saga as OrderSaga
+    participant Inv as Inventory Service
+    participant Pay as Payment Service
+    participant Ship as Shipping Service
+
+    Saga->>Inv: ReserveInventoryCommand
+    Inv-->>Saga: InventoryReserved
+    Saga->>Pay: PaymentProcessingCommand
+    Pay-->>Saga: PaymentProcessed (SUCCESS)
+    Saga->>Ship: ShippingInitiationCommand
+    Ship-->>Saga: ShippingInitiationFailed (Carrier Unavailable)
+    Note over Saga: Step -> COMPENSATING (reverse order)
+    Saga->>Pay: PaymentRefundCommand (Idempotent)
+    Saga->>Inv: InventoryReservationCancellationCommand
+    Pay-->>Saga: PaymentRefunded
+    Inv-->>Saga: InventoryReservationCancelled
+```
+
+> [!WARNING]
+> Never keep `SagaState` *only* in an in-memory `ConcurrentHashMap` in production! Always persist `SagaState` to PostgreSQL (`sagaStateRepository.save(sagaState)`) before publishing the next command, otherwise a pod restart mid-saga will lose in-flight state and miss timeouts.
+
 ### Orchestration-Based Saga: State Diagram
 
 ```
@@ -1228,6 +1442,57 @@ CREATE TABLE outbox (
     INDEX (published, created_at)
 );
 ```
+
+### Outbox Poller vs. Debezium CDC (Log Tailing)
+
+At higher throughput (50K–150K+ orders/hour), polling PostgreSQL every second adds unnecessary read load. Production systems pair the **Transactional Outbox** with **Debezium CDC**, which tails the PostgreSQL Write-Ahead Log (WAL) and streams committed `outbox` inserts directly to Kafka in sub-10ms latency.
+
+```mermaid
+flowchart LR
+    Svc["Payment / Order Service"] -- "Single ACID TX" --> DB[("PostgreSQL (orders + outbox)")]
+    DB -- "WAL Stream" --> Debezium["Debezium CDC Connector"]
+    Debezium -- "Key: aggregate_id" --> Kafka["Kafka Event Bus"]
+    Kafka --> Consumer["Idempotent Consumer"]
+    Consumer --> Dedup[("payment_deduplication")]
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef db fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef cdc fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    classDef bus fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    class Svc,Consumer svc
+    class DB,Dedup db
+    class Debezium cdc
+    class Kafka bus
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Kafka as Kafka (payment-commands)
+    participant Pay as Payment Service
+    participant DB as payment_deduplication + outbox
+    participant Stripe as Stripe API
+
+    Kafka->>Pay: Deliver ProcessPayment (idem_key = K1)
+    Pay->>DB: SELECT * WHERE idempotency_key = K1
+    DB-->>Pay: Not found
+    Pay->>Stripe: charge(amount, idempotencyKey = K1)
+    Stripe-->>Pay: ChargeSucceeded (ch_123)
+    Pay->>DB: BEGIN TX -> INSERT dedup(K1) + INSERT outbox(PaymentProcessed) -> COMMIT
+    Note over Kafka,Pay: Network hiccup -> offset not committed -> Kafka redelivers K1
+    Kafka->>Pay: Redeliver ProcessPayment (idem_key = K1)
+    Pay->>DB: SELECT * WHERE idempotency_key = K1
+    DB-->>Pay: Found cached result (ch_123)
+    Pay-->>Kafka: Skip Stripe charge & commit offset
+```
+
+| Outbox Delivery Mechanism | Latency | DB Load | Operational Complexity | Best Fit |
+|---------------------------|---------|---------|------------------------|----------|
+| **Polling Publisher (`@Scheduled`)** | 100ms – 1,000ms | Periodic `SELECT` queries | Low (pure Spring Boot) | Low-to-moderate throughput (&lt;500 events/sec) |
+| **Debezium CDC (WAL Tailing)** | &lt; 10ms | Zero polling queries | Medium (Kafka Connect + Debezium) | High-scale production (150K+ orders/hr) |
+
+> [!IMPORTANT]
+> **"Exactly-Once" in distributed systems** is actually **At-Least-Once Delivery + Idempotent Processing + Transactional Outbox**. Never rely solely on Kafka's `enable.idempotence=true`—that only deduplicates broker writes within a producer session, not downstream DB writes or external Stripe API calls.
 
 ---
 

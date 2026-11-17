@@ -12,6 +12,7 @@
 9. [Search Engines](#search-engines)
 10. [API Design](#api-design)
 11. [Rate Limiting](#rate-limiting)
+12. [Key Takeaways](#key-takeaways)
 
 ---
 
@@ -19,1421 +20,638 @@
 
 ### DNS (Domain Name System)
 
-**What it is:** Maps human-readable domain names to IP addresses.
+**What it is:** Maps human-readable domain names (e.g., `google.com`) to routable IP addresses (e.g., `142.251.41.14`).
 
-```
-User request flow:
-┌──────────────────────────────────────────────┐
-│ User types "google.com" in browser           │
-└────────────────┬─────────────────────────────┘
-                 │
-                 ▼
-        ┌─────────────────────┐
-        │  Recursive Resolver │
-        │  (ISP DNS)          │
-        │  Caches results     │
-        └────────┬────────────┘
-                 │
-        ┌────────┴─────────────────┬──────────┐
-        ▼                          ▼          ▼
-   ┌─────────────┐      ┌────────────────┐ ┌──────────────┐
-   │Root         │      │TLD Nameserver  │ │Authoritative │
-   │Nameserver   │      │(.com)          │ │Nameserver    │
-   │13 globally  │      │                │ │(google.com)  │
-   └─────────────┘      └────────────────┘ └──────────────┘
-        │                      │                    │
-        └──────────────────────┴────────────────────┘
-                               │
-                               ▼
-        ┌──────────────────────────────────────┐
-        │ Answer: 142.251.41.14 (Google IP)    │
-        │ Cached for 3600 seconds (TTL)        │
-        └──────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant R as Recursive Resolver (ISP DNS)
+    participant Root as Root Nameserver (13 globally)
+    participant TLD as TLD Nameserver (.com)
+    participant Auth as Authoritative Nameserver
+
+    B->>R: Query "google.com"
+    alt Cache Hit (within TTL)
+        R-->>B: Return cached IP (142.251.41.14)
+    else Cache Miss
+        R->>Root: Where is ".com"?
+        Root-->>R: Referral to .com TLD
+        R->>TLD: Where is "google.com"?
+        TLD-->>R: Referral to Authoritative NS
+        R->>Auth: IP for "google.com"?
+        Auth-->>R: 142.251.41.14 (TTL = 3600s)
+        R-->>B: Return IP & cache for TTL
+    end
 ```
 
 **TTL (Time To Live):**
-- Short TTL (300 sec): Changes propagate quickly, but more DNS queries
-- Long TTL (86400 sec): Fewer queries, but slow to change IPs
+- **Short TTL (300 sec):** Changes propagate quickly, but generates more DNS queries.
+- **Long TTL (86400 sec):** Fewer DNS queries, but slow to propagate IP changes.
 
-**Best practice:** Use TTL=300 during migrations, TTL=3600 normally.
+> [!TIP]
+> Use `TTL=300` before and during planned migrations/failovers, and `TTL=3600` during normal steady-state operation.
 
 ### Content Delivery Network (CDN)
 
-**What it is:** Geographically distributed servers that cache and serve content.
+**What it is:** Geographically distributed edge servers that cache and serve static and dynamic content close to end users, cutting round-trip latency (e.g., from ~2000ms cross-continent to ~50ms at a local edge).
 
-```
-Traditional (no CDN):
-┌─────────────┐         ┌──────────────┐
-│User in Asia │────────▶│Origin Server │
-│(2000ms)     │         │(US)          │
-└─────────────┘         └──────────────┘
-                              △
-                              │
-                        Slow! Far away!
+```mermaid
+flowchart LR
+    UserA["User in Asia"] -->|"Without CDN: ~2000ms"| OriginUS["Origin Server (US)"]
+    UserB["User in Asia"] -->|"With CDN: ~50ms"| EdgeSG["CDN Edge Server (Singapore)"]
+    EdgeSG -->|"Origin Fetch on Miss"| OriginUS
 
-With CDN:
-┌─────────────┐         ┌─────────────────┐
-│User in Asia │────────▶│CDN Edge Server  │
-│(50ms)       │         │(Singapore)      │
-└─────────────┘         └────────┬────────┘
-                                 │
-                                 ▼ (origin request)
-                        ┌──────────────────┐
-                        │Origin Server (US)│
-                        └──────────────────┘
+    classDef client fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef edge fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef origin fill:#1e293b,stroke:#fb923c,stroke-width:2px,color:#f8fafc
+    class UserA,UserB client
+    class EdgeSG edge
+    class OriginUS origin
 ```
 
 #### Push CDN vs Pull CDN
 
-**Push CDN:**
-```
-You push content to CDN edges proactively.
-
-Setup:
-├─ Configure CDN with file URLs
-├─ Upload files to all edge locations
-└─ Keep in sync (operational burden)
-
-Pros:
-├─ Guaranteed availability
-├─ No origin load during peak
-└─ Good for pre-known content
-
-Cons:
-├─ Complex operations
-├─ Manual updates needed
-└─ Wastes storage (not all users access all files)
-
-Best for: Static assets, software releases, large files
-```
-
-**Pull CDN:**
-```
-CDN fetches content from origin on-demand.
-
-Setup:
-├─ Configure CDN with origin server
-├─ CDN fetches on first request
-└─ Caches for TTL
-
-Pros:
-├─ Zero operational overhead
-├─ Automatic cache management
-└─ Only popular content cached
-
-Cons:
-├─ First user pays latency penalty
-├─ Origin load during traffic spike
-└─ Cache misses possible
-
-Best for: Dynamic content, user-generated content, majority of web
-```
-
-**Recommendation:** Use Pull CDN for most cases (simpler, less operational burden).
+| Dimension | Push CDN | Pull CDN |
+| :--- | :--- | :--- |
+| **Mechanism** | You proactively upload files to all edge locations and keep them in sync | CDN fetches content from origin on first request and caches it for TTL |
+| **Pros** | Guaranteed availability; zero origin load during traffic peaks | Zero operational overhead; automatic cache management; only popular content cached |
+| **Cons** | Complex operations; manual updates; wastes storage on unaccessed files | First user pays cache-miss latency; origin load during traffic spikes |
+| **Best For** | Static assets, software releases, large pre-known files | Dynamic content, user-generated content, majority of web apps |
 
 ### CDN Cache Invalidation
 
-```
-Problem: New version of file deployed, but CDN still serves old version.
+When a new version of a file is deployed, the CDN may still serve the stale cached version. Use one of these four strategies:
 
-Solution 1: URL versioning (Recommended)
-├─ Old: /api/logo.png
-├─ New: /api/logo-v2.png or /api/logo?v=2
-└─ Different URL = always cache miss, origin serves new version
+| Strategy | How It Works | Tradeoff |
+| :--- | :--- | :--- |
+| **1. URL Versioning (Recommended)** | `/api/logo.png` → `/api/logo-v2.png` or `/api/logo?v=2` | Different URL forces an immediate cache miss and fetches the new version |
+| **2. Version in Path (Best Practice)** | Content-hashed bundles (`app.abc123.js`, `/v1/styles.css`) | Automatically busts cache on every deploy with long TTLs |
+| **3. TTL-Based** | Set a low TTL (e.g., `300` seconds) on mutable files | Higher origin load; good for frequently changing files |
+| **4. Explicit Invalidation** | Call CDN purge API to evict specific URLs | Slow propagation across global edges (minutes); use for emergency fixes only |
 
-Solution 2: TTL-based
-├─ Set low TTL on files (e.g., 300 seconds)
-├─ Downside: More origin load
-└─ Use for files that change frequently
-
-Solution 3: Explicit invalidation
-├─ Call CDN API to purge specific files
-├─ Slow (propagates to all edges in minutes)
-└─ Use for emergency fixes only
-
-Solution 4: Version in path (Best practice)
-├─ webpack bundles: app.abc123.js
-├─ Static assets: /v1/styles.css
-└─ Automatically busted when new version deployed
-```
+> [!IMPORTANT]
+> Prefer **Pull CDN** with **content-hashed filenames** (`app.abc123.js`) and long TTLs. Reserve explicit CDN purges for emergency rollbacks.
 
 ---
 
 ## Load Balancing
 
-### Load Balancer Types
+### Load Balancer Types: Layer 4 vs Layer 7
 
-#### Layer 4 (Transport Layer) Load Balancer
+```mermaid
+flowchart TD
+    Client["Client Traffic"] --> LB{"Load Balancer Layer"}
+    LB -->|"L4: IP + Port + TCP/UDP"| NLB["L4 Load Balancer (NLB / HAProxy Stream)"]
+    LB -->|"L7: URL + Host + Headers + Cookies"| ALB["L7 Load Balancer (ALB / Nginx / Envoy)"]
 
-```
-What it does: Routes based on IP, Port, Protocol (TCP/UDP)
-              No knowledge of application
+    NLB -->|"203.0.113.1:443"| BE1["Backend-1 / DB / WebSocket"]
+    NLB -->|"203.0.113.2:443"| BE2["Backend-2 / Game Server"]
 
-Example:
-IP:Port → 203.0.113.1:443 → Route to backend-1
-IP:Port → 203.0.113.2:443 → Route to backend-2
-         (round-robin, least connections, etc.)
+    ALB -->|"GET /api/users"| API["API Service Cluster"]
+    ALB -->|"GET /images/"| IMG["Image Service Cluster"]
+    ALB -->|"Host: api.example.com"| MICRO["Microservice Mesh"]
 
-Pros:
-├─ Very fast (minimal processing)
-├─ Handles millions of connections
-├─ Good for non-HTTP protocols
-└─ Lower latency
-
-Cons:
-├─ Can't route based on URL/hostname
-├─ Limited load balancing strategies
-└─ Can't cache or compress
-
-When to use: Database connections, game servers, WebSocket
-Technologies: Nginx (stream), HAProxy, AWS NLB, Google Cloud LB
+    classDef entry fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef l4 fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef l7 fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef target fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class Client,LB entry
+    class NLB l4
+    class ALB l7
+    class BE1,BE2,API,IMG,MICRO target
 ```
 
-#### Layer 7 (Application Layer) Load Balancer
-
-```
-What it does: Routes based on HTTP data (URL, hostname, headers, cookies)
-              Understands application protocol
-
-Example:
-GET /api/users → backend-api-1
-GET /images/   → backend-images-1
-GET /videos/   → backend-videos-1 (CDN might be better, but example)
-
-Host: example.com → backend-example
-Host: api.example.com → backend-api
-
-Pros:
-├─ Intelligent routing (URL, hostname, headers)
-├─ Can compress, cache, rewrite
-├─ Support sticky sessions
-└─ Better for microservices
-
-Cons:
-├─ More CPU intensive
-├─ Lower throughput per instance
-└─ Higher latency
-
-When to use: Web applications, microservices, REST APIs
-Technologies: Nginx, HAProxy, AWS ALB, Envoy, NGINX Plus
-```
+| Dimension | Layer 4 (Transport Layer) | Layer 7 (Application Layer) |
+| :--- | :--- | :--- |
+| **Routing Basis** | IP, Port, Protocol (TCP/UDP); no application awareness | HTTP data (URL, hostname, headers, cookies) |
+| **Pros** | Very fast (minimal processing), handles millions of connections, lower latency, non-HTTP support | Intelligent routing, compression, caching, header/URL rewriting, sticky sessions |
+| **Cons** | Cannot route by URL/hostname, limited balancing strategies, no caching/compression | More CPU intensive, lower throughput per instance, slightly higher latency |
+| **When to Use** | Database connections, game servers, WebSockets | Web applications, microservices, REST/GraphQL APIs |
+| **Technologies** | Nginx (`stream`), HAProxy, AWS NLB, Google Cloud LB | Nginx, HAProxy, AWS ALB, Envoy, NGINX Plus |
 
 ### Load Balancing Algorithms
 
+| Algorithm | How It Works | Pros | Cons |
+| :--- | :--- | :--- | :--- |
+| **Round-Robin** | Distributes requests sequentially (`1→S1, 2→S2, 3→S3`) | Simple, fair | Ignores server capacity and current load |
+| **Weighted Round-Robin** | High-capacity servers receive proportionally more requests (e.g., weight `3` gets 3x) | Handles heterogeneous clusters | Requires manual weight configuration |
+| **Least Connections** | Routes to server with fewest active connections | Great for long-lived connections (WebSocket, chat) | Slightly higher tracking overhead |
+| **IP Hash / Consistent Hash** | `Hash(IP) mod server_count` pins client IP to same server | Sticky sessions, cache-friendly | Uneven distribution when servers are added/removed |
+| **Least Load / Response Time** | Routes based on server CPU, memory, and response latency | Most intelligent distribution | Requires active monitoring/telemetry |
+
+### Load Balancer Placement & High Availability (HA)
+
+A single Load Balancer is a **Single Point of Failure (SPOF)**. Production topologies use **Active-Passive** pairs sharing a **Virtual IP (VIP)** with a periodic heartbeat (e.g., every `100ms` via ICMP ping or HTTP health check) and split-brain prevention.
+
+```mermaid
+flowchart LR
+    Clients["Global Client Requests"] --> VIP["Virtual IP (VIP: 203.0.113.1)"]
+    VIP -->|"100% Active Traffic"| LB1["LB-1 (Active)"]
+    LB1 -.->|"Heartbeat every 100ms"| LB2["LB-2 (Passive Standby)"]
+    LB2 -.->|"Failover: Claims VIP if LB-1 dies"| VIP
+
+    LB1 --> B1["Backend-1 :80"]
+    LB1 --> B2["Backend-2 :80"]
+    LB1 --> B3["Backend-3 :80"]
+
+    classDef client fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef vip fill:#1e293b,stroke:#fb923c,stroke-width:2px,color:#f8fafc
+    classDef lb fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef be fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class Clients client
+    class VIP vip
+    class LB1,LB2 lb
+    class B1,B2,B3 be
 ```
-Round-Robin (simplest):
-├─ Distribute requests equally
-├─ Requests: 1→LB1, 2→LB2, 3→LB3, 4→LB1
-├─ Pro: Simple, fair
-└─ Con: Ignores server capacity
 
-Least Connections:
-├─ Route to server with fewest active connections
-├─ Good for long-lived connections (WebSocket, chat)
-├─ Pro: Handles varying load
-└─ Con: More computational overhead
-
-Weighted Round-Robin:
-├─ High-capacity servers get more traffic
-├─ Weight 3: gets 3x more requests
-├─ Pro: Handles heterogeneous clusters
-└─ Con: Requires configuration
-
-IP Hash / Consistent Hash:
-├─ Same IP always goes to same server
-├─ Hash(IP) mod server_count = server_id
-├─ Pro: Sticky sessions, cache-friendly
-└─ Con: Uneven distribution if servers added
-
-Least Load / Response Time:
-├─ Route based on server CPU/memory/response time
-├─ Pro: Most intelligent
-└─ Con: Requires monitoring system
-```
-
-### Load Balancer Placement
-
-```
-Topology:
-           ┌─────────────────────────┐
-           │    Client Requests      │
-           │  (from all over world)  │
-           └────────────┬────────────┘
-                        │
-           ┌────────────▼─────────────┐
-           │  Load Balancer           │
-           │  (primary entry point)   │
-           │  Single point of failure!│
-           └────────────┬─────────────┘
-                        │
-        ┌───────────────┼────────────────┐
-        ▼               ▼                ▼
-    ┌────────┐     ┌────────┐      ┌────────┐
-    │Backend1│     │Backend2│      │Backend3│
-    │Port 80 │     │Port 80 │      │Port 80 │
-    └────────┘     └────────┘      └────────┘
-
-Problem: LB is SPOF (Single Point of Failure)
-
-Solution: HA Load Balancer Setup
-    ┌─────────────────────────────────┐
-    │  Virtual IP (VIP): 203.0.113.1  │
-    │  Heartbeat: Active-Passive LBs  │
-    └─────────────────────────────────┘
-            │                    │
-    ┌───────▼──────┐     ┌──────▼──────┐
-    │LB-1 (Active) │     │LB-2 (Passive)
-    │Handles 100%  │────▶│Monitoring   │
-    │              │◀────│If LB-1 dies │
-    │VIP assigned  │     │takes VIP    │
-    └──────────────┘     └─────────────┘
-
-Heartbeat protocol (every 100ms):
-├─ Periodic ICMP ping / HTTP health check
-├─ If no response → failover to LB-2
-└─ Ensure only one active at a time (split-brain prevention)
-```
+> [!IMPORTANT]
+> Always prevent **split-brain** in Active-Passive LB pairs by using redundant heartbeat links or quorum fencing so only one LB ever advertises the Virtual IP at a time.
 
 ---
 
 ## Reverse Proxy vs Forward Proxy
 
-### Forward Proxy
+```mermaid
+flowchart LR
+    subgraph FP["Forward Proxy (Protects / Hides Client)"]
+        direction LR
+        C1["Client"] -->|"HTTP Req"| FProxy["Forward Proxy"]
+        FProxy -->|"Sees Proxy IP, not Client IP"| Origin1["Public Internet / Origin"]
+    end
 
-```
-What it does: Sits between client and internet.
-              Client requests go through proxy to origin.
+    subgraph RP["Reverse Proxy (Protects / Hides Backend)"]
+        direction LR
+        C2["Client (HTTPS)"] -->|"Sees Proxy as Server"| RProxy["Reverse Proxy (Nginx: TLS + GZip + WAF + LB)"]
+        RProxy -->|"HTTP"| BE1["Backend-1"]
+        RProxy -->|"HTTP"| BE2["Backend-2"]
+        RProxy -->|"HTTP"| BE3["Backend-3"]
+    end
 
-Setup:
-┌────────┐  HTTP Request   ┌──────────────┐  HTTP Request  ┌───────┐
-│ Client ├────────────────▶│Forward Proxy ├───────────────▶│Origin │
-│        │◀────────────────┤              │◀───────────────┤       │
-└────────┘ HTTP Response   └──────────────┘ HTTP Response  └───────┘
-
-From origin perspective:
-- Origin sees proxy's IP, not client's IP
-- Origin doesn't know actual client
-
-Use cases:
-├─ Corporate proxy (monitor employee traffic)
-├─ Hide client IP from servers
-├─ Geographic IP spoofing
-├─ Bypass restrictions
-└─ Caching at network level
-```
-
-### Reverse Proxy
-
-```
-What it does: Sits between internet and server.
-              Client requests come through proxy to backend.
-
-Setup:
-┌────────┐  HTTP Request  ┌──────────────┐  HTTP Request  ┌────────┐
-│ Client ├──────────────▶│Reverse Proxy ├──────────────▶│Backend │
-│        │◀──────────────┤              │◀──────────────┤        │
-└────────┘ HTTP Response └──────────────┘ HTTP Response └────────┘
-
-From client perspective:
-- Client sees reverse proxy as the server
-- Client doesn't know backend exists
-
-Use cases:
-├─ Load balancing (distribute traffic)
-├─ Caching (reduce backend load)
-├─ SSL termination (decrypt HTTPS once)
-├─ Compression
-├─ Rate limiting
-├─ Authentication/authorization
-└─ Hide backend topology
-
-Typical responsibilities:
-├─ TLS/SSL termination (asymmetric crypto only once)
-├─ Request/response logging
-├─ GZip compression
-├─ Virtual host routing
-└─ Connection pooling
+    classDef client fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef proxy fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef server fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class C1,C2 client
+    class FProxy,RProxy proxy
+    class Origin1,BE1,BE2,BE3 server
 ```
 
-### Reverse Proxy Benefits Deep Dive
+| Dimension | Forward Proxy | Reverse Proxy |
+| :--- | :--- | :--- |
+| **Placement** | Sits between client and the internet | Sits between the internet and backend servers |
+| **Identity Hidden** | Origin sees proxy IP, not client IP | Client sees reverse proxy as the server; hides backend topology |
+| **Core Use Cases** | Corporate traffic monitoring, hiding client IP, geo-IP spoofing, bypassing restrictions, network-level caching | Load balancing, response caching, SSL/TLS termination, GZip compression, rate limiting, auth, WAF |
+| **Responsibilities** | Outbound filtering & anonymity | `O(1)` TLS termination, request/response logging, virtual host routing, connection pooling |
 
-```
-Architecture:
-    Client (HTTPS)
-         │
-         ▼
-    ┌───────────────────────────────────┐
-    │ Reverse Proxy (Nginx)             │
-    ├─ SSL/TLS termination             │
-    ├─ Compression                      │
-    ├─ Load balancing                   │
-    ├─ Rate limiting                    │
-    └───────────┬───────────────────────┘
-                │
-    ┌───────────┼──────────────┬────────────────┐
-    ▼           ▼              ▼                ▼
-Backend-1   Backend-2      Backend-3       Backend-4
-(HTTP)      (HTTP)         (HTTP)          (HTTP)
-
-Benefits:
-1. SSL/TLS only once: O(1) expensive crypto ops instead of O(n)
-2. Compression: 10:1 ratio for JSON, saves bandwidth
-3. Load balancing: Spread load across backends
-4. Caching: 50-90% of requests served from cache
-5. Security: Hide backend IPs, add WAF (Web Application Firewall)
-```
+> [!TIP]
+> Terminating **SSL/TLS** at the Reverse Proxy reduces asymmetric crypto handshakes from `O(n)` across all backends to `O(1)` at the edge, while GZip/Brotli compression can achieve ~`10:1` bandwidth savings on JSON payloads.
 
 ---
 
 ## Caching
 
-### Cache Tiers
+![End-to-End Request Pipeline: DNS → CDN Edge → L7 LB → App → Redis Cache-Aside](./assets/02-cdn-lb-cache-pipeline.svg)
 
-```
-Latency vs Capacity tradeoff:
+### Cache Tiers (Latency vs Capacity)
 
-L1 Cache (Fastest, Smallest)
-├─ CPU cache: 1-100 nanoseconds
-├─ Size: KB-MB
-└─ Transparent to software
-
-L2 Cache (Memory)
-├─ In-process cache: ~100 microseconds
-├─ Size: MB-GB
-└─ Example: HashMap, Redis node
-
-L3 Cache (Distributed)
-├─ Distributed cache: ~1-10 milliseconds
-├─ Size: GB-TB across cluster
-└─ Example: Redis cluster, Memcached
-
-L4 Cache (CDN)
-├─ Geographic edge cache: ~10-50 milliseconds
-├─ Size: TB-PB across globe
-└─ Example: Cloudflare, Akamai CDN
-
-L5 Cache (Database)
-├─ Database query cache: ~100 milliseconds
-├─ Size: Variable
-└─ Example: Query result caching
-
-Storage (Source of Truth)
-├─ Database: ~10-100 milliseconds
-├─ Size: Unlimited (limited by hardware)
-└─ Durability: High (ACID/BASE guarantees)
-```
+| Tier | Location | Typical Latency | Capacity | Examples |
+| :--- | :--- | :--- | :--- | :--- |
+| **L1 Cache** | CPU L1/L2/L3 | `1–100 ns` | `KB–MB` | Hardware CPU cache (transparent to software) |
+| **L2 Cache** | In-Process Memory | `~100 µs` | `MB–GB` | Local `HashMap`, Caffeine, single-node Redis |
+| **L3 Cache** | Distributed Cache | `1–10 ms` | `GB–TB` | Redis Cluster, Memcached |
+| **L4 Cache** | CDN Edge | `10–50 ms` | `TB–PB` | Cloudflare, Akamai, CloudFront |
+| **L5 Cache** | Database Query Cache | `~100 ms` | Variable | Query result caching |
+| **Storage** | Source of Truth (DB) | `10–100 ms` | Unlimited | PostgreSQL, MySQL, DynamoDB (ACID/BASE) |
 
 ### Cache Strategies
 
-#### 1. Cache-Aside (Lazy Loading)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant App as App Server
+    participant Cache as Cache (Redis / Memcached)
+    participant DB as Database
 
-```
-Flow:
-1. Client requests data
-2. Check cache (Redis)
-   └─ Hit: Return cached data (fast!)
-   └─ Miss: Fetch from database, cache it, return to client
+    Note over C,DB: 1. Cache-Aside (Lazy Loading)
+    C->>App: get_user(id)
+    App->>Cache: GET user:id
+    alt Cache Hit
+        Cache-->>App: Return user
+    else Cache Miss
+        App->>DB: SELECT * FROM users WHERE id = ?
+        DB-->>App: Return user
+        App->>Cache: SET user:id (TTL=3600)
+    end
+    App-->>C: Return user
 
-Code pattern:
-    def get_user(user_id):
-        cache_key = f"user:{user_id}"
-        user = cache.get(cache_key)
-
-        if user is None:  # Cache miss
-            user = db.get_user(user_id)
-            cache.set(cache_key, user, ttl=3600)
-
-        return user
-
-Pros:
-├─ Simple to implement
-├─ Only caches accessed data
-└─ No stale data issue (db is source of truth)
-
-Cons:
-├─ Cache miss = extra DB hit (latency)
-├─ Complex cache invalidation
-└─ Thundering herd (many misses at once)
-
-Best for: Read-heavy, infrequently changing data
-```
-
-#### 2. Read-Through (Write-Behind lookup)
-
-```
-Flow:
-1. Client requests data
-2. Cache handler checks
-   └─ Hit: Return data
-   └─ Miss: Cache fetches from DB, returns, auto-caches
-
-Similar to cache-aside, but cache is responsible for fetching.
-Requires cache library integration with database.
-
-Pros:
-├─ Cache handles all logic
-└─ Simple client code
-
-Cons:
-├─ Requires specialized cache library
-└─ Tight coupling with data source
+    Note over C,DB: 2. Write-Through vs 3. Write-Behind
+    C->>App: update_user(id, data)
+    App->>Cache: SET user:id = data
+    alt Write-Through (Sync)
+        App->>DB: UPDATE users (wait for ACK)
+        DB-->>App: ACK
+        App-->>C: Success
+    else Write-Behind (Async)
+        App-->>C: Immediate Success
+        Cache-->>DB: Async queue batch write
+    end
 ```
 
-#### 3. Write-Through
+| Strategy | Read / Write Flow | Pros | Cons | Best For |
+| :--- | :--- | :--- | :--- | :--- |
+| **Cache-Aside (Lazy Loading)** | App checks cache; on miss, reads DB and populates cache | Simple; only caches accessed data; DB is source of truth | Miss penalty (extra DB hop); complex invalidation; thundering herd risk | Read-heavy, infrequently changing data |
+| **Read-Through** | Cache provider itself fetches from DB on miss and auto-caches | Clean client code; cache handles all fetch logic | Requires specialized cache library; tight coupling to data source | Standardized data-access layers |
+| **Write-Through** | App writes to cache and synchronously writes to DB | Data always consistent; tolerates cache failure | Higher write latency; every write hits DB | Financial transactions, critical data |
+| **Write-Behind (Write-Back)** | App writes to cache (returns immediately); async worker batches writes to DB | Very fast writes; batches DB writes; reduces DB load | Data loss risk if cache crashes; eventual consistency; ordering bugs | Non-critical data, analytics, recommendations |
+| **Write-Around** | App writes directly to DB (and deletes/invalidates cache); populated on next read | Prevents cache pollution from write-once data | Next read is a cache miss; temporary inconsistency | High write-to-read ratio workloads (logs) |
 
-```
-Flow:
-1. Client writes data
-2. Write to cache
-3. Write to database (synchronous)
-4. Return success to client
+#### Strategy Code Patterns
 
-Code:
-    def update_user(user_id, data):
-        cache.set(f"user:{user_id}", data)
+```python
+# 1. Cache-Aside (Lazy Loading)
+def get_user(user_id):
+    cache_key = f"user:{user_id}"
+    user = cache.get(cache_key)
+    if user is None:  # Cache miss
+        user = db.get_user(user_id)
+        cache.set(cache_key, user, ttl=3600)
+    return user
+
+# 2. Write-Through (Synchronous)
+def update_user_write_through(user_id, data):
+    cache.set(f"user:{user_id}", data)
+    db.update_user(user_id, data)
+    return "success"
+
+# 3. Write-Behind (Asynchronous Queue)
+def update_user_write_behind(user_id, data):
+    cache.set(f"user:{user_id}", data)
+    queue.enqueue(("update_user", user_id, data))
+    return "success"  # Immediate return
+
+def process_queue():
+    while True:
+        op, user_id, data = queue.dequeue()
         db.update_user(user_id, data)
-        return success
 
-Pros:
-├─ Data always consistent
-├─ Good for write-heavy workloads
-└─ Tolerate cache failures (DB always has latest)
-
-Cons:
-├─ Higher write latency (wait for DB)
-├─ Extra DB load (every write hits DB)
-└─ Cache must be same as DB
-
-Best for: Financial transactions, critical data
-```
-
-#### 4. Write-Behind (Write-Back, Write-Deferred)
-
-```
-Flow:
-1. Client writes data
-2. Write to cache only (immediate return)
-3. Cache asynchronously writes to database (eventual)
-
-Code:
-    def update_user(user_id, data):
-        cache.set(f"user:{user_id}", data)
-        queue.enqueue(("update_user", user_id, data))
-        return success  # Immediate, don't wait for DB
-
-    # Background worker
-    def process_queue():
-        while True:
-            op, user_id, data = queue.dequeue()
-            db.update_user(user_id, data)
-
-Pros:
-├─ Very fast writes (cache only)
-├─ Batches writes to DB
-├─ Reduces DB load
-
-Cons:
-├─ Data loss risk (cache fails before DB write)
-├─ Eventual consistency (reads might see old data)
-├─ Complex error handling
-└─ Ordering issues (updates out of order)
-
-Best for: Non-critical data, analytics, recommendations
-```
-
-#### 5. Write-Around
-
-```
-Flow:
-1. Client writes data
-2. Write only to database (skip cache)
-3. Cache is populated on next read
-
-Code:
-    def update_user(user_id, data):
-        db.update_user(user_id, data)
-        cache.delete(f"user:{user_id}")  # Invalidate cache
-        return success
-
-Pros:
-├─ Prevents cache pollution (don't cache writes)
-└─ Reduces write latency to cache
-
-Cons:
-├─ Next read is cache miss
-├─ Higher latency for readers
-└─ Cache inconsistency until first read
-
-Best for: Data with high write:read ratio
+# 4. Write-Around (Skip cache on write, invalidate stale entry)
+def update_user_write_around(user_id, data):
+    db.update_user(user_id, data)
+    cache.delete(f"user:{user_id}")
+    return "success"
 ```
 
 ### Cache Eviction Policies
 
-When cache is full, which item to evict?
+| Policy | Eviction Rule | Implementation | Pros | Cons | Best For |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **LRU** (Least Recently Used) | Evicts item accessed longest ago | Doubly Linked List + HashMap (`O(1)`) | Intuitive; exploits spatial/temporal locality | Ignores item size/frequency; sequential scans pollute cache (`1,2,3,4,1,2,3,4...`) | General-purpose caching (Memcached, Redis default) |
+| **LFU** (Least Frequently Used) | Evicts item accessed least often | Frequency counter + Min-heap | Keeps truly popular items | Complex; historical frequency biases old items; no recency factor | Long-term caching, analytics |
+| **TTL** (Time To Live) | Evicts item after fixed duration | Expiry timestamp + lazy/active deletion | Simple; bounds staleness | Ignores access patterns; may evict hot items | Session data, temporary API caches |
 
-#### LRU (Least Recently Used)
-
-```
-Evict item accessed longest ago.
-
-Example (Cache size = 3):
-Set: [A, B, C]
-Access A: [A*, B, C] (A is recent)
-Access B: [A, B*, C]
-Add D: Evict C (least recent) → [A, B*, D]
-
-Implementation:
-├─ Doubly linked list + HashMap
-├─ Move accessed item to front
-├─ Evict from back
-└─ O(1) operations with proper structure
-
-Pros:
-├─ Intuitive
-├─ Works well in practice
-└─ Spatial locality: hot items stay
-
-Cons:
-├─ Doesn't consider item value/size
-├─ Sequential scans pollute cache
-└─ Pathological case: 1,2,3,4,1,2,3,4... keeps missing
-
-Best for: General purpose caching (Memcached, Redis default)
-```
-
-#### LFU (Least Frequently Used)
-
-```
-Evict item accessed least often.
-
-Example (Cache size = 3):
-Set: [A(freq=1), B(freq=1), C(freq=1)]
-Access A 5 times: [A(freq=5), B(freq=1), C(freq=1)]
-Add D: Evict B or C (freq=1) → [A(freq=5), C(freq=1), D(freq=1)]
-
-Implementation:
-├─ Frequency counter per item
-├─ Min-heap of frequencies
-└─ Evict min frequency item
-
-Pros:
-├─ Considers access frequency
-└─ Better for popular items
-
-Cons:
-├─ More complex to implement
-├─ Historical frequency weights old data
-└─ No recency factor (old frequently accessed item stays)
-
-Best for: Long-term caching, analytics
-```
-
-#### TTL (Time To Live)
-
-```
-Evict item after fixed time.
-
-Example:
-cache.set("key", value, ttl=3600)  # Expires after 1 hour
-    │
-    ├─ After 30 min: Still valid
-    ├─ After 1 hour: Expired, will be evicted
-    └─ Lazy deletion: Actually removed on access or eviction
-
-Pros:
-├─ Simple
-├─ Prevents stale data
-└─ Works with cache-aside pattern
-
-Cons:
-├─ No consideration of access patterns
-├─ Might evict frequently used items
-└─ Wasted space for rarely accessed items
-
-Best for: Session data, temporary caches, API responses
-```
+> [!TIP]
+> **Redis vs Memcached:** Choose **Memcached** for simple, multi-threaded, pure key-value string caching with minimal overhead. Choose **Redis** when you need rich data structures (Sorted Sets for leaderboards, Hashes, Lists), persistence (RDB/AOF), pub/sub, or Lua scripting.
 
 ### Cache Problems and Solutions
 
-#### Problem 1: Cache Stampede (Thundering Herd)
+```mermaid
+flowchart TD
+    P["Production Cache Failure Modes"] --> S["Cache Stampede (Thundering Herd)"]
+    P --> Pen["Cache Penetration (Non-Existent Keys)"]
+    P --> A["Cache Avalanche (Mass Expiry / Node Crash)"]
 
+    S -->|"Defenses"| S1["Probabilistic Early Expiration + Stale-While-Revalidate + Mutex Lock"]
+    Pen -->|"Defenses"| P1["Bloom Filter Pre-Check + Negative Sentinel Caching + Rate Limiting"]
+    A -->|"Defenses"| A1["Multi-AZ Redundancy + Randomized TTL Jitter + Circuit Breaker + Warming"]
+
+    classDef root fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef prob fill:#1e293b,stroke:#fb923c,stroke-width:2px,color:#f8fafc
+    classDef sol fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class P root
+    class S,Pen,A prob
+    class S1,P1,A1 sol
 ```
-Scenario:
-- Popular key expires at exact same time
-- 1000s of requests hit cache simultaneously
-- All miss → all query database
-- Database gets 1000x traffic spike → crashes
 
-Timeline:
-t=0:   key expires
-t=0.1: 1000 requests arrive, all check cache, all miss
-t=0.1: All 1000 hit database
-t=0.2: Database overwhelmed, timeouts occur
+> [!WARNING]
+> **Cache Stampede & Avalanche** can cascade into a full database outage. Never assign identical flat TTLs to bulk-loaded keys—always add randomized jitter (`BASE_TTL + random(0, BASE_TTL // 10)`).
 
-Solutions:
+#### Problem 1: Cache Stampede (Thundering Herd)
+A popular key expires and thousands of concurrent requests miss simultaneously, hammering the DB at once.
+- **Probabilistic Early Expiration (Recommended):** Refresh asynchronously when ~80% of TTL has elapsed.
+- **Mutex / Lock:** Only the first miss acquires a lock to query the DB; others wait and read the populated cache.
+- **Stale-While-Revalidate:** Serve stale data immediately while refreshing in the background. *(Best practice: combine Probabilistic Early Expiration + Stale-While-Revalidate).*
 
-1. Probabilistic early expiration (Recommended)
-   └─ Refresh cache BEFORE expiry, with probability
+```python
+# Probabilistic early expiration + Stale-while-revalidate
+def get_with_early_refresh(key):
+    value, exp_time, is_stale = cache.get_with_meta(key)
+    if is_stale or should_refresh_early(exp_time):  # e.g., >80% TTL passed
+        background_task(refresh_cache, key)
+    return value
 
-   def get(key):
-       value, exp_time = cache.get(key)
-       if should_refresh_early():  # e.g., when 80% TTL passed
-           background_task(refresh_cache, key)
-       return value
-
-2. Locks/Mutexes
-   └─ First miss acquires lock, queries DB, caches result
-   └─ Other requests wait for lock, then use cache
-
-   def get(key):
-       value = cache.get(key)
-       if value is None:
-           if acquire_lock(key):  # Only 1 winner
-               value = db.get(key)  # Expensive query
-               cache.set(key, value)
-               release_lock(key)
-           else:
-               wait_for_lock(key)  # Wait for other thread
-               value = cache.get(key)  # Try again
-       return value
-
-3. Stale-while-revalidate
-   └─ Serve stale value immediately, refresh in background
-
-   def get(key):
-       value, is_stale = cache.get(key)
-       if is_stale:
-           background_task(refresh, key)
-       return value  # Return stale data, refresh async
-
-Best practice: Use (1) + (3) together
+# Mutex lock fallback
+def get_with_lock(key):
+    value = cache.get(key)
+    if value is None:
+        if acquire_lock(key):
+            value = db.get(key)
+            cache.set(key, value)
+            release_lock(key)
+        else:
+            wait_for_lock(key)
+            value = cache.get(key)
+    return value
 ```
 
 #### Problem 2: Cache Penetration
+Requests for non-existent IDs (e.g., `user_id = 999999999999`, or DoS attacks with random IDs) miss both cache and DB repeatedly because nothing is cached.
+- **Cache Negative Results (Recommended):** Store a short-TTL `"NOT_FOUND"` sentinel.
+- **Bloom Filters:** Space-efficient probabilistic structure returning *"definitely not in DB"* or *"might exist"* before touching cache/DB.
+- **Rate Limiting:** Throttle IPs requesting missing resources.
 
-```
-Scenario:
-- Request for non-existent data
-- Misses cache (nothing to cache)
-- Hits database (expensive, returns nothing)
-- Every identical request repeats this
-- Attacker can DOS with random IDs
+```python
+bloom_filter = BloomFilter(capacity=1_000_000, false_positive_rate=0.01)
 
-Example:
-user_id: 999999999999 (doesn't exist)
-├─ Check cache: miss
-├─ Hit database: miss (returns nothing)
-├─ No cache entry created
-└─ Next request for same ID: repeat steps
+def get_user_safe(user_id):
+    if user_id not in bloom_filter:
+        return None  # Definitely not in database
 
-Solutions:
+    cached = cache.get(f"user:{user_id}")
+    if cached == "NOT_FOUND":
+        return None
+    if cached is not None:
+        return cached
 
-1. Cache negative results (Recommended)
-   └─ Store explicit "not found" sentinel value
-
-   def get_user(user_id):
-       cached = cache.get(f"user:{user_id}")
-       if cached == "NOT_FOUND":
-           return None  # Cached negative result
-       if cached is not None:
-           return cached
-
-       user = db.get_user(user_id)
-       if user is None:
-           cache.set(f"user:{user_id}", "NOT_FOUND", ttl=300)
-           return None
-       else:
-           cache.set(f"user:{user_id}", user, ttl=3600)
-           return user
-
-2. Bloom filters
-   └─ Probabilistic data structure: "might exist" or "definitely not exist"
-   └─ Before querying DB, check bloom filter
-
-   bloom_filter = BloomFilter(capacity=1M, false_positive_rate=1%)
-
-   def get_user(user_id):
-       if user_id not in bloom_filter:
-           return None  # Definitely not in database
-
-       cached = cache.get(f"user:{user_id}")
-       if cached is not None:
-           return cached
-
-       user = db.get_user(user_id)
-       cache.set(f"user:{user_id}", user)
-       return user
-
-3. Rate limiting
-   └─ Limit requests per IP
-   └─ Limit requests for non-existent resources
-   └─ Slows down attacker
-
-Best practice: Combine (1) for easy cases + (2) for large datasets
+    user = db.get_user(user_id)
+    if user is None:
+        cache.set(f"user:{user_id}", "NOT_FOUND", ttl=300)
+        return None
+    cache.set(f"user:{user_id}", user, ttl=3600)
+    return user
 ```
 
 #### Problem 3: Cache Avalanche
+Multiple cache nodes fail simultaneously or a massive batch of keys expires together, overloading surviving cache nodes (`10x` spike) and crashing the DB (`100x` spike).
+- **Multi-AZ Redundancy:** Master-replica / cluster across availability zones with health monitoring.
+- **Randomized Expiration (Jitter):** `ttl = BASE_TTL + random(0, BASE_TTL // 10)`.
+- **Circuit Breaker:** Stop querying an overloaded DB and return degraded/stale responses until recovery.
+- **Gradual Cache Warming:** Preload top `10,000` hot keys on startup before serving traffic.
 
-```
-Scenario:
-- Multiple cache nodes fail simultaneously
-- OR mass expiration of many keys at once
-- Remaining cache gets overwhelmed
-- Cascades to database failure
-- Entire system goes down
+```python
+def get_with_circuit_breaker(key):
+    value = cache.get(key)
+    if value is None:
+        if circuit_breaker.is_open():
+            return error_response("Service temporarily unavailable")
+        try:
+            value = db.get(key)
+        except SlowDatabaseError:
+            circuit_breaker.open()
+            return error_response("Service temporarily unavailable")
+    return value
 
-Example:
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│ Cache Node 1 │ │ Cache Node 2 │ │ Cache Node 3 │
-└──────────────┘ └──────────────┘ └──────────────┘
-      │                  │                  │
-      └──────────────────┼──────────────────┘
-                         ▼
-            ┌──────────────────────┐
-            │ Remaining Cache      │ (overloaded!)
-            │ 10x traffic spike    │
-            └──────────────────────┘
-                         ▼
-            ┌──────────────────────┐
-            │ Database             │ (crashes)
-            │ 100x traffic spike   │
-            └──────────────────────┘
-
-Solutions:
-
-1. Multiple cache nodes (redundancy)
-   └─ Distribute across availability zones
-   └─ Use master-slave or cluster configuration
-   └─ Monitor node health
-
-2. Randomized expiration
-   └─ Don't set all TTLs to same value
-   └─ Add random variance: TTL + random(0, TTL*0.1)
-
-   ttl = BASE_TTL + random(0, BASE_TTL // 10)
-   cache.set(key, value, ttl=ttl)
-
-3. Circuit breaker
-   └─ If database latency high, return stale cache
-   └─ Don't query database if already overloaded
-
-   def get(key):
-       value = cache.get(key)
-       if value is None:
-           if circuit_breaker.is_open():
-               return error_response("Service temporarily unavailable")
-           try:
-               value = db.get(key)
-           except SlowDatabaseError:
-               circuit_breaker.open()  # Stop querying DB temporarily
-               return error_response(...)
-       return value
-
-4. Gradual cache warming
-   └─ Preload cache on startup
-   └─ Load hot data before serving traffic
-
-   def warm_cache():
-       hot_keys = db.get_top_10000_items()
-       for key, value in hot_keys:
-           cache.set(f"item:{key}", value)
-
-Best practice: Combine (1) + (2) + (3)
+def warm_cache():
+    for key, value in db.get_top_10000_items():
+        ttl = 3600 + random(0, 360)
+        cache.set(f"item:{key}", value, ttl=ttl)
 ```
 
 ---
 
 ## Databases
 
-### Database Types and When to Use
+### Choosing the Right Database
 
-#### Relational Databases (SQL)
+```mermaid
+flowchart TD
+    Start["Data Storage Requirements"] --> Q1{"Structured data + ACID transactions + Joins?"}
+    Q1 -->|"Yes"| SQL["Relational SQL (PostgreSQL, MySQL)"]
+    Q1 -->|"No"| Q2{"Access pattern?"}
 
-```
-What: Tables with ACID transactions, joins, schema
+    Q2 -->|"Simple Key → Value / In-Memory"| KV["Key-Value Store (Redis, Memcached)"]
+    Q2 -->|"Flexible JSON Documents"| Doc["Document Store (MongoDB, CouchDB)"]
+    Q2 -->|"Massive Write-Heavy / Time-Series"| Col["Column-Family (Cassandra, HBase)"]
+    Q2 -->|"Complex Traversals / Relationships"| Graph["Graph DB (Neo4j, ArangoDB)"]
 
-Examples: PostgreSQL, MySQL, Oracle, SQL Server
-
-Characteristics:
-├─ Schema: Defined upfront (rigid, but safe)
-├─ Consistency: Strong (transactions, constraints)
-├─ Scalability: Vertical (single master scales up)
-└─ Queries: SQL (flexible, powerful)
-
-When to use:
-├─ Structured data (users, products, orders)
-├─ Complex relationships (many joins)
-├─ Need transactions (atomicity)
-├─ Need consistency (banking, inventory)
-
-When NOT to use:
-├─ Need horizontal scaling (sharding is complex)
-├─ Unstructured data (documents, images)
-├─ Flexible schema (schema changes expensive)
-└─ Need super high availability (replication lags)
-
-Scaling strategies:
-├─ Vertical: Add more CPU/memory (limited)
-├─ Read replicas: Distribute reads
-├─ Sharding: Partition data (complex joins break)
-└─ Caching: Cache hot queries
-```
-
-#### NoSQL - Document Stores (MongoDB, CouchDB)
-
-```
-What: JSON/BSON documents, flexible schema, eventually consistent
-
-Characteristics:
-├─ Schema: Flexible (add fields on the fly)
-├─ Queries: MongoDB Query Language (less powerful than SQL)
-├─ Consistency: Eventually consistent (replication lag)
-└─ Scalability: Horizontal (sharding built-in)
-
-When to use:
-├─ Unstructured/semi-structured data
-├─ Flexible schema (new fields often)
-├─ Document-oriented data (user profiles, catalogs)
-├─ Need horizontal scaling (many shards)
-
-When NOT to use:
-├─ Complex relationships (many joins needed)
-├─ Need ACID transactions across shards
-├─ Need strong consistency
-├─ Query patterns very diverse
-
-Example:
-// Document structure (flexible)
-{
-  "_id": ObjectId("..."),
-  "name": "Alice",
-  "emails": ["alice@example.com", "alice.work@example.com"],  // Array
-  "address": {
-    "city": "San Francisco",
-    "zip": "94102"
-  },
-  "profile": {
-    "bio": "Engineer",
-    "followers": 1000
-  }
-}
-
-// New document with different schema (allowed)
-{
-  "_id": ObjectId("..."),
-  "name": "Bob",
-  "phone": "555-1234",
-  "newsletter_preference": true
-}
-
-Scaling:
-├─ Sharding by user_id (partition by key)
-├─ Each shard stores subset of documents
-└─ Query goes to specific shard or all shards
-```
-
-#### NoSQL - Key-Value Stores (Redis, Memcached)
-
-```
-What: Simple key → value mapping, fast, in-memory
-
-Characteristics:
-├─ Operations: get, set, delete, increment
-├─ Consistency: Eventual (but fast)
-├─ Persistence: Optional (can be memory-only)
-└─ Scalability: Horizontal (sharding by key)
-
-When to use:
-├─ Caching (warm queries)
-├─ Session storage
-├─ Rate limiting
-├─ Leaderboards (sorted sets in Redis)
-├─ Real-time counters
-
-When NOT to use:
-├─ Need transactions
-├─ Complex queries
-├─ Need persistence (or very expensive)
-├─ Large data sets (in-memory = expensive)
-
-Example:
-redis.set("user:1001:name", "Alice")
-redis.set("user:1001:email", "alice@example.com")
-redis.get("user:1001:name")  # "Alice"
-
-redis.incr("page_views:home")  # Counters
-redis.zadd("leaderboard", 1000, "alice", 900, "bob")  # Sorted set
-```
-
-#### NoSQL - Column-Family Stores (HBase, Cassandra)
-
-```
-What: Distributed key-value with columns, optimized for analytics
-
-Characteristics:
-├─ Structure: Row key → columns (sparse)
-├─ Consistency: Eventually consistent
-├─ Scalability: Horizontal (excellent)
-└─ Data: Time-series, analytics
-
-When to use:
-├─ Time-series data (metrics, logs)
-├─ Analytics (columnar compression)
-├─ Massive scale (100s of TB+)
-├─ Write-heavy (millions of writes/sec)
-
-When NOT to use:
-├─ Need quick response times (optimized for throughput, not latency)
-├─ Complex queries
-├─ Strong consistency needed
-
-Example:
-// Row: user:1001
-// Columns: profile:name, profile:email, recent_logins:2024-01-15
-
-Row Key      │ profile:name │ profile:email │ recent_logins:2024-01-15
-─────────────┼──────────────┼───────────────┼─────────────────────────
-user:1001    │ "Alice"      │ "alice@ex"    │ "10:23:45"
-user:1002    │ "Bob"        │ "bob@ex"      │ "09:12:30"
-
-// Efficient compression: many columns are sparse/null
-// Efficient for: SELECT profile:name WHERE row_key LIKE 'user:*'
-```
-
-#### NoSQL - Graph Databases (Neo4j, ArangoDB)
-
-```
-What: Nodes and edges optimized for relationships
-
-Characteristics:
-├─ Data: Nodes (vertices) + relationships (edges)
-├─ Queries: Graph queries (traversals)
-├─ Consistency: ACID (some support transactions)
-└─ Scalability: Moderate (not as horizontally scalable)
-
-When to use:
-├─ Social networks (friendships, followers)
-├─ Recommendation engines (products, users)
-├─ Knowledge graphs (Wikipedia relationships)
-├─ Access control (who can access what)
-
-When NOT to use:
-├─ Simple key-value access
-├─ Need massive scale (not as horizontally scalable)
-├─ Unrelated data (random access patterns)
-
-Example:
-Query: "Find friends of friends who like sci-fi"
-
-// Nodes
-User(name="Alice") -[FRIEND]-> User(name="Bob")
-User(name="Bob") -[FRIEND]-> User(name="Charlie")
-User(name="Charlie") -[LIKES]-> Movie(genre="sci-fi")
-
-// Query
-MATCH (alice:User {name:"Alice"})-[:FRIEND]->(friend)-[:FRIEND]->(friend_of_friend)
-      ,(friend_of_friend)-[:LIKES]->(movie:Movie {genre:"sci-fi"})
-RETURN friend_of_friend, movie
+    classDef q fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef sql fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef nosql fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class Start,Q1,Q2 q
+    class SQL sql
+    class KV,Doc,Col,Graph nosql
 ```
 
 ### Database Comparison Table
 
-```
-┌──────────┬─────────────┬────────────┬──────────────┬──────────┐
-│ Type     │ Consistency │ Scalability│ Query Power  │ Use Case │
-├──────────┼─────────────┼────────────┼──────────────┼──────────┤
-│ SQL      │ Strong      │ Vertical   │ Very Powerful│ Business │
-│ Document │ Eventual    │ Horizontal │ Moderate     │ Web App  │
-│ Key-Value│ Eventual    │ Horizontal │ Simple       │ Cache    │
-│ Column   │ Eventual    │ Horizontal │ Analytic     │ Analytics│
-│ Graph    │ Varies      │ Moderate   │ Graph        │ Social   │
-└──────────┴─────────────┴────────────┴──────────────┴──────────┘
-```
+| Type | Examples | Consistency | Scalability | Query Power | Best Use Cases |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Relational (SQL)** | PostgreSQL, MySQL, Oracle, SQL Server | Strong (ACID) | Vertical (+ Read Replicas, Sharding) | Very Powerful (SQL, Joins) | Banking, inventory, structured business entities |
+| **Document (NoSQL)** | MongoDB, CouchDB | Eventual | Horizontal (built-in sharding) | Moderate (Document queries) | User profiles, catalogs, semi-structured web apps |
+| **Key-Value (NoSQL)** | Redis, Memcached | Eventual | Horizontal (key sharding) | Simple (`get`/`set`/`incr`) | Caching, sessions, rate limiting, leaderboards |
+| **Column-Family (NoSQL)** | Cassandra, HBase | Eventual | Horizontal (massive scale) | Analytic / Row-key range | Time-series, metrics, logs, `100TB+` write-heavy |
+| **Graph (NoSQL)** | Neo4j, ArangoDB | Varies (ACID on some) | Moderate | Graph traversals (Cypher) | Social networks, recommendations, knowledge graphs, ACLs |
+
+### Deep-Dive Notes & Examples
+
+- **Relational (SQL):** Rigid schema, strong ACID guarantees. Scale via vertical scaling, read replicas, caching, or sharding.
+  > [!IMPORTANT]
+  > Avoid sharding SQL databases until vertical scaling, read replicas, and caching are exhausted—sharding breaks cross-shard `JOIN`s and distributed transactions.
+- **Document Stores:** Store flexible JSON/BSON documents (e.g., nested `address`, `emails` arrays, optional fields like `phone` per document) sharded by `user_id`. Avoid when cross-shard ACID or heavy joins are required.
+- **Key-Value Stores:** In-memory `O(1)` operations:
+  ```python
+  redis.set("user:1001:name", "Alice")
+  redis.incr("page_views:home")
+  redis.zadd("leaderboard", {"alice": 1000, "bob": 900})
+  ```
+- **Column-Family Stores:** Sparse `Row Key → Column` layout with high columnar compression; optimized for write throughput (`millions/sec`), not low-latency ad-hoc queries:
+  ```sql
+  -- Efficient: SELECT profile:name WHERE row_key LIKE 'user:*'
+  ```
+- **Graph Databases:** Store vertices and edges natively for multi-hop traversals:
+  ```cypher
+  MATCH (alice:User {name:"Alice"})-[:FRIEND]->(friend)-[:FRIEND]->(fof),
+        (fof)-[:LIKES]->(movie:Movie {genre:"sci-fi"})
+  RETURN fof, movie
+  ```
 
 ---
 
 ## Consistent Hashing
 
-### The Problem: Simple Hashing
+### The Problem with Modulo Hashing (`hash(key) % N`)
 
-```
-Store data across N servers using hash(key) % N
+With simple modulo hashing across `N = 3` servers (`S1, S2, S3`), adding `S4` changes the modulus to `4`, causing **nearly all keys to rehash** to different servers—triggering a massive cache invalidation storm and database overload.
 
-Servers: [S1, S2, S3]  (N = 3)
+### The Consistent Hashing Ring & Virtual Nodes
 
-Distribution:
-key="alice" → hash("alice") % 3 = 0 → S1
-key="bob"   → hash("bob") % 3 = 1 → S2
-key="charlie" → hash("charlie") % 3 = 2 → S3
+Arrange servers and keys on a circular hash ring (`0` to `2^32 - 1`). To locate a key's server, hash the key and walk **clockwise** until hitting the first server. When `S4` is added, only keys between `S3` and `S4` (`~N/4`) move.
 
-Problem: Add new server S4
+```mermaid
+flowchart LR
+    subgraph Ring["Consistent Hash Ring (0 to 2^32 - 1) with Virtual Nodes & RF=3"]
+        direction LR
+        S1v1["S1-v1 (10000)"] -->|"clockwise"| K1["Key: bob (45678)"]
+        K1 --> S2v1["S2-v1 (50000) · Primary"]
+        S2v1 -->|"RF Replica 1"| S1v2["S1-v2 (99000)"]
+        S1v2 -->|"RF Replica 2"| S3v1["S3-v1 (120000)"]
+        S3v1 --> S2v2["S2-v2 (150000)"]
+        S2v2 -.->|"wraps around"| S1v1
+    end
 
-Distribution changes:
-key="alice" → hash("alice") % 4 = 0 → S1  (same)
-key="bob"   → hash("bob") % 4 = 1 → S2    (same)
-key="charlie" → hash("charlie") % 4 = 2 → S3  (same)
-key="diana" → hash("diana") % 4 = 3 → S4
-
-Issue: Every key rehashes!
-└─ Hash ring changes → all N-1 moves out of distribution
-└─ Massive cache invalidation
-└─ Database queries for everything
-```
-
-### Consistent Hashing Solution
-
-```
-Arrange servers on a ring (0 to 2^32-1)
-
-Ring layout:
-           S1 (position: 123456)
-          /  \
-         /    \
-   S3(6789)   S2(876543)
-
-Hash key to ring:
-key="alice" → hash("alice") = 234567
-key="bob" → hash("bob") = 45678
-
-Find server: Move clockwise until hitting server:
-alice (234567) → clockwise → S2 (876543) ✓
-bob (45678) → clockwise → S1 (123456) ✓
-
-Add new server S4 (position: 500000):
-
-         S1 (123456)
-        /  \
-       /    \
-  S3(6789)  S2(876543)
-       \    /
-        \  /
-      S4(500000)
-
-Rebalancing:
-alice (234567) → still S2 (unchanged) ✓
-bob (45678) → now S4 (500000) ✗ (moved!)
-charlie (600000) → now S1 (from S2)
-
-Only keys between S3 and S4 move (~N/4 keys move, not all!)
+    classDef node fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef key fill:#1e293b,stroke:#fb923c,stroke-width:2px,color:#f8fafc
+    class S1v1,S2v1,S1v2,S3v1,S2v2 node
+    class K1 key
 ```
 
-### Virtual Nodes (Replication Factor)
+| Feature | Simple Modulo (`hash(k) % N`) | Basic Consistent Hashing | Consistent Hashing + Virtual Nodes |
+| :--- | :--- | :--- | :--- |
+| **Keys Moved on Resize** | `~100%` (`(N-1)/N`) | `~1/N` | `~1/N` with smooth rebalancing |
+| **Load Distribution** | Uniform (static `N`) | Skewed when `N` is small | `<5%` deviation (`150–300` vnodes/server) |
+| **Fault Tolerance** | Poor (rehash storm) | Next clockwise server absorbs entire load | Failed server's load spreads evenly across all survivors |
 
-```
-Problem: Few servers → uneven load distribution
+#### Virtual Nodes & Replication Factor (`RF = 3`)
 
-Solution: Each server has multiple virtual nodes on ring
-
-Ring with virtual nodes:
-         S1-v1 (10000)
-        /          \
-    S1-v2(99000)    S2-v1(50000)
-       /              \
-    S3-v2(5000)      S2-v2(150000)
-       \              /
-       S3-v1(120000)
-
-Benefits:
-├─ Even distribution (each server covers multiple sections)
-├─ Fault tolerance (load distributed if one server down)
-├─ Better rebalancing (less data moves per operation)
-
-Typical configuration:
-├─ Virtual nodes per server: 150-300
-├─ Effectively spreads each server across ring
-└─ Load distribution deviation: <5%
-
-Implementation:
-for i in range(num_virtual_nodes):
+```python
+for i in range(num_virtual_nodes):  # Typically 150-300 per physical server
     virtual_key = f"{server_id}:v{i}"
     ring.add(hash(virtual_key), server_id)
 ```
 
-### Consistent Hashing with Replication
+- **Replication (`RF = 3`):** Store each key on its primary clockwise node plus the next 2 distinct physical nodes on the ring. Tolerates 2 server failures; **quorum reads/writes (`2/3` ACKs)** provide strong consistency.
 
-```
-Replicate each key on multiple servers (usually 3)
-
-Ring:
-    S1(100) → S2(200) → S3(300) → S1(400) → ...
-
-Key alice(150):
-Primary: S2(200) ← clockwise next
-Replica 1: S3(300)
-Replica 2: S1(400)  (or S1(100) depending on implementation)
-
-Write:
-├─ Write to primary S2
-├─ Replicate to S3, S1
-└─ Return to client (once primary + 1 replica ACKs)
-
-Read:
-├─ Read from closest server (any replica)
-├─ Fallback if primary down
-└─ Serve stale data if needed
-
-Replication factor (RF) = 3:
-├─ Each key stored on 3 servers
-├─ Can tolerate 2 server failures
-└─ Quorum reads: wait for 2/3 ACKs (strong consistency)
-```
+> [!WARNING]
+> Without **virtual nodes**, a small cluster (e.g., 3–5 servers) suffers severe hot-spotting and cascading overload when a single node fails.
 
 ---
 
 ## Message Queues
 
-### Message Queue Basics
+### Asynchronous Decoupling Architecture
 
-```
-Producer writes messages → Queue → Consumer reads messages
+Producers publish events and return immediately while consumer groups process slow tasks (charging cards, sending emails) asynchronously.
 
-Use case: Decouple producer from consumer (async processing)
+```mermaid
+flowchart LR
+    Prod["Producer (Order API)"] -->|"publish('orders', order)"| Queue["Message Broker (Kafka / RabbitMQ / SQS)"]
+    Queue -->|"consume()"| Dedup{"Processed ID in Store?"}
+    Dedup -->|"Yes (Duplicate)"| Skip["Ack & Skip (Idempotent)"]
+    Dedup -->|"No"| Work["Process Order + Charge Card + Email"]
+    Work --> SaveID["Record message.id & ACK"]
 
-Example:
-// Producer: User submits order
-order = {"user_id": 1001, "items": [...]}
-message_queue.publish("orders", order)
-// Returns immediately
-
-// Consumer: Process order (asynchronously)
-while True:
-    order = message_queue.consume("orders")
-    process_order(order)
-    charge_credit_card(order)
-    send_email(order)
-    // Takes time, but doesn't block producer
-```
-
-### Kafka vs RabbitMQ vs SQS
-
-```
-                 Kafka              RabbitMQ        AWS SQS
-────────────────────────────────────────────────────────────
-Throughput       Millions/sec       Thousands/sec   Millions/sec
-Latency          Low (ms)           Medium (ms)     Medium (ms)
-Durability       Very High          High            High
-Ordering         Strong (per part.) Per queue       FIFO only
-Replayability    Yes (log)          No              No
-Scale            Excellent          Good            Excellent
-Operational      Complex            Medium          Simple (managed)
-────────────────────────────────────────────────────────────
-
-Use Kafka when:
-├─ Need replay/reprocessing
-├─ Need millions of messages/sec
-├─ Stream processing (Kafka Streams)
-└─ Event sourcing architecture
-
-Use RabbitMQ when:
-├─ Traditional pub/sub needed
-├─ Complex routing rules
-├─ Distributed team managing infrastructure
-└─ Need point-to-point + pub/sub
-
-Use SQS when:
-├─ AWS-native infrastructure
-├─ Don't want to operate Kafka cluster
-├─ High availability important (AWS manages)
-└─ Standard queues acceptable (no ordering guarantee)
+    classDef prod fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef mq fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef proc fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef warn fill:#1e293b,stroke:#fb923c,stroke-width:2px,color:#f8fafc
+    class Prod prod
+    class Queue mq
+    class Work,SaveID,Skip proc
+    class Dedup warn
 ```
 
-### Message Queue Guarantees
+### Kafka vs RabbitMQ vs AWS SQS
 
-```
-At-Least-Once Delivery:
-├─ Consumer gets message at least once
-├─ Consumer might get duplicates if crashes after processing
-├─ Requires idempotent operations
-└─ Most common guarantee
+| Feature | Apache Kafka | RabbitMQ | AWS SQS |
+| :--- | :--- | :--- | :--- |
+| **Throughput** | Millions/sec | Thousands/sec | Millions/sec |
+| **Latency** | Low (ms) | Medium (ms) | Medium (ms) |
+| **Durability** | Very High (replicated commit log) | High | High (managed) |
+| **Ordering** | Strong (per partition) | Per queue | FIFO queues only |
+| **Replayability** | Yes (retained event log) | No (deleted after ACK) | No |
+| **Operations** | Complex | Medium | Simple (fully managed) |
+| **When to Use** | Event sourcing, stream processing, replay | Complex routing rules, classic pub/sub | AWS-native apps without cluster ops |
 
-At-Most-Once Delivery:
-├─ Consumer gets message 0 or 1 times
-├─ If consumer crashes, message lost
-└─ Used for non-critical notifications (error logs, analytics)
+### Delivery Guarantees
 
-Exactly-Once Delivery:
-├─ Theoretically impossible (consult literature)
-├─ In practice: idempotency + deduplication
-├─ Use unique message IDs
-├─ Track processed IDs (in database or separate store)
-└─ Re-processed messages: skip if already processed
+| Guarantee | Behavior | Tradeoff / Requirement |
+| :--- | :--- | :--- |
+| **At-Least-Once** | Retries until ACKed; duplicates possible on crash | Most common; requires **idempotent** consumers |
+| **At-Most-Once** | Fire-and-forget (`0` or `1` delivery) | Fast, no retries; messages lost on crash (metrics/logs) |
+| **Exactly-Once** | Effectively processed once | Achieved in practice via **idempotency + unique message ID deduplication** |
 
-Implementation (Exactly-Once):
-processed_messages = set()  // or database table
-
+```python
 def consume_and_process(message):
     if message.id in processed_messages:
-        return  // Already processed, skip
-
+        return  # Already processed, skip
     process(message)
     processed_messages.add(message.id)
-    acknowledge(message)  // Tell queue: done with this message
+    acknowledge(message)
 ```
+
+> [!IMPORTANT]
+> True network-level exactly-once delivery is theoretically impossible (Two Generals' Problem). Implement **At-Least-Once delivery + Idempotent Consumers** backed by a deduplication store.
 
 ---
 
 ## Blob Storage
 
-### Blob Storage Basics
+**What it is:** Highly durable (`99.999999999%` / eleven 9s) HTTP-accessible storage for large unstructured files (photos, videos, backups) organized into buckets (e.g., **AWS S3**, **Azure Blob Storage**, **Google Cloud Storage**).
 
-```
-What: Store large unstructured files (photos, videos, documents)
+```mermaid
+flowchart LR
+    User["User (Tokyo)"] -->|"GET /video.mp4"| CDN["CloudFront CDN Edge (Tokyo)"]
+    CDN -->|"Hit: Serve directly"| User
+    CDN -->|"Miss: Origin Fetch"| S3Primary["S3 Primary (us-east-1)"]
+    S3Primary -.->|"Multi-Region Replication"| S3Backup["S3 Backup (us-west-2 / eu-central-1)"]
 
-Examples: AWS S3, Azure Blob Storage, Google Cloud Storage
-
-Characteristics:
-├─ Unlimited capacity (pay per GB)
-├─ Highly durable (multi-region replication)
-├─ Accessed via HTTP (simple API)
-├─ Organized by buckets (like directories)
-
-API:
-├─ PUT object: upload file
-├─ GET object: download file
-├─ DELETE object: remove file
-├─ LIST objects: list files in bucket
-
-Typical architecture:
-User → Upload → API → Blob Storage
-                       ├─ Primary region: us-east-1
-                       ├─ Backup region: us-west-2
-                       ├─ Disaster: eu-central-1
-                       └─ Durability: 99.999999999% (11 9s)
+    classDef client fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef cdn fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef s3 fill:#1e293b,stroke:#fb923c,stroke-width:2px,color:#f8fafc
+    class User client
+    class CDN cdn
+    class S3Primary,S3Backup s3
 ```
 
-### CDN for Blob Storage
+| Core API Operation | Purpose | Best Practice |
+| :--- | :--- | :--- |
+| `PUT object` | Upload file to bucket | Use pre-signed URLs so clients upload directly to S3, bypassing app servers |
+| `GET object` | Download file | Serve through a **CDN** (CloudFront) for geo-proximity, compression (`gzip`/`brotli`), and lower S3 egress cost |
+| `DELETE object` | Remove file | Pair with lifecycle policies for cold/archive tiers |
+| `LIST objects` | Enumerate bucket keys | Paginate and store searchable metadata in a DB rather than listing S3 in hot paths |
 
-```
-Don't serve blobs directly from bucket (slow)
-
-Instead: Cloudfront CDN → S3
-
-User in Tokyo
-  │
-  ├─ Cache miss → CDN edge in Tokyo requests S3 (first time)
-  └─ Cache hit → CDN edge serves (subsequent requests)
-
-Configuration:
-S3 bucket (origin)
-   ↑
-   │
-   └─ CloudFront distribution (cache layer)
-       │
-       ├─ Edge location: Tokyo
-       ├─ Edge location: London
-       ├─ Edge location: São Paulo
-       └─ Edge location: Singapore
-
-Benefits:
-├─ Faster downloads (geographic proximity)
-├─ Reduces S3 load (cache hits)
-├─ Can compress files (gzip, brotli)
-└─ Geographic cost optimization (expensive bandwidth in some regions)
-```
+> [!TIP]
+> Never serve hot blobs directly from an origin bucket—front your Blob Storage with a **CDN** to cut cross-region latency and reduce origin egress fees.
 
 ---
 
 ## Search Engines
 
-### Elasticsearch Basics
+### Inverted Index & Distributed Scatter-Gather
 
-```
-What: Search engine optimized for full-text search over documents
+Traditional forward indexes scan every document (`Doc → [words]`). Search engines like **Elasticsearch** build an **Inverted Index** (`word → [Doc1, Doc2, ...]`) per mapped field for `O(1)` term lookup and fast boolean (`AND`/`OR`/`NOT`) and phrase queries.
 
-Use case: Search through millions of documents (products, articles)
+```mermaid
+flowchart LR
+    Q["User Query: 'laptop'"] --> Router["Coordinator / Router"]
+    Router -->|"Parallel Scatter"| S0["Node 1: Shard 0 (Primary)"]
+    Router -->|"Parallel Scatter"| S1["Node 2: Shard 1 (Primary)"]
+    Router -->|"Parallel Scatter"| S2["Node 1: Shard 2 (Primary)"]
 
-Core concept: Inverted Index
+    S0 -.->|"Replicate"| R0["Node 2: Shard 0 (Replica)"]
+    S1 -.->|"Replicate"| R1["Node 1: Shard 1 (Replica)"]
+    S2 -.->|"Replicate"| R2["Node 2: Shard 2 (Replica)"]
 
-Document:
-ID=1: "The quick brown fox jumps over lazy dog"
-ID=2: "The lazy dog sleeps in the sun"
+    S0 --> Merge["Merge & Rank by Relevance Score"]
+    S1 --> Merge
+    S2 --> Merge
 
-Inverted Index:
-the        → [Doc1, Doc2]
-quick      → [Doc1]
-brown      → [Doc1]
-fox        → [Doc1]
-jumps      → [Doc1]
-over       → [Doc1]
-lazy       → [Doc1, Doc2]
-dog        → [Doc1, Doc2]
-sleeps     → [Doc2]
-in         → [Doc2]
-sun        → [Doc2]
-
-Query: "lazy dog"
-├─ Find "lazy" → [Doc1, Doc2]
-├─ Find "dog" → [Doc1, Doc2]
-├─ Intersection → [Doc1, Doc2]
-└─ Return both documents
+    classDef q fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef shard fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef rep fill:#1e293b,stroke:#94a3b8,stroke-width:1.5px,color:#cbd5e1
+    classDef merge fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class Q,Router q
+    class S0,S1,S2 shard
+    class R0,R1,R2 rep
+    class Merge merge
 ```
 
-### How Inverted Indexes Work
+| Index Type | Structure | Query `"lazy dog"` |
+| :--- | :--- | :--- |
+| **Forward Index** | `Doc1 → ["the", "quick", ...]` | Must scan every document (`O(N)`) |
+| **Inverted Index** | `"lazy" → [Doc1, Doc2]`, `"dog" → [Doc1, Doc2]` | `O(1)` lookup per term + list intersection → `[Doc1, Doc2]` |
 
-```
-Traditional Index (Forward):
-Doc1 → [word1, word2, word3, ...]
-Doc2 → [word1, word5, ...]
-
-Query "word3": Check every document (slow!)
-
-Inverted Index (Better for search):
-word1 → [Doc1, Doc2, Doc5, ...]
-word2 → [Doc1, Doc10, ...]
-word3 → [Doc1, Doc7, ...]
-
-Query "word3": Check word3 → Get [Doc1, Doc7] (fast!)
-
-Benefits:
-├─ O(1) lookup of word positions
-├─ Easy boolean queries (AND/OR/NOT)
-├─ Supports phrase queries
-└─ Can store additional metadata (position, frequency)
-
-Storage example (Elasticsearch):
-{
-  "index": "products",
-  "mappings": {
-    "properties": {
-      "name": {"type": "text"},
-      "description": {"type": "text"},
-      "category": {"type": "keyword"}
-    }
-  }
-}
-
-Each field gets its own inverted index!
-Search across multiple fields efficiently.
-```
-
-### Scalability: Sharding and Replication
-
-```
-Elasticsearch Index = Shards × Replicas
-
-Index "products":
-├─ 5 primary shards (distribute data)
-├─ 1 replica per shard (redundancy)
-└─ Total physical space: 5 × (1+1) = 10× logical data size
-
-Shard distribution:
-┌─────────────────────────────────────────┐
-│ Elasticsearch Cluster                   │
-├───────────────────┬─────────────────────┤
-│ Node 1            │ Node 2              │
-│ Shard 0 (primary) │ Shard 0 (replica)   │
-│ Shard 1 (replica) │ Shard 1 (primary)   │
-│ Shard 2 (primary) │ Shard 2 (replica)   │
-└───────────────────┴─────────────────────┘
-
-Search flow:
-User query: "laptop"
-  │
-  ├─ Router calculates shard → hash(query) % num_shards
-  ├─ Query goes to 1 replica per shard (3 shards = 3 parallel requests)
-  ├─ Each shard searches its local index
-  └─ Results merged and ranked (by relevance score)
-```
+> [!IMPORTANT]
+> **Capacity Planning:** An Elasticsearch index with `5` primary shards and `1` replica per shard requires `5 × (1 + 1) = 10` total shards (`2×` storage footprint).
 
 ---
 
@@ -1441,56 +659,33 @@ User query: "laptop"
 
 ### REST vs gRPC vs GraphQL
 
+```mermaid
+flowchart LR
+    Client["Client (Web / Mobile / Microservice)"] -->|"JSON over HTTP/1.1"| REST["REST API (3 calls: N+1 risk)"]
+    Client -->|"Protobuf over HTTP/2"| gRPC["gRPC (Binary, Streaming, Typed)"]
+    Client -->|"Single POST Query"| GQL["GraphQL (Exact Fields Requested)"]
+
+    classDef c fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef r fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef g fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef q fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    class Client c
+    class REST r
+    class gRPC g
+    class GQL q
 ```
-REST (HTTP):
-├─ Pros: Simple, stateless, caching-friendly (HTTP cache)
-├─ Cons: Multiple requests per operation, over/under-fetching
-└─ Use: Public APIs, web applications
 
-Example:
-GET /users/1
-GET /users/1/posts
-GET /users/1/posts/123/comments
+| Feature | REST (HTTP) | gRPC (Protobuf over HTTP/2) | GraphQL |
+| :--- | :--- | :--- | :--- |
+| **Simplicity** | High | Low (requires `.proto` schema) | Medium |
+| **Performance** | Medium (JSON text) | High (binary, multiplexed streams) | Medium |
+| **HTTP Caching** | Easy (built-in) | Hard | Hard (POST queries) |
+| **Type Safety** | None (unless OpenAPI) | Strong | Strong |
+| **Over/Under-Fetching** | Common (`N+1` requests) | Controlled by RPC contract | Eliminated (client specifies fields) |
+| **Best For** | Public APIs, standard web apps | Internal microservice-to-microservice & streaming | Diverse clients (mobile + web) with nested data |
 
-Problem: 3 requests for related data (N+1 problem)
-
-gRPC (Protocol Buffers over HTTP/2):
-├─ Pros: Binary protocol (fast), bidirectional streams, strong typing
-├─ Cons: Complex, requires schema definition, less web-friendly
-└─ Use: Microservice communication, real-time data
-
-Example:
-GetUserWithPostsAndComments(user_id=1)
-  // Single request, gets all related data
-
-GraphQL:
-├─ Pros: Query what you need (no over-fetching), strong typing
-├─ Cons: Complex to implement, can be slow if misused
-└─ Use: APIs with diverse client needs (mobile, web, different queries)
-
-Example:
-{
-  user(id: 1) {
-    name
-    posts {
-      title
-      comments {
-        text
-      }
-    }
-  }
-}
-
-Comparison:
-┌────────────┬──────────────┬────────────┬───────────┐
-│ Feature    │ REST         │ gRPC       │ GraphQL   │
-├────────────┼──────────────┼────────────┼───────────┤
-│Simplicity  │ High         │ Low        │ Medium    │
-│Performance │ Medium       │ High       │ Medium    │
-│Caching     │ Easy (HTTP)  │ Hard       │ Hard      │
-│Type Safety │ None         │ Strong     │ Strong    │
-└────────────┴──────────────┴────────────┴───────────┘
-```
+> [!TIP]
+> Use **gRPC** for low-latency internal service-to-service communication, **REST** for cacheable public APIs, and **GraphQL** when mobile/web clients need flexible aggregations without `N+1` round trips.
 
 ---
 
@@ -1498,245 +693,85 @@ Comparison:
 
 ### Rate Limiting Algorithms
 
-#### Token Bucket
+```mermaid
+flowchart TD
+    Req["Incoming API Request"] --> Alg{"Rate Limiting Strategy"}
+    Alg -->|"Allows Bursts"| TB["Token Bucket (Refill R/sec, Cap N)"]
+    Alg -->|"Constant Outflow"| LB["Leaky Bucket (Bounded Queue)"]
+    Alg -->|"Simple Counter"| FW["Fixed Window (Boundary Spike Risk)"]
+    Alg -->|"Exact Enforcement"| SW["Sliding Window (Log / Rolling Count)"]
 
+    TB --> Dist["Distributed State: Shared Redis or Local + Quorum Sync"]
+    SW --> Dist
+
+    classDef req fill:#1e293b,stroke:#e2e8f0,stroke-width:2px,color:#f8fafc
+    classDef alg fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef dist fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    class Req,Alg req
+    class TB,LB,FW,SW alg
+    class Dist dist
 ```
-Concept: Bucket holds N tokens, refill at rate R per second
 
-Configuration:
-├─ Capacity: 100 tokens
-├─ Refill rate: 10 tokens/second
+| Algorithm | Mechanism | Pros | Cons |
+| :--- | :--- | :--- | :--- |
+| **Token Bucket** | Bucket holds `N` tokens, refills at `R/sec`; request consumes tokens | Allows controlled bursts; smooth average rate; simple | Needs shared state in distributed clusters |
+| **Leaky Bucket** | Requests enter bounded queue and leak out at constant rate | Smooth, constant output rate; no bursts | Higher latency (queued requests); poor for bursty spikes |
+| **Fixed Window** | Counts requests in fixed intervals (e.g., `00:00–00:59`) | Very simple; low memory | **Boundary exploit:** `100` reqs at `00:59` + `100` at `01:00` = `200` in 2s |
+| **Sliding Window** | Counts requests in `(now - window_size, now]` | No boundary exploits; accurate enforcement | Higher memory (timestamps) and CPU |
 
-Timeline:
-t=0:    Bucket: [████████] 100 tokens
-t=0.1:  Request 50 tokens → Bucket: [████] 50 tokens
-t=0.2:  Request 60 tokens → REJECTED (need 60, have 50+1)
-t=0.3:  Refill 3 tokens → Bucket: [███] 53 tokens
-t=0.4:  Request 30 tokens → Bucket: [███] 23 tokens
-
-Implementation:
-bucket_size = 100
-tokens = 100
-refill_rate = 10  // tokens per second
-last_refill_time = now()
-
-def allow_request(needed_tokens=1):
-    current_time = now()
-    time_elapsed = current_time - last_refill_time
-    tokens_to_add = time_elapsed * refill_rate
-    tokens = min(bucket_size, tokens + tokens_to_add)
-    last_refill_time = current_time
-
+```python
+# Token Bucket
+def allow_request_token_bucket(needed_tokens=1):
+    global tokens, last_refill_time
+    now_ts = now()
+    tokens = min(bucket_size, tokens + (now_ts - last_refill_time) * refill_rate)
+    last_refill_time = now_ts
     if tokens >= needed_tokens:
         tokens -= needed_tokens
         return True
-    else:
-        return False
-
-Pros:
-├─ Burst handling (can exceed rate momentarily)
-├─ Smooth traffic
-└─ Easy to implement
-
-Cons:
-├─ Allows brief bursts (may be issue)
-└─ Distributed systems: need shared state
-```
-
-#### Leaky Bucket
-
-```
-Concept: Requests fill a bucket, leak at constant rate
-
-Configuration:
-├─ Bucket size: 100
-├─ Leak rate: 10 requests/second
-
-Timeline:
-t=0:   Request 100 → Bucket: [████████] 100
-t=0.1: Leak 1 → Bucket: [███████] 99
-t=0.2: Request 20 → Bucket: [█████████████] 119 → REJECTED
-       (exceeded capacity)
-t=0.3: Leak 1 → Bucket: [███████] 98
-       Request 5 → Bucket: [████████] 103 → REJECTED
-
-Implementation:
-// Less common in practice (token bucket preferred)
-// But concept: bounded queue
-
-queue = []
-leak_rate = 10  // per second
-
-def allow_request(request):
-    current_time = now()
-
-    // Process queue (leak)
-    while queue and (current_time - queue[0].time) > 1/leak_rate:
-        queue.pop(0)
-
-    if len(queue) < bucket_size:
-        queue.append((request, current_time))
-        return True
-    else:
-        return False  // Queue full
-
-Pros:
-├─ Smooth, constant rate
-├─ No bursts
-└─ Predictable latency
-
-Cons:
-├─ Higher latency (requests queued)
-└─ Less useful for handling spikes
-```
-
-#### Fixed Window
-
-```
-Concept: Divide time into fixed windows, count per window
-
-Configuration:
-├─ Window size: 1 minute
-├─ Limit: 100 requests per window
-
-Timeline:
-00:00-00:59: Can make 100 requests
-01:00-01:59: Can make 100 requests
-
-Problem: Edge case
-t=00:59 → 50 requests made (50 left)
-t=01:00 → Window resets → 100 requests allowed
-t=01:01 → User made 150 requests in 2 seconds! (50+100)
-
-Implementation:
-window_size = 60  // seconds
-limit = 100
-current_window_start = now()
-requests_in_window = 0
-
-def allow_request():
-    global current_window_start, requests_in_window
-
-    current_time = now()
-    if current_time - current_window_start >= window_size:
-        current_window_start = current_time
-        requests_in_window = 0
-
-    if requests_in_window < limit:
-        requests_in_window += 1
-        return True
-    else:
-        return False
-
-Pros:
-├─ Simple implementation
-└─ Low memory
-
-Cons:
-├─ Edge case: can exceed rate at boundaries
-└─ Poor handling of bursty traffic
-```
-
-#### Sliding Window
-
-```
-Concept: Fixed window + fractional accounting
-
-Configuration:
-├─ Window size: 1 minute
-├─ Limit: 100 requests per window
-
-Implementation:
-Let window_start = current_time - window_size
-Count requests in (window_start, current_time]
-If count < limit → allow
-
-Timeline:
-t=00:00 → First request → count=1, allow
-t=00:30 → requests=50 → allow
-t=00:59 → requests=100 → allow
-t=01:00 → Window slides
-        → window_start = 01:00 - 60 = 00:00
-        → Count requests in (00:00, 01:00] = 100
-        → REJECT (at limit)
-t=01:01 → window_start = 01:01 - 60 = 00:01
-        → One request from [00:00, 00:01] falls out
-        → Count = 99
-        → ALLOW
-
-Pros:
-├─ No edge case exploits
-├─ Smooth rate limiting
-└─ Accurate window enforcement
-
-Cons:
-├─ More complex implementation
-├─ Higher memory (store timestamps)
-└─ More CPU (calculate sliding window)
+    return False
 ```
 
 ### Distributed Rate Limiting
 
-```
-Problem: Single rate limiter is a bottleneck and SPOF
+| Approach | How It Works | Pros | Cons |
+| :--- | :--- | :--- | :--- |
+| **Per-Server Local** | Each server enforces `100 req/min` locally | Zero network hop | User can hit `3` servers for `300 req/min` total |
+| **Shared Redis (Standard)** | All API servers check atomic Redis counters/Lua scripts | Accurate global limit per user/IP | Redis can become a latency bottleneck / SPOF (mitigate with Redis Cluster) |
+| **Distributed Quorum** | Local limiters sync every `100ms`; allow if `>= 2/3` quorum agrees | No SPOF; low local latency | Complex; requires clock sync; slight quota overages |
 
-Solution 1: Rate limiter per server
-
-Server 1: 100 req/min
-Server 2: 100 req/min
-Server 3: 100 req/min
-└─ Total: 300 req/min across cluster
-
-Problem: User can game system
-├─ Make 100 req/min to Server 1
-├─ Make 100 req/min to Server 2
-├─ Make 100 req/min to Server 3
-└─ Total: 300 req/min (but should be limited to 100 per user)
-
-Solution 2: Shared Redis rate limiter
-
-Load Balancer
-  │
-  ├─ Server 1 ──┐
-  ├─ Server 2 ──┼─→ Redis (shared state)
-  └─ Server 3 ──┘
-
-All servers check Redis for rate limit state
-User limited to 100 req/min across all servers
-
-Problem: Redis is bottleneck + SPOF
-
-Solution 3: Distributed rate limiting with quorum
-
-Each server has local rate limiter
-Every 100ms, sync with other servers
-Quorum decision: majority vote
-
-Servers track:
-server_1_quota_left = 95
-server_2_quota_left = 92
-server_3_quota_left = 88
-
-If >= 2/3 servers say "allow" → allow request
-
-Pros:
-├─ No single point of failure
-├─ Distributed consensus
-└─ Low latency (mostly local)
-
-Cons:
-├─ Complex to implement
-├─ Requires reliable clock sync
-└─ Possible quota overages (eventual consistency)
-```
+> [!WARNING]
+> Avoid **Fixed Window** counters for strict security or billing limits—attackers can double the allowed burst across minute boundaries. Use **Token Bucket** or **Sliding Window** backed by **Redis**.
 
 ---
 
 ## Key Takeaways
 
-- **Caching is critical** - multi-layer caching strategy
-- **Databases vary widely** - pick right one for use case
-- **Consistent hashing** - enables horizontal scaling
-- **Message queues** - decouple producer and consumer
-- **Rate limiting** - protect against abusers and spikes
-- **Monitoring everything** - can't optimize what you don't measure
+```mermaid
+flowchart LR
+    User["Client"] --> DNS["DNS (TTL)"]
+    DNS --> CDN["CDN Edge (Pull + Hashed URLs)"]
+    CDN --> LB["L7 Load Balancer / Reverse Proxy (HA VIP + Rate Limit)"]
+    LB --> API["Stateless API (REST / gRPC / GraphQL)"]
+    API --> Cache["Redis Cache-Aside (Bloom Filter + Jitter)"]
+    API --> MQ["Message Queue (Kafka / SQS + Idempotency)"]
+    API --> DB["SQL / NoSQL (Consistent Hashing + Replicas)"]
+    API --> Search["Elasticsearch (Inverted Index)"]
+    API --> Blob["Blob Storage (S3 + CDN)"]
+
+    classDef edge fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef core fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef data fill:#1e293b,stroke:#fb923c,stroke-width:2px,color:#f8fafc
+    class User,DNS,CDN,LB edge
+    class API,Cache,MQ core
+    class DB,Search,Blob data
+```
+
+- **Caching is critical:** Combine CDN edge caching, in-memory Redis/Memcached (`Cache-Aside`), Bloom Filters, and randomized TTL jitter.
+- **Pick the right database:** Use SQL for ACID + joins; Document/Column/KV/Graph NoSQL when scale, schema flexibility, or access patterns demand it.
+- **Consistent hashing + virtual nodes:** Enables horizontal scaling with minimal key movement (`~1/N`) and `<5%` load skew.
+- **Message queues decouple slow work:** Pair At-Least-Once delivery with idempotent consumers.
+- **Protect the edge:** Combine HA Load Balancers, Reverse Proxy TLS termination, and Redis-backed Rate Limiting.
+
+> [!TIP]
+> In system design interviews, trace a request end-to-end (**DNS → CDN → L7 LB → App → Cache → DB / Queue**) and explicitly call out **failure modes** (SPOFs, cache stampede, hot partitions, duplicate messages) alongside their mitigations.

@@ -1,0 +1,204 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 540" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">Fencing Tokens Preventing GC-Pause Split-Brain</title>
+  <desc id="desc">Animated sequence showing Client 1 acquiring fencing token 33, stalling in a stop-the-world GC pause while its lock expires, Client 2 acquiring token 34 and writing to storage, and storage rejecting Client 1's stale write with token 33 because 33 is less than 34.</desc>
+
+  <defs>
+    <style>
+      .bg-card { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .header-bar { fill: #1e293b; stroke: #334155; stroke-width: 1; }
+      .text-title { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .text-sub { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .text-actor { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f8fafc; }
+      .text-actor-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .text-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; font-weight: 600; }
+      .text-step { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; }
+      .lifeline { stroke: #334155; stroke-width: 1.5; stroke-dasharray: 5 5; }
+
+      .badge-blue { fill: #172554; stroke: #3b82f6; stroke-width: 1.5; }
+      .badge-purple { fill: #2e1065; stroke: #a855f7; stroke-width: 1.5; }
+      .badge-amber { fill: #451a03; stroke: #f59e0b; stroke-width: 1.5; }
+      .badge-green { fill: #052e16; stroke: #22c55e; stroke-width: 1.5; }
+      .badge-red { fill: #450a0a; stroke: #ef4444; stroke-width: 1.5; }
+
+      .c-blue { fill: #93c5fd; }
+      .c-purple { fill: #d8b4fe; }
+      .c-amber { fill: #fcd34d; }
+      .c-green { fill: #86efac; }
+      .c-red { fill: #fca5a5; }
+      .c-slate { fill: #cbd5e1; }
+
+      /* 12s master animation cycle */
+      @keyframes step1Fade {
+        0%, 3% { opacity: 0; }
+        8%, 92% { opacity: 1; }
+        98%, 100% { opacity: 0; }
+      }
+      @keyframes gcPulse {
+        0%, 16% { opacity: 0; transform: scale(0.96); }
+        21%, 62% { opacity: 1; transform: scale(1); }
+        67%, 100% { opacity: 0; transform: scale(0.96); }
+      }
+      @keyframes gcBlink {
+        0%, 100% { stroke-opacity: 1; }
+        50% { stroke-opacity: 0.35; }
+      }
+      @keyframes step3Fade {
+        0%, 28% { opacity: 0; }
+        34%, 92% { opacity: 1; }
+        98%, 100% { opacity: 0; }
+      }
+      @keyframes step4Fade {
+        0%, 45% { opacity: 0; }
+        51%, 92% { opacity: 1; }
+        98%, 100% { opacity: 0; }
+      }
+      @keyframes step5Fade {
+        0%, 64% { opacity: 0; }
+        70%, 92% { opacity: 1; }
+        98%, 100% { opacity: 0; }
+      }
+      @keyframes step6Fade {
+        0%, 76% { opacity: 0; }
+        81%, 94% { opacity: 1; }
+        99%, 100% { opacity: 0; }
+      }
+      @keyframes token34Update {
+        0%, 50% { opacity: 0; }
+        54%, 94% { opacity: 1; }
+        99%, 100% { opacity: 0; }
+      }
+
+      .anim-s1 { animation: step1Fade 12s infinite; }
+      .anim-gc { animation: gcPulse 12s infinite, gcBlink 1.2s ease-in-out infinite; transform-origin: 115px 250px; }
+      .anim-s3 { animation: step3Fade 12s infinite; }
+      .anim-s4 { animation: step4Fade 12s infinite; }
+      .anim-s5 { animation: step5Fade 12s infinite; }
+      .anim-s6 { animation: step6Fade 12s infinite; }
+      .anim-t34 { animation: token34Update 12s infinite; }
+    </style>
+
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a855f7"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="940" height="540" rx="14" class="bg-card"/>
+
+  <!-- Header -->
+  <rect x="20" y="16" width="900" height="56" rx="10" class="header-bar"/>
+  <text x="38" y="40" class="text-title">Fencing Tokens: Defeating GC-Pause Split-Brain</text>
+  <text x="38" y="58" class="text-sub">Monotonically increasing tokens ensure the storage layer rejects stale writes from paused clients</text>
+
+  <!-- Live Cycle Pill -->
+  <rect x="772" y="28" width="132" height="30" rx="15" class="badge-purple"/>
+  <circle cx="790" cy="43" r="4.5" fill="#c084fc">
+    <animate attributeName="opacity" values="1;0.3;1" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <text x="802" y="47" class="text-mono c-purple">12s LOOP</text>
+
+  <!-- Actor Headers -->
+  <!-- Client 1 -->
+  <rect x="30" y="88" width="170" height="48" rx="8" class="panel"/>
+  <text x="115" y="109" text-anchor="middle" class="text-actor">Client 1 (JVM)</text>
+  <text x="115" y="126" text-anchor="middle" class="text-actor-sub">Holds stale lock</text>
+  <line x1="115" y1="136" x2="115" y2="464" class="lifeline"/>
+
+  <!-- Lock Service -->
+  <rect x="265" y="88" width="180" height="48" rx="8" class="panel"/>
+  <text x="355" y="109" text-anchor="middle" class="text-actor">Lock Service</text>
+  <text x="355" y="126" text-anchor="middle" class="text-actor-sub">ZK / etcd (monotonic)</text>
+  <line x1="355" y1="136" x2="355" y2="464" class="lifeline"/>
+
+  <!-- Client 2 -->
+  <rect x="510" y="88" width="170" height="48" rx="8" class="panel"/>
+  <text x="595" y="109" text-anchor="middle" class="text-actor">Client 2 (JVM)</text>
+  <text x="595" y="126" text-anchor="middle" class="text-actor-sub">Acquires after TTL</text>
+  <line x1="595" y1="136" x2="595" y2="464" class="lifeline"/>
+
+  <!-- Storage Layer -->
+  <rect x="740" y="88" width="170" height="48" rx="8" class="panel"/>
+  <text x="825" y="109" text-anchor="middle" class="text-actor">Storage Layer</text>
+  <text x="825" y="126" text-anchor="middle" class="text-actor-sub">Checks max_token</text>
+  <line x1="825" y1="136" x2="825" y2="464" class="lifeline"/>
+
+  <!-- Step 1: Client 1 acquires token=33 -->
+  <g class="anim-s1">
+    <line x1="120" y1="164" x2="347" y2="164" stroke="#3b82f6" stroke-width="2" marker-end="url(#arr-blue)"/>
+    <rect x="172" y="145" width="126" height="17" rx="4" fill="#0f172a"/>
+    <text x="235" y="157" text-anchor="middle" class="text-step c-blue">1. Acquire Lock</text>
+
+    <line x1="350" y1="194" x2="123" y2="194" stroke="#a855f7" stroke-width="2" marker-end="url(#arr-purple)"/>
+    <rect x="160" y="175" width="150" height="17" rx="4" class="badge-purple"/>
+    <text x="235" y="187" text-anchor="middle" class="text-mono c-purple">token = 33 (TTL 30s)</text>
+  </g>
+
+  <!-- Step 2: Client 1 STW GC Pause & Lock Expires -->
+  <g class="anim-gc">
+    <rect x="34" y="216" width="162" height="64" rx="8" class="badge-amber"/>
+    <text x="115" y="236" text-anchor="middle" class="text-step c-amber">2. STW GC PAUSE (40s)</text>
+    <text x="115" y="253" text-anchor="middle" class="text-mono c-amber">Process frozen...</text>
+    <text x="115" y="269" text-anchor="middle" class="text-actor-sub">Lock expires at 30s!</text>
+  </g>
+
+  <!-- Step 3: Client 2 acquires token=34 -->
+  <g class="anim-s3">
+    <line x1="590" y1="234" x2="363" y2="234" stroke="#3b82f6" stroke-width="2" marker-end="url(#arr-blue)"/>
+    <rect x="410" y="215" width="130" height="17" rx="4" fill="#0f172a"/>
+    <text x="475" y="227" text-anchor="middle" class="text-step c-blue">3. Acquire Lock</text>
+
+    <line x1="360" y1="264" x2="587" y2="264" stroke="#a855f7" stroke-width="2" marker-end="url(#arr-purple)"/>
+    <rect x="415" y="245" width="120" height="17" rx="4" class="badge-purple"/>
+    <text x="475" y="257" text-anchor="middle" class="text-mono c-purple">token = 34</text>
+  </g>
+
+  <!-- Step 4: Client 2 writes token=34 to Storage (ACCEPTED) -->
+  <g class="anim-s4">
+    <line x1="600" y1="306" x2="817" y2="306" stroke="#22c55e" stroke-width="2.5" marker-end="url(#arr-green)"/>
+    <rect x="640" y="286" width="140" height="18" rx="4" class="badge-green"/>
+    <text x="710" y="299" text-anchor="middle" class="text-mono c-green">4. Write (token=34)</text>
+
+    <line x1="820" y1="336" x2="603" y2="336" stroke="#22c55e" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arr-green)"/>
+    <text x="710" y="330" text-anchor="middle" class="text-step c-green">ACCEPTED (max_token = 34)</text>
+  </g>
+
+  <!-- Storage state pill -->
+  <g class="anim-t34">
+    <rect x="752" y="348" width="146" height="26" rx="6" class="badge-green"/>
+    <text x="825" y="365" text-anchor="middle" class="text-mono c-green">max_token = 34</text>
+  </g>
+
+  <!-- Step 5: Client 1 wakes up and sends stale token=33 -->
+  <g class="anim-s5">
+    <rect x="42" y="378" width="146" height="22" rx="6" class="badge-blue"/>
+    <text x="115" y="393" text-anchor="middle" class="text-step c-blue">5. Wakes up (unaware)</text>
+
+    <line x1="120" y1="414" x2="817" y2="414" stroke="#ef4444" stroke-width="2.5" marker-end="url(#arr-red)"/>
+    <rect x="378" y="395" width="184" height="18" rx="4" class="badge-red"/>
+    <text x="470" y="408" text-anchor="middle" class="text-mono c-red">Stale Write (token = 33)</text>
+  </g>
+
+  <!-- Step 6: Storage rejects 33 < 34 -->
+  <g class="anim-s6">
+    <line x1="820" y1="444" x2="123" y2="444" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="5 3" marker-end="url(#arr-red)"/>
+    <rect x="355" y="427" width="230" height="20" rx="5" class="badge-red"/>
+    <text x="470" y="441" text-anchor="middle" class="text-mono c-red">6. REJECTED: 33 &lt; 34 (Stale)</text>
+  </g>
+
+  <!-- Bottom Invariant Footer -->
+  <rect x="20" y="476" width="900" height="46" rx="10" class="panel"/>
+  <text x="38" y="504" class="text-step c-slate">Storage Guard:</text>
+  <text x="132" y="504" class="text-mono c-green">UPDATE resources SET data = ?, last_token = ? WHERE id = ? AND last_token &lt; ?</text>
+  <rect x="748" y="486" width="156" height="26" rx="6" class="badge-green"/>
+  <text x="826" y="503" text-anchor="middle" class="text-step c-green">DATA INTEGRITY SAFE</text>
+</svg>
