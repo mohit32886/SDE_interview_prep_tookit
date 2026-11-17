@@ -1,16 +1,56 @@
 # Kafka Deep Dive - FAANG Interview Preparation
 
+![Kafka Deep Dive Animated Roadmap Banner](./assets/00-kafka-deep-dive-banner.svg)
+
 ## Overview
 
-This comprehensive Kafka interview preparation package contains **6,867 lines** of detailed content across 5 markdown files, specifically designed for mid-level Java engineers (5+ years experience) targeting FAANG companies.
+This comprehensive Kafka interview preparation package contains **6,867 lines** of detailed content across **5 markdown files**, specifically designed for mid-level Java engineers (5+ years experience) targeting FAANG companies.
 
-**Total Content**: ~50,000 words with 100+ code examples, architecture diagrams, and real-world scenarios.
+| Metric | Scope |
+| :--- | :--- |
+| **Total Volume** | **6,867 lines** (~50,000 words) across 5 core guides |
+| **Code & Diagrams** | **100+ production-ready Java code examples** and architecture diagrams |
+| **Scenario Depth** | Real-world failure, durability, scaling, and system design scenarios |
+| **Target Profile** | Mid-level Java engineers (5+ YoE) targeting FAANG Senior/Staff interviews |
+
+> [!NOTE]
+> Every module pairs theoretical internals with production Java configurations and FAANG-style interview questions so you can move seamlessly from low-level broker mechanics to high-level distributed system design.
+
+### Module Learning Roadmap
+
+```mermaid
+flowchart LR
+    M1["01 Architecture & ISR - 1,025 lines"] --> M2["02 Producers & Consumers - 1,454 lines"]
+    M2 --> M3["03 Streams & Connect - 1,207 lines"]
+    M3 --> M4["04 Microservices & Outbox - 1,515 lines"]
+    M4 --> M5["05 Interview Q&As - 1,666 lines"]
+
+    classDef core fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef client fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef stream fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef micro fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef qa fill:#881337,stroke:#fb7185,stroke-width:2px,color:#f8fafc
+
+    class M1 core
+    class M2 client
+    class M3 stream
+    class M4 micro
+    class M5 qa
+```
 
 ---
 
 ## File Structure
 
-### 1. **01-Kafka-Architecture-and-Internals.md** (1,025 lines)
+| # | Guide | Lines | Primary Focus | Interview Qs |
+| :---: | :--- | :---: | :--- | :---: |
+| 1 | [01-Kafka-Architecture-and-Internals.md](./01-Kafka-Architecture-and-Internals.md) | 1,025 | Brokers, KRaft, ISR, zero-copy, storage segments, sizing | 7 Q&As |
+| 2 | [02-Producers-and-Consumers.md](./02-Producers-and-Consumers.md) | 1,454 | Batching, idempotence, transactions, consumer groups, rebalancing | 9 Q&As |
+| 3 | [03-Kafka-Streams-and-Connect.md](./03-Kafka-Streams-and-Connect.md) | 1,207 | KStream/KTable, windowing, RocksDB, CDC, Schema Registry | 4 Q&As |
+| 4 | [04-Kafka-in-Microservices.md](./04-Kafka-in-Microservices.md) | 1,515 | Event sourcing, CQRS, Saga, Outbox, DLQ, security | 4 Q&As |
+| 5 | [05-Kafka-Interview-Questions.md](./05-Kafka-Interview-Questions.md) | 1,666 | Top 50 FAANG-level Kafka interview questions & system design | 50 Q&As |
+
+### 1. [01-Kafka-Architecture-and-Internals.md](./01-Kafka-Architecture-and-Internals.md) (1,025 lines)
 
 Deep dive into Kafka's core architecture and internals.
 
@@ -36,12 +76,12 @@ Deep dive into Kafka's core architecture and internals.
 
 ---
 
-### 2. **02-Producers-and-Consumers.md** (1,454 lines)
+### 2. [02-Producers-and-Consumers.md](./02-Producers-and-Consumers.md) (1,454 lines)
 
 Complete guide to Kafka producers and consumers.
 
 **Topics covered**:
-- Producer architecture: ProducerRecord flow through the system
+- Producer architecture: `ProducerRecord` flow through the system
 - Serialization and partitioning strategies
 - Batching mechanism with configuration impact
 - Producer configuration deep dive with 15+ parameters
@@ -61,22 +101,22 @@ Complete guide to Kafka producers and consumers.
 
 **Key Sections**:
 - Producer durability configuration matrix
-- acks setting explanation with scenarios
+- `acks` setting explanation with scenarios
 - Consumer group assignment visualization
 - Offset commit flow diagrams
 - Rebalancing timeline and strategies
 
 ---
 
-### 3. **03-Kafka-Streams-and-Connect.md** (1,207 lines)
+### 3. [03-Kafka-Streams-and-Connect.md](./03-Kafka-Streams-and-Connect.md) (1,207 lines)
 
 Kafka Streams, Kafka Connect, and Schema Registry guide.
 
 **Topics covered**:
 - Kafka Streams overview: embedded client library
 - Stateless vs stateful operations
-- KStream, KTable, GlobalKTable comparison and use cases
-- Stream processing operations: filter, map, flatMap, groupBy, aggregate, join
+- `KStream`, `KTable`, `GlobalKTable` comparison and use cases
+- Stream processing operations: `filter`, `map`, `flatMap`, `groupBy`, `aggregate`, `join`
 - Windowing types: Tumbling, Hopping, Sliding, Session with examples
 - State stores: RocksDB, in-memory, changelog topics
 - Interactive queries for state store access
@@ -87,7 +127,7 @@ Kafka Streams, Kafka Connect, and Schema Registry guide.
 - Schema Registry: Avro, JSON Schema, Protobuf
 - Schema evolution strategies: backward, forward, full compatibility
 - Kafka Streams vs Apache Flink vs Spark Streaming comparison
-- 4 interview questions covering KStream vs KTable, windowing, state recovery, joins
+- 4 interview questions covering `KStream` vs `KTable`, windowing, state recovery, joins
 
 **Key Sections**:
 - Topology diagram with transformation flow
@@ -98,7 +138,7 @@ Kafka Streams, Kafka Connect, and Schema Registry guide.
 
 ---
 
-### 4. **04-Kafka-in-Microservices.md** (1,515 lines)
+### 4. [04-Kafka-in-Microservices.md](./04-Kafka-in-Microservices.md) (1,515 lines)
 
 Real-world patterns for Kafka in microservices architecture.
 
@@ -133,22 +173,31 @@ Real-world patterns for Kafka in microservices architecture.
 
 ---
 
-### 5. **05-Kafka-Interview-Questions.md** (1,666 lines)
+### 5. [05-Kafka-Interview-Questions.md](./05-Kafka-Interview-Questions.md) (1,666 lines)
 
 **Top 50 FAANG-level Kafka interview questions with comprehensive answers.**
 
-**Question Categories**:
+| Category | Range | Core Themes |
+| :--- | :---: | :--- |
+| **Architecture & Internals** | Q1-Q10 | High throughput, broker failure, `min.insync.replicas`, log compaction, split-brain, replication, offsets |
+| **Producers & Consumers** | Q11-Q20 | Scenario configs, lag optimization, manual commits, error handling, idempotence, transactions, rebalancing |
+| **Durability & Reliability** | Q21-Q30 | Lag debugging, duplicates, data loss prevention, under-replicated partitions, disk full, ISR, unclean election |
+| **Performance & Optimization** | Q31-Q40 | Producer/consumer throughput, latency, partition count, broker memory, network, tiering, multi-cluster |
+| **Design & Troubleshooting** | Q41-Q50 | 1M orders/day system, EOS order processing, Saga, JSON-to-Avro, multi-region, zero-downtime upgrade, DR |
+
+<details>
+<summary>Full 50-Question Index (Q1-Q50)</summary>
 
 **Architecture & Internals (Q1-Q10)**:
 1. High throughput architecture (sequential I/O, batching, compression)
 2. Broker failure handling and recovery
-3. min.insync.replicas impact on durability
+3. `min.insync.replicas` impact on durability
 4. Log compaction vs retention policies
 5. Split-brain scenario prevention
 6. Leader/follower replication model
 7. Partition assignment and consumer groups
 8. Message loss prevention in different scenarios
-9. Offset management and __consumer_offsets topic
+9. Offset management and `__consumer_offsets` topic
 10. Log compaction use cases and implementation
 
 **Producers & Consumers (Q11-Q20)**:
@@ -165,15 +214,15 @@ Real-world patterns for Kafka in microservices architecture.
 
 **Durability & Reliability (Q21-Q30)**:
 21. Debugging consumer lag
-22. Handling message duplicates
-23. Data loss scenarios and prevention
-24. Broker rebalancing vs leader election
-25. Under-replicated partitions
-26. Offset out of range issues
-27. Handling broker disk full
-28. Consumer group coordination
-29. ISR changes and implications
-30. Unclean leader election scenarios
+2. Handling message duplicates
+3. Data loss scenarios and prevention
+4. Broker rebalancing vs leader election
+5. Under-replicated partitions
+6. Offset out of range issues
+7. Handling broker disk full
+8. Consumer group coordination
+9. ISR changes and implications
+10. Unclean leader election scenarios
 
 **Performance & Optimization (Q31-Q40)**:
 31. Throughput tuning for producers
@@ -199,124 +248,72 @@ Real-world patterns for Kafka in microservices architecture.
 49. Cost optimization in production
 50. Disaster recovery plan
 
+</details>
+
 ---
 
 ## Content Highlights
 
-### Code Examples
-- 100+ production-ready Java code samples
-- Spring Kafka integration examples
-- Custom partitioner implementation
-- Idempotent consumer patterns
-- Transactional producer setup
-- Event sourcing implementation
-- Saga pattern choreography and orchestration
-- DLQ and error handling
-- Kafka Streams topology examples
-- Consumer group configuration
-
-### Architecture Diagrams
-- Kafka broker internals
-- Replication and ISR flow
-- Consumer group partition assignment
-- Producer batching pipeline
-- Kafka Streams topology
-- Event-driven microservices flow
-- Saga pattern coordination
-- Outbox pattern with CDC
-
-### Configuration Examples
-- Producer configurations for 3 scenarios
-- Consumer configuration for different use cases
-- Topic configuration for financial data
-- Kafka Streams configuration
-- Schema Registry setup
-- Kafka Connect connector examples
-- Security configurations (SASL, TLS, ACLs)
-
-### Real-World Scenarios
-- Broker failure recovery
-- Network partition handling
-- Split-brain prevention
-- Consumer lag debugging
-- Message deduplication
-- Event ordering guarantees
-- Exactly-once delivery implementation
-- Multi-region replication
+| Pillar | What You Get |
+| :--- | :--- |
+| **Code Examples** | 100+ production-ready Java code samples, Spring Kafka integration, custom partitioner, idempotent consumer, transactional producer, event sourcing, Saga (choreography & orchestration), DLQ/error handling, Kafka Streams topologies, consumer group config |
+| **Architecture Diagrams** | Kafka broker internals, replication & ISR flow, consumer group partition assignment, producer batching pipeline, Kafka Streams topology, event-driven microservices flow, Saga coordination, Outbox pattern with CDC |
+| **Configuration Examples** | Producer configs for 3 scenarios, consumer configs for varied use cases, financial topic configs, Kafka Streams config, Schema Registry setup, Kafka Connect connectors, security configs (SASL, TLS, ACLs) |
+| **Real-World Scenarios** | Broker failure recovery, network partition handling, split-brain prevention, consumer lag debugging, message deduplication, event ordering guarantees, exactly-once delivery implementation, multi-region replication |
 
 ---
 
 ## Target Audience
 
-**Ideal for**:
-- Mid-level Java engineers (5+ years experience)
-- FAANG company interview preparation
-- Microservices architecture design
-- Stream processing implementation
-- System design interviews
-
-**Prerequisites**:
-- Solid Java fundamentals
-- Understanding of distributed systems
-- Basic knowledge of message queues
-- Experience with Spring Framework (helpful)
+| Dimension | Details |
+| :--- | :--- |
+| **Ideal For** | Mid-level Java engineers (5+ years experience), FAANG interview preparation, microservices architecture design, stream processing implementation, system design interviews |
+| **Prerequisites** | Solid Java fundamentals, understanding of distributed systems, basic knowledge of message queues, experience with Spring Framework (helpful) |
 
 ---
 
 ## How to Use This Guide
 
-### For Interview Preparation (8-week plan):
+### 8-Week Study Loop
 
-**Week 1-2**: Architecture Internals (File 1)
-- Study Kafka overview and core concepts
-- Deep dive into replication and durability
-- Practice Q1-Q10
+```mermaid
+flowchart LR
+    W12["Weeks 1-2: Architecture & Internals - File 1 + Q1-Q10"] --> W34["Weeks 3-4: Producers & Consumers - File 2 + Q11-Q20"]
+    W34 --> W56["Weeks 5-6: Streams & Connect - File 3 + Schemas"]
+    W56 --> W7["Week 7: Microservices Patterns - File 4 + Outbox/Saga"]
+    W7 --> W8["Week 8: 50 Q&As & Mock Design - File 5"]
+    W8 -->|"Refine weak spots"| W12
 
-**Week 3-4**: Producers and Consumers (File 2)
-- Study producer configurations for different scenarios
-- Master consumer groups and offset management
-- Practice Q11-Q20
-- Code examples: implement custom partitioner
+    classDef phase fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef capstone fill:#1e293b,stroke:#fb7185,stroke-width:2px,color:#f8fafc
 
-**Week 5-6**: Streams and Connect (File 3)
-- KStream vs KTable concepts
-- Windowing and state stores
-- Practice basic topology examples
-- Study schema evolution
+    class W12,W34,W56,W7 phase
+    class W8 capstone
+```
 
-**Week 7**: Microservices Patterns (File 4)
-- Event sourcing implementation
-- Saga pattern deep dive
-- Outbox pattern for consistency
-- DLQ and error handling
+> [!TIP]
+> Pair each weekly reading block with hands-on Java code practice and timed whiteboard explanations of the corresponding interview questions.
 
-**Week 8**: Interview Questions and Design (File 5)
-- Practice all 50 questions
-- System design: order processing system
-- Deep dive into 3 chosen questions
-- Mock interview practice
+### Interview Preparation (8-Week Plan)
 
-### For System Design Practice:
+| Timeline | Module Focus | Key Action Items |
+| :--- | :--- | :--- |
+| **Week 1-2** | Architecture Internals (File 1) | Study Kafka overview & core concepts; deep dive into replication and durability; practice Q1-Q10 |
+| **Week 3-4** | Producers and Consumers (File 2) | Study producer configs for different scenarios; master consumer groups & offset management; practice Q11-Q20; implement custom partitioner |
+| **Week 5-6** | Streams and Connect (File 3) | Master `KStream` vs `KTable`, windowing & state stores; practice basic topology examples; study schema evolution |
+| **Week 7** | Microservices Patterns (File 4) | Implement Event Sourcing; deep dive into Saga & Outbox patterns for consistency; master DLQ and error handling |
+| **Week 8** | Interview Questions & Design (File 5) | Practice all 50 questions; design order processing system; deep dive into 3 chosen questions; run mock interviews |
+
+### System Design Practice
 
 1. **Design order processing system** (Q41):
-   - Use event sourcing
-   - Implement saga pattern
-   - Add exactly-once guarantees
-   - Plan for 1M orders/day
-
+   - Use event sourcing, implement saga pattern, add exactly-once guarantees, and plan for 1M orders/day.
 2. **Design multi-region Kafka** (Q45):
-   - Low-latency reads
-   - Cross-region replication
-   - Disaster recovery
-   - Cost optimization
-
+   - Low-latency reads, cross-region replication, disaster recovery, and cost optimization.
 3. **Capacity planning scenario** (Q48):
-   - Scale from 100K to 1M msg/s
-   - Cluster sizing
-   - Partition rebalancing
-   - Resource allocation
+   - Scale from 100K to 1M msg/s, cluster sizing, partition rebalancing, and resource allocation.
 
-### For Code Practice:
+### Code Practice
 
 1. Implement custom partitioner (regional routing)
 2. Build idempotent consumer
@@ -328,28 +325,56 @@ Real-world patterns for Kafka in microservices architecture.
 
 ## Key Concepts to Master
 
-### Durability & Reliability
+### Kafka Internals Dependency Tree
+
+```mermaid
+flowchart TD
+    CORE["Core Broker Internals: KRaft, Partitions, Segments"] --> REP["Replication & ISR: Leader Election, min.insync.replicas"]
+    CORE --> IO["High Throughput: Zero-Copy, Sequential I/O, Page Cache"]
+    REP --> PROD["Producers: Batching, Idempotence, Transactions"]
+    REP --> CONS["Consumers: Groups, Offsets, Cooperative Rebalance"]
+    PROD --> STREAM["Streams & Connect: KStream/KTable, RocksDB, CDC"]
+    CONS --> STREAM
+    STREAM --> MICRO["Microservices: Event Sourcing, CQRS, Saga, Outbox, DLQ"]
+
+    classDef root fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef mid fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef app fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef arch fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+
+    class CORE root
+    class REP,IO,PROD,CONS mid
+    class STREAM app
+    class MICRO arch
+```
+
+> [!IMPORTANT]
+> In FAANG interviews, durability questions almost always trace back to the interaction between producer `acks=all`, broker `min.insync.replicas`, and consumer `isolation.level=read_committed`.
+
+### Mastery Checklist
+
+**Durability & Reliability**:
 - [ ] Replication and ISR
 - [ ] Leader election and split-brain prevention
 - [ ] Exactly-once semantics
 - [ ] Transactional writes and reads
 - [ ] Message loss scenarios and prevention
 
-### Performance
+**Performance**:
 - [ ] Throughput vs latency tradeoffs
 - [ ] Batching and compression
 - [ ] Partition count optimization
 - [ ] Consumer parallelism
 - [ ] Zero-copy transfer
 
-### Operations
+**Operations**:
 - [ ] Monitoring and alerting (consumer lag)
 - [ ] Scaling strategies
 - [ ] Cluster upgrades
 - [ ] Disaster recovery
 - [ ] Cost optimization
 
-### Architecture Patterns
+**Architecture Patterns**:
 - [ ] Event sourcing
 - [ ] CQRS
 - [ ] Saga pattern (choreography/orchestration)
@@ -361,17 +386,18 @@ Real-world patterns for Kafka in microservices architecture.
 
 ## Common Interview Questions (Quick Reference)
 
-**Most Asked Questions**:
-1. "Explain Kafka's high throughput architecture" → Q1
-2. "How does Kafka handle broker failures?" → Q2
-3. "What is min.insync.replicas and why is it important?" → Q3
-4. "Design an event-driven order processing system" → Q41
-5. "How would you guarantee exactly-once delivery?" → Q42
-6. "Debug high consumer lag scenario" → Q46
-7. "Difference between log compaction and retention" → Q4
-8. "KStream vs KTable" → Q11 (File 3)
-9. "Saga pattern implementation" → Q43
-10. "Schema evolution strategy" → Q44
+| # | Most Asked Interview Question | Reference |
+| :---: | :--- | :---: |
+| 1 | "Explain Kafka's high throughput architecture" | Q1 |
+| 2 | "How does Kafka handle broker failures?" | Q2 |
+| 3 | "What is `min.insync.replicas` and why is it important?" | Q3 |
+| 4 | "Design an event-driven order processing system" | Q41 |
+| 5 | "How would you guarantee exactly-once delivery?" | Q42 |
+| 6 | "Debug high consumer lag scenario" | Q46 |
+| 7 | "Difference between log compaction and retention" | Q4 |
+| 8 | "`KStream` vs `KTable`" | Q11 (File 3) |
+| 9 | "Saga pattern implementation" | Q43 |
+| 10 | "Schema evolution strategy" | Q44 |
 
 ---
 
@@ -384,48 +410,63 @@ Real-world patterns for Kafka in microservices architecture.
 5. **System design**: Approach large problems systematically (requirements → architecture → implementation)
 6. **Ask questions**: Clarify requirements, constraints, and tradeoffs in interviews
 
----
-
-## Additional Resources
-
-- Apache Kafka Documentation: https://kafka.apache.org/documentation/
-- Confluent Platform: https://www.confluent.io/
-- Spring Kafka: https://spring.io/projects/spring-kafka
-- Kafka Internals Papers and talks
-- Sample projects on GitHub
+> [!WARNING]
+> Avoid memorizing configuration flags in isolation. Interviewers routinely follow up by changing a constraint (e.g., network partition or sudden 10x traffic spike) to test whether you understand the underlying tradeoff.
 
 ---
 
-## Version Info
+## Additional Resources & Version Info
 
-**Created**: February 2026
-**Java Version**: Java 11+
-**Kafka Version**: 3.0+
-**Spring Kafka**: 2.8+
-**Target Level**: FAANG Senior/Staff Engineer
+| Resource / Metadata | Details |
+| :--- | :--- |
+| **Apache Kafka Docs** | https://kafka.apache.org/documentation/ |
+| **Confluent Platform** | https://www.confluent.io/ |
+| **Spring Kafka** | https://spring.io/projects/spring-kafka |
+| **Further Study** | Kafka Internals papers/talks & sample projects on GitHub |
+| **Created / Stack** | February 2026 · Java 11+ · Kafka 3.0+ · Spring Kafka 2.8+ |
+| **Target Level** | FAANG Senior/Staff Engineer |
 
 ---
 
 ## What's Covered vs Not Covered
 
-### Covered:
-- Core architecture and internals
-- Producer and consumer configuration
-- Replication and durability
-- Stream processing with Kafka Streams
-- Microservices patterns
-- Schema management
-- Real-world troubleshooting
-- Performance tuning
-- System design scenarios
+### Topic Coverage Map
 
-### Not Covered (out of scope):
-- Kafka Security Manager details
-- Kafka Admin API deep dive (covered in summary)
-- Kafka Protocol internals (binary format)
-- Performance benchmarks and hardware specifications
-- Cloud provider managed Kafka services (AWS MSK, Confluent Cloud)
-- Advanced Kafka Streams DSL (covered at overview level)
+```mermaid
+flowchart TD
+    ROOT["Module 05 Scope"] --> IN["Covered In-Depth"]
+    ROOT --> OUT["Out of Scope"]
+
+    IN --> IN1["Core Internals, Replication & Durability"]
+    IN --> IN2["Producer/Consumer Tuning & Troubleshooting"]
+    IN --> IN3["Kafka Streams, Schema Management & Microservices"]
+    IN --> IN4["System Design & 50 FAANG Q&As"]
+
+    OUT --> OUT1["Kafka Security Manager & Binary Protocol"]
+    OUT --> OUT2["Admin API Deep Dive & Hardware Benchmarks"]
+    OUT --> OUT3["Managed Cloud Services: AWS MSK, Confluent Cloud"]
+    OUT --> OUT4["Advanced Kafka Streams DSL Beyond Overview"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef covered fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef excluded fill:#475569,stroke:#94a3b8,stroke-width:1.5px,color:#f1f5f9
+
+    class ROOT root
+    class IN,IN1,IN2,IN3,IN4 covered
+    class OUT,OUT1,OUT2,OUT3,OUT4 excluded
+```
+
+| Covered (In-Depth) | Not Covered (Out of Scope) |
+| :--- | :--- |
+| Core architecture and internals | Kafka Security Manager details |
+| Producer and consumer configuration | Kafka Admin API deep dive (covered in summary) |
+| Replication and durability | Kafka Protocol internals (binary format) |
+| Stream processing with Kafka Streams | Performance benchmarks and hardware specifications |
+| Microservices patterns | Cloud provider managed Kafka services (AWS MSK, Confluent Cloud) |
+| Schema management | Advanced Kafka Streams DSL (covered at overview level) |
+| Real-world troubleshooting | — |
+| Performance tuning | — |
+| System design scenarios | — |
 
 ---
 

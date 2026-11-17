@@ -3,7 +3,7 @@
 ## Table of Contents
 1. [Event-Driven Microservices](#event-driven-microservices)
 2. [Event Sourcing](#event-sourcing)
-3. [CQRS (Command Query Responsibility Segregation)](#cqrs)
+3. [CQRS (Command Query Responsibility Segregation)](#cqrs-command-query-responsibility-segregation)
 4. [Saga Pattern](#saga-pattern)
 5. [Outbox Pattern](#outbox-pattern)
 6. [Dead Letter Queue Pattern](#dead-letter-queue-pattern)
@@ -14,6 +14,7 @@
 11. [Monitoring and Operations](#monitoring-and-operations)
 12. [Security](#security)
 13. [Interview Questions](#interview-questions)
+14. [Summary](#summary)
 
 ---
 
@@ -21,52 +22,58 @@
 
 ### Traditional vs Event-Driven Architecture
 
-Traditional (Synchronous):
-```
-┌─────────────────┐
-│  Order Service  │
-└────────┬────────┘
-         │ REST/gRPC
-         ↓
-┌─────────────────┐      ┌──────────────────┐
-│ Payment Service │─────→│ Inventory Service│
-└─────────────────┘      └──────────────────┘
+In synchronous microservice architectures, services call one another directly over REST or gRPC, creating tight temporal and runtime coupling. In an event-driven architecture powered by Kafka, producers emit immutable domain facts to topics and downstream consumers react asynchronously at their own pace.
 
-Coupling:
-├─ Order → Payment (direct call)
-├─ Order → Inventory (direct call)
-├─ Tight coupling (circular dependencies)
-├─ Cascading failures
-├─ Temporal coupling (all must be up)
-└─ Difficult to scale independently
+```mermaid
+flowchart LR
+    subgraph Sync["Traditional Synchronous (Tightly Coupled)"]
+        O1["Order Service"] -->|"REST/gRPC"| P1["Payment Service"]
+        P1 -->|"REST/gRPC"| I1["Inventory Service"]
+    end
+
+    subgraph Async["Event-Driven Asynchronous (Decoupled)"]
+        O2["Order Service"] -->|"Publish OrderCreated"| K["Kafka Topic: order-created-events"]
+        K -->|"Subscribe: payment-group"| P2["Payment Service"]
+        K -->|"Subscribe: inventory-group"| I2["Inventory Service"]
+    end
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef broker fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef cons fill:#1e293b,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    class O1,P1,I1,O2 svc
+    class K broker
+    class P2,I2 cons
 ```
 
-Event-Driven (Asynchronous):
-```
-Order Service         Order Created      Consumer Service
-     │                  Event               (Payment)
-     │                    │
-     ├──────────────────────────────────────┐
-     │                    ↓                   ↓
-     │            ┌──────────────┐   ┌──────────────┐
-     │            │ Order Topic  │   │ Event Handler│
-     │            └──────────────┘   └──────────────┘
-     │                    ↓
-     │            ┌──────────────┐   ┌──────────────┐
-     │            │ Order Topic  │   │ Event Handler│
-     │            └──────────────┘   └──────────────┘
-     │
-     └──→ Order created
-          Publish "OrderCreated"
+```mermaid
+flowchart LR
+    OS["OrderService: createOrder()"] -->|"1. Save Order to DB"| DB["Orders Database"]
+    OS -->|"2. kafkaTemplate.send(orderId, event)"| T["Topic: order-created-events"]
+    T -->|"Consumer Group: payment-group"| PS["PaymentService: handleOrderCreated()"]
+    T -->|"Consumer Group: inventory-group"| IS["InventoryService: handleOrderCreated()"]
+    T -->|"Consumer Group: analytics-group"| AS["New Consumer (Zero Producer Changes)"]
 
-Benefits:
-├─ Loose coupling (services don't know each other)
-├─ Asynchronous (services can process at own pace)
-├─ Better scalability (independent scaling)
-├─ Fault tolerant (service failures isolated)
-├─ Audit trail (all events preserved)
-└─ Easy to add new consumers
+    classDef prod fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef topic fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef cons fill:#1e293b,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    class OS prod
+    class DB db
+    class T topic
+    class PS,IS,AS cons
 ```
+
+| Dimension | Traditional Synchronous (REST/gRPC) | Event-Driven Asynchronous (Kafka) |
+| :--- | :--- | :--- |
+| **Coupling** | Tight runtime & schema coupling; circular dependencies | Loose coupling; services only know the event contract |
+| **Temporal Dependency** | All downstream services must be up simultaneously | Producers and consumers operate independently |
+| **Failure Blast Radius** | Cascading failures across call chains | Faults isolated to the failing consumer group |
+| **Scalability** | Scaled by upstream request spikes | Independent scaling via consumer group partitions |
+| **Extensibility** | Producer must be modified to call new services | New consumers subscribe to existing topics with zero producer changes |
+| **Auditability** | Ephemeral request/response logs | Durable, replayable event log |
+
+> [!TIP]
+> Use synchronous REST/gRPC when the caller needs an **immediate, strongly consistent response** (e.g., login or balance check). Use Kafka event-driven communication when you need **high throughput, failure isolation, and fan-out** to multiple independent services.
 
 ### Event-Driven Flow
 
@@ -127,32 +134,44 @@ public class InventoryService {
 
 ### Concept
 
-Event Sourcing stores all state changes as immutable events:
+Event Sourcing persists every state transition as an immutable sequence of domain events rather than overwriting a single mutable row in a database. Current state is derived by replaying events from offset `0` (or from a periodic snapshot).
 
+```mermaid
+flowchart LR
+    E0["Offset 0: OrderCreated (id=123, amt=500)"] --> E1["Offset 1: PaymentProcessed (id=123)"]
+    E1 --> E2["Offset 2: OrderShipped (id=123)"]
+    E2 --> E3["Offset 3: OrderDelivered (id=123)"]
+    E3 --> AGG["Reconstructed Aggregate: Order 123 (Status=DELIVERED)"]
+
+    classDef evt fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef state fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class E0,E1,E2,E3 evt
+    class AGG state
 ```
-Traditional approach:
-Database: {Order: OrderId=123, Status=Shipped, Amount=500}
-           └─ Only current state, history lost
 
-Event Sourcing:
-Kafka Topic (order-events):
-Offset 0: OrderCreated {id: 123, amount: 500}
-Offset 1: PaymentProcessed {id: 123, amount: 500}
-Offset 2: OrderShipped {id: 123}
-Offset 3: OrderDelivered {id: 123}
-
-Current state derived from:
-├─ OrderCreated → Pending
-├─ PaymentProcessed → Paid
-├─ OrderShipped → Shipped
-└─ OrderDelivered → Delivered
-
-Advantages:
-├─ Complete audit trail
-├─ Replay history anytime
-├─ Temporal queries (state at any point in time)
-└─ Debugging (see exactly what happened)
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED : OrderCreatedEvent
+    CREATED --> PAID : PaymentProcessedEvent
+    PAID --> SHIPPED : OrderShippedEvent
+    SHIPPED --> DELIVERED : OrderDeliveredEvent
+    DELIVERED --> [*]
 ```
+
+| Feature | Traditional State-Based Storage | Event Sourcing (Kafka Event Store) |
+| :--- | :--- | :--- |
+| **Persistence Model** | `UPDATE orders SET status = 'SHIPPED'` (overwrites history) | Append-only immutable event log (`order-events`) |
+| **Audit Trail** | Requires separate audit tables or triggers | Built-in, tamper-evident history of every change |
+| **Temporal Queries** | Difficult; only latest state is stored | Replay events up to any timestamp `T` |
+| **Debugging & Replay** | Hard to reproduce past bugs | Replay production events into a test environment |
+| **Read Performance** | Fast direct row lookup | Requires replay or CQRS materialized read views |
+
+- **Complete audit trail:** Every mutation is recorded with timestamp and aggregate ID.
+- **Replay history anytime:** Rebuild projections, fix bugs in derived views, or seed new services.
+- **Temporal queries:** Reconstruct the exact state of an aggregate at any historical point in time.
+
+> [!IMPORTANT]
+> When using Kafka as an Event Store for long-lived aggregates, configure **log compaction** (`cleanup.policy=compact`) or **periodic snapshots** so `Order.fromEvents()` does not have to replay millions of historical events on every read.
 
 ### Implementation with Kafka
 
@@ -255,25 +274,46 @@ public class OrderEventStore {
 
 ### Concept
 
-CQRS separates reads and writes:
+CQRS separates the **Write Model (Commands)** from the **Read Model (Queries)**. Commands validate domain invariants and append events to Kafka, while asynchronous **Projectors** consume those events to update denormalized read databases (MySQL, Elasticsearch, Redis).
 
+```mermaid
+flowchart LR
+    subgraph WritePath["Write Path (Commands)"]
+        C["POST /orders (CreateOrderCommand)"] --> CS["OrderCommandService"]
+        CS -->|"Append Events"| ES["Kafka Event Store: order-events"]
+    end
+
+    ES -->|"Consume (read-model-group)"| PR["OrderProjector (@KafkaListener)"]
+    PR -->|"Upsert Denormalized View"| RDB["Read DB (MySQL / Elasticsearch)"]
+
+    subgraph ReadPath["Read Path (Queries)"]
+        Q["GET /orders/{id}"] --> QS["OrderQueryService"]
+        QS -->|"Fast Indexed Lookup"| RDB
+    end
+
+    classDef cmd fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef kafka fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef proj fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef read fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class C,CS cmd
+    class ES kafka
+    class PR proj
+    class RDB,Q,QS read
 ```
-Traditional Model:
-Request → Business Logic → Database → Response
-           (Read & Write)
 
-CQRS Model:
-Write Path:
-Command → Order Service → Event Store (Kafka)
+| Aspect | Write Model (Command Side) | Read Model (Query Side) |
+| :--- | :--- | :--- |
+| **Responsibility** | Enforce business rules, state transitions, invariants | Serve fast, tailored queries and search |
+| **Data Store** | Normalized transactional DB or Kafka Event Store | Denormalized views (SQL, Elasticsearch, Redis) |
+| **Scaling** | Scaled for write concurrency & validation | Scaled independently for high read QPS |
+| **Consistency** | Strongly consistent within aggregate | Eventually consistent (projection lag) |
 
-Read Path:
-Query → Read Database (Denormalized view)
+- **Independent scaling:** Scale read replicas or Elasticsearch clusters without impacting command throughput.
+- **Polyglot persistence:** Use the best engine per workload (e.g., Kafka + Postgres for writes, Elasticsearch for full-text search).
+- **Clean separation:** Domain logic stays isolated from complex reporting joins.
 
-Separation of concerns:
-├─ Write: Complex domain logic
-├─ Read: Optimized for queries
-└─ Independent scaling
-```
+> [!WARNING]
+> Because `OrderProjector` updates the read database asynchronously from Kafka, CQRS introduces **eventual consistency**. A client issuing `POST /orders` followed immediately by `GET /orders/{id}` may briefly observe a `404` or stale status until the projector catches up.
 
 ### Implementation
 
@@ -379,54 +419,41 @@ public class OrderController {
 }
 ```
 
-Advantages:
-```
-├─ Scalable: Read and write paths scale independently
-├─ Optimized: Each can use best database (write: transactional, read: denormalized)
-├─ Complex reads: Elasticsearch, analytics database
-├─ Eventually consistent: Read model eventually consistent with write model
-├─ Audit trail: Event store provides complete history
-```
-
 ---
 
 ## Saga Pattern
 
 ### Distributed Transactions
 
-Sagas coordinate transactions across services:
-
-```
-Traditional transaction (single database):
-BEGIN TRANSACTION
-├─ Insert order
-├─ Update inventory
-├─ Process payment
-└─ COMMIT / ROLLBACK (all or nothing)
-
-Distributed saga (multiple services):
-No 2-phase commit (slow, blocking)
-Instead: Coordinated events with compensations
-
-Order Service: CreateOrder
-    ↓ publishes OrderCreated
-Payment Service: ProcessPayment
-    ↓ publishes PaymentProcessed
-Inventory Service: ReserveInventory
-    ↓ publishes InventoryReserved
-Shipping Service: CreateShipment
-    ↓ publishes ShipmentCreated
-
-If any step fails:
-Payment fails → Trigger compensations
-├─ Reverse inventory reservation
-├─ Cancel order
-└─ Notify customer
-```
+In microservices, a single ACID database transaction or blocking Two-Phase Commit (2PC) across services does not scale. The **Saga Pattern** breaks a distributed transaction into a sequence of local transactions, each publishing an event or command. If any step fails, **compensating transactions** undo the preceding steps.
 
 ### Choreography-Based Saga
 
-Services react to events (decoupled):
+Services react autonomously to Kafka events without a central coordinator:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as OrderService
+    participant K as Kafka Topics
+    participant P as PaymentService
+    participant I as InventoryService
+    participant S as ShippingService
+
+    O->>K: Publish OrderCreatedEvent (order-events)
+    K->>P: Consume OrderCreatedEvent
+    P->>K: Publish PaymentSucceededEvent (payment-events)
+    K->>I: Consume PaymentSucceededEvent
+    alt Inventory Available
+        I->>K: Publish InventoryReservedEvent (inventory-events)
+        K->>S: Consume InventoryReservedEvent
+        S->>S: createShipment()
+    else Inventory Out of Stock (Compensation)
+        I->>K: Publish InventoryReservationFailedEvent
+        K->>S: Consume Failure -> Trigger Cancel Saga
+        K->>P: Consume OrderCancelledEvent -> refund()
+    end
+```
 
 ```java
 // Order Service (initiator)
@@ -525,7 +552,26 @@ public class ShippingService {
 
 ### Orchestration-Based Saga
 
-Central orchestrator coordinates (decoupled but centralized):
+A central `OrderSagaOrchestrator` persists saga state and explicitly dispatches commands and compensations:
+
+```mermaid
+flowchart TD
+    OC["OrderCreatedEvent (order-events)"] --> ORC["OrderSagaOrchestrator (Persists SagaState)"]
+    ORC -->|"1. ProcessPaymentCommand"| PC["Payment Service"]
+    PC -->|"PaymentResponse"| ORC
+    ORC -->|"2. Success → ReserveInventoryCommand"| IC["Inventory Service"]
+    ORC -->|"2. Failure → Cancel Order"| FAIL["SagaStatus.FAILED"]
+    IC -->|"InventoryResponse"| ORC
+    ORC -->|"3. Success → CreateShipmentCommand"| SC["Shipping Service"]
+    ORC -->|"3. Failure → Refund Payment"| COMP["Compensate()"]
+
+    classDef orch fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef err fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    class ORC orch
+    class OC,PC,IC,SC svc
+    class FAIL,COMP err
+```
 
 ```java
 // Saga Orchestrator
@@ -580,65 +626,71 @@ public class OrderSagaOrchestrator {
 }
 ```
 
-Choreography vs Orchestration:
-```
-Choreography:
-├─ Services react to events
-├─ Loose coupling
-├─ Distributed logic (harder to understand)
-├─ No single point of failure
-└─ Good: Simple sagas
+| Dimension | Choreography-Based Saga | Orchestration-Based Saga |
+| :--- | :--- | :--- |
+| **Coordination** | Decentralized; services react to events | Centralized in a dedicated Saga Orchestrator |
+| **Coupling** | Very loose; services only know event schemas | Tighter coupling to the orchestrator's commands |
+| **Visibility & Debugging** | Flow is scattered across multiple services | Single place to inspect and trace saga state |
+| **Single Point of Failure** | None | Orchestrator must be HA / clustered |
+| **Best Fit** | Simple workflows (2–4 steps) | Complex workflows with branching and retries |
 
-Orchestration:
-├─ Central coordinator
-├─ Tighter coupling (to orchestrator)
-├─ Centralized logic (easier to understand)
-├─ Single point of failure
-└─ Good: Complex sagas
-```
+> [!IMPORTANT]
+> Compensating actions in a Saga (such as `refund()` or `releaseInventory()`) **must be idempotent** and **commutatively safe**, because Kafka's at-least-once delivery may deliver a failure event more than once.
 
 ---
 
 ## Outbox Pattern
 
-### Problem
+### Problem & Solution
 
-Updating database and publishing event is not atomic:
+Updating a local database and publishing a Kafka message are two separate network operations—not an atomic transaction. If a service crashes after `INSERT INTO orders` but before `kafkaTemplate.send()`, the event is permanently lost and downstream services never react.
 
+The **Transactional Outbox Pattern** solves this by writing both the business entity (`orders`) and the domain event (`outbox`) inside the **same local ACID database transaction**. A separate relay (either an `OutboxPoller` or **Debezium CDC**) then publishes the outbox rows to Kafka.
+
+![Transactional Outbox + Debezium CDC + Idempotent Saga Pipeline](./assets/04-kafka-outbox-saga-pipeline.svg)
+
+```mermaid
+flowchart LR
+    subgraph Problem["Without Outbox (Dual-Write Hazard)"]
+        P1["1. INSERT INTO orders (OK)"] --> P2["2. Service Crashes Before Kafka Send (LOST EVENT)"]
+    end
+
+    subgraph Solution["With Outbox (Atomic Local ACID TX)"]
+        S1["BEGIN TX"] --> S2["INSERT INTO orders"]
+        S2 --> S3["INSERT INTO outbox"]
+        S3 --> S4["COMMIT TX (All or Nothing)"]
+    end
+
+    classDef bad fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    classDef good fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class P1,P2 bad
+    class S1,S2,S3,S4 good
 ```
-Without outbox pattern:
-1. INSERT INTO orders VALUES (...)  ✓
-2. Publish event to Kafka          ✗ (service crashes)
-3. No notification about order creation!
 
-Result:
-├─ Order created in DB
-├─ Event never published
-├─ Payment service never notified
-└─ Inconsistent state
+```mermaid
+flowchart LR
+    OB["Outbox Table"] -->|"Option A: @Scheduled Poll"| POLL["OutboxPoller"]
+    OB -->|"Option B: WAL / Binlog Tail"| DEB["Debezium CDC Connector"]
+    POLL -->|"Publish + Mark Published"| K["Kafka Topic"]
+    DEB -->|"Low-Latency Event Stream"| K
+
+    classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef poll fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef cdc fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef kafka fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    class OB db
+    class POLL poll
+    class DEB cdc
+    class K kafka
 ```
 
-### Solution: Outbox Table
-
-Store event in same transaction as business data:
-
-```
-Database:
-├─ orders table
-└─ outbox table (event log)
-
-Transaction:
-BEGIN
-├─ INSERT INTO orders VALUES (...)
-├─ INSERT INTO outbox (event_id, event_type, payload, created_at)
-└─ COMMIT
-
-Separate process:
-├─ Polls outbox table
-├─ Publishes to Kafka
-├─ Marks as published
-└─ Cleans up old records
-```
+| Criteria | Outbox Poller (`@Scheduled`) | Debezium CDC (Log-Based) |
+| :--- | :--- | :--- |
+| **Mechanism** | Periodically queries `WHERE published = false` | Tails database WAL / binlog directly |
+| **Latency** | Bounded by polling interval (e.g., 100ms–1s) | Near real-time (milliseconds) |
+| **Database Load** | Extra `SELECT` + `UPDATE` queries on hot table | Zero polling queries on application tables |
+| **Duplicate Risk** | Can publish twice if crash occurs before `published = true` | At-least-once from WAL offset; cleaner handoff |
+| **Operational Complexity** | Simple Spring Boot code, no extra infra | Requires Kafka Connect + Debezium cluster |
 
 ### Implementation with Spring Data JPA
 
@@ -759,16 +811,13 @@ public class OutboxPoller {
 }
 ```
 
-With Debezium CDC:
-```
-Outbox table → Debezium → Kafka topic
+With **Debezium CDC**, the `OutboxPoller` is replaced by a Debezium Outbox Event Router SMT that tails the database transaction log:
+- **No custom polling needed:** Eliminates polling queries and lock contention.
+- **Lower latency:** CDC-driven streaming reacts immediately to committed WAL entries.
+- **No duplicate polling publishes & database-agnostic:** Supports PostgreSQL, MySQL, SQL Server, and Oracle via Kafka Connect.
 
-Advantages:
-├─ No custom polling needed
-├─ Lower latency (CDC-driven)
-├─ No duplicate publishes
-├─ Database-agnostic
-```
+> [!TIP]
+> Regardless of whether you use `OutboxPoller` or Debezium CDC, the Outbox Pattern provides **at-least-once** delivery—downstream consumers must still be **idempotent**.
 
 ---
 
@@ -776,20 +825,36 @@ Advantages:
 
 ### Handling Failed Messages
 
-Failed messages need separate handling:
+When a consumer fails to process a record after exhausting retries (e.g., malformed payload or unrecoverable validation error), blocking the partition forever would halt all subsequent messages. Instead, the record is routed to a **Dead Letter Queue (DLQ)** topic (`orders-dlq`) and the main offset is committed.
 
+![Spring Kafka Non-Blocking Retry Topics and Dead Letter Topic](./assets/04-non-blocking-retry-dlq.svg)
+
+```mermaid
+flowchart LR
+    M["Kafka Topic: orders"] --> C["OrderConsumer (@KafkaListener)"]
+    C -->|"Success"| OK["Commit Offset"]
+    C -->|"Exception → FixedBackOff (3x, 1s)"| R{"Retries Exhausted?"}
+    R -->|"Yes"| DLQ["Topic: orders-dlq"]
+    DLQ --> DC["DlqConsumer (Log, Alert Ops, Ticket)"]
+
+    classDef topic fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    classDef warn fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef err fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    class M,C topic
+    class OK ok
+    class R warn
+    class DLQ,DC err
 ```
-Normal flow:
-Message → Process → Success → Commit offset
 
-Failed flow:
-Message → Process → Exception → Handle gracefully
+| Strategy | Blocking Behavior | Throughput Impact | Best Use Case |
+| :--- | :--- | :--- | :--- |
+| **In-Topic Blocking Retry (`DefaultErrorHandler`)** | Blocks current partition during backoff | High impact if backoff is long | Short transient glitches (e.g., 3x 1s) |
+| **Non-Blocking Retry Topics (`@RetryableTopic`)** | Zero blocking on main topic | Healthy messages keep flowing | Longer backoffs (5s, 30s, 5m) |
+| **Immediate DLQ** | Zero blocking | None | Permanent errors (bad JSON, validation failure) |
 
-Options:
-1. Retry in same topic
-2. Send to DLQ topic
-3. Manual intervention
-```
+> [!WARNING]
+> Synchronous `FixedBackOff` retries inside `DefaultErrorHandler` **block the consumer thread** for that partition. If your backoff exceeds `max.poll.interval.ms`, Kafka will assume the consumer is dead and trigger a **consumer group rebalance**.
 
 ### DLQ Implementation with Spring Kafka
 
@@ -874,10 +939,77 @@ public class DlqConsumer {
 
 ## Retry and Error Handling
 
-### Retry Strategies
+### Error Classification & Non-Blocking Retry Topics
+
+Not all failures deserve a retry. Classifying exceptions into **transient** (retriable) vs **permanent** (non-retriable) prevents wasted compute and ensures poison pills reach the DLQ immediately.
+
+```mermaid
+flowchart TD
+    MSG["Incoming Message"] --> PROC["Process Order"]
+    PROC -->|"Success"| COMMIT["Commit Offset"]
+    PROC -->|"Exception"| CLASS{"Classify Error"}
+    CLASS -->|"Transient (NetworkTimeout, DB Pool, 503)"| RETRY["Async Retry Topic (Exponential Backoff)"]
+    CLASS -->|"Permanent (Invalid JSON, Validation, 403)"| DLT["Direct to Dead Letter Topic (orders-dlt)"]
+    RETRY -->|"Max Attempts Exhausted"| DLT
+
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    classDef warn fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef err fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    classDef proc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    class MSG,PROC,CLASS proc
+    class COMMIT ok
+    class RETRY warn
+    class DLT err
+```
+
+```mermaid
+flowchart LR
+    T0["Topic: orders"] -->|"Fail 1 → Commit & Forward"| R1["orders-retry-5s"]
+    R1 -->|"Fail 2 → Backoff 30s"| R2["orders-retry-30s"]
+    R2 -->|"Fail 3 → Exhausted"| DLT["orders-dlt (@DltHandler)"]
+
+    classDef main fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef retry fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef dlt fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    class T0 main
+    class R1,R2 retry
+    class DLT dlt
+```
+
+| Error Category | Examples | Action |
+| :--- | :--- | :--- |
+| **Transient Errors** | Network timeout, temporary 503 unavailable, DB connection pool exhausted, lock timeout | **Retry** with exponential backoff (prefer non-blocking retry topics) |
+| **Permanent Errors** | Invalid JSON / deserialization error, missing required fields, validation failure, authorization failure | **Skip retries** and route directly to DLQ (`orders-dlt`) |
+
+> [!TIP]
+> Spring Kafka's `@RetryableTopic` annotation automatically provisions `*-retry-*` and `*-dlt` topics and routes failed messages asynchronously so healthy traffic on the main topic is never stalled.
+
+### Retry Strategies (Java / Spring Kafka)
 
 ```java
-// Exponential backoff
+// Non-Blocking Retry Topics (Recommended Spring Kafka pattern)
+@Service
+public class NonBlockingOrderConsumer {
+
+    @RetryableTopic(
+        attempts = "3",
+        backoff = @Backoff(delay = 5000, multiplier = 6.0), // 5s -> 30s -> DLT
+        exclude = { ValidationException.class }             // Permanent errors skip retries
+    )
+    @KafkaListener(topics = "orders", groupId = "order-group")
+    public void handleOrder(Order order) {
+        processOrder(order);
+    }
+
+    @DltHandler
+    public void handleDlt(Order order, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        logger.error("Poison pill routed to DLT {}: {}", topic, order.getId());
+    }
+}
+```
+
+```java
+// Exponential backoff with Spring Retry (@Retryable)
 @Service
 public class OrderService {
     @Autowired
@@ -900,7 +1032,7 @@ public class OrderService {
     }
 }
 
-// Retry topic (Spring Kafka pattern)
+// Retry topic / DefaultErrorHandler configuration
 @Service
 public class OrderConsumer {
     @KafkaListener(
@@ -931,24 +1063,8 @@ public class RetryTopicConfig {
 }
 ```
 
-### Error Classification
+Error classification in a listener:
 
-```
-Transient errors (retry):
-├─ Network timeout
-├─ Temporary service unavailable
-├─ Database connection pool exhausted
-└─ Lock timeout
-
-Permanent errors (DLQ):
-├─ Invalid JSON
-├─ Missing required fields
-├─ Validation failure
-├─ Unsupported operation
-└─ Authorization failure
-```
-
-Implementation:
 ```java
 @KafkaListener(topics = "orders")
 public void handleOrder(Order order) throws Exception {
@@ -968,63 +1084,64 @@ public void handleOrder(Order order) throws Exception {
 
 ## Schema Evolution in Microservices
 
-### Backward Compatibility
+### Compatibility & Schema Registry
 
-Consumers can read old messages with new code:
+In microservices, producers and consumers deploy independently. **Schema evolution** ensures that producers can evolve event payloads without breaking existing consumers, typically enforced by a **Schema Registry** (Avro, Protobuf, or JSON Schema).
 
+```mermaid
+flowchart LR
+    P["Producer (V2 Schema)"] -->|"1. Register / Check Compatibility"| SR["Schema Registry (BACKWARD / FORWARD / FULL)"]
+    SR -->|"2. Approved Schema ID"| P
+    P -->|"3. Send Magic Byte + Schema ID + Payload"| K["Kafka Topic: order-created"]
+    K -->|"4. Fetch Schema by ID (Cached)"| C["Consumer (V1 or V2 Code)"]
+
+    classDef prod fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef reg fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef kafka fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef cons fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class P prod
+    class SR reg
+    class K kafka
+    class C cons
 ```
-Evolution: Add new optional field
 
-Old event:
+| Compatibility Mode | Rule | Allowed Changes | Upgrade Order |
+| :--- | :--- | :--- | :--- |
+| **`BACKWARD`** | New consumers can read **old** data | Add optional fields, delete fields | Upgrade **consumers** first |
+| **`FORWARD`** | Old consumers can read **new** data | Add fields, delete optional fields | Upgrade **producers** first |
+| **`FULL`** | Both `BACKWARD` and `FORWARD` compatible | Add/delete **optional** fields with defaults only | Upgrade in **any** order |
+| **`NONE`** | Compatibility checks disabled | Any breaking change allowed (not for prod) | Unsafe |
+
+### Backward Compatibility vs Breaking Changes
+
+**Backward-compatible evolution (adding an optional field with a default):**
+
+```json
+// Old event (V1)
 {
   "orderId": "order-123",
   "amount": 100.00
 }
 
-New schema:
+// New schema (V2) - adds optional "currency"
 {
   "orderId": "order-123",
   "amount": 100.00,
-  "currency": "USD"      ← New optional field
+  "currency": "USD"
 }
-
-New consumer reading old event:
-├─ Reads: orderId, amount
-├─ Uses default for: currency (USD)
-└─ Works ✓
 ```
 
-### Incompatible Changes (Breaking)
+New consumers reading V1 events read `orderId` and `amount`, and fall back to `"USD"` for `currency`.
 
-```
-Removing field (incompatible):
+**Incompatible (breaking) change (removing a required field):**
+- Removing `"status"` while old consumers still expect `"status"` causes deserialization or runtime errors.
+- **Safe removal workflow:** Mark the field deprecated -> wait for all consumers to stop reading it -> remove the field (or bump the topic/event version).
 
-Old event:
-{
-  "orderId": "order-123",
-  "amount": 100.00,
-  "status": "PENDING"
-}
-
-New schema (removed "status"):
-{
-  "orderId": "order-123",
-  "amount": 100.00
-}
-
-Old consumer expecting "status":
-└─ Missing field → Error ✗
-
-Solution:
-├─ Mark field as deprecated (first)
-├─ Wait for all consumers to handle missing field
-├─ Then remove field
-└─ Or use versioning
-```
+> [!IMPORTANT]
+> Never delete or rename an active field in a single deployment. Use **`FULL`** or **`BACKWARD`** compatibility in Schema Registry with **optional fields and explicit defaults** so rolling deployments never crash consumers.
 
 ### Version Handling
 
-**Explicit versioning**:
 ```java
 @Data
 public class OrderCreatedEvent {
@@ -1055,48 +1172,50 @@ public void handleOrderCreated(OrderCreatedEvent event) {
 }
 ```
 
-**Schema Registry with versioning**:
-```
-Schema Registry manages compatibility
-
-Config:
-├─ BACKWARD: Consumers can read new/old events
-├─ FORWARD: Old consumers can read new events
-├─ FULL: Both directions (most restrictive)
-└─ NONE: No compatibility check
-```
-
 ---
 
 ## Ordering Guarantees
 
 ### Single Partition Ordering
 
+Kafka guarantees **strict FIFO ordering only within a single partition**, never across partitions. To preserve the lifecycle order of an entity (e.g., `CreateOrder` -> `PayOrder` -> `ShipOrder`), all events for that entity must use the **same message key** (`orderId`), so `hash(key) % numPartitions` routes them to the same partition.
+
+```mermaid
+flowchart LR
+    subgraph Events["Producer (Key = orderId)"]
+        E1["T1: CreateOrder (order-123)"]
+        E2["T2: PayOrder (order-123)"]
+        E3["T3: ShipOrder (order-123)"]
+        E4["T1: CreateOrder (order-456)"]
+    end
+
+    Events -->|"hash(order-123) % 3 = 0"| P0["Partition 0: [0:Create, 1:Pay, 2:Ship] (Ordered)"]
+    Events -->|"hash(order-456) % 3 = 1"| P1["Partition 1: [0:Create] (Ordered)"]
+    Events -->|"hash(order-789) % 3 = 2"| P2["Partition 2: [Empty]"]
+
+    P0 -->|"Single Consumer Thread"| C0["Consumer A (Strict Order for order-123)"]
+    P1 -->|"Single Consumer Thread"| C1["Consumer B (Strict Order for order-456)"]
+
+    classDef prod fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef part fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef cons fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class E1,E2,E3,E4 prod
+    class P0,P1,P2 part
+    class C0,C1 cons
 ```
-Messages must have same key to guarantee order
 
-Topic: orders (3 partitions)
+| Strategy | Ordering Scope | Parallelism & Throughput | Trade-off |
+| :--- | :--- | :--- | :--- |
+| **Keyed Partitioning (`key = orderId`)** | Strict per-key ordering | High (scales up to partition count) | Hot keys can skew a single partition |
+| **Null Key (Sticky / Round-Robin)** | No ordering guarantee | Maximum balanced throughput | Out-of-order processing possible |
+| **Single-Partition Topic** | Global strict ordering | Very low (1 consumer thread max) | Severe throughput bottleneck |
 
-Partition 0: order-123
-Partition 1: order-456
-Partition 2: order-789
+- **Same key -> same partition:** Automatic with default Murmur2 key-based partitioning.
+- **Sequential processing:** One consumer thread per partition; offloading to an async worker pool inside `@KafkaListener` breaks ordering.
+- **Rebalancing:** Handle partition revocations cleanly so in-flight records are committed before handoff.
 
-Timeline:
-T=1: CreateOrder(order-123) → Partition 0 [offset=0]
-T=2: PayOrder(order-123)    → Partition 0 [offset=1]
-T=3: ShipOrder(order-123)   → Partition 0 [offset=2]
-
-Consumer reads partition 0:
-├─ Offset 0: CreateOrder
-├─ Offset 1: PayOrder
-├─ Offset 2: ShipOrder
-└─ Ordered ✓
-
-Consumer with multiple partitions:
-├─ Partition 0: order-123 events (ordered)
-├─ Partition 1: order-456 events (ordered)
-└─ But relative order between partitions: undefined
-```
+> [!WARNING]
+> If your `@KafkaListener` hands off records to an internal `ExecutorService` thread pool and returns immediately, **partition ordering is broken** and offsets may be committed before processing finishes.
 
 ### Ordering with Consumer Deserialization
 
@@ -1118,26 +1237,41 @@ public void handleOrder(OrderEvent event, @Header(KafkaHeaders.RECEIVED_PARTITIO
 }
 ```
 
-### Key Considerations
-
-```
-Ordering guarantee requirements:
-├─ Same key → same partition (automatic with key-based partitioning)
-├─ Sequential processing (single consumer thread per partition)
-├─ No parallel processing (violates order)
-└─ Handle rebalancing (may lose in-flight events)
-
-Tradeoff:
-├─ Order: Reduced parallelism
-├─ No order: Better throughput, parallel processing
-└─ Design choice based on requirements
-```
-
 ---
 
 ## Handling Duplicates
 
 ### Idempotent Consumers
+
+Because Kafka defaults to **at-least-once** delivery (e.g., a consumer processes an order, crashes before committing the offset, and restarts), consumers **must be idempotent**—processing the same event multiple times must produce the exact same final state without side effects.
+
+```mermaid
+flowchart TD
+    IN["Receive Event (eventId = evt-123)"] --> CHK{"Already in processed_events or Cache?"}
+    CHK -->|"Yes (Duplicate)"| SKIP["Log Warning &amp; Return (Skip)"]
+    CHK -->|"No (First Time)"| TX["Begin Local DB Transaction"]
+    TX --> BIZ["Execute Business Logic (processOrder)"]
+    BIZ --> SAVE["INSERT INTO processed_events (evt-123)"]
+    SAVE --> COM["Commit DB TX &amp; Kafka Offset"]
+
+    classDef start fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class IN,CHK start
+    class SKIP warn
+    class TX,BIZ,SAVE,COM ok
+```
+
+| Deduplication Approach | Durability | Multi-Instance Safe? | Best Use Case |
+| :--- | :--- | :--- | :--- |
+| **Database `processed_events` Table (Unique Key)** | Durable across restarts | Yes (shared DB) | Financial / order workflows requiring strict atomic dedup |
+| **Distributed Cache (Redis `SETNX` + TTL)** | Configurable (RDB/AOF) | Yes (shared Redis) | High-throughput deduplication within a time window |
+| **In-Memory `ConcurrentHashMap`** | Lost on pod restart | No (per-JVM only) | Best-effort, low-latency filtering only |
+
+> [!IMPORTANT]
+> Always insert into `processed_events` inside the **same `@Transactional` database boundary** as your business logic (`processOrder()`). Otherwise, a crash between the two writes re-exposes you to duplicate execution.
+
+### Idempotent Consumer & Cache Implementations
 
 ```java
 // Store processed IDs in database
@@ -1219,6 +1353,38 @@ public class CachedIdempotentProcessor {
 
 ## Monitoring and Operations
 
+### Consumer Lag & JMX Metrics
+
+**Consumer lag** (`log_end_offset - committed_offset`) is the primary health indicator for event-driven microservices. Growing lag indicates that consumers cannot keep pace with producers or are stuck retrying poison pills.
+
+```mermaid
+flowchart LR
+    KB["Kafka Brokers (JMX: BrokerTopicMetrics, ReplicaManager)"] -->|"Scrape (Prometheus / JMX Exporter)"| MON["Metrics Store (Prometheus / Datadog)"]
+    KC["Kafka Consumers (JMX: consumer-fetch-manager, coordinator)"] -->|"Scrape"| MON
+    LM["Spring LagMonitor (AdminClient)"] -->|"listConsumerGroupOffsets()"| KB
+    LM -->|"Lag &gt; Threshold"| ALT["Ops Alert (PagerDuty / Slack)"]
+    MON --> DASH["Grafana Dashboards"]
+
+    classDef src fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef mon fill:#0f172a,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef alert fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    class KB,KC,LM src
+    class MON,DASH mon
+    class ALT alert
+```
+
+| Component | JMX MBean / Metric | What It Tracks |
+| :--- | :--- | :--- |
+| **Broker** | `kafka.server:type=BrokerTopicMetrics` | Messages in/sec, bytes in/out per topic |
+| **Broker** | `kafka.server:type=ReplicaManager` | Under-replicated partitions, ISR shrink/expand |
+| **Broker** | `kafka.controller:type=KafkaController` | Active controller count, leader elections |
+| **Consumer** | `kafka.consumer:type=consumer-fetch-manager` | Records fetched, fetch latency, bytes consumed |
+| **Consumer** | `kafka.consumer:type=consumer-coordinator-metrics` | Rebalance rate and rebalance latency |
+| **Consumer** | `kafka.consumer:type=consumer-metrics` | Records lag max and per-partition lag |
+
+> [!TIP]
+> Alert on **sustained lag growth rate** rather than a single static spike—temporary spikes during deployments or batch imports are normal, whereas monotonically increasing lag signals a stuck consumer or under-provisioned partition count.
+
 ### Consumer Lag Monitoring
 
 ```java
@@ -1260,23 +1426,36 @@ public class LagMonitor {
 }
 ```
 
-### JMX Metrics
-
-```
-Kafka broker JMX metrics:
-├─ kafka.server:type=BrokerTopicMetrics → Message count, bytes
-├─ kafka.server:type=ReplicaManager → Replicas, ISR
-└─ kafka.controller:type=KafkaController → Leader elections
-
-Consumer JMX metrics:
-├─ kafka.consumer:type=consumer-fetch-manager → Records fetched
-├─ kafka.consumer:type=consumer-coordinator-metrics → Rebalance latency
-└─ kafka.consumer:type=consumer-metrics → Lag per topic/partition
-```
-
 ---
 
 ## Security
+
+### Authentication, Encryption, and Authorization
+
+Production Kafka clusters enforce defense-in-depth across three layers: **TLS/SSL** for encryption in transit, **SASL/SCRAM** (or mTLS) for authentication, and **ACLs** for fine-grained topic and consumer-group authorization.
+
+```mermaid
+flowchart LR
+    CLI["Microservice Client"] -->|"1. TLS Handshake (SSL Truststore)"| BRK["Kafka Broker (:9093)"]
+    CLI -->|"2. SASL/SCRAM-SHA-256 Auth"| BRK
+    BRK -->|"3. ACL Check (User:app-user -&gt; Write/Read)"| RES["Topic: orders / Group: order-processor"]
+
+    classDef cli fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef brk fill:#0f172a,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef res fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class CLI cli
+    class BRK brk
+    class RES res
+```
+
+| Security Layer | Mechanism | Purpose |
+| :--- | :--- | :--- |
+| **Encryption in Transit** | TLS / SSL (`security.protocol=SSL` or `SASL_SSL`) | Encrypts payloads and credentials over the wire |
+| **Authentication** | `SASL/SCRAM-SHA-256`, `SASL/OAUTHBEARER`, or mTLS | Verifies client identity (`User:app-user`) |
+| **Authorization** | Kafka ACLs (`kafka-acls`) | Restricts `Read`, `Write`, `Create` per topic and group |
+
+> [!IMPORTANT]
+> Never expose `PLAINTEXT://` listeners on untrusted networks or without `SASL_SSL` in production. Always combine `SASL_SSL` with least-privilege ACLs so a compromised microservice can only access its own topics and consumer groups.
 
 ### SASL/SCRAM Authentication
 
@@ -1318,9 +1497,7 @@ ssl.truststore.password=truststore-password
 
 ### ACLs (Access Control Lists)
 
-```
-Restrict who can do what:
-
+```bash
 # Allow user to produce to topic
 kafka-acls --bootstrap-server broker:9092 \
     --add \
@@ -1341,145 +1518,67 @@ kafka-acls --bootstrap-server broker:9092 \
 
 ## Interview Questions
 
+```mermaid
+flowchart TD
+    Q["Microservices Challenge"] -->|"Dual-Write DB + Kafka?"| A1["Transactional Outbox + Debezium CDC"]
+    Q -->|"Distributed Transaction?"| A2["Saga (Choreography or Orchestration)"]
+    Q -->|"Duplicate Delivery?"| A3["Idempotent Consumer (processed_events)"]
+    Q -->|"Poison Pill Blocking?"| A4["Non-Blocking Retry Topics + DLT"]
+
+    classDef q fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc
+    classDef a fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    class Q q
+    class A1,A2,A3,A4 a
+```
+
 ### Question 1: Event-Driven vs Synchronous Microservices
 
 **Answer**:
 
-Event-driven advantages:
-```
-1. Loose coupling: Services don't know each other
-2. Better failure isolation: One service failure doesn't cascade
-3. Independent scaling: Each service scales based on its load
-4. Flexibility: Add new consumers without modifying producers
-5. Audit trail: All events captured for compliance
-```
+| Dimension | Event-Driven Advantages | Trade-offs |
+| :--- | :--- | :--- |
+| **Architecture** | Loose coupling (services don't know each other) | Eventually consistent (not immediate) |
+| **Resilience** | Failure isolation; no cascading outages | Harder to debug distributed flows |
+| **Scaling & Extensibility** | Independent scaling; add new consumers without changing producers | Higher async latency & more complex testing |
+| **Compliance** | Built-in event audit trail | Requires schema governance |
 
-Trade-offs:
-```
-Consistency: Eventually consistent (not immediately consistent)
-Complexity: Harder to debug (distributed logic)
-Latency: Higher (asynchronous) vs synchronous
-Testing: More complex (async behavior)
-```
-
-When to use:
-```
-Event-driven: High throughput, fault tolerance needed
-Synchronous: Simple request-response, immediate feedback needed
-```
+**When to use:**
+- **Event-driven:** High throughput, fault tolerance, fan-out to multiple consumers.
+- **Synchronous:** Simple request-response where immediate user feedback is required.
 
 ### Question 2: Outbox Pattern and Debezium
 
 **Answer**:
 
-Problem without outbox:
-```
-1. INSERT order → Success
-2. Publish event → Failure
-
-Result: Order created but event never published
-(Payment service never notified)
-```
-
-Outbox solution:
-```
-1. INSERT order → Success
-2. INSERT outbox → Success
-   (Both in same transaction)
-
-3. Separate process:
-   Read outbox → Publish to Kafka → Mark as published
-
-Benefit: Guarantees publication
-(no message loss between DB and Kafka)
-```
-
-Debezium (CDC):
-```
-Outbox table → Debezium → Kafka
-
-Advantages:
-├─ No custom polling code
-├─ Lower latency (CDC-driven)
-├─ Better performance
-├─ Proven pattern
-```
+- **Problem without outbox:** `1. INSERT order` succeeds, `2. Publish to Kafka` fails -> Order exists in DB, but Payment Service is never notified.
+- **Outbox solution:** `INSERT order` and `INSERT outbox` execute in the **same local ACID transaction**. A separate relay reads the outbox and publishes to Kafka, guaranteeing no message loss between DB and Kafka.
+- **Debezium (CDC):** Tails the DB transaction log (`outbox -> Debezium -> Kafka`), eliminating custom polling code, lowering latency, and improving database performance.
 
 ### Question 3: Saga Pattern Choreography vs Orchestration
 
 **Answer**:
 
-Choreography (distributed):
-```
-Services emit events, others react
+| Aspect | Choreography (Distributed) | Orchestration (Centralized) |
+| :--- | :--- | :--- |
+| **How it works** | Services emit events and react independently | Central orchestrator sends commands & tracks state |
+| **Pros** | Loose coupling, no single point of failure | Clear flow in one place, easier testing & complex sagas |
+| **Cons** | Distributed logic, possible circular dependencies | Central bottleneck, tighter coupling, SPOF risk |
 
-Pros:
-├─ Loose coupling
-├─ No central point of failure
-├─ Each service independent
-
-Cons:
-├─ Logic distributed (hard to understand)
-├─ Circular dependencies possible
-├─ Testing difficult
-```
-
-Orchestration (centralized):
-```
-Central service coordinates
-
-Pros:
-├─ Clear flow (one place to understand)
-├─ Easier testing
-├─ Complex sagas easier
-
-Cons:
-├─ Central service is bottleneck
-├─ Tighter coupling (to orchestrator)
-└─ Single point of failure
-```
-
-Example comparison:
-```
-Order → Payment → Inventory → Shipping
-
-Choreography:
-Order: Publish OrderCreated
-Payment: Listen to OrderCreated → Process → Publish PaymentDone
-Inventory: Listen to PaymentDone → Reserve → Publish InventoryDone
-Shipping: Listen to InventoryDone → Ship
-
-Orchestration:
-Orchestrator:
-  1. Call PaymentService
-  2. Wait for response
-  3. Call InventoryService
-  4. Wait for response
-  5. Call ShippingService
-  6. If any fails → Compensate
-```
+Example (`Order -> Payment -> Inventory -> Shipping`):
+- **Choreography:** `Order` publishes `OrderCreated` -> `Payment` listens, processes, publishes `PaymentDone` -> `Inventory` listens, reserves, publishes `InventoryDone` -> `Shipping` ships.
+- **Orchestration:** `Orchestrator` calls `PaymentService`, waits for response, calls `InventoryService`, waits, calls `ShippingService`, and triggers compensations if any step fails.
 
 ### Question 4: Idempotent Consumers
 
 **Answer**:
 
-Idempotent processing prevents duplicates:
+**Failure scenario:**
+1. Consumer processes order `123` and saves to DB.
+2. Consumer crashes before committing the Kafka offset.
+3. Consumer restarts and re-reads order `123` -> **Duplicate order!**
 
-```
-Scenario:
-1. Process order 123 → Save to DB ✓
-2. Commit offset → Fails ✗
-3. Consumer restarts
-4. Process order 123 again → Duplicate order!
+**Solution:** Check if the event ID is already processed using a DB unique constraint (`processed_events`) or deduplication cache, and mark it processed atomically with the business logic:
 
-Solution: Idempotent processing
-├─ Check if already processed
-├─ Use unique constraint (DB)
-├─ Deduplication cache
-└─ No duplicate output
-```
-
-Implementation:
 ```java
 // Database-backed
 if (processedEventRepository.exists(orderId)) {
@@ -1496,20 +1595,45 @@ processOrder(order);
 processedCache.add(orderId);
 ```
 
+> [!TIP]
+> In senior-level interviews, always pair **Outbox + Debezium** (at-least-once producer) with **Idempotent Consumers** (deduplicated consumer) to explain how to achieve end-to-end **effectively-once** processing without 2PC.
+
 ---
 
 ## Summary
 
-Event-driven microservices patterns:
-- Event Sourcing: Store all state changes
-- CQRS: Separate read and write models
-- Saga: Distribute transactions across services
-- Outbox: Guarantee event publication
-- DLQ: Handle failed messages
+```mermaid
+flowchart LR
+    SVC["Order Service (Local ACID: orders + outbox)"] -->|"Debezium CDC"| BUS["Kafka Event Bus (Schema Registry + ACLs)"]
+    BUS -->|"Saga + Keyed Order"| CONS["Idempotent Consumers (processed_events)"]
+    CONS -->|"Transient Fail"| RET["Non-Blocking Retry Topics"]
+    RET -->|"Exhausted / Poison Pill"| DLT["Dead Letter Topic (orders-dlt)"]
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef bus fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef cons fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    classDef dlt fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    class SVC svc
+    class BUS bus
+    class CONS cons
+    class RET,DLT dlt
+```
+
+| Pattern | Core Problem Solved |
+| :--- | :--- |
+| **Event Sourcing** | Preserves complete immutable state history and enables replay |
+| **CQRS** | Separates and scales write-side domain logic from read-side queries |
+| **Saga Pattern** | Coordinates distributed transactions across services via compensations |
+| **Outbox Pattern** | Eliminates dual-write inconsistency between DB and Kafka |
+| **Non-Blocking Retry & DLQ** | Isolates transient failures and poison pills without stalling partitions |
+| **Idempotent Consumers** | Safely absorbs at-least-once duplicate deliveries |
 
 Key principles:
-- Loose coupling through events
-- Eventually consistent state
-- Idempotent processing (handle duplicates)
-- Proper error handling (retries, DLQ)
-- Schema evolution awareness
+- Loose coupling through immutable domain events
+- Eventually consistent read models and sagas
+- Idempotent processing to handle duplicate deliveries
+- Non-blocking retries and DLQs for resilient error handling
+- Schema evolution awareness (`BACKWARD` / `FULL` compatibility)
+
+> [!NOTE]
+> Master the **Outbox + CDC + Idempotent Consumer + Non-Blocking Retry/DLQ** quartet—together they form the production backbone of reliable Kafka-based microservices.

@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-labelledby="lag-title lag-desc">
+  <title id="lag-title">Kafka Consumer Lag Troubleshooting Triage</title>
+  <desc id="lag-desc">Animated triage workflow from Lag Rising Alert through Partition Skew vs Slow Downstream check, Rebalance Storm diagnosis (max.poll.interval.ms), to Scaling Consumers up to Partition Count and Async Batching.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .card-alert { fill: #1e293b; stroke: #fb7185; stroke-width: 1.8; }
+      .card-warn { fill: #1e293b; stroke: #fbbf24; stroke-width: 1.6; }
+      .card-info { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.6; }
+      .card-ok { fill: #1e293b; stroke: #34d399; stroke-width: 1.8; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .sublabel { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .step-badge { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; fill: #0f172a; }
+      .flow-line { fill: none; stroke-width: 2.2; stroke-linecap: round; }
+      .dash-flow { stroke-dasharray: 6 6; animation: dashMove 1.6s linear infinite; }
+      .alert-pulse { animation: alertGlow 2s ease-in-out infinite; }
+      @keyframes dashMove {
+        from { stroke-dashoffset: 24; }
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes alertGlow {
+        0%, 100% { stroke-opacity: 0.45; }
+        50% { stroke-opacity: 1; }
+      }
+    </style>
+
+    <marker id="arr-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fb7185"/>
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arr-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+
+    <path id="triage-1-2" d="M 236 185 L 288 185" />
+    <path id="triage-2-3" d="M 520 185 L 572 185" />
+    <path id="triage-3-4" d="M 688 265 L 688 310" />
+    <path id="triage-2-4" d="M 404 265 L 404 375 L 548 375" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="0" y="0" width="960" height="540" rx="16" class="bg"/>
+  <rect x="12" y="12" width="936" height="516" rx="12" fill="none" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Header -->
+  <rect x="24" y="22" width="912" height="52" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="40" y="45" class="title">Consumer Lag Troubleshooting Triage Runbook</text>
+  <text x="40" y="63" class="subtitle">From Lag Spike Detection -&gt; Skew &amp; Downstream Isolation -&gt; Rebalance Storm Fix -&gt; Bounded Scaling</text>
+  <rect x="760" y="34" width="160" height="26" rx="13" fill="#4c0519" stroke="#fb7185" stroke-width="1" class="alert-pulse"/>
+  <text x="840" y="51" text-anchor="middle" class="sublabel" fill="#fda4af">RUNBOOK: P1 LAG</text>
+
+  <!-- Stage 1: Lag Rising Alert -->
+  <rect x="32" y="105" width="204" height="160" rx="10" class="card-alert alert-pulse"/>
+  <rect x="32" y="105" width="204" height="26" rx="10" fill="#881337"/>
+  <text x="134" y="122" text-anchor="middle" class="label" fill="#ffe4e6">1. Lag Rising Alert</text>
+  <text x="46" y="150" class="sublabel" fill="#fda4af">records-lag-max &gt; SLA</text>
+  <text x="46" y="168" class="sublabel">LEO - CommittedOffset</text>
+  <!-- Animated Lag Bars -->
+  <rect x="46" y="182" width="176" height="44" rx="6" fill="#0f172a" stroke="#334155"/>
+  <rect x="56" y="206" width="24" height="14" rx="2" fill="#34d399"/>
+  <rect x="88" y="198" width="24" height="22" rx="2" fill="#fbbf24"/>
+  <rect x="120" y="190" width="24" height="30" rx="2" fill="#fb7185">
+    <animate attributeName="height" values="18;32;18" dur="2.2s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="202;188;202" dur="2.2s" repeatCount="indefinite"/>
+  </rect>
+  <rect x="152" y="188" width="24" height="32" rx="2" fill="#fb7185">
+    <animate attributeName="height" values="22;34;22" dur="1.8s" repeatCount="indefinite"/>
+    <animate attributeName="y" values="198;186;198" dur="1.8s" repeatCount="indefinite"/>
+  </rect>
+  <rect x="184" y="196" width="24" height="24" rx="2" fill="#fbbf24"/>
+  <text x="134" y="248" text-anchor="middle" class="sublabel" fill="#94a3b8">Verify: Burrow / Prometheus</text>
+
+  <!-- Stage 2: Check Partition Skew vs Slow Downstream -->
+  <rect x="288" y="105" width="232" height="160" rx="10" class="card-info"/>
+  <rect x="288" y="105" width="232" height="26" rx="10" fill="#0c4a6e"/>
+  <text x="404" y="122" text-anchor="middle" class="label" fill="#7dd3fc">2. Skew vs Downstream</text>
+  <rect x="302" y="144" width="204" height="48" rx="6" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="312" y="162" class="sublabel" fill="#7dd3fc">Partition Skew (1 hot key)</text>
+  <text x="312" y="180" class="sublabel">P0: 900k lag | P1-P5: 0</text>
+  <rect x="302" y="200" width="204" height="48" rx="6" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="312" y="218" class="sublabel" fill="#fcd34d">Slow Downstream (all P)</text>
+  <text x="312" y="236" class="sublabel">DB / HTTP latency &gt; poll()</text>
+
+  <!-- Stage 3: Rebalance Storm -->
+  <rect x="572" y="105" width="356" height="160" rx="10" class="card-warn"/>
+  <rect x="572" y="105" width="356" height="26" rx="10" fill="#78350f"/>
+  <text x="750" y="122" text-anchor="middle" class="label" fill="#fde68a">3. Rebalance Storm (max.poll.interval.ms)</text>
+  <text x="588" y="150" class="sublabel" fill="#fcd34d">Batch processing &gt; max.poll.interval.ms (5m)</text>
+  <text x="588" y="170" class="sublabel">-&gt; Coordinator evicts consumer -&gt; Rebalance loop</text>
+  <rect x="588" y="184" width="324" height="64" rx="6" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="600" y="204" class="sublabel" fill="#6ee7b7">Fix A: Lower max.poll.records (500 -&gt; 100)</text>
+  <text x="600" y="222" class="sublabel" fill="#6ee7b7">Fix B: CooperativeStickyAssignor +</text>
+  <text x="600" y="238" class="sublabel" fill="#6ee7b7">       group.instance.id (static membership)</text>
+
+  <!-- Stage 4: Scale Consumers & Async Batch -->
+  <rect x="548" y="310" width="380" height="160" rx="10" class="card-ok"/>
+  <rect x="548" y="310" width="380" height="26" rx="10" fill="#064e3b"/>
+  <text x="738" y="327" text-anchor="middle" class="label" fill="#6ee7b7">4. Scale to Partition Count / Async Batch</text>
+  <rect x="564" y="348" width="348" height="50" rx="6" fill="#0f172a" stroke="#34d399"/>
+  <text x="576" y="366" class="sublabel" fill="#6ee7b7">Horizontal Scale: consumers &lt;= partitions</text>
+  <text x="576" y="384" class="sublabel">Extra consumers beyond N partitions sit idle!</text>
+  <rect x="564" y="406" width="348" height="50" rx="6" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="576" y="424" class="sublabel" fill="#7dd3fc">Async Batch / Worker Pool + DLQ</text>
+  <text x="576" y="442" class="sublabel">Pause/resume or bulk DB writes; route poison pills</text>
+
+  <!-- Left Bottom: Partition Ceiling & Key Salt Diagnostic Card -->
+  <rect x="32" y="310" width="460" height="160" rx="10" class="card"/>
+  <rect x="32" y="310" width="460" height="26" rx="10" fill="#334155"/>
+  <text x="262" y="327" text-anchor="middle" class="label">Diagnostic Quick-Check Matrix</text>
+  <text x="48" y="356" class="sublabel" fill="#7dd3fc">1. Lag on 1 partition only?  -&gt; Add key salting / sub-keys</text>
+  <text x="48" y="378" class="sublabel" fill="#fcd34d">2. Rebalances every ~5 min?  -&gt; Tune max.poll.records / interval</text>
+  <text x="48" y="400" class="sublabel" fill="#6ee7b7">3. Consumers &lt; Partitions?   -&gt; Scale consumer pods up to N</text>
+  <text x="48" y="422" class="sublabel" fill="#fda4af">4. Consumers == Partitions?  -&gt; Async batching or add partitions</text>
+  <text x="48" y="448" class="sublabel" fill="#94a3b8">Rule: Never exceed N consumers per group for N partitions.</text>
+
+  <!-- Connectors -->
+  <use href="#triage-1-2" class="flow-line dash-flow" stroke="#fb7185" marker-end="url(#arr-rose)"/>
+  <use href="#triage-2-3" class="flow-line dash-flow" stroke="#fbbf24" marker-end="url(#arr-amber)"/>
+  <use href="#triage-3-4" class="flow-line dash-flow" stroke="#34d399" marker-end="url(#arr-emerald)"/>
+  <use href="#triage-2-4" class="flow-line dash-flow" stroke="#38bdf8" marker-end="url(#arr-cyan)"/>
+
+  <!-- Animated Triage Packets -->
+  <circle r="5" fill="#fb7185">
+    <animateMotion dur="1.5s" repeatCount="indefinite" begin="0s">
+      <mpath href="#triage-1-2"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#fbbf24">
+    <animateMotion dur="1.5s" repeatCount="indefinite" begin="0.5s">
+      <mpath href="#triage-2-3"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#34d399">
+    <animateMotion dur="1.5s" repeatCount="indefinite" begin="1.0s">
+      <mpath href="#triage-3-4"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#38bdf8">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.8s">
+      <mpath href="#triage-2-4"/>
+    </animateMotion>
+  </circle>
+
+  <!-- Footer Legend -->
+  <rect x="24" y="488" width="912" height="30" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <circle cx="48" cy="503" r="5" fill="#fb7185"/>
+  <text x="60" y="507" class="sublabel">Lag Alert</text>
+  <circle cx="155" cy="503" r="5" fill="#38bdf8"/>
+  <text x="167" y="507" class="sublabel">Skew / Downstream Check</text>
+  <circle cx="365" cy="503" r="5" fill="#fbbf24"/>
+  <text x="377" y="507" class="sublabel">Rebalance Storm Mitigation</text>
+  <circle cx="595" cy="503" r="5" fill="#34d399"/>
+  <text x="607" y="507" class="sublabel">Bounded Scaling &amp; Async Batching</text>
+</svg>

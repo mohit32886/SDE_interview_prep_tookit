@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-labelledby="eos-title eos-desc">
+  <title id="eos-title">Kafka Exactly-Once Semantics (EOS) and Two-Phase Commit</title>
+  <desc id="eos-desc">Animated diagram showing Idempotent Producer (PID + Seq), TransactionCoordinator (__transaction_state), atomic Consume-Transform-Produce writes to output topic and __consumer_offsets, and read_committed consumer filtering.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .card-accent { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.5; }
+      .card-tx { fill: #1e293b; stroke: #a78bfa; stroke-width: 1.5; }
+      .card-ok { fill: #1e293b; stroke: #34d399; stroke-width: 1.5; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .sublabel { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #0f172a; }
+      .step-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #e2e8f0; }
+      .flow-line { fill: none; stroke-width: 2; stroke-linecap: round; }
+      .dash-flow { stroke-dasharray: 6 6; animation: dashMove 1.8s linear infinite; }
+      .pulse-ring { animation: pulseOpacity 2.4s ease-in-out infinite; }
+      @keyframes dashMove {
+        from { stroke-dashoffset: 24; }
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes pulseOpacity {
+        0%, 100% { opacity: 0.45; }
+        50% { opacity: 1; }
+      }
+    </style>
+
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+    </marker>
+
+    <path id="path-consume" d="M 140 185 L 140 245" />
+    <path id="path-tx-init" d="M 245 275 L 295 275 L 295 145 L 340 145" />
+    <path id="path-produce" d="M 245 320 L 340 320" />
+    <path id="path-offsets" d="M 245 355 L 295 355 L 295 435 L 340 435" />
+    <path id="path-commit-out" d="M 480 215 L 480 270" />
+    <path id="path-read-committed" d="M 620 320 L 700 320" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="0" y="0" width="960" height="540" rx="16" class="bg"/>
+  <rect x="12" y="12" width="936" height="516" rx="12" fill="none" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Header -->
+  <rect x="24" y="22" width="912" height="52" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="40" y="45" class="title">Kafka Exactly-Once Semantics (EOS) &amp; Two-Phase Commit (2PC)</text>
+  <text x="40" y="63" class="subtitle">Idempotent Producer (PID + Seq) + TransactionCoordinator (__transaction_state) + read_committed Isolation</text>
+  <rect x="772" y="34" width="148" height="26" rx="13" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
+  <text x="846" y="51" text-anchor="middle" class="sublabel" fill="#6ee7b7">ATOMIC COMMIT</text>
+
+  <!-- Input Topic -->
+  <rect x="36" y="95" width="208" height="90" rx="10" class="card"/>
+  <rect x="36" y="95" width="208" height="24" rx="10" fill="#0c4a6e"/>
+  <text x="140" y="111" text-anchor="middle" class="label" fill="#7dd3fc">Input Topic: orders-in</text>
+  <rect x="52" y="132" width="52" height="26" rx="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1"/>
+  <text x="78" y="149" text-anchor="middle" class="sublabel">off: 101</text>
+  <rect x="112" y="132" width="52" height="26" rx="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1"/>
+  <text x="138" y="149" text-anchor="middle" class="sublabel">off: 102</text>
+  <rect x="172" y="132" width="52" height="26" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="198" y="149" text-anchor="middle" class="sublabel">off: 103</text>
+  <text x="140" y="175" text-anchor="middle" class="sublabel" fill="#94a3b8">Partition 0 (committed)</text>
+
+  <!-- Stream Processor / Idempotent Producer -->
+  <rect x="36" y="245" width="208" height="145" rx="10" class="card-accent"/>
+  <rect x="36" y="245" width="208" height="26" rx="10" fill="#164e63"/>
+  <text x="140" y="262" text-anchor="middle" class="label" fill="#67e8f9">EOS Producer / Streams</text>
+  <text x="50" y="290" class="sublabel">transactional.id = "ord-tx-1"</text>
+  <text x="50" y="308" class="sublabel">enable.idempotence = true</text>
+  <rect x="50" y="320" width="180" height="26" rx="5" fill="#0f172a" stroke="#38bdf8" stroke-width="1"/>
+  <text x="140" y="337" text-anchor="middle" class="sublabel" fill="#38bdf8">PID: 42 | Epoch: 1 | Seq: 0,1</text>
+  <text x="140" y="370" text-anchor="middle" class="step-text" fill="#cbd5e1">Consume -&gt; Transform -&gt; Produce</text>
+
+  <!-- Transaction Coordinator -->
+  <rect x="340" y="95" width="280" height="120" rx="10" class="card-tx"/>
+  <rect x="340" y="95" width="280" height="26" rx="10" fill="#4c1d95"/>
+  <text x="480" y="112" text-anchor="middle" class="label" fill="#ddd6fe">TransactionCoordinator</text>
+  <text x="480" y="138" text-anchor="middle" class="sublabel">Log: __transaction_state (compacted)</text>
+  <!-- State machine pills -->
+  <rect x="356" y="152" width="54" height="22" rx="4" fill="#0f172a" stroke="#64748b"/>
+  <text x="383" y="167" text-anchor="middle" class="sublabel">EMPTY</text>
+  <rect x="418" y="152" width="66" height="22" rx="4" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="451" y="167" text-anchor="middle" class="sublabel" fill="#fbbf24">ONGOING</text>
+  <rect x="492" y="152" width="56" height="22" rx="4" fill="#0f172a" stroke="#a78bfa"/>
+  <text x="520" y="167" text-anchor="middle" class="sublabel" fill="#a78bfa">PREPARE</text>
+  <rect x="556" y="152" width="52" height="22" rx="4" fill="#064e3b" stroke="#34d399" class="pulse-ring"/>
+  <text x="582" y="167" text-anchor="middle" class="sublabel" fill="#34d399">COMMIT</text>
+  <text x="480" y="198" text-anchor="middle" class="sublabel" fill="#94a3b8">Fences zombie producers via Epoch++</text>
+
+  <!-- Output Topic -->
+  <rect x="340" y="270" width="280" height="104" rx="10" class="card-ok"/>
+  <rect x="340" y="270" width="280" height="24" rx="10" fill="#064e3b"/>
+  <text x="480" y="286" text-anchor="middle" class="label" fill="#6ee7b7">Output Topic: orders-out</text>
+  <rect x="354" y="306" width="56" height="28" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1.2"/>
+  <text x="382" y="324" text-anchor="middle" class="sublabel" fill="#6ee7b7">Seq:0</text>
+  <rect x="416" y="306" width="56" height="28" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1.2"/>
+  <text x="444" y="324" text-anchor="middle" class="sublabel" fill="#6ee7b7">Seq:1</text>
+  <rect x="478" y="306" width="58" height="28" rx="4" fill="#4c0519" stroke="#fb7185" stroke-width="1.2"/>
+  <text x="507" y="324" text-anchor="middle" class="sublabel" fill="#fda4af">ABORT</text>
+  <rect x="542" y="306" width="66" height="28" rx="4" fill="#064e3b" stroke="#34d399" stroke-width="1.5" class="pulse-ring"/>
+  <text x="575" y="324" text-anchor="middle" class="sublabel" fill="#34d399">COMMIT</text>
+  <text x="480" y="358" text-anchor="middle" class="sublabel" fill="#94a3b8">Control markers gate LSO visibility</text>
+
+  <!-- __consumer_offsets -->
+  <rect x="340" y="394" width="280" height="82" rx="10" class="card"/>
+  <rect x="340" y="394" width="280" height="24" rx="10" fill="#334155"/>
+  <text x="480" y="410" text-anchor="middle" class="label">__consumer_offsets</text>
+  <text x="480" y="436" text-anchor="middle" class="sublabel">sendOffsetsToTransaction(offsets, groupId)</text>
+  <text x="480" y="456" text-anchor="middle" class="sublabel" fill="#34d399">Offset 102 + COMMIT marker written atomically</text>
+
+  <!-- Downstream read_committed Consumer -->
+  <rect x="700" y="245" width="224" height="160" rx="10" class="card-ok"/>
+  <rect x="700" y="245" width="224" height="26" rx="10" fill="#064e3b"/>
+  <text x="812" y="262" text-anchor="middle" class="label" fill="#6ee7b7">Downstream Consumer</text>
+  <rect x="716" y="282" width="192" height="24" rx="5" fill="#0f172a" stroke="#34d399"/>
+  <text x="812" y="298" text-anchor="middle" class="sublabel" fill="#34d399">isolation.level=read_committed</text>
+  <text x="718" y="326" class="sublabel" fill="#6ee7b7">[OK] Reads Seq:0, Seq:1</text>
+  <text x="718" y="346" class="sublabel" fill="#fda4af">[SKIP] Aborted / Open Txns</text>
+  <text x="718" y="366" class="sublabel" fill="#cbd5e1">[GATE] Stops at LSO</text>
+  <text x="812" y="392" text-anchor="middle" class="sublabel" fill="#94a3b8">Zero dirty or duplicate reads</text>
+
+  <!-- Flow Arrows -->
+  <use href="#path-consume" class="flow-line dash-flow" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+  <use href="#path-tx-init" class="flow-line dash-flow" stroke="#fbbf24" marker-end="url(#arrow-amber)"/>
+  <use href="#path-produce" class="flow-line dash-flow" stroke="#34d399" marker-end="url(#arrow-emerald)"/>
+  <use href="#path-offsets" class="flow-line dash-flow" stroke="#34d399" marker-end="url(#arrow-emerald)"/>
+  <use href="#path-commit-out" class="flow-line dash-flow" stroke="#a78bfa" marker-end="url(#arrow-violet)"/>
+  <use href="#path-read-committed" class="flow-line dash-flow" stroke="#34d399" marker-end="url(#arrow-emerald)"/>
+
+  <!-- Step Labels -->
+  <rect x="148" y="203" width="84" height="20" rx="4" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="190" y="217" text-anchor="middle" class="step-text" fill="#7dd3fc">1. Poll</text>
+
+  <rect x="242" y="122" width="90" height="20" rx="4" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="287" y="136" text-anchor="middle" class="step-text" fill="#fcd34d">2. Begin Tx</text>
+
+  <rect x="252" y="294" width="80" height="20" rx="4" fill="#0f172a" stroke="#34d399"/>
+  <text x="292" y="308" text-anchor="middle" class="step-text" fill="#6ee7b7">3. Produce</text>
+
+  <rect x="246" y="408" width="86" height="20" rx="4" fill="#0f172a" stroke="#34d399"/>
+  <text x="289" y="422" text-anchor="middle" class="step-text" fill="#6ee7b7">3b. Offsets</text>
+
+  <rect x="490" y="232" width="122" height="20" rx="4" fill="#0f172a" stroke="#a78bfa"/>
+  <text x="551" y="246" text-anchor="middle" class="step-text" fill="#ddd6fe">4. 2PC Markers</text>
+
+  <rect x="626" y="294" width="68" height="20" rx="4" fill="#0f172a" stroke="#34d399"/>
+  <text x="660" y="308" text-anchor="middle" class="step-text" fill="#6ee7b7">5. &lt;= LSO</text>
+
+  <!-- Animated Moving Packets (SMIL) -->
+  <circle r="5" fill="#38bdf8">
+    <animateMotion dur="2.2s" repeatCount="indefinite" begin="0s">
+      <mpath href="#path-consume"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#fbbf24">
+    <animateMotion dur="2.6s" repeatCount="indefinite" begin="0.4s">
+      <mpath href="#path-tx-init"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#34d399">
+    <animateMotion dur="2.0s" repeatCount="indefinite" begin="0.9s">
+      <mpath href="#path-produce"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#34d399">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.0s">
+      <mpath href="#path-offsets"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#a78bfa">
+    <animateMotion dur="2.0s" repeatCount="indefinite" begin="1.5s">
+      <mpath href="#path-commit-out"/>
+    </animateMotion>
+  </circle>
+  <circle r="5" fill="#34d399">
+    <animateMotion dur="2.0s" repeatCount="indefinite" begin="2.0s">
+      <mpath href="#path-read-committed"/>
+    </animateMotion>
+  </circle>
+
+  <!-- Footer Legend -->
+  <rect x="24" y="488" width="912" height="30" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <circle cx="48" cy="503" r="5" fill="#38bdf8"/>
+  <text x="60" y="507" class="sublabel">Consume Input</text>
+  <circle cx="185" cy="503" r="5" fill="#fbbf24"/>
+  <text x="197" y="507" class="sublabel">Tx Coordinator Registration</text>
+  <circle cx="400" cy="503" r="5" fill="#34d399"/>
+  <text x="412" y="507" class="sublabel">Idempotent Write + Offset Commit</text>
+  <circle cx="655" cy="503" r="5" fill="#a78bfa"/>
+  <text x="667" y="507" class="sublabel">2PC Commit / Abort Marker</text>
+</svg>

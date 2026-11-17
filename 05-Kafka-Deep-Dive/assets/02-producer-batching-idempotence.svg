@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="auto" role="img" aria-label="KafkaProducer Batching and Idempotent Deduplication Animation">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 6; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 17px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .hdr { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #e2e8f0; }
+      .lbl { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; fill: #cbd5e1; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .mono-bright { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #f8fafc; font-weight: 600; }
+      .badge-blue { fill: #1d4ed8; }
+      .badge-purple { fill: #6d28d9; }
+      .badge-amber { fill: #b45309; }
+      .badge-green { fill: #15803d; }
+      .badge-red { fill: #b91c1c; }
+      .pipe { stroke: #475569; stroke-width: 2; fill: none; }
+      .pipe-dash { stroke: #f59e0b; stroke-width: 1.8; stroke-dasharray: 5 4; fill: none; }
+      .pulse-batch { animation: batchFill 8s infinite ease-in-out; }
+      .pulse-linger { animation: lingerBlink 8s infinite; }
+      .dedup-flash { animation: dedupPop 8s infinite; }
+      .ack-glow { animation: ackGlow 8s infinite; }
+
+      @keyframes batchFill {
+        0%, 15% { width: 14px; fill: #38bdf8; }
+        30%, 50% { width: 124px; fill: #22c55e; }
+        55%, 100% { width: 14px; fill: #38bdf8; }
+      }
+      @keyframes lingerBlink {
+        0%, 24% { opacity: 0.35; }
+        28%, 48% { opacity: 1; }
+        52%, 100% { opacity: 0.35; }
+      }
+      @keyframes dedupPop {
+        0%, 62% { opacity: 0.25; transform: scale(0.98); }
+        68%, 88% { opacity: 1; transform: scale(1); }
+        95%, 100% { opacity: 0.25; }
+      }
+      @keyframes ackGlow {
+        0%, 45% { stroke: #334155; }
+        55%, 85% { stroke: #22c55e; }
+        95%, 100% { stroke: #334155; }
+      }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="960" height="440" rx="12" />
+
+  <!-- Header -->
+  <text x="24" y="34" class="title">KafkaProducer: Batching (RecordAccumulator) &amp; Idempotent Deduplication</text>
+  <text x="24" y="54" class="subtitle">send() -&gt; Serializer -&gt; Partitioner -&gt; RecordAccumulator (batch.size / linger.ms) -&gt; Sender (PID, Epoch, Seq#) -&gt; Broker</text>
+
+  <!-- Stage 1: App Thread -->
+  <rect class="card" x="24" y="76" width="170" height="336" />
+  <rect class="badge-blue" x="36" y="88" width="146" height="22" rx="5" />
+  <text x="109" y="103" text-anchor="middle" class="mono-bright">1. APP THREAD</text>
+
+  <rect class="subcard" x="36" y="124" width="146" height="58" />
+  <text x="109" y="144" text-anchor="middle" class="hdr">send(record)</text>
+  <text x="109" y="162" text-anchor="middle" class="mono">key="ord-7", val={...}</text>
+  <text x="109" y="175" text-anchor="middle" class="mono">Async Future&lt;Meta&gt;</text>
+
+  <line class="pipe" x1="109" y1="182" x2="109" y2="206" marker-end="url(#arrow)" />
+
+  <rect class="subcard" x="36" y="210" width="146" height="58" />
+  <text x="109" y="230" text-anchor="middle" class="hdr">Serializer</text>
+  <text x="109" y="247" text-anchor="middle" class="mono">Key -&gt; byte[]</text>
+  <text x="109" y="261" text-anchor="middle" class="mono">Val -&gt; byte[]</text>
+
+  <line class="pipe" x1="109" y1="268" x2="109" y2="292" marker-end="url(#arrow)" />
+
+  <rect class="subcard" x="36" y="296" width="146" height="68" />
+  <text x="109" y="316" text-anchor="middle" class="hdr">Partitioner</text>
+  <text x="109" y="333" text-anchor="middle" class="mono">murmur2(key) % N</text>
+  <text x="109" y="348" text-anchor="middle" class="mono">null key -&gt; Sticky</text>
+  <text x="109" y="359" text-anchor="middle" class="mono" style="fill:#38bdf8;">Target: Partition 0</text>
+
+  <!-- Connector 1 -> 2 -->
+  <line class="pipe" x1="194" y1="330" x2="226" y2="330" marker-end="url(#arrow)" />
+
+  <!-- Stage 2: RecordAccumulator -->
+  <rect class="card" x="230" y="76" width="210" height="336" />
+  <rect class="badge-purple" x="242" y="88" width="186" height="22" rx="5" />
+  <text x="335" y="103" text-anchor="middle" class="mono-bright">2. RECORD ACCUMULATOR</text>
+
+  <text x="244" y="132" class="lbl">Per-Partition Deque&lt;ProducerBatch&gt;</text>
+
+  <!-- Partition 0 Batch -->
+  <rect class="subcard" x="242" y="144" width="186" height="110" />
+  <text x="252" y="162" class="mono-bright" style="fill:#38bdf8;">Topic: orders | P0</text>
+  <rect x="252" y="172" width="166" height="18" rx="4" fill="#1e293b" stroke="#475569" />
+  <rect class="pulse-batch" x="254" y="174" width="14" height="14" rx="3" />
+  <text x="252" y="208" class="mono">batch.size = 16 KB</text>
+  <text x="252" y="224" class="mono">linger.ms  = 10 ms</text>
+  <text x="252" y="242" class="mono pulse-linger" style="fill:#22c55e;">READY: size&gt;=16K || linger</text>
+
+  <!-- Partition 1 Batch -->
+  <rect class="subcard" x="242" y="268" width="186" height="62" />
+  <text x="252" y="286" class="mono-bright" style="fill:#94a3b8;">Topic: orders | P1</text>
+  <rect x="252" y="296" width="166" height="14" rx="3" fill="#1e293b" stroke="#475569" />
+  <rect x="254" y="298" width="46" height="10" rx="2" fill="#64748b" />
+  <text x="252" y="323" class="mono">Accumulating (4.2 KB)...</text>
+
+  <rect class="subcard" x="242" y="342" width="186" height="56" />
+  <text x="252" y="360" class="mono">buffer.memory = 32 MB</text>
+  <text x="252" y="376" class="mono">compression   = snappy</text>
+  <text x="252" y="391" class="mono">max.block.ms  = 60s</text>
+
+  <!-- Connector 2 -> 3 -->
+  <line class="pipe" x1="440" y1="198" x2="472" y2="198" marker-end="url(#arrow)" />
+
+  <!-- Stage 3: Sender I/O Thread -->
+  <rect class="card" x="476" y="76" width="196" height="336" />
+  <rect class="badge-amber" x="488" y="88" width="172" height="22" rx="5" />
+  <text x="574" y="103" text-anchor="middle" class="mono-bright">3. SENDER I/O THREAD</text>
+
+  <rect class="subcard" x="488" y="124" width="172" height="86" />
+  <text x="574" y="144" text-anchor="middle" class="hdr">Idempotent Envelope</text>
+  <text x="500" y="164" class="mono" style="fill:#fbbf24;">PID:   42 (Broker Init)</text>
+  <text x="500" y="180" class="mono" style="fill:#fbbf24;">Epoch: 0  (Fencing)</text>
+  <text x="500" y="196" class="mono" style="fill:#38bdf8;">Seq#:  0, 1, 2 (Per P0)</text>
+
+  <rect class="subcard" x="488" y="224" width="172" height="72" />
+  <text x="574" y="244" text-anchor="middle" class="hdr">In-Flight Pipeline</text>
+  <text x="500" y="263" class="mono">max.in.flight = 5</text>
+  <text x="500" y="279" class="mono">acks = all | retries=MAX</text>
+
+  <rect class="subcard" x="488" y="310" width="172" height="88" style="stroke:#f59e0b;" />
+  <text x="574" y="330" text-anchor="middle" class="hdr" style="fill:#fbbf24;">Network Retry Event</text>
+  <text x="500" y="349" class="mono">Ack lost for Seq=1!</text>
+  <text x="500" y="365" class="mono" style="fill:#f59e0b;">Resending (PID=42, Seq=1)</text>
+  <text x="500" y="382" class="mono">Order preserved safely</text>
+
+  <!-- Connectors 3 -> 4 -->
+  <line class="pipe" x1="672" y1="168" x2="704" y2="168" marker-end="url(#arrow)" />
+  <path class="pipe-dash" d="M 672 354 L 704 282" marker-end="url(#arrow-amber)" />
+
+  <!-- Stage 4: Broker Leader -->
+  <rect class="card ack-glow" x="708" y="76" width="228" height="336" />
+  <rect class="badge-green" x="720" y="88" width="204" height="22" rx="5" />
+  <text x="822" y="103" text-anchor="middle" class="mono-bright">4. BROKER LEADER (P0)</text>
+
+  <text x="722" y="130" class="lbl">Sequence Validation: expected = last + 1</text>
+
+  <!-- Broker log rows -->
+  <rect class="subcard" x="720" y="142" width="204" height="44" />
+  <text x="730" y="160" class="mono-bright" style="fill:#22c55e;">ACCEPT  Seq=0 -&gt; Offset 100</text>
+  <text x="730" y="176" class="mono">PID=42 | Expected=0 (Match)</text>
+
+  <rect class="subcard" x="720" y="196" width="204" height="44" />
+  <text x="730" y="214" class="mono-bright" style="fill:#22c55e;">ACCEPT  Seq=1 -&gt; Offset 101</text>
+  <text x="730" y="230" class="mono">PID=42 | Expected=1 (Match)</text>
+
+  <rect class="subcard dedup-flash" x="720" y="250" width="204" height="58" style="stroke:#ef4444;" />
+  <text x="730" y="268" class="mono-bright" style="fill:#f87171;">DEDUP   Seq=1 (Retry Dropped)</text>
+  <text x="730" y="284" class="mono">Seq &lt;= LastAcked (1)</text>
+  <text x="730" y="299" class="mono" style="fill:#22c55e;">Returns ACK (No Duplicate!)</text>
+
+  <rect class="subcard" x="720" y="318" width="204" height="44" />
+  <text x="730" y="336" class="mono-bright" style="fill:#22c55e;">ACCEPT  Seq=2 -&gt; Offset 102</text>
+  <text x="730" y="352" class="mono">PID=42 | Expected=2 (Match)</text>
+
+  <text x="822" y="392" text-anchor="middle" class="mono" style="fill:#94a3b8;">Result: Strictly Ordered, Zero Duplicates</text>
+
+  <!-- Animated Packet 1: Normal Batch Flow -->
+  <g>
+    <rect x="-18" y="-9" width="36" height="18" rx="4" fill="#38bdf8" stroke="#f8fafc" stroke-width="1" />
+    <text x="0" y="3" text-anchor="middle" class="mono-bright" style="font-size:9px; fill:#0f172a;">BATCH</text>
+    <animateMotion dur="8s" repeatCount="indefinite"
+      path="M 109 152 L 109 330 L 242 198 L 440 198 L 574 168 L 720 168" />
+    <animate attributeName="opacity" values="0;1;1;1;1;0;0" keyTimes="0;0.08;0.35;0.5;0.6;0.65;1" dur="8s" repeatCount="indefinite" />
+  </g>
+
+  <!-- Animated Packet 2: Retry Deduplication -->
+  <g>
+    <rect x="-20" y="-9" width="40" height="18" rx="4" fill="#f59e0b" stroke="#fef3c7" stroke-width="1" />
+    <text x="0" y="3" text-anchor="middle" class="mono-bright" style="font-size:8.5px; fill:#0f172a;">RETRY</text>
+    <animateMotion dur="8s" repeatCount="indefinite"
+      path="M 574 354 L 672 354 L 720 278" />
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.58;0.64;0.82;0.88;1" dur="8s" repeatCount="indefinite" />
+  </g>
+</svg>

@@ -7,16 +7,18 @@
 4. [Transactional Producer](#transactional-producer)
 5. [Custom Partitioners](#custom-partitioners)
 6. [Consumer Architecture](#consumer-architecture)
-7. [Consumer Groups](#consumer-groups)
-8. [Consumer Configuration](#consumer-configuration)
-9. [Offset Management](#offset-management)
-10. [Consumer Rebalancing](#consumer-rebalancing)
-11. [Code Examples](#code-examples)
-12. [Interview Questions](#interview-questions)
+7. [Consumer Configuration](#consumer-configuration)
+8. [Offset Management](#offset-management)
+9. [Consumer Rebalancing](#consumer-rebalancing)
+10. [Code Examples](#code-examples)
+11. [Interview Questions](#interview-questions)
+12. [Summary](#summary)
 
 ---
 
 ## Producer Architecture
+
+![KafkaProducer Batching and Idempotent Deduplication](./assets/02-producer-batching-idempotence.svg)
 
 ### ProducerRecord
 
@@ -42,84 +44,48 @@ ProducerRecord<String, String> record = new ProducerRecord<>(
 );
 ```
 
-### Producer Architecture Diagram
+### Producer Pipeline (`RecordAccumulator` & `Sender`)
 
+```mermaid
+flowchart TD
+    A["1. send(ProducerRecord) API Entry"] --> B["2. Serialization: K, V -&gt; byte[]"]
+    B --> C["3. Partitioner: Explicit / Sticky / murmur2(key) % N"]
+    C --> D["4. RecordAccumulator: Per-Partition Deque&lt;ProducerBatch&gt; (16KB default)"]
+    D --> E{"Batch Ready? size &gt;= batch.size OR time &gt;= linger.ms"}
+    E -- "Yes" --> F["5. Sender I/O Thread: Drain &amp; Send Request to Broker"]
+    F --> G["6. Broker Acknowledgment: acks=0 / 1 / all"]
+    G --> H["7. Callback Execution: onCompletion(RecordMetadata, Exception)"]
+
+    classDef app fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc
+    classDef buffer fill:#4c1d95,stroke:#8b5cf6,color:#f8fafc
+    classDef io fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef broker fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class A,B,C app
+    class D,E buffer
+    class F,H io
+    class G broker
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 KafkaProducer<K, V>                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        1. send(ProducerRecord) API Entry             │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        2. Serialization                              │   │
-│  │  ├─ Key serializer: K → byte[]                      │   │
-│  │  └─ Value serializer: V → byte[]                    │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        3. Partitioner                                │   │
-│  │  ├─ If partition specified: use it                  │   │
-│  │  ├─ Else if key null: round-robin                   │   │
-│  │  └─ Else: hash(key) % partition_count               │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        4. Accumulator Buffer                         │   │
-│  │  ├─ Per-partition batch buffer (16KB default)       │   │
-│  │  ├─ Compressed if compression enabled               │   │
-│  │  └─ Callback registered here                        │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        5. Network I/O Thread                         │   │
-│  │  ├─ Batch ready if: size >= batch.size              │   │
-│  │  ├─ OR time >= linger.ms                            │   │
-│  │  └─ Create batch request → broker                   │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        6. Broker Acknowledgment                      │   │
-│  │  ├─ acks=0: No wait                                 │   │
-│  │  ├─ acks=1: Wait for leader                         │   │
-│  │  └─ acks=all: Wait for min.insync.replicas          │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        7. Callback Execution                         │   │
-│  │  ├─ RecordMetadata: topic, partition, offset        │   │
-│  │  ├─ Exception: if error occurred                    │   │
-│  │  └─ User callback: onCompletion(metadata, exception)│   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+
+- **App Thread (`send()`)**: Serializes keys/values, computes target partition, and appends the record to a per-partition `ProducerBatch` inside `RecordAccumulator` (compressed if `compression.type` is set, with user callback registered).
+- **`Sender` Network I/O Thread**: Polls `RecordAccumulator`, drains batches when `size >= batch.size` or `time >= linger.ms`, sends `ProduceRequest` to the partition leader, awaits `acks`, and invokes `onCompletion(RecordMetadata, Exception)`.
 
 ### Serialization
 
-Kafka requires serialization of keys and values to bytes:
+Kafka requires serialization of keys and values to `byte[]`:
 
 ```java
-// Key serializer interface
+// Key & Value serializer interface
 public interface Serializer<T> {
     byte[] serialize(String topic, T data);
     void close();
 }
 
-// Value serializer interface
-public interface Serializer<T> {
-    byte[] serialize(String topic, T data);
-    void close();
-}
-
-// Built-in serializers
-ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG:
-├─ StringSerializer        → String to byte[]
-├─ IntegerSerializer       → Integer to byte[]
-├─ ByteArraySerializer     → byte[] to byte[] (identity)
-└─ BytesSerializer         → Bytes to byte[]
+// Built-in serializers (ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG)
+// - StringSerializer    -> String to byte[]
+// - IntegerSerializer   -> Integer to byte[]
+// - ByteArraySerializer -> byte[] to byte[] (identity)
+// - BytesSerializer     -> Bytes to byte[]
 
 // Custom serializer example
 class OrderSerializer implements Serializer<Order> {
@@ -133,44 +99,31 @@ class OrderSerializer implements Serializer<Order> {
 
 ### Batching Mechanism
 
-Kafka batches messages for efficiency:
+```mermaid
+flowchart LR
+    M1["send(msg1) -&gt; 0.5KB"] --> B["RecordAccumulator Batch Buffer"]
+    M2["send(msg2) -&gt; 0.5KB"] --> B
+    M3["send(msg3) -&gt; 0.5KB"] --> B
+    B -- "Trigger 1: size &gt;= batch.size (16KB)" --> S1["Sender Flushes Full Batch"]
+    B -- "Trigger 2: time &gt;= linger.ms (10ms)" --> S2["Sender Flushes Partial Batch"]
 
-```
-Timeline visualization:
+    classDef msg fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef buf fill:#4c1d95,stroke:#8b5cf6,color:#f8fafc
+    classDef send fill:#14532d,stroke:#22c55e,color:#f8fafc
 
-Producer.send(msg1)  → Buffer → Waiting
-Producer.send(msg2)  → Buffer → Waiting
-Producer.send(msg3)  → Buffer → Waiting [3 * 0.5KB = 1.5KB]
-Producer.send(msg4)  → Buffer → SEND! (batch.size=16KB reached after msg1000)
-...
-Producer.send(msg1000) → Buffer → Send batch
-
-Alternative timeline:
-
-Producer.send(msg1)  → Buffer → Waiting
-... wait 100ms (linger.ms) ...
-Producer.send(msg2)  → Buffer → SEND! (timeout expires)
-[2 messages, even if < 16KB]
+    class M1,M2,M3 msg
+    class B buf
+    class S1,S2 send
 ```
 
-Configuration impact:
+| Profile | `batch.size` | `linger.ms` | Behavior & Tradeoff |
+| :--- | :--- | :--- | :--- |
+| **High Throughput** | `32768` (32 KB) | `200` ms | Large batches, higher latency, maximum compression efficiency |
+| **Low Latency** | `1024` (1 KB) | `0` ms | Sends immediately, small batches, higher network syscall overhead |
+| **Balanced (Recommended)** | `16384` (16 KB, default) | `10` ms | Good compromise between throughput and tail latency |
 
-```java
-// Option 1: High throughput, high latency
-batch.size = 32768        // 32KB
-linger.ms = 200           // Wait 200ms
-// Result: Large batches, delayed
-
-// Option 2: Low latency, lower throughput
-batch.size = 1024         // 1KB
-linger.ms = 0             // Send immediately
-// Result: Small batches, more overhead
-
-// Option 3: Balanced
-batch.size = 16384        // 16KB (default)
-linger.ms = 10            // Wait 10ms
-// Result: Good compromise
-```
+> [!TIP]
+> `batch.size` is an **upper bound** per partition batch, not a fixed wait size. If `linger.ms > 0`, the `Sender` waits up to `linger.ms` for more records to arrive unless `batch.size` fills up first.
 
 ---
 
@@ -212,145 +165,88 @@ props.put("delivery.timeout.ms", 120000);  // 2 min
 KafkaProducer<String, String> producer = new KafkaProducer<>(props);
 ```
 
-### acks Configuration
+### `acks` Configuration (Durability vs. Latency)
 
-The `acks` setting determines durability vs. latency:
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant L as Partition Leader
+    participant F as ISR Followers
 
-```
-acks = "0" (Fire and forget)
-├─ Producer sends, returns immediately
-├─ No broker acknowledgment
-├─ Use case: Non-critical metrics, logs
-├─ Data loss risk: HIGH (any broker failure → loss)
-└─ Latency: Lowest
+    Note over P,F: acks = "0" (Fire and Forget - Lowest Latency, High Loss Risk)
+    P->>L: ProduceRequest (no wait)
+    P-->>P: Return immediately
 
-Example code:
-producer.send(record);  // Returns immediately
-// Don't wait for broker response
-```
+    Note over P,F: acks = "1" (Leader Ack - Medium Latency, Risk if Leader Crashes Before Replication)
+    P->>L: ProduceRequest
+    L->>L: Append to local log
+    L-->>P: ACK
+    L--)F: Async replicate
 
-```
-acks = "1" (Leader acknowledgment)
-├─ Producer waits for leader to write to its log
-├─ Doesn't wait for replicas
-├─ Use case: Most applications
-├─ Data loss risk: MEDIUM (leader crashes before replication)
-└─ Latency: Medium
-
-Timeline:
-1. Producer sends ProducerRecord
-2. Broker (leader) writes to log
-3. Broker returns ack
-4. Producer callback with success
-5. (Asynchronously: replicas pull from leader)
-
-Risk scenario:
-T1. Message reaches leader, ack sent to producer
-T2. Leader crashes before sending to replicas
-T3. New leader elected (from followers)
-T4. Message is gone (no replica had it)
+    Note over P,F: acks = "all" (min.insync.replicas=2, RF=3 - Highest Durability)
+    P->>L: ProduceRequest
+    L->>L: Append to local log
+    L->>F: Replicate to followers
+    F-->>L: Follower ACK
+    L-->>P: ACK (when min.insync.replicas satisfied)
 ```
 
+| `acks` | Wait Condition | Data Loss Risk | Latency | Typical Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **`0`** | No broker acknowledgment | **High** (any broker failure loses data) | Lowest | Non-critical metrics, fire-and-forget logs |
+| **`1`** | Leader writes to local log | **Medium** (leader crashes before followers pull) | Medium | General-purpose workloads |
+| **`all`** (`-1`) | All `min.insync.replicas` ack | **Low** (only if 2+ brokers fail simultaneously with `RF=3, min.isr=2`) | Highest | Financial transactions, orders, critical events |
+
+> [!IMPORTANT]
+> To guarantee zero data loss with `acks="all"`, configure the topic/broker with `replication.factor >= 3` and `min.insync.replicas = 2`. With `RF=3` and `min.insync.replicas=2`, the message is safely persisted on the leader plus at least 1 follower before the producer receives an acknowledgment.
+
+### `retries`, `max.in.flight.requests.per.connection`, and `enable.idempotence`
+
+```mermaid
+flowchart LR
+    A["Attempt 1 Fails"] --> B["Wait retry.backoff.ms (100ms)"]
+    B --> C["Retry Attempt"]
+    C --> D{"Success or delivery.timeout.ms?"}
+    D -- "Transient Error" --> B
+    D -- "Success / Timeout" --> E["Complete Callback"]
+
+    classDef step fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef dec fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef done fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class A,B,C step
+    class D dec
+    class E done
 ```
-acks = "all" (All replicas acknowledge)
-├─ Producer waits for min.insync.replicas to ack
-├─ Very durable, highest latency
-├─ Use case: Critical data (financial, orders)
-├─ Data loss risk: LOW (only if 2+ brokers fail simultaneously)
-└─ Latency: Highest
-
-Configuration must include:
-├─ replication.factor ≥ 3
-├─ min.insync.replicas = 2
-└─ acks = "all"
-
-Timeline:
-1. Producer sends ProducerRecord
-2. Leader writes to its log
-3. Followers pull and write
-4. min.insync.replicas brokers acknowledge
-5. Producer callback with success
-
-Durability guarantee:
-├─ With replication.factor=3, min.insync.replicas=2
-├─ Message acked when on leader + 1 follower
-├─ Can lose leader, still safe (message on 1 follower)
-└─ Only lose if leader + 1 follower fail (2 out of 3)
-```
-
-### retries and max.in.flight.requests
-
-Retry behavior:
 
 ```java
 // Configuration
-props.put("retries", Integer.MAX_VALUE);  // Retry indefinitely
+props.put("retries", Integer.MAX_VALUE);  // Retry indefinitely until delivery.timeout.ms
 props.put("retry.backoff.ms", 100);       // Wait 100ms between retries
 
-// Behavior
-Retry loop:
-├─ First attempt fails
-├─ Wait 100ms
-├─ Retry
-├─ Fails again
-├─ Wait 100ms
-├─ Retry again
-└─ Continue until success or timeout (delivery.timeout.ms)
-
-Important: With retries, message ordering can be affected
-```
-
-To maintain message ordering with retries:
-
-```java
+// Option A: Strict ordering without idempotence (reduces throughput)
 props.put("max.in.flight.requests.per.connection", 1);
-// Send only 1 message at a time
-// Next message waits for ack
 
-OR (Kafka 0.11+):
-props.put("enable.idempotence", true);  // Handles ordering automatically
-```
-
-### enable.idempotence
-
-Enables exactly-once semantics:
-
-```java
+// Option B (Kafka 0.11+): Ordering + pipelining + deduplication
 props.put("enable.idempotence", true);
-
-Automatically sets:
-├─ max.in.flight.requests.per.connection = 5
-├─ retries = Integer.MAX_VALUE
-├─ acks = "all"
-└─ Enables idempotent producer (sequence numbers)
-
-Guarantees:
-├─ No duplicate messages due to retries
-├─ Message ordering preserved
-└─ Cost: Slightly higher latency than acks=1
+// Automatically enforces:
+// - max.in.flight.requests.per.connection = 5 (<= 5)
+// - retries = Integer.MAX_VALUE
+// - acks = "all"
 ```
 
 ### Compression
 
 ```java
 props.put("compression.type", "snappy");  // or "lz4", "gzip", "zstd"
-
-Tradeoff:
-┌──────────────┬──────────────┬────────────┬──────────────┐
-│ Algorithm    │ Compression  │ CPU Usage  │ Best For     │
-├──────────────┼──────────────┼────────────┼──────────────┤
-│ snappy       │ 50-60%       │ 5-10%      │ Balanced     │
-│ lz4          │ 40-50%       │ 2-3%       │ Speed        │
-│ gzip         │ 70-80%       │ 30-40%     │ Max reduction│
-│ zstd         │ 70-75%       │ 15-20%     │ Modern       │
-└──────────────┴──────────────┴────────────┴──────────────┘
-
-Recommendation:
-├─ Default: snappy (good balance)
-├─ High CPU available: gzip
-├─ Low CPU required: lz4
-└─ Always: better than no compression
 ```
+
+| Algorithm | Compression Ratio | CPU Usage | Best For |
+| :--- | :--- | :--- | :--- |
+| **`snappy`** | 50–60% | 5–10% | Balanced default for most workloads |
+| **`lz4`** | 40–50% | 2–3% | Maximum speed / lowest CPU overhead |
+| **`gzip`** | 70–80% | 30–40% | Maximum size reduction when CPU is abundant |
+| **`zstd`** | 70–75% | 15–20% | Modern high-ratio, moderate-CPU workloads |
 
 ---
 
@@ -358,27 +254,33 @@ Recommendation:
 
 ### How It Works
 
-Idempotent producers prevent duplicate messages by using sequence numbers:
+Idempotent producers prevent duplicate messages from network retries by tagging each batch with `(PID, Partition, Sequence#)`:
 
-```
-Producer maintains:
-├─ Producer ID (PID): Unique identifier for this producer instance
-└─ Sequence number: Incremented with each message
+- **Producer ID (`PID`)**: Unique identifier assigned to the producer instance by the broker.
+- **Sequence Number (`Seq#`)**: Monotonically incremented per partition for each message/batch.
+- **Broker Validation**: Tracks `expected = lastSequence + 1`:
+  - `msgSeq == expected`: **Accept** and advance `lastSequence`.
+  - `msgSeq < expected`: **Duplicate** — drop silently and return `ACK` (prevents duplicate write).
+  - `msgSeq > expected`: **Out of order** — reject with `OutOfOrderSequenceException`.
 
-Each message tagged with: (PID, Partition, Sequence#)
+```mermaid
+sequenceDiagram
+    participant P as Producer (PID=1)
+    participant B as Broker Leader (Partition 0)
 
-Broker validates:
-├─ Expected sequence: Last sequence + 1
-├─ If msg sequence == expected: Accept
-├─ If msg sequence < expected: Duplicate (drop)
-├─ If msg sequence > expected: Out of order (error)
+    P->>B: (PID=1, Seq=0, msg1)
+    B-->>P: ACK (Accepted, Expected=1)
 
-Example:
-Producer sends 3 messages to partition 0:
-1. (PID=1, Seq=0, msg1) → Broker accepts, stores Seq=0
-2. (PID=1, Seq=1, msg2) → Broker accepts, stores Seq=1
-3. (PID=1, Seq=1, msg2 again - retry) → Broker rejects (duplicate)
-4. (PID=1, Seq=2, msg3) → Broker accepts, stores Seq=2
+    P->>B: (PID=1, Seq=1, msg2)
+    B->>B: Stores Seq=1 (Expected=2)
+    B--xP: ACK Lost (Network Timeout)
+
+    P->>B: Retry: (PID=1, Seq=1, msg2)
+    B->>B: Seq=1 &lt; Expected(2) -&gt; Duplicate Dropped
+    B-->>P: ACK (No Duplicate Written)
+
+    P->>B: (PID=1, Seq=2, msg3)
+    B-->>P: ACK (Accepted, Expected=3)
 ```
 
 ### Implementation
@@ -403,38 +305,36 @@ Future<RecordMetadata> future = producer.send(record);
 
 ### Limitations
 
-```
-Idempotent guarantee:
-├─ Applies WITHIN a single producer instance
-├─ Partition level (sequence number per partition)
-├─ Does NOT prevent duplicates across:
-│  ├─ Multiple producer instances (different PIDs)
-│  └─ After broker failure and log truncation
-├─ Time-based: Default 5 minutes (transaction.state.log.min.isr)
-└─ After 5 min: PID can be reused, can get duplicates
-```
+> [!WARNING]
+> Idempotent producer guarantees apply **within a single producer instance** at the **partition level** only. They do **not** prevent duplicates across multiple producer instances (different `PID`s), across process restarts, or after broker log truncation/PID expiration (default 5 minutes / `transaction.state.log.min.isr` window).
 
 ---
 
 ## Transactional Producer
 
-### Exactly-Once Semantics
+### Exactly-Once Semantics (2PC & `TransactionCoordinator`)
 
-Transactional producers guarantee exactly-once delivery across partitions:
+Without transactions, an idempotent producer only guarantees at-most-once duplicates *per partition*—if you write to 2 partitions and 1 fails, you get a partial write. Transactional producers use **Two-Phase Commit (2PC)** coordinated by the broker's `TransactionCoordinator` and `__transaction_state` topic for atomic all-or-nothing writes across partitions and topics.
 
+```mermaid
+sequenceDiagram
+    participant P as Transactional Producer
+    participant TC as TransactionCoordinator
+    participant B as Partition Leaders
+
+    P->>TC: initTransactions() (transactional.id)
+    TC-->>P: Assign PID &amp; Bump Epoch (Fence Zombies)
+
+    P->>TC: beginTransaction()
+    P->>B: send(record1 -&gt; orders), send(record2 -&gt; payments)
+    P->>TC: commitTransaction()
+    TC->>TC: Write PREPARE_COMMIT to __transaction_state
+    TC->>B: Write COMMIT markers to partitions
+    TC->>TC: Write COMPLETE_COMMIT to __transaction_state
+    TC-->>P: Transaction Committed
 ```
-Without transactions (idempotent only):
-├─ Each partition: at most once
-├─ Across partitions: no guarantee
-├─ Example: Send to 2 partitions, 1 fails → partial write
 
-With transactions:
-├─ All partitions: atomically updated
-├─ All or nothing semantics
-├─ Example: Send to 2 partitions, both succeed or both rollback
-```
-
-### Configuration
+### Configuration & Transaction API
 
 ```java
 Properties props = new Properties();
@@ -451,25 +351,16 @@ KafkaProducer<String, String> producer = new KafkaProducer<>(props);
 
 // Initialize transaction (must do once)
 producer.initTransactions();
-```
 
-### Transaction API
-
-```java
 try {
-    // Begin transaction
     producer.beginTransaction();
 
-    // Send multiple messages atomically
     producer.send(record1);
     producer.send(record2);
     producer.send(record3);
 
-    // Commit
     producer.commitTransaction();
-
 } catch (Exception e) {
-    // Rollback on any error
     producer.abortTransaction();
     throw e;
 }
@@ -477,32 +368,38 @@ try {
 
 ### Transaction Isolation Levels
 
-Consumers read transactions based on `isolation.level`:
+Consumers control visibility of uncommitted/aborted transactions via `isolation.level`:
 
-```
-isolation.level = "read_uncommitted" (default)
-├─ Read all messages, including uncommitted ones
-├─ Higher throughput
-├─ May see rolled-back transactions
-└─ Use case: Non-critical data, analytics
+| `isolation.level` | Behavior | Throughput | Rolled-back Messages | Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **`read_uncommitted`** (default) | Reads all messages immediately, including uncommitted ones | Higher | **Visible** to consumer | Non-critical analytics, telemetry |
+| **`read_committed`** | Buffers until `COMMIT` marker; skips aborted transactions | Slightly lower | **Never visible** to consumer | Financial, orders, billing |
 
-isolation.level = "read_committed"
-├─ Read only committed messages
-├─ Skip rolled-back transactions
-├─ Lower throughput (more processing)
-└─ Use case: Critical data (financial, orders)
-
-Example timeline:
-T1. Producer sends msg1, msg2 (transaction)
-T2. Consumer (read_uncommitted): sees msg1, msg2
-T3. Producer rolls back transaction
-T4. Consumer (read_uncommitted): still sees msg1, msg2 ✗
-T5. Consumer (read_committed): never sees them ✓
-```
+> [!IMPORTANT]
+> Example timeline: Producer sends `msg1, msg2` inside a transaction and then calls `abortTransaction()`. A `read_uncommitted` consumer still sees `msg1, msg2`, whereas a `read_committed` consumer never exposes them.
 
 ---
 
 ## Custom Partitioners
+
+### Partitioner Decision Flow
+
+```mermaid
+flowchart TD
+    A["ProducerRecord(topic, partition, key, value)"] --> B{"Explicit partition != null?"}
+    B -- "Yes" --> C["Route to explicit partition"]
+    B -- "No" --> D{"keyBytes == null?"}
+    D -- "Yes" --> E["Round-Robin / Sticky Partitioner"]
+    D -- "No" --> F["Math.abs(Utils.murmur2(keyBytes)) % numPartitions"]
+
+    classDef node fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef dec fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef out fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class A node
+    class B,D dec
+    class C,E,F out
+```
 
 ### Default Partitioner
 
@@ -525,9 +422,7 @@ public class DefaultPartitioner implements Partitioner {
 }
 ```
 
-### Custom Partitioner Example
-
-Order routing by region:
+### Custom Partitioner Example (Order Routing by Region)
 
 ```java
 public class RegionalPartitioner implements Partitioner {
@@ -541,11 +436,7 @@ public class RegionalPartitioner implements Partitioner {
 
         List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
 
-        // Region-based routing
-        // Partition 0: North America
-        // Partition 1: Europe
-        // Partition 2: Asia
-
+        // Region-based routing: NA -> 0, EU -> 1, ASIA -> 2
         switch (region) {
             case "NA":
                 return 0;
@@ -572,23 +463,11 @@ props.put("partitioner.class", RegionalPartitioner.class.getName());
 
 ### Partitioner Best Practices
 
-```
-Choosing a partition key:
-├─ Goal: Distribute load evenly
-├─ Goal: Related messages same partition (if needed)
-├─ Goal: Avoid hot partitions
+- **Good keys**: `user_id` (user events together), `customer_id` (per-customer ordering), `merchant_id` (fair distribution), `null` (logs where ordering isn't needed).
+- **Avoid**: Low-cardinality keys (uneven distribution), overly high-cardinality keys when grouping is needed, and time-based keys (creates hot partitions during peak windows).
 
-Examples:
-├─ user-events: Key = user_id (all user events together)
-├─ order-events: Key = customer_id (per-customer ordering)
-├─ payments: Key = merchant_id (fair distribution)
-└─ logs: Key = null (round-robin, no ordering needed)
-
-Avoid:
-├─ Low cardinality keys (many duplicates → uneven distribution)
-├─ Too high cardinality (no reuse of partition → inefficient)
-└─ Time-based keys (may create hot partitions at certain times)
-```
+> [!TIP]
+> Ensure your partition key has enough cardinality to distribute load evenly across all partitions while still preserving ordering for related entities.
 
 ---
 
@@ -596,83 +475,68 @@ Avoid:
 
 ### Consumer Groups
 
-Consumers are organized in **consumer groups**:
+```mermaid
+flowchart LR
+    subgraph Topic["Topic: orders (4 Partitions)"]
+        P0["Partition 0"]
+        P1["Partition 1"]
+        P2["Partition 2"]
+        P3["Partition 3"]
+    end
 
+    subgraph GA["Consumer Group A (4 Consumers)"]
+        A1["Consumer A1"]
+        A2["Consumer A2"]
+        A3["Consumer A3"]
+        A4["Consumer A4"]
+    end
+
+    subgraph GB["Consumer Group B (2 Consumers)"]
+        B1["Consumer B1"]
+        B2["Consumer B2"]
+    end
+
+    P0 --> A1
+    P1 --> A2
+    P2 --> A3
+    P3 --> A4
+
+    P0 --> B1
+    P1 --> B1
+    P2 --> B2
+    P3 --> B2
+
+    classDef part fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc
+    classDef cons fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class P0,P1,P2,P3 part
+    class A1,A2,A3,A4,B1,B2 cons
 ```
-Topic with 4 partitions:
-├─ Partition 0
-├─ Partition 1
-├─ Partition 2
-└─ Partition 3
 
-Consumer Group A (4 consumers):
-├─ Consumer A1 → Partition 0
-├─ Consumer A2 → Partition 1
-├─ Consumer A3 → Partition 2
-└─ Consumer A4 → Partition 3
+- **Key Property**: Each partition is assigned to **at most 1 consumer per consumer group**, while multiple independent consumer groups can read the exact same partition concurrently.
 
-Consumer Group B (2 consumers):
-├─ Consumer B1 → Partitions 0, 1
-└─ Consumer B2 → Partitions 2, 3
+### `KafkaConsumer` Lifecycle
 
-Key property:
-└─ Each partition assigned to at most 1 consumer per group
-   (multiple groups can read same partition)
+```mermaid
+flowchart TD
+    A["1. Join Consumer Group: Register group.id with GroupCoordinator"] --> B["2. Partition Assignment: Range / RoundRobin / Sticky"]
+    B --> C["3. Offset Fetch: Read last committed offset from __consumer_offsets"]
+    C --> D["4. Fetch Loop: poll() up to max.poll.records within max.poll.interval.ms"]
+    D --> E["5. Deserialization: byte[] -&gt; K, V"]
+    E --> F["6. Process &amp; Commit: commitSync() / commitAsync()"]
+    F --> D
+
+    classDef coord fill:#4c1d95,stroke:#8b5cf6,color:#f8fafc
+    classDef loop fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc
+    classDef commit fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class A,B,C coord
+    class D,E loop
+    class F commit
 ```
 
-### Consumer Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                 KafkaConsumer<K, V>                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        1. Join Consumer Group                        │   │
-│  │  ├─ Connect to group coordinator (broker)            │   │
-│  │  ├─ Register consumer with group.id                  │   │
-│  │  └─ Rebalance triggered                             │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        2. Partition Assignment                       │   │
-│  │  ├─ Assign strategy: Range / RoundRobin / Sticky    │   │
-│  │  ├─ Group leader decides assignments                │   │
-│  │  └─ Other consumers receive assignment              │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        3. Offset Commit                              │   │
-│  │  ├─ Store processed offset to __consumer_offsets    │   │
-│  │  ├─ Can be automatic or manual                      │   │
-│  │  └─ Enables resume from last position              │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        4. Fetch Loop                                 │   │
-│  │  ├─ poll(): Request records from assigned partitions │   │
-│  │  ├─ Fetch up to max.poll.records                    │   │
-│  │  ├─ Block up to max.poll.interval.ms               │   │
-│  │  └─ Return ConsumerRecords batch                    │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        5. Deserialization                            │   │
-│  │  ├─ Key deserializer: byte[] → K                    │   │
-│  │  ├─ Value deserializer: byte[] → V                  │   │
-│  │  └─ Convert to domain objects                       │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          │                                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │        6. Process and Commit                         │   │
-│  │  ├─ Application processes record                     │   │
-│  │  ├─ commitSync(): Blocking commit                   │   │
-│  │  ├─ commitAsync(): Non-blocking commit              │   │
-│  │  └─ Resume next poll() from committed offset        │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+> [!NOTE]
+> `KafkaConsumer` is **not thread-safe**. Each consumer instance must be driven by a single polling thread (or decouple `poll()` from worker threads while carefully managing offset commits and `max.poll.interval.ms`).
 
 ---
 
@@ -694,7 +558,7 @@ props.put("key.deserializer", StringDeserializer.class);
 props.put("value.deserializer", StringDeserializer.class);
 
 // Offset management
-props.put("auto.offset.reset", "earliest");  // or "latest"
+props.put("auto.offset.reset", "earliest");  // or "latest", "none"
 props.put("enable.auto.commit", true);       // Auto-commit offsets
 props.put("auto.commit.interval.ms", 5000);  // Every 5 seconds
 
@@ -709,160 +573,45 @@ props.put("max.poll.interval.ms", 300000);   // 5 minute max
 KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
 ```
 
-### auto.offset.reset
+### `auto.offset.reset`
 
-Controls behavior when no offset is committed:
+| Value | Behavior When No Committed Offset Exists | Use Case | Risk |
+| :--- | :--- | :--- | :--- |
+| **`earliest`** | Start from the beginning of the partition | Initialize new consumer group | Large historical backlog |
+| **`latest`** | Start from the end of the partition | Real-time only, ignore history | Misses messages sent while offline |
+| **`none`** | Throw `NoOffsetForPartitionException` | Strict explicit offset management | Fails fast if offset missing |
 
-```
-auto.offset.reset = "earliest"
-├─ Start from beginning of partition
-├─ Processes all historical messages
-├─ Use case: Initialize new consumer group
-└─ Risk: Can be large backlog
+### Session, Heartbeat, and `max.poll.interval.ms`
 
-auto.offset.reset = "latest"
-├─ Start from end of partition
-├─ Skip historical messages
-├─ Use case: Don't care about backlog
-└─ Risk: Miss messages from when consumer was offline
-
-auto.offset.reset = "none"
-├─ Throw NoOffsetForPartitionException
-├─ Require explicit offset management
-└─ Use case: Very specific offset requirements
+```mermaid
+stateDiagram-v2
+    [*] --> Active: JoinGroup &amp; Heartbeat Every 10s
+    Active --> Active: poll() within max.poll.interval.ms (5m)
+    Active --> Expelled: No Heartbeat &gt; session.timeout.ms (30s)
+    Active --> Expelled: Slow Processing &gt; max.poll.interval.ms (5m)
+    Expelled --> [*]: Rebalance Triggered
 ```
 
-### Session and Heartbeat
+- **Heartbeat Rule of Thumb**: Set `heartbeat.interval.ms = 1/3 * session.timeout.ms` (e.g., `10s` heartbeat, `30s` session timeout) to tolerate 2–3 missed heartbeats before declaring a consumer dead.
+- **Slow Processing Protection**: If business logic exceeds `max.poll.interval.ms` (default `300000ms` / 5 min) between `poll()` calls, the consumer is expelled and a rebalance triggers. Fix by increasing `max.poll.interval.ms`, lowering `max.poll.records`, or offloading processing to worker threads.
 
-Kafka detects consumer failures through heartbeats:
-
-```
-Consumer session:
-├─ session.timeout.ms = 30000 (default)
-│  └─ If broker doesn't see heartbeat for 30s, consumer is dead
-└─ heartbeat.interval.ms = 10000 (default)
-   └─ Send heartbeat every 10 seconds
-
-Best practice:
-├─ heartbeat.interval.ms = 1/3 of session.timeout.ms
-├─ Example: 10s heartbeat, 30s timeout
-├─ Allows 2-3 heartbeat misses before detection
-└─ Balanced: detect failures quickly, avoid false positives
-```
-
-### max.poll.interval.ms
-
-Time allowed between poll() calls:
-
-```
-Configuration: max.poll.interval.ms = 300000 (5 minutes)
-
-Valid timeline:
-T=0s:   poll() returns 500 records
-T=60s:  Process 300 records
-T=120s: poll() again ✓ (within 5 min)
-
-Invalid timeline:
-T=0s:   poll() returns 500 records
-T=60s:  Start processing (slow business logic)
-T=301s: Still processing, call poll() ✗
-        Consumer considered dead, expelled from group
-
-Solution:
-├─ Increase max.poll.interval.ms
-├─ Reduce max.poll.records
-├─ Process faster (async, parallelism)
-└─ Use different thread for polling and processing
-```
+> [!WARNING]
+> Background heartbeat threads keep the session alive during normal network operation, **but** `max.poll.interval.ms` is tracked on the application's `poll()` loop. A blocked `poll()` loop still causes group expulsion!
 
 ---
 
 ## Offset Management
 
-### Automatic Offset Commit
+### Automatic vs. Manual Offset Commit
+
+- **Automatic Commit (`enable.auto.commit = true`, `auto.commit.interval.ms = 5000`)**:
+  - Risky: if `poll()` returns offsets `100–104`, offset `101` throws an exception at `T=3s`, and auto-commit fires at `T=5s` committing `104`, a restart resumes at `105` and **loses offsets `101–104`**.
+- **Manual Commit (`enable.auto.commit = false`)**:
+  - `commitSync()`: Blocking, retries transient failures, throws exception on permanent failure.
+  - `commitAsync(callback)`: Non-blocking, higher throughput, handles errors in callback.
+  - **Combined Pattern (Recommended)**: Use `commitAsync()` inside the `while` loop for speed, and `commitSync()` in `finally` / `onPartitionsRevoked()` for guaranteed final commit.
 
 ```java
-// Configuration
-props.put("enable.auto.commit", true);
-props.put("auto.commit.interval.ms", 5000);  // Every 5 sec
-
-KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-consumer.subscribe(Arrays.asList("orders"));
-
-while (true) {
-    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
-
-    for (ConsumerRecord<String, String> record : records) {
-        // Process message
-        System.out.println("Offset: " + record.offset() + ", Value: " + record.value());
-    }
-
-    // Automatic commit happens here (every 5 seconds)
-    // Even if processing fails! This is dangerous
-}
-```
-
-Risks with automatic commit:
-```
-Timeline:
-T=0s:   poll() returns offset 100-104
-T=2s:   Offset 100 acked → Consumer restarts
-T=3s:   Processing offset 101 fails (exception)
-T=5s:   Auto-commit triggers, commits offset 104
-T=6s:   Consumer restarts
-T=7s:   Consumer resumes from offset 105
-        Lost offset 101-104 (processed, but not saved)
-```
-
-### Manual Offset Commit
-
-```java
-// Configuration
-props.put("enable.auto.commit", false);  // Manual commits only
-
-KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-consumer.subscribe(Arrays.asList("orders"));
-
-while (true) {
-    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
-
-    try {
-        for (ConsumerRecord<String, String> record : records) {
-            // Process message
-            processOrder(record.value());
-        }
-
-        // Only commit after successful processing
-        consumer.commitSync();  // Blocking commit
-
-    } catch (Exception e) {
-        logger.error("Processing failed, not committing", e);
-        // Consumer will retry from last committed offset
-    }
-}
-```
-
-### commitSync vs commitAsync
-
-```java
-// commitSync() - Blocking
-consumer.commitSync();
-// Waits until broker confirms
-// Slower, but guaranteed commit
-// Throws exception on failure
-
-// commitAsync() - Non-blocking
-consumer.commitAsync((offsets, exception) -> {
-    if (exception != null) {
-        logger.error("Commit failed", exception);
-    } else {
-        logger.info("Committed offsets: " + offsets);
-    }
-});
-// Returns immediately
-// Continues processing
-// Exception handled in callback
-
 // Combined approach (recommended)
 try {
     consumer.commitAsync((offsets, exception) -> {
@@ -877,148 +626,75 @@ try {
 
 ### Delivery Semantics
 
+```mermaid
+flowchart TD
+    A["Delivery Semantics"] --> B["At-Most-Once: Commit -&gt; Process"]
+    A --> C["At-Least-Once: Process -&gt; Commit"]
+    A --> D["Exactly-Once: Atomic Transaction"]
+
+    B --> B1["Crash after commit = Message Lost"]
+    C --> C1["Crash before commit = Reprocessed (Duplicates)"]
+    D --> D1["isolation.level=read_committed + Idempotent Sink"]
+
+    classDef root fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef amo fill:#7f1d1d,stroke:#ef4444,color:#f8fafc
+    classDef alo fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef eos fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class A root
+    class B,B1 amo
+    class C,C1 alo
+    class D,D1 eos
 ```
-At-most-once:
-├─ Configuration: enable.auto.commit=true, auto.commit.interval.ms=1000
-├─ Commit offset BEFORE processing
-├─ If crash after commit, before processing: message lost
-├─ Risk: Losing messages
-└─ Use case: Non-critical data (logs, metrics)
 
-Code:
-consumer.commitSync();           // Commit first
-processMessage(record);          // Process after
-if (crash here): message lost ✗
+| Semantic | Commit Order | Failure Outcome | Configuration / Pattern | Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **At-most-once** | Commit **before** processing | Message lost on crash | `enable.auto.commit=true` or `commitSync()` before `process()` | Non-critical logs, metrics |
+| **At-least-once** | Process **before** commit | Duplicate processing on crash | `enable.auto.commit=false`, `commitSync()` after `process()` | Most applications (with idempotent consumer) |
+| **Exactly-once** | Atomic with side-effect | Rolled back cleanly | `isolation.level=read_committed` + transactional producer | Financial, orders, billing |
 
-At-least-once:
-├─ Configuration: enable.auto.commit=false
-├─ Process message, THEN commit offset
-├─ If crash after processing, before commit: message reprocessed
-├─ Risk: Duplicate processing
-└─ Use case: Most applications
-
-Code:
-processMessage(record);          // Process first
-consumer.commitSync();           // Commit after
-if (crash here): message reprocessed ✗
-
-Exactly-once:
-├─ Configuration: isolation.level=read_committed
-├─ Process message, commit atomic with side effect
-├─ Requires idempotent processing
-├─ If crash: transaction rolled back
-└─ Use case: Critical data (financial, orders)
-
-Code:
-beginTransaction();
-processMessage(record);
-updateDatabase(record);
-consumer.commitSync();           // Atomic with DB
-commitTransaction();
-```
+> [!IMPORTANT]
+> For **at-least-once** pipelines, always pair manual post-processing commits with an **idempotent consumer** (e.g., deduplicating by `record.key()` or `topic-partition-offset` in your database).
 
 ---
 
 ## Consumer Rebalancing
 
-### Rebalancing Process
+![Cooperative Sticky Rebalancing Animation](./assets/02-consumer-group-rebalance.svg)
 
-When a consumer joins, fails, or changes subscriptions:
+### Eager vs. Cooperative Sticky Rebalancing
 
-```
-Timeline:
-T=0s:   Consumer A joins group
-├─ Join group request sent to coordinator
-└─ Rebalancing triggered
+```mermaid
+sequenceDiagram
+    participant C1 as Consumer C1
+    participant C2 as Consumer C2
+    participant GC as GroupCoordinator
+    participant C3 as Consumer C3 (New)
 
-T=1s:   Stop consuming, revoke partitions
-├─ Consumer A stops fetching
-├─ Commits current offsets
-└─ onPartitionsRevoked() callback
+    Note over C1,C3: Eager Rebalance (Stop-the-World: 2-3s Downtime)
+    C1->>GC: onPartitionsRevoked(ALL)
+    C2->>GC: onPartitionsRevoked(ALL)
+    C3->>GC: JoinGroup
+    GC-->>C1: onPartitionsAssigned(New)
+    GC-->>C2: onPartitionsAssigned(New)
+    GC-->>C3: onPartitionsAssigned(New)
 
-T=2s:   Assign new partitions
-├─ Group coordinator decides assignment
-├─ Consumer A assigned partitions
-└─ onPartitionsAssigned() callback
-
-T=3s:   Resume consuming
-└─ Consumer A resumes from committed offsets
-
-Downtime: 2-3 seconds (no messages processed)
-```
-
-### Rebalancing Strategies
-
-**Range Partitioner**:
-```
-Topic: orders, Partitions: [0, 1, 2, 3, 4, 5]
-Consumer Group: [A, B, C]
-
-Assignment:
-├─ Consumer A → [0, 1]
-├─ Consumer B → [2, 3]
-└─ Consumer C → [4, 5]
-
-Problem: If consumer dies
-├─ New assignment: A → [0, 1, 2], B → [3, 4, 5]
-├─ Partition 2 moves from B to A (reprocessing)
-└─ Partition 2 reprocessed (duplicates possible)
+    Note over C1,C3: CooperativeStickyAssignor (Kafka 2.4+ Incremental)
+    C3->>GC: JoinGroup
+    C1->>GC: Revoke ONLY P1 (P0 keeps processing!)
+    Note right of C2: C2 keeps P2, P3 uninterrupted
+    GC-->>C3: Assign P1 (Zero stop-the-world pause)
 ```
 
-**RoundRobin Partitioner**:
-```
-Topic: orders, Partitions: [0, 1, 2, 3, 4, 5]
-Consumer Group: [A, B, C]
+### Partition Assignment Strategies
 
-Assignment (round-robin):
-├─ Consumer A → [0, 3]
-├─ Consumer B → [1, 4]
-└─ Consumer C → [2, 5]
+| Strategy | Assignment Pattern | Rebalance Impact |
+| :--- | :--- | :--- |
+| **`RangeAssignor`** | Contiguous slices per topic (`A->[0,1], B->[2,3], C->[4,5]`) | High movement when a consumer dies; can cause uneven load across topics |
+| **`RoundRobinAssignor`** | Interleaved (`A->[0,3], B->[1,4], C->[2,5]`) | Balanced distribution, but still moves many partitions on rebalance |
+| **`StickyAssignor`** | Preserves existing assignments as much as possible | Minimal partition movement, reduces duplicate reprocessing |
+| **`CooperativeStickyAssignor`** | Incremental revoke + sticky assignment (Kafka 2.4+) | **No stop-the-world pause**; unaffected partitions keep consuming |
 
-Better distribution, but still suboptimal on rebalancing
-```
-
-**Sticky Partitioner**:
-```
-Goal: Minimize partition movement during rebalancing
-
-Before rebalancing:
-├─ Consumer A → [0, 1]
-├─ Consumer B → [2, 3]
-└─ Consumer C → [4, 5]
-
-Consumer B dies, C takes over:
-├─ Consumer A → [0, 1] (unchanged)
-├─ Consumer C → [2, 3, 4, 5] (only gets B's partitions)
-└─ Minimal movement, less reprocessing
-
-Result:
-├─ Only partition 2, 3 reprocessed
-├─ Partitions 0, 1, 4, 5 not affected
-└─ Reduced duplicate processing
-```
-
-**CooperativeSticky Partitioner** (Kafka 2.4+):
-```
-Cooperative rebalancing (no stop-the-world):
-
-Before Consumer B failure:
-├─ Consumer A → [0, 1]
-├─ Consumer B → [2, 3]
-└─ Consumer C → [4, 5]
-
-During rebalancing (cooperative):
-├─ Phase 1: Revoke only affected: B revokes [2,3]
-├─ Phase 2: Consumer C assigned [2, 3] (no revoke)
-├─ Phase 3: A stays on [0,1], B offline, C has [4,5,2,3]
-
-Advantage:
-├─ Consumers continue fetching unaffected partitions
-├─ Only affected partitions stop briefly
-└─ Less downtime than eager rebalancing
-```
-
-Configuration:
 ```java
 props.put("partition.assignment.strategy",
     "org.apache.kafka.clients.consumer.CooperativeStickyAssignor");
@@ -1030,24 +706,33 @@ props.put("partition.assignment.strategy",
 
 ### Static Group Membership
 
-Avoid rebalancing on consumer restart:
+Avoid unnecessary rebalancing during rolling restarts or brief network blips by assigning a persistent `group.instance.id`:
 
 ```java
-props.put("group.instance.id", "consumer-1");  // Unique per consumer
-
-Behavior:
-├─ Consumer leaves group → Wait for timeout (10min default)
-├─ Consumer rejoins with same group.instance.id
-├─ Same partitions assigned immediately (no rebalancing)
-└─ Fast restart, no downtime
-
-Configuration:
-props.put("session.timeout.ms", 600000);  // 10 min timeout
+props.put("group.instance.id", "consumer-1");  // Unique per consumer instance
+props.put("session.timeout.ms", 600000);       // 10 min timeout
 ```
+
+- If the consumer restarts and rejoins within `session.timeout.ms`, the coordinator immediately restores its exact previous partitions **with zero rebalancing**.
+
+> [!TIP]
+> Combine `CooperativeStickyAssignor` with `group.instance.id` (Static Membership) in production Kubernetes/container deployments to eliminate rebalance storms during rolling deployments.
 
 ---
 
 ## Code Examples
+
+```mermaid
+flowchart LR
+    T1["BasicProducer: Async Callback + Batching"] --> T2["TransactionalProducer: 2PC Multi-Topic Atomic"]
+    C1["BasicConsumer: Manual commitSync() Loop"] --> C2["ConsumerWithRebalanceListener: CooperativeSticky + Seek"]
+
+    classDef prod fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc
+    classDef cons fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class T1,T2 prod
+    class C1,C2 cons
+```
 
 ### Basic Producer
 
@@ -1114,8 +799,8 @@ public class TransactionalProducer {
     public static void main(String[] args) {
         Properties props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
-        props.put("key.serializer", StringSerializer.class.getName());
-        props.put("value.serializer", StringSerializer.class.getName());
+        props.put("key.serializer", StringSerializer.class);
+        props.put("value.serializer", StringSerializer.class);
 
         // Transactional settings
         props.put("transactional.id", "order-producer-1");
@@ -1291,164 +976,109 @@ public class ConsumerWithRebalanceListener {
 }
 ```
 
+> [!TIP]
+> In `ConsumerWithRebalanceListener`, always call `consumer.commitSync()` inside `onPartitionsRevoked()` so that the next consumer taking over those partitions resumes from the exact last processed offset.
+
 ---
 
 ## Interview Questions
 
+```mermaid
+flowchart TD
+    Q["Core Interview Pillars"] --> Q1["1. Producer Batching: batch.size vs linger.ms"]
+    Q --> Q2["2. Delivery Semantics: At-Least-Once vs Exactly-Once"]
+    Q --> Q3["3. Consumer Lag: LogEndOffset - CommittedOffset"]
+    Q --> Q4["4. Rebalancing Triggers &amp; Static Membership"]
+
+    classDef root fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef pill fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc
+
+    class Q root
+    class Q1,Q2,Q3,Q4 pill
+```
+
 ### Question 1: Producer Batching Explanation
 
-**Answer**:
-
-Producer batching accumulates messages in memory before sending:
-
-```
-Flow:
-1. send(msg1) → Buffer (1KB)
-2. send(msg2) → Buffer (2KB)
-3. send(msg3) → Buffer (3KB)
-4. Buffer reaches 16KB (batch.size)
-   OR
-5. 100ms elapsed (linger.ms)
-   → Send all messages in one request
-
-Benefit: Reduced network overhead
-├─ 1000 messages: 1 request (16KB batch)
-├─ vs 1000 individual requests
-└─ ~100x reduction in network syscalls
-```
-
-Configuration impact:
+**Answer**: Producer batching accumulates messages in memory (`RecordAccumulator`) before sending:
+- `send(msg1)` -> `send(msg2)` -> `send(msg3)` accumulate until buffer reaches `batch.size` (e.g., `16KB`) **OR** `linger.ms` (e.g., `100ms`) elapses, then sends all messages in one request.
+- **Benefit**: ~100x reduction in network syscalls (1000 messages in 1 request vs. 1000 individual requests).
 
 ```java
 // High throughput
 props.put("batch.size", 32768);      // 32KB
 props.put("linger.ms", 100);         // Wait up to 100ms
-// Result: Larger batches, higher latency
 
 // Low latency
 props.put("batch.size", 1024);       // 1KB
 props.put("linger.ms", 0);           // No waiting
-// Result: Small batches, more overhead
 ```
 
 ### Question 2: Exactly-Once vs At-Least-Once
 
 **Answer**:
-
-At-least-once:
-```
-Process message → Save offset
-└─ If crash after process, before offset: reprocess
-
-Idempotent producer ensures:
-├─ Duplicates from retries handled
-├─ Message ordering preserved
-└─ Still requires idempotent consumer
-```
-
-Exactly-once:
-```
-Transactional producer:
-├─ Consume message
-├─ Process message
-├─ Send to multiple topics atomically
-├─ Commit offset
-└─ All or nothing
-
-Guarantees:
-└─ No duplicates, no message loss
-
-Cost:
-├─ Performance overhead
-├─ Complexity
-└─ Transactional ID requirement
-```
+- **At-least-once**: Process message -> Save offset. If crash occurs after processing and before commit, message is reprocessed. An idempotent producer prevents retry duplicates and preserves ordering, but still requires an idempotent consumer.
+- **Exactly-once**: Transactional producer consumes, processes, sends to multiple topics atomically, and commits offsets in an all-or-nothing transaction (`transactional.id` + `isolation.level=read_committed`), at the cost of higher latency and complexity.
 
 ### Question 3: Consumer Lag Calculation
 
 **Answer**:
-
-Consumer lag = LogEndOffset - CommittedOffset
-
-```
-Example:
-Topic partition has 1000 messages (offset 0-999)
-LogEndOffset = 1000
-
-Consumer group committed offset 500
-CommittedOffset = 500
-
-Consumer lag = 1000 - 500 = 500 messages behind
-
-Monitoring:
-consumer-lag = max(0, highWatermark - committedOffset)
-
-High lag indicates:
-├─ Consumer is slow
-├─ Consumer crashed and recovering
-├─ Consumer misconfigured
-└─ Topic has high throughput
-```
+`Consumer Lag = LogEndOffset (highWatermark) - CommittedOffset`
+- Example: Topic partition has 1000 messages (offsets `0–999`, `LogEndOffset = 1000`) and consumer group committed offset `500` -> `Consumer Lag = 500` messages behind.
+- High lag indicates a slow consumer, a crashed/recovering consumer, misconfiguration (`max.poll.records` / `fetch.max.bytes`), or a sudden traffic spike.
 
 ### Question 4: Rebalancing Causes
 
-**Answer**:
+**Answer**: Rebalancing is triggered by:
+1. **Consumer joins group** -> existing partitions redistributed.
+2. **Consumer leaves/crashes** (missed `session.timeout.ms` or `max.poll.interval.ms`) -> partitions reassigned.
+3. **Topic subscription changes** (e.g., `consumer.subscribe(["orders", "payments"])`).
+4. **Static group membership timeout** -> if a consumer with `group.instance.id` reboots faster than `session.timeout.ms`, **no rebalance** occurs; if slower, rebalance triggers.
+- Eager rebalancing causes a 2–5s stop-the-world pause; `CooperativeStickyAssignor` avoids global pauses.
 
-Rebalancing triggered by:
-
-1. **Consumer joins group**:
-   ```
-   New consumer1 joins → Rebalancing
-   └─ Existing partitions redistributed
-   ```
-
-2. **Consumer leaves/crashes**:
-   ```
-   Consumer2 dies (no heartbeat) → Rebalancing
-   └─ Consumer2's partitions reassigned
-   ```
-
-3. **Topic subscription changes**:
-   ```
-   consumer.subscribe(["orders", "payments"])
-   → Rebalancing
-   ```
-
-4. **Static group membership timeout**:
-   ```
-   Consumer has group.instance.id
-   └─ If reboot < timeout: no rebalancing
-   └─ If reboot > timeout: rebalancing
-   ```
-
-Downtime implications:
-```
-Rebalancing takes 2-5 seconds:
-├─ No messages consumed during this time
-├─ Processed offset committed
-├─ Resume from committed offset
-└─ No duplicates (if manual commit)
-```
+> [!IMPORTANT]
+> When asked about **Consumer Lag** in interviews, distinguish between **transient lag** (normal during bursts) and **growing lag** (consumer throughput < producer throughput, requiring more consumers up to the partition count).
 
 ---
 
 ## Summary
 
+```mermaid
+flowchart LR
+    subgraph Prod["Producer Pillars"]
+        P1["Batching: batch.size + linger.ms"]
+        P2["Durability: acks=all + min.insync.replicas"]
+        P3["Reliability: enable.idempotence + Transactions"]
+    end
+
+    subgraph Cons["Consumer Pillars"]
+        C1["Parallelism: Consumer Groups (1 Consumer/Partition)"]
+        C2["Control: Manual commitSync() / commitAsync()"]
+        C3["Stability: CooperativeSticky + Static Membership"]
+    end
+
+    Prod --> Cons
+
+    classDef p fill:#1e3a8a,stroke:#3b82f6,color:#f8fafc
+    classDef c fill:#14532d,stroke:#22c55e,color:#f8fafc
+
+    class P1,P2,P3 p
+    class C1,C2,C3 c
+```
+
 **Producers**:
-- Batching increases throughput
-- acks setting determines durability
-- Idempotence prevents retries-duplicates
-- Transactions enable exactly-once
+- Batching (`batch.size`, `linger.ms`) increases throughput and compression efficiency.
+- `acks` (`0`, `1`, `all`) determines durability vs. latency tradeoffs.
+- Idempotence (`PID` + `Sequence#`) prevents retry duplicates within a partition.
+- Transactions (`transactional.id` + `TransactionCoordinator`) enable atomic multi-partition exactly-once semantics.
 
 **Consumers**:
-- Consumer groups enable parallel processing
-- Offset commits track progress
-- Rebalancing redistributes partitions
-- Manual commits provide better control
+- Consumer groups enable parallel processing (at most 1 consumer per partition per group).
+- Offset commits (`commitSync`, `commitAsync`) track progress in `__consumer_offsets`.
+- Rebalancing redistributes partitions; `CooperativeStickyAssignor` + `group.instance.id` minimize downtime.
+- Manual commits + idempotent processing provide the safest production control.
 
-Key interview topics:
-- Durability vs latency tradeoffs
-- Exactly-once semantics
-- Consumer lag and monitoring
-- Rebalancing behavior
-- Partition assignment strategies
+**Key Interview Topics**:
+- Durability vs. latency tradeoffs (`acks=all` + `min.insync.replicas`)
+- Exactly-once semantics (Idempotent vs. Transactional producers)
+- Consumer lag calculation and monitoring (`LogEndOffset - CommittedOffset`)
+- Rebalancing causes and strategies (`Range`, `RoundRobin`, `Sticky`, `CooperativeSticky`, Static Membership)

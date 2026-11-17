@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="auto" role="img" aria-label="Cooperative Sticky Rebalancing Animation">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 6; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 17px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .hdr { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #e2e8f0; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .mono-bright { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #f8fafc; font-weight: 700; }
+      .active-pulse { animation: activePulse 1.6s infinite ease-in-out; }
+      .p1-c1-box { animation: p1C1 9s infinite; }
+      .p1-c1-line { animation: p1LineC1 9s infinite; }
+      .p1-c3-box { animation: p1C3 9s infinite; }
+      .p1-c3-line { animation: p1LineC3 9s infinite; }
+      .c3-card { animation: c3Card 9s infinite; }
+      .phase1-pill { animation: ph1 9s infinite; }
+      .phase2-pill { animation: ph2 9s infinite; }
+      .phase3-pill { animation: ph3 9s infinite; }
+
+      @keyframes activePulse {
+        0%, 100% { opacity: 0.65; }
+        50% { opacity: 1; }
+      }
+      @keyframes p1C1 {
+        0%, 28% { opacity: 1; stroke: #22c55e; fill: #14532d; }
+        35%, 58% { opacity: 0.85; stroke: #f59e0b; fill: #78350f; }
+        65%, 94% { opacity: 0.12; stroke: #334155; fill: #0f172a; }
+        100% { opacity: 1; stroke: #22c55e; fill: #14532d; }
+      }
+      @keyframes p1LineC1 {
+        0%, 28% { opacity: 0.9; stroke: #22c55e; }
+        35%, 55% { opacity: 0.5; stroke: #f59e0b; stroke-dasharray: 5 4; }
+        62%, 94% { opacity: 0.08; stroke: #334155; }
+        100% { opacity: 0.9; stroke: #22c55e; }
+      }
+      @keyframes p1C3 {
+        0%, 58% { opacity: 0.12; stroke: #334155; fill: #0f172a; }
+        66%, 94% { opacity: 1; stroke: #38bdf8; fill: #0c4a6e; }
+        100% { opacity: 0.12; stroke: #334155; fill: #0f172a; }
+      }
+      @keyframes p1LineC3 {
+        0%, 58% { opacity: 0.08; stroke: #334155; }
+        66%, 94% { opacity: 0.95; stroke: #38bdf8; }
+        100% { opacity: 0.08; stroke: #334155; }
+      }
+      @keyframes c3Card {
+        0%, 25% { opacity: 0.45; stroke: #334155; }
+        32%, 94% { opacity: 1; stroke: #38bdf8; }
+        100% { opacity: 0.45; stroke: #334155; }
+      }
+      @keyframes ph1 {
+        0%, 30% { opacity: 1; fill: #1d4ed8; }
+        33%, 96% { opacity: 0.35; fill: #1e293b; }
+        100% { opacity: 1; fill: #1d4ed8; }
+      }
+      @keyframes ph2 {
+        0%, 30% { opacity: 0.35; fill: #1e293b; }
+        33%, 62% { opacity: 1; fill: #b45309; }
+        65%, 100% { opacity: 0.35; fill: #1e293b; }
+      }
+      @keyframes ph3 {
+        0%, 62% { opacity: 0.35; fill: #1e293b; }
+        65%, 96% { opacity: 1; fill: #15803d; }
+        100% { opacity: 0.35; fill: #1e293b; }
+      }
+    </style>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e" />
+    </marker>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+  </defs>
+
+  <rect class="bg" width="960" height="440" rx="12" />
+
+  <!-- Header -->
+  <text x="24" y="34" class="title">CooperativeStickyAssignor: Incremental Rebalance (Zero Stop-the-World)</text>
+  <text x="24" y="54" class="subtitle">C3 joins group -&gt; Only P1 is revoked from C1 and assigned to C3; P0, P2, P3 keep processing uninterrupted</text>
+
+  <!-- Phase Indicator Bar -->
+  <rect class="phase1-pill" x="24" y="70" width="290" height="26" rx="6" stroke="#334155" />
+  <text x="169" y="87" text-anchor="middle" class="mono-bright">1. Steady State (C1: P0,P1 | C2: P2,P3)</text>
+
+  <rect class="phase2-pill" x="335" y="70" width="290" height="26" rx="6" stroke="#334155" />
+  <text x="480" y="87" text-anchor="middle" class="mono-bright">2. C3 Joins: Revoke P1 Only (No Pause)</text>
+
+  <rect class="phase3-pill" x="646" y="70" width="290" height="26" rx="6" stroke="#334155" />
+  <text x="791" y="87" text-anchor="middle" class="mono-bright">3. Balanced (C1: P0 | C2: P2,P3 | C3: P1)</text>
+
+  <!-- Left Panel: Topic Partitions -->
+  <rect class="card" x="24" y="114" width="240" height="300" />
+  <text x="144" y="138" text-anchor="middle" class="hdr">Topic: orders (4 Partitions)</text>
+
+  <!-- P0 -->
+  <rect class="subcard" x="40" y="156" width="208" height="52" style="stroke:#22c55e;" />
+  <circle class="active-pulse" cx="56" cy="182" r="5" fill="#22c55e" />
+  <text x="70" y="178" class="mono-bright">Partition 0 (P0)</text>
+  <text x="70" y="195" class="mono" style="fill:#22c55e;">Continuous Fetch (No Pause)</text>
+
+  <!-- P1 -->
+  <rect class="subcard" x="40" y="220" width="208" height="52" style="stroke:#f59e0b;" />
+  <circle cx="56" cy="246" r="5" fill="#f59e0b" />
+  <text x="70" y="242" class="mono-bright">Partition 1 (P1)</text>
+  <text x="70" y="259" class="mono" style="fill:#fbbf24;">Migrates: C1 -&gt; C3</text>
+
+  <!-- P2 -->
+  <rect class="subcard" x="40" y="284" width="208" height="52" style="stroke:#22c55e;" />
+  <circle class="active-pulse" cx="56" cy="310" r="5" fill="#22c55e" />
+  <text x="70" y="306" class="mono-bright">Partition 2 (P2)</text>
+  <text x="70" y="323" class="mono" style="fill:#22c55e;">Continuous Fetch (No Pause)</text>
+
+  <!-- P3 -->
+  <rect class="subcard" x="40" y="348" width="208" height="52" style="stroke:#22c55e;" />
+  <circle class="active-pulse" cx="56" cy="374" r="5" fill="#22c55e" />
+  <text x="70" y="370" class="mono-bright">Partition 3 (P3)</text>
+  <text x="70" y="387" class="mono" style="fill:#22c55e;">Continuous Fetch (No Pause)</text>
+
+  <!-- Assignment Connectors -->
+  <!-- P0 -> C1 (Always Active) -->
+  <path d="M 248 182 C 360 182, 420 156, 520 156" stroke="#22c55e" stroke-width="2.5" fill="none" marker-end="url(#arr-green)" />
+  <!-- P1 -> C1 (Phase 1 -> Revoked) -->
+  <path class="p1-c1-line" d="M 248 242 C 360 242, 420 192, 520 192" stroke-width="2.5" fill="none" />
+  <!-- P1 -> C3 (Phase 3 Assigned) -->
+  <path class="p1-c3-line" d="M 248 250 C 370 250, 410 364, 520 364" stroke-width="2.5" fill="none" marker-end="url(#arr-blue)" />
+  <!-- P2 -> C2 (Always Active) -->
+  <path d="M 248 310 C 360 310, 420 264, 520 264" stroke="#22c55e" stroke-width="2.5" fill="none" marker-end="url(#arr-green)" />
+  <!-- P3 -> C2 (Always Active) -->
+  <path d="M 248 374 C 360 374, 420 296, 520 296" stroke="#22c55e" stroke-width="2.5" fill="none" marker-end="url(#arr-green)" />
+
+  <!-- Right Panel: Consumer Group -->
+  <rect class="card" x="504" y="114" width="432" height="300" />
+  <text x="720" y="138" text-anchor="middle" class="hdr">Consumer Group: order-processing-group</text>
+
+  <!-- Consumer 1 -->
+  <rect class="subcard" x="520" y="148" width="400" height="74" style="stroke:#22c55e;" />
+  <text x="536" y="170" class="mono-bright">Consumer C1</text>
+  <text x="536" y="188" class="mono">Retains P0 continuously</text>
+  <rect x="706" y="160" width="90" height="44" rx="6" fill="#14532d" stroke="#22c55e" />
+  <text x="751" y="186" text-anchor="middle" class="mono-bright">P0 (Active)</text>
+  <rect class="p1-c1-box" x="810" y="160" width="94" height="44" rx="6" />
+  <text x="857" y="186" text-anchor="middle" class="mono-bright">P1 (Own/Rev)</text>
+
+  <!-- Consumer 2 -->
+  <rect class="subcard" x="520" y="236" width="400" height="74" style="stroke:#22c55e;" />
+  <text x="536" y="258" class="mono-bright">Consumer C2</text>
+  <text x="536" y="276" class="mono">Retains P2, P3 continuously</text>
+  <rect x="706" y="248" width="90" height="44" rx="6" fill="#14532d" stroke="#22c55e" />
+  <text x="751" y="274" text-anchor="middle" class="mono-bright">P2 (Active)</text>
+  <rect x="810" y="248" width="94" height="44" rx="6" fill="#14532d" stroke="#22c55e" />
+  <text x="857" y="274" text-anchor="middle" class="mono-bright">P3 (Active)</text>
+
+  <!-- Consumer 3 -->
+  <rect class="subcard c3-card" x="520" y="324" width="400" height="74" />
+  <text x="536" y="346" class="mono-bright" style="fill:#38bdf8;">Consumer C3 (New Member)</text>
+  <text x="536" y="364" class="mono">Joins -&gt; Receives P1 only</text>
+  <rect class="p1-c3-box" x="706" y="336" width="198" height="44" rx="6" />
+  <text x="805" y="362" text-anchor="middle" class="mono-bright">P1 (Assigned to C3)</text>
+
+  <!-- Moving data pulses on P0, P2, P3 to show uninterrupted processing -->
+  <circle r="4" fill="#4ade80">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 248 182 C 360 182, 420 156, 520 156" />
+  </circle>
+  <circle r="4" fill="#4ade80">
+    <animateMotion dur="1.8s" repeatCount="indefinite" begin="0.4s" path="M 248 310 C 360 310, 420 264, 520 264" />
+  </circle>
+  <circle r="4" fill="#4ade80">
+    <animateMotion dur="1.8s" repeatCount="indefinite" begin="0.9s" path="M 248 374 C 360 374, 420 296, 520 296" />
+  </circle>
+</svg>

@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" role="img" aria-label="Spring Kafka Non-Blocking Retry Topics and Dead Letter Topic">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .title { font: 700 20px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+      .box-title { font: 700 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+      .box-sub { font: 500 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #cbd5e1; }
+      .label-sm { font: 600 11px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+      .code-pill { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #38bdf8; }
+      .lane-main { fill: none; stroke: #22c55e; stroke-width: 2.5; stroke-dasharray: 6 5; opacity: 0.55; }
+      .lane-retry { fill: none; stroke: #f59e0b; stroke-width: 2.5; stroke-dasharray: 6 5; opacity: 0.65; }
+      .lane-dlt { fill: none; stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: 6 5; opacity: 0.75; }
+      .node-main { fill: #0f172a; stroke: #38bdf8; stroke-width: 2; }
+      .node-consumer { fill: #0f172a; stroke: #22c55e; stroke-width: 2; }
+      .node-retry { fill: #0f172a; stroke: #f59e0b; stroke-width: 2; }
+      .node-dlt { fill: #0f172a; stroke: #ef4444; stroke-width: 2; }
+      .node-db { fill: #0f172a; stroke: #10b981; stroke-width: 2; }
+      .dlt-pulse { animation: pulseRed 2.2s ease-in-out infinite; }
+      .healthy-glow { animation: pulseGreen 2.5s ease-in-out infinite; }
+      @keyframes pulseRed {
+        0%, 100% { stroke-opacity: 0.6; filter: drop-shadow(0 0 2px #ef4444); }
+        50% { stroke-opacity: 1; filter: drop-shadow(0 0 8px #ef4444); }
+      }
+      @keyframes pulseGreen {
+        0%, 100% { opacity: 0.75; }
+        50% { opacity: 1; }
+      }
+    </style>
+
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+    </marker>
+
+    <!-- Motion paths -->
+    <path id="fastPath" d="M 125 180 L 325 180 L 540 180 L 790 180" />
+    <path id="retryPath" d="M 390 215 L 390 295 L 555 295 L 775 295 L 775 405 L 575 405" />
+  </defs>
+
+  <!-- Outer Background -->
+  <rect class="bg" width="960" height="520" rx="16"/>
+  <rect class="card" x="18" y="18" width="924" height="484" rx="14"/>
+
+  <!-- Header -->
+  <text class="title" x="42" y="54">Spring Kafka: Non-Blocking Retry Topics &amp; Dead Letter Topic (DLT)</text>
+  <text class="subtitle" x="42" y="76">Poison pills are offloaded to async retry topics so healthy messages on 'orders' never stall</text>
+  <rect x="650" y="38" width="270" height="28" rx="6" fill="#0f172a" stroke="#334155"/>
+  <text class="code-pill" x="664" y="56">@RetryableTopic(attempts = "3")</text>
+
+  <!-- Fast Path Label -->
+  <rect x="42" y="106" width="220" height="22" rx="4" fill="#064e3b" opacity="0.7"/>
+  <text class="box-sub" x="52" y="121" fill="#6ee7b7">FAST LANE: Unblocked Main Topic</text>
+
+  <!-- Main Flow Connectors -->
+  <path class="lane-main" d="M 205 180 L 305 180" marker-end="url(#arrow-green)"/>
+  <path class="lane-main" d="M 475 180 L 705 180" marker-end="url(#arrow-green)"/>
+
+  <!-- Node 1: Main Topic -->
+  <rect class="node-main" x="42" y="142" width="163" height="76" rx="10"/>
+  <text class="box-title" x="123" y="169" text-anchor="middle">Topic: orders</text>
+  <text class="box-sub" x="123" y="189" text-anchor="middle">Partitions: 3</text>
+  <text class="label-sm" x="123" y="206" text-anchor="middle">offset 101, 102, 103</text>
+
+  <!-- Node 2: Main Consumer -->
+  <rect class="node-consumer healthy-glow" x="310" y="142" width="165" height="76" rx="10"/>
+  <text class="box-title" x="392" y="169" text-anchor="middle">OrderConsumer</text>
+  <text class="box-sub" x="392" y="189" text-anchor="middle">@KafkaListener</text>
+  <text class="label-sm" x="392" y="206" text-anchor="middle">Commits offset immediately</text>
+
+  <!-- Node 3: Success Sink -->
+  <rect class="node-db" x="710" y="142" width="195" height="76" rx="10"/>
+  <text class="box-title" x="807" y="169" text-anchor="middle">Processed &amp; Committed</text>
+  <text class="box-sub" x="807" y="189" text-anchor="middle">msg-101, msg-103 OK</text>
+  <text class="label-sm" x="807" y="206" text-anchor="middle">Zero head-of-line blocking</text>
+
+  <!-- Retry Lane Connectors -->
+  <path class="lane-retry" d="M 390 218 L 390 295 L 455 295" marker-end="url(#arrow-amber)"/>
+  <path class="lane-retry" d="M 615 295 L 685 295" marker-end="url(#arrow-amber)"/>
+  <path class="lane-dlt" d="M 775 335 L 775 405 L 585 405" marker-end="url(#arrow-red)"/>
+
+  <!-- Transient Failure Label -->
+  <rect x="260" y="246" width="120" height="22" rx="4" fill="#78350f" opacity="0.8"/>
+  <text class="box-sub" x="270" y="261" fill="#fde68a">Transient Fail</text>
+
+  <!-- Node 4: Retry 5s -->
+  <rect class="node-retry" x="460" y="257" width="155" height="76" rx="10"/>
+  <text class="box-title" x="537" y="284" text-anchor="middle">orders-retry-5s</text>
+  <text class="box-sub" x="537" y="304" text-anchor="middle">Backoff: 5,000 ms</text>
+  <text class="label-sm" x="537" y="321" text-anchor="middle">Retry Attempt #1</text>
+
+  <!-- Node 5: Retry 30s -->
+  <rect class="node-retry" x="690" y="257" width="175" height="76" rx="10"/>
+  <text class="box-title" x="777" y="284" text-anchor="middle">orders-retry-30s</text>
+  <text class="box-sub" x="777" y="304" text-anchor="middle">Backoff: 30,000 ms</text>
+  <text class="label-sm" x="777" y="321" text-anchor="middle">Retry Attempt #2</text>
+
+  <!-- Node 6: DLT -->
+  <rect class="node-dlt dlt-pulse" x="370" y="367" width="210" height="76" rx="10"/>
+  <text class="box-title" x="475" y="394" text-anchor="middle">Topic: orders-dlt</text>
+  <text class="box-sub" x="475" y="414" text-anchor="middle">@DltHandler (Poison Pill)</text>
+  <text class="label-sm" x="475" y="431" text-anchor="middle">Alert Ops + Store for Replay</text>
+
+  <!-- Exhausted label -->
+  <rect x="625" y="378" width="136" height="22" rx="4" fill="#7f1d1d" opacity="0.85"/>
+  <text class="box-sub" x="635" y="393" fill="#fca5a5">Retries Exhausted</text>
+
+  <!-- Animated Healthy Packets -->
+  <g>
+    <circle r="8" fill="#22c55e" stroke="#ecfdf5" stroke-width="1.5">
+      <animateMotion dur="3.2s" repeatCount="indefinite" begin="0s">
+        <mpath href="#fastPath"/>
+      </animateMotion>
+    </circle>
+    <circle r="8" fill="#22c55e" stroke="#ecfdf5" stroke-width="1.5">
+      <animateMotion dur="3.2s" repeatCount="indefinite" begin="1.6s">
+        <mpath href="#fastPath"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Animated Poison Pill Packet -->
+  <g>
+    <circle r="9" fill="#f59e0b" stroke="#fef3c7" stroke-width="1.5">
+      <animateMotion dur="6.0s" repeatCount="indefinite" begin="0.4s">
+        <mpath href="#retryPath"/>
+      </animateMotion>
+      <animate attributeName="fill" values="#f59e0b;#f59e0b;#ef4444;#ef4444" keyTimes="0;0.55;0.75;1" dur="6.0s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- Legend Footer -->
+  <line x1="42" y1="462" x2="918" y2="462" stroke="#334155" stroke-width="1"/>
+  <circle cx="56" cy="482" r="6" fill="#22c55e"/>
+  <text class="label-sm" x="70" y="486">Healthy Event (Non-blocking fast path)</text>
+
+  <circle cx="330" cy="482" r="6" fill="#f59e0b"/>
+  <text class="label-sm" x="344" y="486">Transient Failure (Async retry topic)</text>
+
+  <circle cx="605" cy="482" r="6" fill="#ef4444"/>
+  <text class="label-sm" x="619" y="486">Poison Pill (Exhausted retries -&gt; DLT)</text>
+</svg>

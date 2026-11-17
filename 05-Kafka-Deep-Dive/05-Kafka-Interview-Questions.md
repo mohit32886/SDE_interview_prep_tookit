@@ -11,6 +11,59 @@
 
 ## Architecture & Internals
 
+> [!IMPORTANT]
+> **Durability Triad**: Never evaluate `acks=all` in isolation. True zero-data-loss requires `replication.factor >= 3`, `min.insync.replicas >= 2`, and `acks="all"` together so at least one follower persists every acknowledged record.
+
+### Visual Architecture Overview
+
+```mermaid
+flowchart LR
+    classDef client fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef broker fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef storage fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+
+    P["Producer (batch.size, linger.ms, lz4/snappy)"]:::client
+    L["Partition Leader (Append-Only Log)"]:::broker
+    PC["OS Page Cache (RAM Speed)"]:::storage
+    ZC["Zero-Copy sendfile() (Kernel to NIC)"]:::storage
+    F1["Follower 1 (ISR Pull)"]:::broker
+    F2["Follower 2 (ISR Pull)"]:::broker
+    C["Consumer (Reads &lt;= High Watermark)"]:::client
+
+    P -->|"1. Compressed Batch"| L
+    L -->|"2. Sequential Disk + Page Cache"| PC
+    L -->|"3. Async Replication"| F1
+    L -->|"3. Async Replication"| F2
+    PC -->|"4. Direct DMA Transfer"| ZC
+    ZC -->|"5. Fetch Response"| C
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Producer / Consumer
+    participant B1 as Broker 1 (Old Leader)
+    participant Ctrl as Controller (ZK / KRaft Quorum)
+    participant B0 as Broker 0 (ISR Follower)
+
+    B1--xCtrl: Heartbeat missed (session.timeout.ms)
+    Ctrl->>Ctrl: Remove B1 from ISR [1,0,2] -> [0,2]
+    Ctrl->>B0: Elect B0 as New Partition Leader
+    Ctrl-->>P: Broadcast Updated Cluster Metadata
+    P->>B0: Retry Produce / Fetch against New Leader B0
+```
+
+| Concept | Core Mechanism | Key Configs / Guarantees | Covered In |
+| :--- | :--- | :--- | :--- |
+| **Throughput** | Sequential I/O, batching, zero-copy `sendfile()`, OS page cache | `batch.size`, `linger.ms`, `compression.type` | Q1 |
+| **Replication** | Single leader handles writes & reads; followers pull asynchronously | `acks=all`, `min.insync.replicas=2`, High Watermark | Q2, Q3, Q6 |
+| **Quorum Safety** | Controller election requires majority quorum (ZK or KRaft) | Min 3 brokers prevents split-brain writes | Q5 |
+| **Rebalancing** | Cooperative-Sticky revokes only affected partitions; static ID avoids churn | `CooperativeStickyAssignor`, `group.instance.id` | Q7 |
+| **Log Lifecycle** | Delete by time/size vs compact to latest value per key (with tombstones) | `cleanup.policy=delete` vs `compact`, `__consumer_offsets` | Q4, Q9, Q10 |
+
+> [!TIP]
+> **Prevent Rebalance Storms**: Use `CooperativeStickyAssignor` to avoid stop-the-world pauses, and set `group.instance.id` for static membership during rolling restarts.
+
 ### Q1: Explain Kafka's High Throughput Architecture
 
 **Question**: How does Kafka achieve 1M+ messages per second throughput? Explain the architectural decisions.
@@ -1214,6 +1267,58 @@ kafkaTemplate.send("user-profiles", "user-123", null);  // Delete
 
 ## Producers & Consumers
 
+> [!IMPORTANT]
+> **Ordering with Pipelining**: Enabling `enable.idempotence=true` guarantees strict per-partition ordering and deduplication even with `max.in.flight.requests.per.connection <= 5` (thanks to broker-side `PID + Sequence Number` tracking).
+
+### Producer Profiles & Consumer Lifecycle
+
+```mermaid
+flowchart TD
+    classDef decision fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef fast fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef balanced fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef strict fill:#4c1d95,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+
+    Start["Workload Criticality?"]:::decision
+    Log["High-Throughput Logging (acks=1, batch=32KB, linger=100ms, lz4)"]:::fast
+    Ecom["Balanced E-Commerce (acks=all, idempotence=true, linger=10ms)"]:::balanced
+    Fin["Financial EOS (acks=all, idempotence=true, transactional.id, retries=MAX)"]:::strict
+
+    Start -->|"Non-critical logs/metrics"| Log
+    Start -->|"Orders &amp; inventory"| Ecom
+    Start -->|"Payments &amp; ledgers"| Fin
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Consumer (@KafkaListener)
+    participant B as Partition Leader
+    participant OC as __consumer_offsets
+    participant DLQ as Retry / Dead-Letter Topic
+
+    C->>B: poll(Duration) [max.poll.records]
+    B-->>C: ConsumerRecords Batch
+    alt Processing Succeeds
+        C->>C: Idempotent Business Logic
+        C->>OC: commitAsync() / commitSync()
+    else Transient / Poison Pill Error
+        C->>DLQ: Route Failed Record + Error Headers
+        C->>OC: Commit Offset to Unblock Partition
+    end
+```
+
+| Pattern / Topic | Key Configuration / Mechanism | Production Trade-Off | Covered In |
+| :--- | :--- | :--- | :--- |
+| **Producer Profiles** | Logging (`acks=1`) vs E-Commerce (`acks=all`) vs Financial (`EOS`) | Latency vs zero-loss durability | Q11 |
+| **Offset Commits** | `enable.auto.commit=false` + `commitAsync()` / `commitSync()` | Prevents data loss on crash before processing | Q13 |
+| **Partitioners** | Key hash (`murmur2`), sticky round-robin, custom partitioner | Preserves per-key order; watch for hot-key skew | Q14 |
+| **Idempotence & Tx** | `PID + Seq` (idempotent) + `transactional.id` (multi-partition atomic) | Eliminates broker-retry duplicates | Q16, Q17 |
+| **Error Handling** | Exponential backoff retries + Dead-Letter Queue (DLQ) | Isolates poison pills without halting lag | Q18, Q20 |
+
+> [!TIP]
+> **Commit Pattern in Production**: Use `commitAsync()` inside the hot `poll()` loop for throughput, and call `commitSync()` inside `onPartitionsRevoked()` and `finally` blocks on shutdown to guarantee the final offset lands.
+
 ### Q11: Producer Configuration for Different Scenarios
 
 **Question**: Configure Kafka producers for 3 different scenarios: (1) High-throughput logging, (2) Financial transactions, (3) Balanced e-commerce platform.
@@ -1476,6 +1581,44 @@ public void processOrder(Order order) throws Exception {
 
 ## Durability & Reliability
 
+![Kafka Exactly-Once Semantics (EOS) & Two-Phase Commit](./assets/05-kafka-eos-2pc.svg)
+
+> [!IMPORTANT]
+> **End-to-End EOS Requires Both Sides**: A transactional producer (`transactional.id`) alone is not enough—downstream consumers MUST set `isolation.level=read_committed` so they stop at the Last Stable Offset (LSO) and skip aborted or uncommitted transaction markers.
+
+### ISR Shrinking & Unclean Leader Election Flow
+
+```mermaid
+flowchart LR
+    classDef healthy fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef degraded fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef danger fill:#881337,stroke:#fb7185,stroke-width:2px,color:#f8fafc
+    classDef safe fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+
+    ISR3["ISR = [0, 1, 2] (Healthy)"]:::healthy
+    ISR1["Follower Lags &gt; replica.lag.time.max.ms → ISR = [0]"]:::degraded
+    Loss["Leader 0 Fails (No ISR Replicas Left)"]:::danger
+    UncleanFalse["unclean.leader.election.enable=false (Wait for 0: Consistency)"]:::safe
+    UncleanTrue["unclean.leader.election.enable=true (Elect Out-of-Sync: Data Loss)"]:::danger
+
+    ISR3 -->|"Slow disk / GC pause"| ISR1
+    ISR1 -->|"Broker 0 crash"| Loss
+    Loss -->|"Recommended"| UncleanFalse
+    Loss -->|"Availability over durability"| UncleanTrue
+```
+
+| Failure / Edge Case | Detection Signal | Root Cause | Prevention / Recovery | Covered In |
+| :--- | :--- | :--- | :--- | :--- |
+| **Consumer Lag** | `records-lag-max` rising | Slow downstream, hot key skew, or rebalances | Scale up to partition count, batch async I/O | Q21 |
+| **Duplicate Messages** | Repeated business events | Producer retries or at-least-once consumer crash | `enable.idempotence=true` + idempotent sink/DB key | Q22 |
+| **Under-Replicated Partitions** | `UnderReplicatedPartitions > 0` | Broker down, network saturation, disk I/O | Check broker health, throttle replication, rebalance | Q24, Q25 |
+| **OffsetOutOfRange** | `OffsetOutOfRangeException` | Consumer offline longer than `retention.ms` | Set `auto.offset.reset=earliest/latest` or reset tool | Q26 |
+| **Broker Disk Full** | `IOException` / broker shutdown | Retention too long or stuck log cleaner | Lower `retention.bytes`, expand volume, tiered storage | Q27 |
+| **Unclean Leader Election** | `UncleanLeaderElectionsPerSec > 0` | All ISR replicas lost before leader crash | Keep `unclean.leader.election.enable=false` | Q29, Q30 |
+
+> [!WARNING]
+> **Never Enable Unclean Leader Election for Stateful Topics**: Setting `unclean.leader.election.enable=true` trades durability for availability and can silently truncate committed records when an out-of-sync follower is promoted.
+
 ### Q21: How to Debug Consumer Lag
 
 **Answer**: (300 lines on measuring lag, causes, solutions)
@@ -1520,6 +1663,56 @@ public void processOrder(Order order) throws Exception {
 
 ## Performance & Optimization
 
+> [!TIP]
+> **Broker Memory Rule of Thumb**: Keep the Kafka broker JVM heap small (`6 GB`–`8 GB` with G1GC) and leave the rest of system RAM to the **OS Page Cache**. Caching in JVM heap only duplicates OS cache and triggers GC pauses.
+
+### End-to-End Tuning & Partition Sizing
+
+```mermaid
+flowchart LR
+    classDef prod fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef broker fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef cons fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+
+    P["Producer: batch.size + linger.ms + lz4/zstd"]:::prod
+    B["Broker: OS Page Cache + segment.bytes + Tiered Storage"]:::broker
+    C["Consumer: fetch.min.bytes + Parallelism &lt;= Partitions"]:::cons
+    DR["Multi-Cluster: MirrorMaker 2 / Cluster Linking"]:::broker
+
+    P -->|"Fewer, larger network frames"| B
+    B -->|"Zero-copy sendfile() &amp; S3/GCS offload"| C
+    B -->|"Async cross-region replication"| DR
+```
+
+```mermaid
+flowchart TD
+    classDef calc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+
+    T["Target Throughput (T MB/s)"]:::calc
+    P["Single-Partition Producer Rate (P MB/s)"]:::calc
+    C["Single-Partition Consumer Rate (C MB/s)"]:::calc
+    Formula["Partitions N &gt;= max(T / P, T / C)"]:::ok
+    Cap["Guardrail: Avoid Over-Partitioning (Controller Metadata &amp; FD Overhead)"]:::warn
+
+    T --> Formula
+    P --> Formula
+    C --> Formula
+    Formula --> Cap
+```
+
+| Optimization Lever | Throughput Setting | Low-Latency Setting | Key Trade-Off | Covered In |
+| :--- | :--- | :--- | :--- | :--- |
+| **Producer Batching** | `batch.size=64KB`, `linger.ms=20-100` | `linger.ms=0-5` | Higher batching adds `linger.ms` tail latency | Q31, Q32 |
+| **Compression** | `lz4` (fast) or `zstd` (best ratio) | `none` or `lz4` | Saves network/disk I/O at minor CPU cost | Q31, Q35 |
+| **Partition Count** | Match peak consumer concurrency `N` | Moderate `N` | Too many partitions slow leader election & ZK/KRaft | Q33 |
+| **Broker Memory** | `6-8 GB` JVM heap + large OS Page Cache | Same (avoid swap) | Page cache eliminates disk reads for hot consumers | Q34 |
+| **Storage & DR** | Kafka Tiered Storage (`remote.storage.enable`) | Local NVMe segments | Offloads cold segments to object storage cheaply | Q37, Q38, Q40 |
+
+> [!WARNING]
+> **Over-Partitioning Penalty**: You can easily add partitions, but you cannot shrink them without recreating the topic. Excessive partitions increase open file descriptors, replication overhead, and unavailability windows during leader elections.
+
 ### Q31: Throughput Tuning for Producers
 
 **Answer**: (300 lines on batching, compression, buffering)
@@ -1563,6 +1756,59 @@ public void processOrder(Order order) throws Exception {
 ---
 
 ## Design & Troubleshooting
+
+![Kafka Consumer Lag Troubleshooting Triage](./assets/05-kafka-lag-troubleshooting.svg)
+
+> [!IMPORTANT]
+> **Schema Evolution Before Traffic**: When migrating from JSON to Avro/Protobuf, register schemas with `BACKWARD` (or `FULL`) compatibility in Schema Registry first—upgrade consumers before producers so older consumers never choke on new fields.
+
+### Event-Driven Saga & Zero-Downtime Upgrade Flows
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant OS as Order Service
+    participant K as Kafka (orders / payments / inventory)
+    participant PS as Payment Service
+    participant IS as Inventory Service
+
+    OS->>K: Publish OrderCreated (Avro + Schema ID)
+    K-->>PS: Consume OrderCreated
+    PS->>K: Publish PaymentCharged
+    K-->>IS: Consume PaymentCharged
+    alt Inventory Available
+        IS->>K: Publish InventoryReserved -> Trigger Shipping
+    else Out of Stock (Compensating Action)
+        IS->>K: Publish InventoryFailed
+        K-->>PS: Consume InventoryFailed -> Refund Payment
+    end
+```
+
+```mermaid
+flowchart TD
+    classDef check fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef action fill:#1e293b,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef gate fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+
+    Pre["1. Verify UnderReplicatedPartitions == 0"]:::check
+    Stop["2. Controlled Shutdown (Leader Handoff)"]:::action
+    Upgrade["3. Upgrade Broker Binary &amp; Config"]:::action
+    Sync["4. Wait for ISR == Replication Factor"]:::gate
+    Next["5. Proceed to Next Broker"]:::check
+
+    Pre --> Stop --> Upgrade --> Sync --> Next
+```
+
+| Design / Ops Scenario | Primary Architecture / Pattern | Key Metrics & Targets | Covered In |
+| :--- | :--- | :--- | :--- |
+| **Order Saga & EOS** | Choreography/Orchestration Saga + `transactional.id` | Zero duplicate charges, idempotent consumers | Q41, Q42, Q43 |
+| **Schema Evolution** | Confluent Schema Registry (`BACKWARD` / `FULL` mode) | Zero breaking deserialization during deploys | Q44 |
+| **Multi-Region & DR** | Active-Active / Active-Passive with MirrorMaker 2 | Define explicit RPO (lag) & RTO (failover time) | Q45, Q50 |
+| **Lag Triage** | Isolate skew vs slow downstream vs rebalance storm | `records-lag-max`, `max.poll.interval.ms` | Q46 |
+| **Upgrades, Scale & Cost** | Rolling restart on `URP=0`, Tiered Storage, `zstd`/`lz4` | 40% cost cut via tiering + retention tuning | Q47, Q48, Q49 |
+
+> [!TIP]
+> **Rolling Upgrade Gate**: Never restart the next broker until `UnderReplicatedPartitions == 0` and `OfflinePartitionsCount == 0`. This guarantees `min.insync.replicas` stays satisfied throughout the rollout.
 
 ### Q41: Design Event-Driven Order Processing System
 
@@ -1627,6 +1873,43 @@ public void processOrder(Order order) throws Exception {
 ---
 
 ## Summary and Tips
+
+> [!TIP]
+> **FAANG Interview Framing**: Anchor every design answer around explicit trade-offs—**Durability vs. Latency** (`acks=all` + `min.insync.replicas=2`), **Throughput vs. Tail Latency** (`batch.size` + `linger.ms`), and **Ordering vs. Parallelism** (partition count & key design).
+
+### FAANG Kafka Interview Mental Model
+
+```mermaid
+flowchart TD
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef pillar fill:#0c4a6e,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef leaf fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#f8fafc
+
+    Q["1. Clarify Scale &amp; SLAs (msg/s, RPO/RTO, ordering)"]:::root
+    A["2. Durability (RF=3, min.ISR=2, acks=all)"]:::pillar
+    B["3. Throughput (batch.size, linger.ms, lz4, sendfile)"]:::pillar
+    C["4. Semantics (PID+Seq, 2PC Tx, read_committed)"]:::pillar
+    D["5. Operations (Lag triage, CooperativeSticky, DR)"]:::pillar
+    E["6. Trade-offs &amp; Bottlenecks Explained"]:::leaf
+
+    Q --> A --> E
+    Q --> B --> E
+    Q --> C --> E
+    Q --> D --> E
+```
+
+| # | Common Mistake | Why It Breaks in Production | Recommended Fix |
+| :--- | :--- | :--- | :--- |
+| 1 | Assuming followers serve reads | Replication is async; followers lag behind leader | Reads/writes go to leader only (or rack-aware follower fetch with care) |
+| 2 | Setting partition count too low | Bottlenecks max consumer parallelism (`consumers <= N`) | Size `N` for peak throughput growth upfront |
+| 3 | Omitting `min.insync.replicas` | `acks=all` degrades to `acks=1` when ISR shrinks to 1 | Set `replication.factor=3`, `min.insync.replicas=2` |
+| 4 | Leaving `auto.offset.reset=latest` | New consumer groups silently skip historical backlog | Explicitly set `earliest` when replay is required |
+| 5 | Ignoring rebalance storms | Stop-the-world pauses cause p99 latency spikes & lag | Use `CooperativeStickyAssignor` + `group.instance.id` |
+| 6 | Not monitoring consumer lag | Silent backlog growth until SLAs breach | Alert on `records-lag-max` & commit velocity |
+| 7 | Over-batching low-latency paths | High `linger.ms` adds artificial delay | Keep `linger.ms=0-5` for real-time SLAs |
+| 8 | Under-sizing cluster for growth | Disk/NIC saturation causes URPs and broker crashes | Plan capacity with 2-3x headroom + tiered storage |
+| 9 | Skipping idempotence / dedup | Retries or consumer restarts create duplicate side effects | Enable `enable.idempotence=true` + idempotent sinks |
+| 10 | Ignoring schema evolution early | Uncoordinated producer deploys break downstream consumers | Enforce `BACKWARD` compatibility in Schema Registry |
 
 **Key Interview Topics**:
 

@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="100%" height="360" role="img" aria-labelledby="banner-title banner-desc">
+  <title id="banner-title">Kafka Deep Dive - 5-Stage Mastery Pipeline</title>
+  <desc id="banner-desc">Animated roadmap banner showing the 5 stages of Kafka Mastery: 01 Architecture and ISR, 02 Producers and Consumers, 03 Streams and Connect, 04 Microservices and Outbox, and 05 Q&amp;As and Troubleshooting.</desc>
+
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="55%" stop-color="#111c33"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="top-accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="25%" stop-color="#818cf8"/>
+      <stop offset="50%" stop-color="#34d399"/>
+      <stop offset="75%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+
+    <linearGradient id="pipe-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.85"/>
+      <stop offset="50%" stop-color="#34d399" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#fb7185" stop-opacity="0.85"/>
+    </linearGradient>
+
+    <pattern id="grid-pattern" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#334155" stroke-width="0.5" stroke-opacity="0.28"/>
+    </pattern>
+
+    <filter id="glow-soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <style>
+    .title-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 700; fill: #f8fafc; }
+    .sub-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 400; fill: #94a3b8; }
+    .mono-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; }
+    .stage-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 700; font-size: 12.5px; fill: #f1f5f9; }
+    .stage-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; fill: #94a3b8; }
+    .pill-label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #cbd5e1; font-weight: 500; }
+    .pill-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #38bdf8; font-weight: 700; }
+
+    .flow-line {
+      stroke-dasharray: 6 6;
+      animation: flowDash 1.8s linear infinite;
+    }
+
+    @keyframes flowDash {
+      from { stroke-dashoffset: 24; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    .stage-card {
+      animation: stagePulse 6s ease-in-out infinite;
+    }
+    .s1 { animation-delay: 0s; }
+    .s2 { animation-delay: 1.2s; }
+    .s3 { animation-delay: 2.4s; }
+    .s4 { animation-delay: 3.6s; }
+    .s5 { animation-delay: 4.8s; }
+
+    @keyframes stagePulse {
+      0%, 100% { transform: translateY(0px); opacity: 0.92; }
+      15%, 25% { transform: translateY(-4px); opacity: 1; }
+    }
+
+    .live-dot {
+      animation: pulseDot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 0.45; }
+      50% { opacity: 1; }
+    }
+  </style>
+
+  <!-- Outer Canvas -->
+  <rect x="0" y="0" width="960" height="360" rx="16" fill="url(#bg-grad)"/>
+  <rect x="0" y="0" width="960" height="360" rx="16" fill="url(#grid-pattern)"/>
+  <rect x="1" y="1" width="958" height="358" rx="15" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Top Accent Bar -->
+  <rect x="24" y="14" width="912" height="3" rx="1.5" fill="url(#top-accent)"/>
+
+  <!-- Header Section -->
+  <rect x="28" y="30" width="232" height="24" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-opacity="0.5" stroke-width="1"/>
+  <circle cx="44" cy="42" r="4" fill="#34d399" class="live-dot"/>
+  <text x="56" y="46" class="mono-text" font-size="10.5" fill="#38bdf8">MODULE 05 · FAANG INTERVIEW PREP</text>
+
+  <text x="28" y="80" class="title-text" font-size="24">Kafka Deep Dive: 5-Stage Mastery Pipeline</text>
+  <text x="28" y="102" class="sub-text" font-size="13">6,867 lines · ~50,000 words · 100+ Java examples · 50 FAANG interview Q&amp;As</text>
+
+  <!-- Right Header Badge -->
+  <rect x="752" y="32" width="180" height="52" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="768" y="53" class="mono-text" font-size="10" fill="#94a3b8">STACK &amp; TARGET</text>
+  <text x="768" y="72" class="mono-text" font-size="12.5" fill="#f8fafc">Java 11+ · Kafka 3.0+</text>
+
+  <!-- Pipeline Connector Track -->
+  <line x1="112" y1="186" x2="848" y2="186" stroke="#334155" stroke-width="3" stroke-linecap="round"/>
+  <line x1="112" y1="186" x2="848" y2="186" stroke="url(#pipe-grad)" stroke-width="2.5" stroke-linecap="round" class="flow-line"/>
+
+  <!-- SMIL Animated Data Packets -->
+  <circle r="4.5" fill="#38bdf8" filter="url(#glow-soft)">
+    <animateMotion dur="4s" repeatCount="indefinite" path="M 112 186 L 848 186"/>
+  </circle>
+  <circle r="3.5" fill="#34d399" filter="url(#glow-soft)">
+    <animateMotion dur="4s" begin="1.3s" repeatCount="indefinite" path="M 112 186 L 848 186"/>
+  </circle>
+  <circle r="3.5" fill="#fbbf24" filter="url(#glow-soft)">
+    <animateMotion dur="4s" begin="2.6s" repeatCount="indefinite" path="M 112 186 L 848 186"/>
+  </circle>
+
+  <!-- Stage 01: Architecture & ISR -->
+  <g class="stage-card s1">
+    <rect x="28" y="128" width="166" height="116" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+    <rect x="40" y="140" width="32" height="20" rx="6" fill="#0c4a6e"/>
+    <text x="49" y="154" class="mono-text" font-size="11" fill="#38bdf8">01</text>
+    <text x="80" y="154" class="stage-sub">1,025 lines</text>
+    <text x="40" y="182" class="stage-title">Architecture &amp; ISR</text>
+    <text x="40" y="202" class="stage-sub">KRaft · Partitions</text>
+    <text x="40" y="218" class="stage-sub">Zero-Copy · Segments</text>
+    <rect x="40" y="228" width="142" height="4" rx="2" fill="#38bdf8" fill-opacity="0.7"/>
+  </g>
+
+  <!-- Stage 02: Producers & Consumers -->
+  <g class="stage-card s2">
+    <rect x="212" y="128" width="166" height="116" rx="12" fill="#1e293b" stroke="#818cf8" stroke-width="1.5"/>
+    <rect x="224" y="140" width="32" height="20" rx="6" fill="#312e81"/>
+    <text x="233" y="154" class="mono-text" font-size="11" fill="#818cf8">02</text>
+    <text x="264" y="154" class="stage-sub">1,454 lines</text>
+    <text x="224" y="182" class="stage-title">Producers &amp; Consumers</text>
+    <text x="224" y="202" class="stage-sub">Idempotent · EOS</text>
+    <text x="224" y="218" class="stage-sub">Rebalance · Offsets</text>
+    <rect x="224" y="228" width="142" height="4" rx="2" fill="#818cf8" fill-opacity="0.7"/>
+  </g>
+
+  <!-- Stage 03: Streams & Connect -->
+  <g class="stage-card s3">
+    <rect x="396" y="128" width="166" height="116" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+    <rect x="408" y="140" width="32" height="20" rx="6" fill="#064e3b"/>
+    <text x="417" y="154" class="mono-text" font-size="11" fill="#34d399">03</text>
+    <text x="448" y="154" class="stage-sub">1,207 lines</text>
+    <text x="408" y="182" class="stage-title">Streams &amp; Connect</text>
+    <text x="408" y="202" class="stage-sub">KStream · KTable</text>
+    <text x="408" y="218" class="stage-sub">CDC · Schema Registry</text>
+    <rect x="408" y="228" width="142" height="4" rx="2" fill="#34d399" fill-opacity="0.7"/>
+  </g>
+
+  <!-- Stage 04: Microservices & Outbox -->
+  <g class="stage-card s4">
+    <rect x="580" y="128" width="166" height="116" rx="12" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5"/>
+    <rect x="592" y="140" width="32" height="20" rx="6" fill="#78350f"/>
+    <text x="601" y="154" class="mono-text" font-size="11" fill="#fbbf24">04</text>
+    <text x="632" y="154" class="stage-sub">1,515 lines</text>
+    <text x="592" y="182" class="stage-title">Microservices &amp; Outbox</text>
+    <text x="592" y="202" class="stage-sub">Event Sourcing · CQRS</text>
+    <text x="592" y="218" class="stage-sub">Saga · Outbox · DLQ</text>
+    <rect x="592" y="228" width="142" height="4" rx="2" fill="#fbbf24" fill-opacity="0.7"/>
+  </g>
+
+  <!-- Stage 05: Q&As & Troubleshooting -->
+  <g class="stage-card s5">
+    <rect x="764" y="128" width="168" height="116" rx="12" fill="#1e293b" stroke="#fb7185" stroke-width="1.5"/>
+    <rect x="776" y="140" width="32" height="20" rx="6" fill="#881337"/>
+    <text x="785" y="154" class="mono-text" font-size="11" fill="#fb7185">05</text>
+    <text x="816" y="154" class="stage-sub">1,666 lines</text>
+    <text x="776" y="182" class="stage-title">Q&amp;As &amp; Troubleshooting</text>
+    <text x="776" y="202" class="stage-sub">50 FAANG Questions</text>
+    <text x="776" y="218" class="stage-sub">Lag · Tuning · DR</text>
+    <rect x="776" y="228" width="144" height="4" rx="2" fill="#fb7185" fill-opacity="0.7"/>
+  </g>
+
+  <!-- Bottom Telemetry Bar -->
+  <rect x="28" y="268" width="904" height="64" rx="10" fill="#1e293b" fill-opacity="0.85" stroke="#334155" stroke-width="1"/>
+
+  <!-- Metric 1 -->
+  <text x="48" y="294" class="pill-label">Throughput Benchmark</text>
+  <text x="48" y="314" class="pill-val">1M+ msg/sec</text>
+
+  <line x1="254" y1="280" x2="254" y2="320" stroke="#334155" stroke-width="1"/>
+
+  <!-- Metric 2 -->
+  <text x="274" y="294" class="pill-label">Durability Guarantee</text>
+  <text x="274" y="314" class="pill-val" fill="#818cf8">acks=all + min.isr</text>
+
+  <line x1="484" y1="280" x2="484" y2="320" stroke="#334155" stroke-width="1"/>
+
+  <!-- Metric 3 -->
+  <text x="504" y="294" class="pill-label">Delivery Semantics</text>
+  <text x="504" y="314" class="pill-val" fill="#34d399">Exactly-Once (EOS)</text>
+
+  <line x1="714" y1="280" x2="714" y2="320" stroke="#334155" stroke-width="1"/>
+
+  <!-- Metric 4 -->
+  <text x="734" y="294" class="pill-label">8-Week Study Plan</text>
+  <text x="734" y="314" class="pill-val" fill="#fbbf24">5 Modules · 50 Q&amp;As</text>
+</svg>

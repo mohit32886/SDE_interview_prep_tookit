@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="100%" height="auto" role="img" aria-labelledby="zc-title zc-desc">
+  <title id="zc-title">Traditional I/O vs Kafka Zero-Copy sendfile()</title>
+  <desc id="zc-desc">Animated comparison of traditional read/write with 4 context switches and 4 copies through JVM user space versus Kafka zero-copy sendfile() with 2 context switches and direct DMA transfer from Kernel Page Cache to NIC.</desc>
+  <style>
+    .bg { fill: #0f172a; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .panel-trad { fill: #0f172a; stroke: #ef4444; stroke-width: 1.3; rx: 10; }
+    .panel-zc { fill: #0f172a; stroke: #22c55e; stroke-width: 1.3; rx: 10; }
+    .box { fill: #1e293b; stroke: #475569; stroke-width: 1.3; rx: 8; }
+    .box-jvm { fill: #3f1d2b; stroke: #f87171; stroke-width: 1.5; rx: 8; }
+    .box-kernel { fill: #172554; stroke: #60a5fa; stroke-width: 1.5; rx: 8; }
+    .box-nic { fill: #064e3b; stroke: #34d399; stroke-width: 1.5; rx: 8; }
+    .title { font: 700 18px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 400 12px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #94a3b8; }
+    .section-title { font: 700 14px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #f8fafc; }
+    .label { font: 600 12px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #e2e8f0; text-anchor: middle; }
+    .mono { font: 600 11px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #cbd5e1; text-anchor: middle; }
+    .mono-left { font: 600 11px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #cbd5e1; }
+    .badge { font: 700 10px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #0f172a; text-anchor: middle; }
+    .zone-label { font: 700 10px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #64748b; letter-spacing: 0.8px; }
+    .wire-trad { fill: none; stroke: #f87171; stroke-width: 2.2; stroke-dasharray: 5 4; }
+    .wire-dma { fill: none; stroke: #38bdf8; stroke-width: 2.5; }
+    .wire-zc { fill: none; stroke: #34d399; stroke-width: 3; }
+    .wire-desc { fill: none; stroke: #fbbf24; stroke-width: 1.6; stroke-dasharray: 3 3; }
+    .divider { stroke: #334155; stroke-width: 1.2; stroke-dasharray: 6 4; }
+
+    @keyframes glow {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
+    }
+    .pulse { animation: glow 2.4s infinite ease-in-out; }
+  </style>
+
+  <defs>
+    <marker id="arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f87171"/>
+    </marker>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="960" height="560" rx="14"/>
+  <rect class="card" x="16" y="16" width="928" height="528" rx="12"/>
+
+  <!-- Header -->
+  <text class="title" x="36" y="48">Traditional read()/write() vs Kafka Zero-Copy sendfile()</text>
+  <text class="subtitle" x="36" y="68">Eliminating User-Space JVM Heap Copies &amp; Halving Context Switches</text>
+
+  <!-- ==================== TOP PANEL: TRADITIONAL ==================== -->
+  <g transform="translate(32, 86)">
+    <rect class="panel-trad" x="0" y="0" width="896" height="214"/>
+    <rect x="14" y="12" width="210" height="22" rx="4" fill="#ef4444"/>
+    <text class="badge" x="119" y="27">TRADITIONAL: read() + write()</text>
+    <text class="mono-left" x="240" y="27" fill="#fca5a5">4 Context Switches  |  4 Data Copies (2 DMA + 2 CPU)  |  JVM GC Pressure</text>
+
+    <!-- Kernel / User Space boundary -->
+    <line class="divider" x1="16" y1="112" x2="880" y2="112"/>
+    <text class="zone-label" x="22" y="104">USER SPACE (JVM)</text>
+    <text class="zone-label" x="22" y="128">KERNEL SPACE &amp; HARDWARE</text>
+
+    <!-- Nodes -->
+    <rect class="box" x="28" y="138" width="130" height="58"/>
+    <text class="label" x="93" y="164">Disk</text>
+    <text class="mono" x="93" y="182">.log Segment</text>
+
+    <rect class="box-kernel" x="230" y="138" width="160" height="58"/>
+    <text class="label" x="310" y="164">OS Page Cache</text>
+    <text class="mono" x="310" y="182">Kernel Buffer</text>
+
+    <rect class="box-jvm" x="370" y="46" width="165" height="52"/>
+    <text class="label" x="452" y="69">JVM User Buffer</text>
+    <text class="mono" x="452" y="86" fill="#fca5a5">byte[] heap copy</text>
+
+    <rect class="box-kernel" x="515" y="138" width="160" height="58"/>
+    <text class="label" x="595" y="164">Socket Buffer</text>
+    <text class="mono" x="595" y="182">Kernel TCP</text>
+
+    <rect class="box-nic" x="745" y="138" width="128" height="58"/>
+    <text class="label" x="809" y="164">NIC Buffer</text>
+    <text class="mono" x="809" y="182">Network Out</text>
+
+    <!-- Paths -->
+    <!-- 1. Disk -> Page Cache (DMA) -->
+    <path class="wire-dma" d="M 158 167 L 222 167" marker-end="url(#arr-blue)"/>
+    <text class="mono" x="190" y="158" fill="#38bdf8">1. DMA</text>
+
+    <!-- 2. Page Cache -> JVM Heap (CPU) -->
+    <path class="wire-trad" d="M 310 138 L 395 100" marker-end="url(#arr-red)"/>
+    <text class="mono" x="322" y="104" fill="#fca5a5">2. CPU Copy</text>
+
+    <!-- 3. JVM Heap -> Socket Buffer (CPU) -->
+    <path class="wire-trad" d="M 510 100 L 585 138" marker-end="url(#arr-red)"/>
+    <text class="mono" x="582" y="104" fill="#fca5a5">3. CPU Copy</text>
+
+    <!-- 4. Socket Buffer -> NIC (DMA) -->
+    <path class="wire-dma" d="M 675 167 L 737 167" marker-end="url(#arr-blue)"/>
+    <text class="mono" x="706" y="158" fill="#38bdf8">4. DMA</text>
+
+    <!-- Animated Packet -->
+    <circle r="6" fill="#f87171">
+      <animateMotion dur="4.2s" repeatCount="indefinite" path="M 93 167 L 310 167 L 452 72 L 595 167 L 809 167"/>
+    </circle>
+  </g>
+
+  <!-- ==================== BOTTOM PANEL: KAFKA ZERO-COPY ==================== -->
+  <g transform="translate(32, 316)">
+    <rect class="panel-zc" x="0" y="0" width="896" height="212"/>
+    <rect x="14" y="12" width="228" height="22" rx="4" fill="#22c55e"/>
+    <text class="badge" x="128" y="27">KAFKA ZERO-COPY: sendfile()</text>
+    <text class="mono-left" x="256" y="27" fill="#86efac">2 Context Switches  |  2 DMA Copies (0 CPU Copies)  |  JVM Heap Bypassed</text>
+
+    <!-- Kernel / User Space boundary -->
+    <line class="divider" x1="16" y1="100" x2="880" y2="100"/>
+    <text class="zone-label" x="22" y="92">USER SPACE (JVM) - BYPASSED</text>
+    <text class="zone-label" x="22" y="116">KERNEL SPACE &amp; HARDWARE</text>
+
+    <!-- Nodes -->
+    <rect class="box" x="28" y="132" width="130" height="58"/>
+    <text class="label" x="93" y="158">Disk</text>
+    <text class="mono" x="93" y="176">.log Segment</text>
+
+    <rect class="box-kernel" x="230" y="132" width="175" height="58"/>
+    <text class="label" x="317" y="158">OS Page Cache</text>
+    <text class="mono" x="317" y="176">Kernel Buffer</text>
+
+    <rect class="box" x="370" y="42" width="165" height="44" opacity="0.4"/>
+    <text class="mono" x="452" y="61" fill="#94a3b8">FileChannel.transferTo()</text>
+    <text class="mono" x="452" y="76" fill="#34d399">No data enters JVM!</text>
+
+    <rect class="box-kernel" x="495" y="132" width="165" height="58" opacity="0.7"/>
+    <text class="label" x="577" y="156">Socket Buffer</text>
+    <text class="mono" x="577" y="174" fill="#fbbf24">Descriptor Only (ptr, len)</text>
+
+    <rect class="box-nic" x="745" y="132" width="128" height="58"/>
+    <text class="label" x="809" y="158">NIC Buffer</text>
+    <text class="mono" x="809" y="176">Scatter-Gather DMA</text>
+
+    <!-- Paths -->
+    <!-- 1. Disk -> Page Cache (DMA) -->
+    <path class="wire-dma" d="M 158 161 L 222 161" marker-end="url(#arr-blue)"/>
+    <text class="mono" x="190" y="152" fill="#38bdf8">1. DMA</text>
+
+    <!-- Descriptor to Socket Buffer -->
+    <path class="wire-desc" d="M 405 161 L 487 161" marker-end="url(#arr-amber)"/>
+    <text class="mono" x="446" y="152" fill="#fbbf24">fd + len</text>
+
+    <!-- 2. Direct Page Cache -> NIC (Zero-Copy DMA) -->
+    <path class="wire-zc pulse" d="M 395 132 Q 577 88 745 144" marker-end="url(#arr-green)"/>
+    <text class="mono" x="577" y="108" fill="#34d399">2. Direct DMA (Page Cache -&gt; NIC)</text>
+
+    <!-- Animated Fast Packet -->
+    <circle r="6" fill="#34d399">
+      <animateMotion dur="2.0s" repeatCount="indefinite" path="M 93 161 L 317 161 L 395 132 Q 577 88 745 144 L 809 161"/>
+    </circle>
+  </g>
+</svg>

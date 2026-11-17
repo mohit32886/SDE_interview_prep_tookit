@@ -1,0 +1,242 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="auto" role="img" aria-labelledby="isr-title isr-desc">
+  <title id="isr-title">Kafka ISR Replication and High Watermark Flow</title>
+  <desc id="isr-desc">Animated diagram showing Producer acks=all write to Leader Broker 0, replication to Follower Broker 1 and lagging Follower Broker 2, High Watermark advancement, and ISR membership update.</desc>
+  <style>
+    .bg { fill: #0f172a; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1.2; rx: 8; }
+    .title { font: 700 18px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 400 12px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #94a3b8; }
+    .label { font: 600 13px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #e2e8f0; }
+    .mono { font: 600 11px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #cbd5e1; }
+    .small { font: 500 11px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #94a3b8; }
+    .badge-text { font: 700 10px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #0f172a; }
+    .cell-committed { fill: #1d4ed8; stroke: #60a5fa; stroke-width: 1.2; rx: 4; }
+    .cell-new { fill: #059669; stroke: #34d399; stroke-width: 1.2; rx: 4; }
+    .cell-lag { fill: #475569; stroke: #64748b; stroke-width: 1.2; stroke-dasharray: 3 2; rx: 4; }
+    .cell-text { font: 700 11px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #f8fafc; text-anchor: middle; }
+    .wire { fill: none; stroke: #475569; stroke-width: 2; }
+    .wire-active { fill: none; stroke: #38bdf8; stroke-width: 2.5; stroke-dasharray: 6 4; }
+    .wire-ack { fill: none; stroke: #34d399; stroke-width: 2.5; stroke-dasharray: 6 4; }
+    .wire-warn { fill: none; stroke: #f87171; stroke-width: 2; stroke-dasharray: 4 4; }
+
+    @keyframes pulseWrite {
+      0%, 100% { opacity: 0.25; }
+      10%, 35% { opacity: 1; }
+      45% { opacity: 0.25; }
+    }
+    @keyframes pulseAppend {
+      0%, 15% { opacity: 0.15; transform: scale(0.95); }
+      25%, 85% { opacity: 1; transform: scale(1); }
+      95%, 100% { opacity: 0.15; }
+    }
+    @keyframes pulseReplica {
+      0%, 35% { opacity: 0.15; }
+      45%, 85% { opacity: 1; }
+      95%, 100% { opacity: 0.15; }
+    }
+    @keyframes pulseAck {
+      0%, 55% { opacity: 0.15; }
+      65%, 88% { opacity: 1; }
+      96%, 100% { opacity: 0.15; }
+    }
+    @keyframes hwMove {
+      0%, 55% { transform: translateX(0px); }
+      65%, 90% { transform: translateX(76px); }
+      98%, 100% { transform: translateX(0px); }
+    }
+    @keyframes lagDrop {
+      0%, 40% { fill: #f59e0b; }
+      55%, 90% { fill: #ef4444; }
+      100% { fill: #f59e0b; }
+    }
+    @keyframes step1 { 0%, 24% { fill: #1e40af; stroke: #60a5fa; } 25%, 100% { fill: #0f172a; stroke: #334155; } }
+    @keyframes step2 { 0%, 24% { fill: #0f172a; stroke: #334155; } 25%, 49% { fill: #065f46; stroke: #34d399; } 50%, 100% { fill: #0f172a; stroke: #334155; } }
+    @keyframes step3 { 0%, 49% { fill: #0f172a; stroke: #334155; } 50%, 74% { fill: #92400e; stroke: #fbbf24; } 75%, 100% { fill: #0f172a; stroke: #334155; } }
+    @keyframes step4 { 0%, 74% { fill: #0f172a; stroke: #334155; } 75%, 99% { fill: #065f46; stroke: #34d399; } 100% { fill: #0f172a; stroke: #334155; } }
+
+    .anim-write { animation: pulseWrite 10s infinite; }
+    .anim-append { animation: pulseAppend 10s infinite; transform-box: fill-box; transform-origin: center; }
+    .anim-replica { animation: pulseReplica 10s infinite; }
+    .anim-ack { animation: pulseAck 10s infinite; }
+    .anim-hw { animation: hwMove 10s infinite ease-in-out; }
+    .anim-lag-badge { animation: lagDrop 10s infinite; }
+    .s1 { animation: step1 10s infinite; }
+    .s2 { animation: step2 10s infinite; }
+    .s3 { animation: step3 10s infinite; }
+    .s4 { animation: step4 10s infinite; }
+  </style>
+
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f87171"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Dark Canvas -->
+  <rect class="bg" width="960" height="540" rx="14"/>
+  <rect class="card" x="16" y="16" width="928" height="508" rx="12"/>
+
+  <!-- Header -->
+  <text class="title" x="36" y="48">Kafka In-Sync Replicas (ISR) &amp; High Watermark Progression</text>
+  <text class="subtitle" x="36" y="68">acks=all  |  replication.factor=3  |  min.insync.replicas=2  |  replica.lag.time.max.ms=30s</text>
+
+  <!-- Legend -->
+  <g transform="translate(610, 34)">
+    <rect x="0" y="0" width="12" height="12" rx="3" fill="#1d4ed8" stroke="#60a5fa"/>
+    <text class="small" x="18" y="10">Committed (&lt; HW)</text>
+    <rect x="128" y="0" width="12" height="12" rx="3" fill="#059669" stroke="#34d399"/>
+    <text class="small" x="146" y="10">New Batch [4,5]</text>
+    <rect x="242" y="0" width="12" height="12" rx="3" fill="#ef4444"/>
+    <text class="small" x="260" y="10">Out of ISR</text>
+  </g>
+
+  <!-- Producer Box -->
+  <g transform="translate(36, 130)">
+    <rect class="subcard" x="0" y="0" width="180" height="146" stroke="#38bdf8"/>
+    <rect x="12" y="12" width="84" height="20" rx="4" fill="#38bdf8"/>
+    <text class="badge-text" x="54" y="26" text-anchor="middle">PRODUCER</text>
+    <text class="label" x="14" y="54">Orders Service</text>
+    <text class="mono" x="14" y="76">acks = "all"</text>
+    <text class="mono" x="14" y="94">retries = MAX</text>
+    <text class="mono" x="14" y="112">idempotence = true</text>
+    <rect x="14" y="122" width="152" height="16" rx="4" fill="#064e3b" class="anim-ack"/>
+    <text class="mono anim-ack" x="90" y="134" text-anchor="middle" fill="#34d399">ACK RECEIVED (HW=6)</text>
+  </g>
+
+  <!-- Produce Wire (Producer -> Leader) -->
+  <path class="wire-active anim-write" d="M 216 172 L 322 172" marker-end="url(#arrow-blue)"/>
+  <text class="mono anim-write" x="269" y="162" text-anchor="middle" fill="#38bdf8">Produce [4,5]</text>
+  <circle r="5" fill="#38bdf8">
+    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 216 172 L 320 172"/>
+  </circle>
+
+  <!-- ACK Wire (Leader -> Producer) -->
+  <path class="wire-ack anim-ack" d="M 322 232 L 218 232" marker-end="url(#arrow-green)"/>
+  <text class="mono anim-ack" x="269" y="250" text-anchor="middle" fill="#34d399">ACK (min ISR met)</text>
+
+  <!-- Broker 0: Leader -->
+  <g transform="translate(330, 96)">
+    <rect class="subcard" x="0" y="0" width="590" height="114" stroke="#60a5fa"/>
+    <rect x="14" y="12" width="136" height="22" rx="4" fill="#60a5fa"/>
+    <text class="badge-text" x="82" y="27" text-anchor="middle">BROKER 0 (LEADER)</text>
+    <rect x="160" y="12" width="66" height="22" rx="4" fill="#22c55e"/>
+    <text class="badge-text" x="193" y="27" text-anchor="middle">ISR: YES</text>
+    <text class="mono" x="242" y="27">Topic: orders-0  |  ISR = [0, 1, 2] -&gt; [0, 1]</text>
+
+    <!-- Log Cells -->
+    <g transform="translate(14, 52)">
+      <rect class="cell-committed" x="0" y="0" width="34" height="32"/>
+      <text class="cell-text" x="17" y="20">0</text>
+      <rect class="cell-committed" x="38" y="0" width="34" height="32"/>
+      <text class="cell-text" x="55" y="20">1</text>
+      <rect class="cell-committed" x="76" y="0" width="34" height="32"/>
+      <text class="cell-text" x="93" y="20">2</text>
+      <rect class="cell-committed" x="114" y="0" width="34" height="32"/>
+      <text class="cell-text" x="131" y="20">3</text>
+
+      <!-- New offsets 4, 5 -->
+      <g class="anim-append">
+        <rect class="cell-new" x="152" y="0" width="34" height="32"/>
+        <text class="cell-text" x="169" y="20">4</text>
+        <rect class="cell-new" x="190" y="0" width="34" height="32"/>
+        <text class="cell-text" x="207" y="20">5</text>
+      </g>
+
+      <!-- Animated High Watermark Marker -->
+      <g class="anim-hw">
+        <line x1="150" y1="-8" x2="150" y2="44" stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="4 3"/>
+        <rect x="128" y="38" width="44" height="16" rx="3" fill="#fbbf24"/>
+        <text class="badge-text" x="150" y="50" text-anchor="middle">HW</text>
+      </g>
+
+      <!-- LEO label -->
+      <text class="mono" x="242" y="20" fill="#34d399">LEO = 6 (appended to local log)</text>
+    </g>
+  </g>
+
+  <!-- Replication Wires Leader <-> Followers -->
+  <path class="wire-active anim-replica" d="M 450 210 L 450 236" marker-end="url(#arrow-blue)"/>
+  <text class="mono anim-replica" x="458" y="227" fill="#38bdf8">Fetch [4,5]</text>
+  <path class="wire-ack anim-ack" d="M 600 236 L 600 210" marker-end="url(#arrow-green)"/>
+  <text class="mono anim-ack" x="608" y="227" fill="#34d399">Follower 1 ACK (LEO=6)</text>
+
+  <!-- Broker 1: Follower 1 (In-Sync) -->
+  <g transform="translate(330, 238)">
+    <rect class="subcard" x="0" y="0" width="590" height="104" stroke="#34d399"/>
+    <rect x="14" y="12" width="150" height="22" rx="4" fill="#34d399"/>
+    <text class="badge-text" x="89" y="27" text-anchor="middle">BROKER 1 (FOLLOWER)</text>
+    <rect x="174" y="12" width="66" height="22" rx="4" fill="#22c55e"/>
+    <text class="badge-text" x="207" y="27" text-anchor="middle">ISR: YES</text>
+    <text class="mono" x="254" y="27">Fetch latency: 4ms (&lt; 30s)  |  In Sync</text>
+
+    <g transform="translate(14, 48)">
+      <rect class="cell-committed" x="0" y="0" width="34" height="32"/>
+      <text class="cell-text" x="17" y="20">0</text>
+      <rect class="cell-committed" x="38" y="0" width="34" height="32"/>
+      <text class="cell-text" x="55" y="20">1</text>
+      <rect class="cell-committed" x="76" y="0" width="34" height="32"/>
+      <text class="cell-text" x="93" y="20">2</text>
+      <rect class="cell-committed" x="114" y="0" width="34" height="32"/>
+      <text class="cell-text" x="131" y="20">3</text>
+      <g class="anim-replica">
+        <rect class="cell-new" x="152" y="0" width="34" height="32"/>
+        <text class="cell-text" x="169" y="20">4</text>
+        <rect class="cell-new" x="190" y="0" width="34" height="32"/>
+        <text class="cell-text" x="207" y="20">5</text>
+      </g>
+      <text class="mono" x="242" y="20" fill="#34d399">Replicated [4,5] -&gt; meets min.insync.replicas=2</text>
+    </g>
+  </g>
+
+  <!-- Wire to Broker 2 (Lagging) -->
+  <path class="wire-warn" d="M 450 342 L 450 366" marker-end="url(#arrow-red)"/>
+  <text class="mono" x="460" y="358" fill="#f87171">Network stall / GC pause (&gt; 30s)</text>
+
+  <!-- Broker 2: Follower 2 (Drops out of ISR) -->
+  <g transform="translate(330, 368)">
+    <rect class="subcard" x="0" y="0" width="590" height="100" stroke="#f87171"/>
+    <rect x="14" y="12" width="150" height="22" rx="4" fill="#94a3b8"/>
+    <text class="badge-text" x="89" y="27" text-anchor="middle">BROKER 2 (FOLLOWER)</text>
+    <rect x="174" y="12" width="118" height="22" rx="4" class="anim-lag-badge"/>
+    <text class="badge-text" x="233" y="27" text-anchor="middle">DROPPED FROM ISR</text>
+    <text class="mono" x="304" y="27" fill="#fca5a5">Lag &gt; replica.lag.time.max.ms</text>
+
+    <g transform="translate(14, 46)">
+      <rect class="cell-committed" x="0" y="0" width="34" height="32"/>
+      <text class="cell-text" x="17" y="20">0</text>
+      <rect class="cell-committed" x="38" y="0" width="34" height="32"/>
+      <text class="cell-text" x="55" y="20">1</text>
+      <rect class="cell-committed" x="76" y="0" width="34" height="32"/>
+      <text class="cell-text" x="93" y="20">2</text>
+      <rect class="cell-committed" x="114" y="0" width="34" height="32"/>
+      <text class="cell-text" x="131" y="20">3</text>
+      <rect class="cell-lag" x="152" y="0" width="34" height="32"/>
+      <text class="cell-text" x="169" y="20" fill="#94a3b8">?</text>
+      <rect class="cell-lag" x="190" y="0" width="34" height="32"/>
+      <text class="cell-text" x="207" y="20" fill="#94a3b8">?</text>
+      <text class="mono" x="242" y="20" fill="#fca5a5">Controller shrinks ISR=[0,1]; writes still succeed</text>
+    </g>
+  </g>
+
+  <!-- Bottom Timeline Stepper -->
+  <g transform="translate(36, 480)">
+    <rect class="s1" x="0" y="0" width="212" height="30" rx="6" stroke-width="1.2"/>
+    <text class="mono" x="106" y="19" text-anchor="middle">1. Produce acks=all [4,5]</text>
+
+    <rect class="s2" x="226" y="0" width="212" height="30" rx="6" stroke-width="1.2"/>
+    <text class="mono" x="332" y="19" text-anchor="middle">2. Leader appends (LEO=6)</text>
+
+    <rect class="s3" x="452" y="0" width="212" height="30" rx="6" stroke-width="1.2"/>
+    <text class="mono" x="558" y="19" text-anchor="middle">3. B1 syncs; B2 lags out</text>
+
+    <rect class="s4" x="678" y="0" width="210" height="30" rx="6" stroke-width="1.2"/>
+    <text class="mono" x="783" y="19" text-anchor="middle">4. HW -&gt; 6 &amp; ACK Producer</text>
+  </g>
+</svg>
