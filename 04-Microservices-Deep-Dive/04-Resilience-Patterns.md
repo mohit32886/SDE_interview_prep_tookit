@@ -16,48 +16,63 @@
 
 ## Circuit Breaker
 
-Prevents cascading failures by stopping requests to failing services.
+Prevents cascading failures by stopping requests to failing downstream services and failing fast until recovery is verified.
 
-### States
+![Circuit Breaker State Machine](./assets/04-circuit-breaker-states.svg)
 
-```
-CLOSED (normal operation):
-├─ Service is healthy
-├─ Requests pass through
-└─ Success counter increments
+### State Machine & Decision Flow
 
-OPEN (service failing):
-├─ Failure threshold exceeded
-├─ Fast-fail all requests
-└─ Return cached response or error
-
-HALF-OPEN (testing recovery):
-├─ Allow limited requests
-├─ If successful: transition to CLOSED
-└─ If failed: transition back to OPEN
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED: Service Healthy
+    CLOSED --> OPEN: Failure rate >= 50% or Slow call rate >= 50%
+    OPEN --> HALF_OPEN: waitDurationInOpenState elapsed (30s)
+    HALF_OPEN --> CLOSED: All 3 probe calls succeed
+    HALF_OPEN --> OPEN: Any probe call fails
 ```
 
-### Circuit Breaker Flow
+```mermaid
+flowchart TD
+    REQ["Request Arrives"] --> STATE{"Circuit State?"}
+    STATE -->|"CLOSED"| CALL["Pass Request to PaymentClient"]
+    CALL --> OUTCOME{"Call Succeeded?"}
+    OUTCOME -->|"Yes"| OK["Record Success in Sliding Window"]
+    OUTCOME -->|"No"| FAIL["Record Failure in Sliding Window"]
+    FAIL --> THRESH{"Failure Rate &gt;= 50%?"}
+    THRESH -->|"Yes"| TRIP["Trip Circuit to OPEN"]
+    THRESH -->|"No"| DONE["Return Error to Caller"]
+    STATE -->|"OPEN"| FAST["Fast-Fail: CallNotPermittedException"]
+    FAST --> FB["Invoke fallbackProcessPayment()"]
+    STATE -->|"HALF_OPEN"| PROBE{"Permitted Probe Slot?"}
+    PROBE -->|"Yes"| TEST["Execute Probe Request"]
+    PROBE -->|"No"| FAST
+    TEST -->|"All Probes Pass"| RECOVER["Transition to CLOSED"]
+    TEST -->|"Probe Fails"| REOPEN["Trip Back to OPEN"]
 
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+
+    class REQ,CALL,STATE,OUTCOME,THRESH,PROBE neutral
+    class OK,RECOVER healthy
+    class FAIL,TRIP,FAST,REOPEN,DONE danger
+    class FB,TEST warn
 ```
-Request arrives
-    │
-    ▼
-Is circuit CLOSED?
-    ├─ YES: Pass request through
-    │   ├─ Success: increment success counter
-    │   └─ Failure: increment failure counter
-    │       └─ Failure threshold exceeded?
-    │           └─ YES: Open circuit
-    │
-    └─ NO (OPEN/HALF-OPEN):
-        Is circuit OPEN?
-        ├─ YES: Fast fail, return fallback
-        │
-        └─ HALF-OPEN: Allow probe request
-            ├─ Success: Close circuit
-            └─ Failure: Keep open
-```
+
+### Circuit Breaker States Comparison
+
+| State | Traffic Behavior | Metrics Tracked | Transition Trigger |
+| :--- | :--- | :--- | :--- |
+| **CLOSED** | All requests pass through normally | Sliding window (`100` calls) failure & slow call rates | `failureRate >= 50%` or `slowCallRate >= 50%` → **OPEN** |
+| **OPEN** | Fast-fail immediately (`CallNotPermittedException`), route to fallback | Elapsed cooldown timer (`waitDurationInOpenState = 30s`) | Timer expires (`automaticTransitionFromOpenToHalfOpenEnabled`) → **HALF_OPEN** |
+| **HALF_OPEN** | Allows `permittedNumberOfCallsInHalfOpenState` (`3`) probe requests | Probe success/failure count | All 3 succeed → **CLOSED**; any probe fails → **OPEN** |
+
+- **Sliding Window Types:** `COUNT_BASED` evaluates the last *N* calls (`slidingWindowSize = 100`), whereas `TIME_BASED` evaluates calls within the last *N* seconds.
+- **Exception Filtering:** Record infrastructure/transient faults (`PaymentException`, `TimeoutException`) and ignore client input errors (`ValidationException`) so bad user input never trips the breaker.
+
+> [!IMPORTANT]
+> Always pair `@CircuitBreaker` with a `fallbackMethod` that matches the original method signature plus an `Exception` parameter, and ensure `ValidationException` is in `ignoreExceptions` so client 4xx errors do not open the circuit for all users.
 
 ### Resilience4j Implementation
 
@@ -247,7 +262,38 @@ public class CircuitBreakerMetrics {
 
 ## Retry Pattern
 
-Automatically retry failed requests with exponential backoff.
+Automatically retries transient failures with **exponential backoff and jitter** to avoid synchronized retry storms.
+
+### Exponential Backoff & Jitter Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as OrderService
+    participant P as PaymentService
+    C->>P: Attempt 1 (with Idempotency-Key)
+    P--xC: 503 / TimeoutException
+    Note over C: Backoff = 1s + random(0..500ms) jitter
+    C->>P: Attempt 2 (same Idempotency-Key)
+    P--xC: 503 / TimeoutException
+    Note over C: Backoff = 2s + random(0..1000ms) jitter
+    C->>P: Attempt 3 (same Idempotency-Key)
+    P-->>C: 200 OK (Payment Confirmed)
+```
+
+### Retry Strategy Comparison
+
+| Strategy | Delay Formula | Thundering Herd Risk | Best Use Case |
+| :--- | :--- | :--- | :--- |
+| **Fixed Interval** | `waitDuration` (constant) | High — all clients retry in lockstep | Low-concurrency internal background jobs |
+| **Exponential Backoff** | `base * multiplier^(attempt - 1)` | Medium — synchronized waves at `1s, 2s, 4s` | Moderate traffic transient network blips |
+| **Exponential + Jitter** | `base * 2^(attempt - 1) + random(0, base/2)` | Low — spreads retries smoothly over time | High-throughput microservices & external APIs |
+
+- **Transient vs Non-Transient:** Only retry `PaymentException` and `TimeoutException`; never retry `ValidationException` or `UnauthorizedException`.
+- **Aspect Ordering:** In Resilience4j, `Retry` wraps `CircuitBreaker` by default (`Retry(CircuitBreaker(call))`), or vice versa depending on `retryAspectOrder`. Ensure retries do not mask an open circuit.
+
+> [!WARNING]
+> Never retry non-idempotent mutations (like charging a credit card) without an **Idempotency Key**. A network timeout after the server commits the charge will cause a blind retry to double-charge the customer.
 
 ### Retry Configuration
 
@@ -355,7 +401,7 @@ resilience4j:
 ### When NOT to Retry
 
 ```java
-// BAD: Retrying idempotent operations can cause issues
+// BAD: Retrying non-idempotent operations can cause issues
 @Retry(name = "payment-service", maxAttempts = 3)
 public Payment processPayment(Long orderId, BigDecimal amount) {
     // If network timeout after payment is processed:
@@ -388,39 +434,44 @@ public Payment processPayment(Long orderId, BigDecimal amount) {
 
 ## Bulkhead Pattern
 
-Isolates resources to prevent cascading failures.
+Isolates resource pools (threads or concurrency permits) per dependency so a single slow downstream service cannot exhaust the entire JVM thread pool.
 
-### Thread Pool Isolation
+### Thread-Pool Isolation Architecture
 
+```mermaid
+flowchart LR
+    subgraph OS["Order Service (20 Threads Total)"]
+        direction TB
+        IN["Incoming Requests"] -->|"DB Query"| P1["Pool 1: Database (10 Threads)"]
+        IN -->|"Payment Call"| P2["Pool 2: Payment (5 Threads)"]
+    end
+    P1 -->|"Healthy, 0ms Impact"| DB[("Order DB")]
+    P2 -->|"All 5 Blocked (25%)"| PAY["Hanging Payment Service"]
+    P2 -.->|"6th Call &gt; 3s Wait"| REJ["BulkheadFullException -&gt; Fallback"]
+
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+
+    class IN,OS neutral
+    class P1,DB healthy
+    class P2,PAY,REJ danger
 ```
-Without bulkhead:
-┌───────────────────────────────────┐
-│   Order Service (20 threads)      │
-├─────────────┬─────────────────────┤
-│ DB calls    │ Payment Service     │
-│ (10 threads)│ (10 threads)        │
-└─────────────┴─────────────────────┘
 
-If Payment Service hangs:
-└─ All 10 threads blocked
-└─ Order service can still handle other requests
-└─ But 50% of threads consumed
+### Semaphore vs Thread-Pool Bulkhead
 
-With bulkhead:
-┌──────────────────────────────────────┐
-│   Order Service (20 threads total)   │
-├───────────────┬──────────────────────┤
-│ Pool 1        │ Pool 2               │
-│ DB calls      │ Payment Service      │
-│ (10 threads)  │ (5 threads)          │
-│ Isolated      │ Isolated             │
-└───────────────┴──────────────────────┘
+| Dimension | Semaphore Isolation (`SEMAPHORE`) | Thread-Pool Isolation (`THREADPOOL`) |
+| :--- | :--- | :--- |
+| **Execution Thread** | Runs on caller's existing HTTP/worker thread | Offloads to a dedicated isolated `ExecutorService` |
+| **Overhead** | Very low (atomic counter + `maxWaitDuration`) | Higher (context switching, queue, separate threads) |
+| **Timeout Cancellation** | Cannot interrupt blocking I/O on its own | Supports true async timeout cancellation (`TimeLimiter`) |
+| **Best For** | Fast in-memory or non-blocking calls | Slow external HTTP/RPC calls that may hang |
 
-If Payment Service hangs:
-└─ Only 5 threads blocked (25%)
-└─ Order service can still use Pool 1
-└─ Failure isolated to Pool 2
-```
+- **Failure Containment:** If Payment Service hangs, only Pool 2's `5` threads (`25%`) block; Pool 1 (`10` threads) keeps serving `getOrder()` normally.
+- **Fast Rejection:** Once `maxConcurrentCalls` is saturated and `maxWaitDuration` (`3s`) expires, Resilience4j throws `BulkheadFullException`.
+
+> [!TIP]
+> Size each bulkhead proportionally to downstream SLA: `maxConcurrentCalls ≈ peak_RPS * p99_latency_seconds`. Use `SEMAPHORE` for high-throughput, low-latency calls and `THREADPOOL` when isolating untrusted external APIs.
 
 ### Bulkhead Implementation
 
@@ -525,22 +576,50 @@ public Bulkhead paymentSemaphoreBulkhead(BulkheadRegistry registry) {
 
 ## Rate Limiter
 
-Controls the rate of requests to prevent overload.
+Controls the rate of incoming or outgoing requests to protect services from traffic spikes, abusive clients, and downstream overload.
 
-### Token Bucket Algorithm
+![Token Bucket Rate Limiter and Bulkhead Isolation](./assets/04-rate-limiter-token-bucket.svg)
 
+### Rate Limiting Decision Flow
+
+```mermaid
+flowchart TD
+    REQ["Incoming API Request"] --> ID["Extract Scope (Global / User ID / Tier)"]
+    ID --> ALGO{"Tokens or Quota Available?"}
+    ALGO -->|"Yes"| CONSUME["Decrement Token / Increment Window"]
+    CONSUME --> EXEC["Forward to OrderController"]
+    ALGO -->|"No, timeoutDuration &gt; 0"| WAIT["Wait up to timeoutDuration (1s-5s)"]
+    WAIT -->|"Permit Acquired"| EXEC
+    WAIT -->|"Timed Out"| SHED["Return HTTP 429 Too Many Requests"]
+    ALGO -->|"No, timeoutDuration = 0"| SHED
+
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+
+    class REQ,ID,ALGO neutral
+    class CONSUME,EXEC healthy
+    class WAIT warn
+    class SHED danger
 ```
-Bucket: 100 tokens
-Refill rate: 10 tokens/second
 
-Second 0: 100 tokens, request arrives → 99 tokens left
-Second 0: 100 tokens, request arrives → 98 tokens left
-Second 0: 100 tokens, request arrives → 97 tokens left
-...
-Second 0.1: Refill 1 token → 98 tokens
-...
-Second 1.0: Refill 10 tokens → 100 tokens
-```
+### Rate Limiting Algorithms Compared
+
+| Algorithm | How It Works | Burst Handling | Memory Footprint | Trade-off |
+| :--- | :--- | :--- | :--- | :--- |
+| **Token Bucket** | Bucket holds up to *N* tokens, refilled at fixed rate *R* tokens/sec; each request consumes 1 token | **Allows bursts** up to bucket capacity | `O(1)` (2 numbers: tokens + timestamp) | Great for user-facing APIs with bursty traffic |
+| **Leaky Bucket** | Requests enter a FIFO queue and drain at a **constant** outflow rate; full queue drops requests | **Smooths bursts** into steady outflow | `O(queue_size)` | Protects fragile downstream DBs; adds queueing latency |
+| **Sliding Window** | Weighted sum of previous + current fixed window (or timestamp log): `curr + prev * overlap%` | **No boundary spike** (unlike fixed window) | `O(1)` counter / `O(N)` log | Accurate rate enforcement across window boundaries |
+
+- **Token Bucket Example:** Capacity `100` tokens, refill `10` tokens/sec. Three immediate requests drop tokens `100 → 99 → 98 → 97`; after `0.1s`, `1` token refills (`98`); after `1.0s`, `10` tokens refill (capped at `100`).
+- **Leaky Bucket Example:** Queue capacity `50`, drain rate `10 req/sec`. A burst of `40` requests is queued and dispatched smoothly at `100ms` intervals; the `51st` concurrent request overflows and receives `HTTP 429`.
+- **Sliding Window Example:** Limit `1000 req/min`. At `2:30`, current window has `500` requests and previous window (`1:00–1:59`) had `150` requests (`50%` weight): `500 + (150 * 0.5) = 575 < 1000` → request allowed.
+
+> [!IMPORTANT]
+> For global DDoS/overload protection (`GlobalRateLimitingFilter`), set `timeoutDuration(Duration.ZERO)` so excess requests are rejected immediately with `HTTP 429` instead of holding servlet threads hostage waiting for permits.
+
+### Resilience4j Rate Limiter Implementation
 
 ```java
 @Configuration
@@ -669,26 +748,43 @@ resilience4j:
         timeoutDuration: 1s
 ```
 
-### Sliding Window Algorithm
-
-```
-Alternative to token bucket, tracks request timestamps.
-
-Minute 1:00-1:59: 150 requests
-Minute 2:00-2:59: 200 requests (exceeds 1000 limit)
-At 2:30: Current window has 500 requests so far
-         Previous window has 150 requests (30 seconds old)
-         Total: 500 + (150 * 0.5) = 575 requests
-         Still under 1000, allow request
-```
-
 ---
 
 ## Timeout Pattern
 
-Prevents requests from hanging indefinitely.
+Prevents requests from hanging indefinitely and tying up threads, sockets, and database connections.
 
-### Types of Timeouts
+### Layered Timeout Timeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as OrderService (TimeLimiter: 3s)
+    participant TCP as TCP Socket (Connect: 3s)
+    participant Server as PaymentService (Read: 5s)
+    Client->>TCP: Open Connection
+    Note over Client,TCP: Connect Timeout = 3000ms
+    TCP-->>Client: Connected
+    Client->>Server: POST /api/payments
+    Note over Client,Server: TimeLimiter cancels Future if total &gt; 3000ms
+    Server-->>Client: Response (or TimeoutException if &gt; Read Timeout 5000ms)
+```
+
+### Timeout Types & Hierarchy
+
+| Timeout Layer | Scope | Typical Value | Failure Symptom |
+| :--- | :--- | :--- | :--- |
+| **Connect Timeout** | TCP 3-way handshake establishment | `3000ms` | Unreachable host, dropped SYN packets |
+| **Read Timeout** | Max idle gap between response bytes | `5000ms` | Slow downstream query, GC pause, deadlock |
+| **TimeLimiter / Request Timeout** | End-to-end call budget (including retries) | `3000ms–10000ms` | Slow trickle responses or retry loops |
+
+- **Cancel Running Future:** Setting `cancelRunningFuture(true)` on Resilience4j `TimeLimiter` interrupts the underlying `CompletableFuture` thread when the deadline expires.
+- **Budgeting Rule:** Ensure `Gateway Request Timeout > (Retry Attempts * Per-Attempt Read Timeout) + Backoff` so outer callers don't time out mid-retry.
+
+> [!WARNING]
+> Never leave HTTP client timeouts at their defaults (often `infinite` in older `RestTemplate` / `HttpURLConnection` configurations). A single hung downstream socket without a read timeout will silently exhaust your entire web server thread pool.
+
+### Timeout Implementation
 
 ```java
 // Connection timeout: time to establish TCP connection
@@ -700,8 +796,6 @@ int readTimeout = 5000;     // 5 seconds
 // Request timeout: total time from request to response
 int requestTimeout = 10000; // 10 seconds
 ```
-
-### Timeout Implementation
 
 ```java
 @Configuration
@@ -802,7 +896,38 @@ spring:
 
 ## Fallback Strategies
 
-Handle failures gracefully when services are unavailable.
+Gracefully degrade functionality when downstream dependencies fail or circuits open, preserving core user journeys.
+
+### Fallback Routing Decision Tree
+
+```mermaid
+flowchart TD
+    FAIL["Primary Call Failed / Circuit Open"] --> TYPE{"Operation Semantics?"}
+    TYPE -->|"Read: Catalog / Profile"| CACHE["Cache Fallback: Serve Stale Redis Data"]
+    TYPE -->|"Read: Non-Critical Calc"| DEF["Default Value: Return Conservative 0% Discount"]
+    TYPE -->|"Read: Personalization"| DEG["Degraded Service: Return Trending Products"]
+    TYPE -->|"Write: Email / Payment"| ASYNC["Async Queue: Persist to Retry Queue (+1h)"]
+
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc
+
+    class FAIL,TYPE neutral
+    class CACHE,DEG,ASYNC healthy
+    class DEF warn
+```
+
+### Fallback Pattern Matrix
+
+| Strategy | Example | Data Freshness / Consistency | Risk if Misused |
+| :--- | :--- | :--- | :--- |
+| **Cache Fallback** | `getProductFromCache` via Redis | Eventual / Stale (`setFromCache(true)`) | Serving stale inventory/price on checkout |
+| **Default Value** | `getDefaultDiscount` returns `BigDecimal.ZERO` | Conservative safe default | Silently giving wrong financial values if not conservative |
+| **Degraded Service** | `getDegradedRecommendations` returns trending items | Generic (non-personalized) | Secondary dependency (`getTrendingProducts`) also failing |
+| **Async Processing** | `queueNotificationForRetry` saves to `NotificationQueue` | Eventual completion (`+1 hour` retry) | Unbounded queue growth during prolonged outage |
+
+> [!TIP]
+> Keep fallback methods **self-contained and fast**. A fallback that makes another synchronous network call to a struggling database can cause a secondary cascade.
 
 ### Cache Fallback
 
@@ -921,24 +1046,40 @@ public class NotificationServiceWithFallback {
 
 ## Health Checks
 
-Determine if service is healthy and should receive traffic.
+Determine whether a service instance is alive (should not be restarted) and ready (should receive load-balancer traffic).
 
-### Liveness vs Readiness
+### Kubernetes Liveness vs Readiness Probes
 
+```mermaid
+flowchart LR
+    K8S["Kubernetes Kubelet"] -->|"/actuator/health/live (10s)"| LIVE{"Liveness OK?"}
+    LIVE -->|"200 OK"| KEEP["Keep Pod Running"]
+    LIVE -->|"3 Failures"| KILL["Restart Pod Container"]
+
+    K8S -->|"/actuator/health/ready (5s)"| READY{"Readiness OK?"}
+    READY -->|"200 OK"| LB_IN["Include Pod in Service Endpoints"]
+    READY -->|"503 / 3 Failures"| LB_OUT["Remove from Load Balancer (Keep Pod Alive)"]
+
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+
+    class K8S,LIVE,READY neutral
+    class KEEP,LB_IN healthy
+    class KILL danger
+    class LB_OUT warn
 ```
-LIVENESS: Is the service running?
-├─ If false: Kill the pod, start new instance
-├─ Check: Can database connection be established?
-├─ Check: Is main event loop running?
-└─ Should be true for running services even if degraded
 
-READINESS: Is the service ready to handle traffic?
-├─ If false: Remove from load balancer (don't kill)
-├─ Check: Can all dependencies be reached?
-├─ Check: Is cache warmed up?
-├─ Check: Are there available database connections?
-└─ Can be false if warming up or temporarily degraded
-```
+### Liveness vs Readiness Comparison
+
+| Probe | Question Answered | Action on Failure (`failureThreshold: 3`) | What to Check |
+| :--- | :--- | :--- | :--- |
+| **Liveness** (`/actuator/health/live`) | *Is the process deadlocked or crashed?* | **Kill & restart** the pod | Main event loop / JVM responsiveness only |
+| **Readiness** (`/actuator/health/ready`) | *Can this pod serve traffic right now?* | **Remove from load balancer** (do not kill) | DB connection pool, cache warmup, critical dependencies |
+
+> [!WARNING]
+> Never include external downstream dependencies (like `payment-service`) in your **Liveness** probe. If `payment-service` goes down, Kubernetes would restart all `order-service` pods in a crash loop, amplifying the outage. Put external checks in **Readiness** or custom health endpoints only.
 
 ### Health Check Implementation
 
@@ -1000,8 +1141,10 @@ public class HealthController {
         return new Health.Builder().up().build();
     }
 }
+```
 
-// Kubernetes manifest
+```yaml
+# Kubernetes manifest
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1036,9 +1179,43 @@ spec:
 
 ## Chaos Engineering
 
-Intentionally inject failures to test resilience.
+Proactively injects controlled faults (failures, latency, dependency outages) to verify that circuit breakers, timeouts, and fallbacks work before production incidents happen.
 
-### Netflix Simian Army
+### Chaos Experiment Lifecycle
+
+```mermaid
+flowchart LR
+    SS["1. Define Steady State (p99 &lt; 500ms, 0% 5xx)"] --> HYP["2. Hypothesize Resilience (Fallback activates)"]
+    HYP --> INJ["3. Inject Fault (1% Fail / 5s Latency)"]
+    INJ --> OBS["4. Observe Metrics &amp; Traces"]
+    OBS -->|"Graceful Degradation"| PASS["Verified Resilient"]
+    OBS -->|"Cascade / Timeout"| FIX["Fix Gap &amp; Re-test"]
+
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc
+
+    class SS,HYP,OBS neutral
+    class INJ warn
+    class PASS healthy
+    class FIX danger
+```
+
+### Chaos Fault Matrix (Netflix Simian Army & Test Suite)
+
+| Fault Injection Type | Simulated Failure | Expected Resilience Behavior |
+| :--- | :--- | :--- |
+| **Service Outage** | `PaymentClient` throws `PaymentServiceException` | Order created with `OrderStatus.PENDING` & `PaymentStatus.PENDING` |
+| **Dependency Timeout** | `InventoryClient` throws `TimeoutException` | Graceful fallback without crashing checkout |
+| **Cascade Failure** | Payment + Inventory + Shipping all throw `ServiceException` | Circuit breakers open; fast-fail `OrderException("unavailable")` |
+| **Latency Injection** | `Thread.sleep(5000)` on `PaymentClient` | `TimeLimiter` aborts under `10s`; falls back to `PENDING` |
+| **Production Chaos** | `ChaosMonkeyRunner` (`failureRate=0.01`, `latency=100ms`) | Blast radius contained; SLAs remain green |
+
+> [!IMPORTANT]
+> Always minimize the **blast radius** of production chaos experiments (e.g., `1%` failure rate in `ChaosMonkeyRunner`, canary pods, or automated abort triggers) and run GameDays during staffed hours.
+
+### Chaos Engineering Implementation
 
 ```java
 // Simulating chaos in tests
@@ -1137,7 +1314,41 @@ public class ChaosConfiguration {
 
 ## Distributed Tracing
 
-Track requests across multiple services.
+Tracks a single request end-to-end across microservice boundaries using **Trace IDs**, **Span IDs**, and **Correlation IDs** to pinpoint latency and failures.
+
+### Distributed Trace & Span Hierarchy
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GW as API Gateway
+    participant OS as OrderService
+    participant DB as Order DB
+    participant PS as PaymentService
+    GW->>OS: POST /api/orders (Trace: abc123def456, X-Correlation-ID)
+    Note over OS: Span 1: save order
+    OS->>DB: INSERT order
+    DB-->>OS: OK
+    Note over OS: Span 2: POST payment-service/api/payments
+    OS->>PS: HTTP POST (propagates Trace + Correlation ID)
+    Note over PS: Span 3: processing payment
+    Note over PS: Span 4: update ledger
+    PS-->>OS: 200 OK
+    Note over OS: Span 5: update order status
+    OS-->>GW: 201 Created (X-Correlation-ID)
+```
+
+### Tracing Concepts & Sampling
+
+| Concept | Purpose | Scope |
+| :--- | :--- | :--- |
+| **Trace ID** (`abc123def456`) | Uniquely identifies the entire end-to-end request tree | Across all services |
+| **Span ID** | Represents a single unit of work (HTTP call, DB query, manual block) | Single operation (`parentId` links tree) |
+| **Correlation ID** (`X-Correlation-ID`) | Business/log correlation header stored in SLF4J `MDC` | Logs across threads & services |
+| **Sampling Probability** | Percentage of traces exported to Zipkin (`1.0` = 100%, `0.1` = 10%) | Controls Zipkin storage & network overhead |
+
+> [!TIP]
+> Always clear `MDC.remove("correlationId")` in a `finally` block inside `CorrelationIdFilter`. Servlet containers reuse threads across requests, so forgetting to clear `MDC` leaks one user's `correlationId` into subsequent unrelated logs.
 
 ### Spring Cloud Sleuth + Zipkin
 
@@ -1273,9 +1484,10 @@ public class CorrelationIdFilter implements Filter {
         }
     }
 }
+```
 
-// Logging includes correlation ID
-// logback.xml
+```xml
+<!-- logback.xml -->
 <configuration>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -1285,7 +1497,9 @@ public class CorrelationIdFilter implements Filter {
         </encoder>
     </appender>
 </configuration>
+```
 
+```text
 // Logs appear as:
 // 2024-02-09 10:30:45.123 [http-nio-8080-exec-1] INFO OrderService [abc123] - Processing order
 // 2024-02-09 10:30:45.456 [http-nio-8080-exec-2] INFO PaymentService [abc123] - Processing payment
@@ -1298,119 +1512,71 @@ public class CorrelationIdFilter implements Filter {
 
 ### Q1: Design a resilient payment service handling 10K requests/second
 
-**Answer**:
+```mermaid
+flowchart TD
+    CLIENT["Clients (10K req/s)"] --> GW["API Gateway: Rate Limit + Auth + Idempotency Key"]
+    GW --> RL["Rate Limiter (429 + Queue if Exceeded)"]
+    RL --> CB["Circuit Breaker (Fail-Fast if Provider Down)"]
+    CB --> RT["Retry (Max 3, Exp Backoff + Jitter, Skip 4xx)"]
+    RT --> BH{"Bulkhead Thread Pools"}
+    BH -->|"5 Threads"| CC["Credit Card Pool (Connect 3s / Read 5s)"]
+    BH -->|"5 Threads"| PP["PayPal Pool (Connect 3s / Read 5s)"]
+    BH -->|"3 Threads"| BT["Bank Transfer Pool (Connect 3s / Read 5s)"]
+    CC & PP & BT --> EXT["Payment Providers (Stripe, PayPal)"]
+    CB -.->|"Open / Timeout Fallback"| Q["Mark PENDING + Async Retry Queue"]
 
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc
+
+    class CLIENT,GW,RL,CB,RT,BH neutral
+    class CC,PP,BT,EXT healthy
+    class Q warn
 ```
-Resilience layers:
 
-┌─────────────────────────────────────────┐
-│ API Gateway (Public Interface)          │
-├─────────────────────────────────────────┤
-│ - Rate limiting (10K/sec)               │
-│ - Authentication, validation            │
-│ - Idempotency key tracking              │
-└──────────────┬──────────────────────────┘
-               ▼
-┌─────────────────────────────────────────┐
-│ Payment Service                         │
-├─────────────────────────────────────────┤
-│ 1. Circuit Breaker (Resilience4j)       │
-│    - Fail fast if payment provider down │
-│    - Fallback: queue for async retry    │
-│                                         │
-│ 2. Retry Pattern                        │
-│    - Exponential backoff with jitter    │
-│    - Max 3 attempts (1 orig + 2 retry)  │
-│    - Don't retry on validation errors   │
-│                                         │
-│ 3. Bulkhead Pattern                     │
-│    - Separate thread pools:             │
-│      ├── Credit card (5 threads)        │
-│      ├── PayPal (5 threads)             │
-│      ├── Bank transfer (3 threads)      │
-│    - Isolated failures                  │
-│                                         │
-│ 4. Timeout Pattern                      │
-│    - Connect: 3 seconds                 │
-│    - Read: 5 seconds                    │
-│    - Total: 10 seconds max              │
-│                                         │
-│ 5. Fallback Strategy                    │
-│    - Payment provider down:             │
-│      └── Mark as PENDING, retry queue   │
-│    - Timeout: queue for async          │
-│    - Rate limited: return 429 + queue   │
-│                                         │
-│ 6. Idempotency                          │
-│    - Client provides idempotency key    │
-│    - Prevents double charging on retry  │
-└──────────────┬──────────────────────────┘
-               ▼
-        Payment Providers
-        (Stripe, PayPal, etc)
+**Layered Resilience Architecture:**
 
-Monitoring:
-├── Circuit breaker state (Prometheus)
-├── Retry counts (metrics)
-├── Bulkhead capacity (alerts)
-├── Latency distributions (p50, p95, p99)
-└── Distributed tracing (Zipkin)
-```
+- **API Gateway (Public Interface):** Enforce `10K req/s` rate limiting, authentication, request validation, and `Idempotency-Key` tracking at the edge.
+- **Circuit Breaker (Resilience4j):** Fail fast when a payment provider goes down and route to a `PENDING` async retry queue.
+- **Retry Pattern:** Exponential backoff with jitter, max `3` attempts (`1` original + `2` retries), ignoring validation/4xx errors; always send the `Idempotency-Key` to prevent double charging.
+- **Bulkhead Pattern:** Isolate thread pools per provider (`Credit Card: 5 threads`, `PayPal: 5 threads`, `Bank Transfer: 3 threads`) so one slow provider never starves the others.
+- **Timeout Pattern:** Connect timeout `3s`, read timeout `5s`, total request budget `10s`.
+- **Fallback Strategy:** Provider down → `PENDING` + async queue; Timeout → async queue; Rate limited → `HTTP 429` + queue.
+- **Observability:** Track circuit breaker states (Prometheus), retry counts, bulkhead capacity alerts, latency percentiles (`p50`, `p95`, `p99`), and distributed traces (Zipkin).
 
 ### Q2: Your payment service is timing out. How would you troubleshoot?
 
-**Answer**:
+```mermaid
+flowchart TD
+    START["Payment Service Timing Out"] --> TRACE["1. Inspect Sleuth / Zipkin Trace"]
+    TRACE --> WHERE{"Where Is Latency?"}
+    WHERE -->|"Server-Side"| SRV["2. Check Slow DB Queries, CPU &gt; 90%, Mem &gt; 80%, Thread Pool"]
+    WHERE -->|"Client-Side"| CLI["3. Check Low Timeouts, Retry Storms, CB Thrashing, Full Bulkhead"]
+    WHERE -->|"Network / DNS"| NET["4. Check Packet Loss, Slow DNS, Load Balancer Health"]
+    SRV & CLI & NET --> QUICK["5. Quick Mitigations: Scale Pods, Cache, Tune Timeout, Check Health"]
+    QUICK --> LONG["6. Long-Term: DB Indexes, Redis Cache, Async Queues, Load Testing"]
 
-```
-Timeout Troubleshooting:
+    classDef danger fill:#7f1d1d,stroke:#ef4444,color:#f8fafc
+    classDef neutral fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef warn fill:#78350f,stroke:#f59e0b,color:#f8fafc
+    classDef healthy fill:#14532d,stroke:#22c55e,color:#f8fafc
 
-1. Identify where timeout occurs:
-   └── Use distributed tracing (Sleuth/Zipkin)
-       ├── Check which service calls are slow
-       ├── See if timeout on client side or server side
-       └── Example: Payment Service → Stripe API timeout
-
-2. Server-side issues:
-   ├── Database slow queries
-   │   └── Check slow query log
-   │   └── Add query indexes
-   │
-   ├── Resource constraints
-   │   ├── CPU usage > 90%?
-   │   ├── Memory usage > 80%?
-   │   ├── Thread pool exhausted?
-   │   └── Scale service or tune resources
-   │
-   ├── Dependency latency
-   │   ├── Database too slow
-   │   ├── External API slow
-   │   └── Network latency high
-
-3. Client-side issues:
-   ├── Timeout value too low?
-   ├── Retry storm (many clients retrying)
-   ├── Circuit breaker thrashing
-   ├── Bulkhead at capacity (queuing)
-
-4. Network issues:
-   ├── Network latency high
-   ├── Packet loss
-   ├── DNS lookup slow
-   └── Load balancer having issues
-
-5. Quick fixes:
-   ├── Increase timeout value (temporary)
-   ├── Scale payment service (add instances)
-   ├── Cache responses where possible
-   ├── Batch requests
-   ├── Check circuit breaker state
-   └── Check dependency health
-
-6. Long-term fixes:
-   ├── Database optimization (indexes, caching)
-   ├── Async processing where possible
-   ├── Improve payment provider integration
-   ├── Add caching layer (Redis)
-   └── Load test to find bottlenecks
+    class START danger
+    class TRACE,WHERE,SRV,CLI,NET neutral
+    class QUICK warn
+    class LONG healthy
 ```
 
+**Systematic Troubleshooting Checklist:**
+
+| Phase | Investigation / Action | Key Signals |
+| :--- | :--- | :--- |
+| **1. Isolate Span** | Open Sleuth/Zipkin trace to see client vs server span | e.g., `Payment Service → Stripe API` span hanging |
+| **2. Server-Side** | Check slow query log, CPU (`> 90%`), Memory (`> 80%`), thread pool exhaustion | Lock contention, missing DB indexes, GC pauses |
+| **3. Client-Side** | Audit retry storms, circuit breaker thrashing, full bulkheads, overly tight timeouts | Surge in retry metrics, `BulkheadFullException` |
+| **4. Network** | Inspect packet loss, DNS resolution latency, load balancer health | High TCP handshake / connect latency |
+| **5. Quick Fixes** | Scale service instances, enable response caching, batch requests, temporarily raise timeout | Immediate `p99` & error-rate stabilization |
+| **6. Long-Term Fixes** | Add DB indexes, Redis caching layer, async processing, provider optimization, load tests | Sustained headroom under peak traffic |
+
+> [!TIP]
+> In interviews, always mention **retry storms** when diagnosing timeouts: if a downstream service slows down and callers retry aggressively without jitter or a circuit breaker, traffic multiplies 3× and keeps the service pinned even after the root cause clears.

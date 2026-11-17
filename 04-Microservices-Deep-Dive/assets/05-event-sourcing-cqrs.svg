@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Event Sourcing with Snapshots and CQRS Projection</title>
+  <desc id="desc">Animated diagram showing commands appending OrderCreated, ItemAdded, and OrderPaid events to an append-only event store with snapshot checkpointing and asynchronous CQRS projection into an indexed read database.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke-width: 1.5; rx: 10; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 6; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .h3 { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; fill: #cbd5e1; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #94a3b8; }
+      .badge-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 700; fill: #0f172a; }
+      .arrow-active { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 6; animation: dashFlow 1.6s linear infinite; }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      @keyframes eventPulse1 {
+        0%, 100% { stroke: #334155; }
+        25% { stroke: #34d399; }
+      }
+      @keyframes eventPulse2 {
+        0%, 100% { stroke: #334155; }
+        50% { stroke: #38bdf8; }
+      }
+      @keyframes eventPulse3 {
+        0%, 100% { stroke: #334155; }
+        75% { stroke: #fbbf24; }
+      }
+      @keyframes snapGlow {
+        0%, 100% { stroke-opacity: 0.55; }
+        50% { stroke-opacity: 1; }
+      }
+      .ev1 { animation: eventPulse1 3s ease-in-out infinite; }
+      .ev2 { animation: eventPulse2 3s ease-in-out infinite; }
+      .ev3 { animation: eventPulse3 3s ease-in-out infinite; }
+      .snap-box { animation: snapGlow 2.4s ease-in-out infinite; }
+    </style>
+
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#38bdf8"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+    </marker>
+    <marker id="arr-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#a855f7"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" x="0" y="0" width="960" height="440" rx="12"/>
+  <rect x="8" y="8" width="944" height="424" rx="10" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text class="title" x="28" y="38">Event Sourcing + Snapshot Checkpointing + CQRS Projection</text>
+  <text class="subtitle" x="28" y="56">Commands append immutable events -&gt; Snapshots bound replay time -&gt; Async projector updates indexed Read DB</text>
+
+  <!-- Step 1: Command Side -->
+  <g transform="translate(24, 96)">
+    <rect class="card" x="0" y="0" width="168" height="168" stroke="#38bdf8"/>
+    <rect x="12" y="12" width="108" height="20" rx="4" fill="#38bdf8"/>
+    <text class="badge-text" x="20" y="26">1. COMMAND SIDE</text>
+    <text class="h3" x="12" y="52">OrderAggregate</text>
+
+    <rect class="subcard" x="12" y="64" width="144" height="90"/>
+    <text class="mono" x="20" y="82" fill="#38bdf8">CreateOrderCmd</text>
+    <text class="mono" x="20" y="100" fill="#cbd5e1">AddItemCmd</text>
+    <text class="mono" x="20" y="118" fill="#cbd5e1">PayOrderCmd</text>
+    <text class="label" x="20" y="140" fill="#94a3b8">Validate -&gt; Emit Event</text>
+  </g>
+
+  <!-- Arrow: Command -> Event Store -->
+  <path class="arrow-active" d="M 192 174 L 232 174" marker-end="url(#arr-blue)"/>
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="1.5s" repeatCount="indefinite" path="M 192 174 L 232 174"/>
+  </circle>
+
+  <!-- Step 2: Append-Only Event Store + Snapshots -->
+  <g transform="translate(238, 76)">
+    <rect class="card" x="0" y="0" width="248" height="224" stroke="#10b981"/>
+    <rect x="12" y="12" width="144" height="20" rx="4" fill="#10b981"/>
+    <text class="badge-text" x="20" y="26">2. EVENT STORE (LOG)</text>
+
+    <!-- Event entries -->
+    <rect class="subcard ev1" x="12" y="42" width="224" height="28"/>
+    <text class="mono" x="20" y="60" fill="#34d399">v1 | OrderCreated ($0)</text>
+
+    <rect class="subcard ev2" x="12" y="76" width="224" height="28"/>
+    <text class="mono" x="20" y="94" fill="#38bdf8">v2 | ItemAdded (SKU-42, $99)</text>
+
+    <rect class="subcard ev3" x="12" y="110" width="224" height="28"/>
+    <text class="mono" x="20" y="128" fill="#fbbf24">v3 | OrderPaid (tx_8821)</text>
+
+    <!-- Snapshot checkpoint -->
+    <rect class="snap-box" x="12" y="148" width="224" height="64" rx="6" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5"/>
+    <text class="h3" x="20" y="168" fill="#fbbf24">Snapshot Checkpoint (every N)</text>
+    <text class="mono" x="20" y="186">v10: {status: PAID, total: $99}</text>
+    <text class="mono" x="20" y="202" fill="#94a3b8">Replay = Load v10 + delta(v11..)</text>
+  </g>
+
+  <!-- Arrow: Event Store -> Projector -->
+  <path class="arrow-active" d="M 486 168 L 526 168" stroke="#f59e0b" marker-end="url(#arr-amber)"/>
+  <circle r="4" fill="#fbbf24">
+    <animateMotion dur="1.7s" repeatCount="indefinite" path="M 486 168 L 526 168"/>
+  </circle>
+
+  <!-- Step 3: Async CQRS Projector -->
+  <g transform="translate(532, 102)">
+    <rect class="card" x="0" y="0" width="150" height="154" stroke="#f59e0b"/>
+    <rect x="12" y="12" width="122" height="20" rx="4" fill="#f59e0b"/>
+    <text class="badge-text" x="18" y="26">3. CQRS PROJECTOR</text>
+    <text class="h3" x="12" y="52">Async Worker</text>
+
+    <rect class="subcard" x="12" y="64" width="126" height="76"/>
+    <text class="mono" x="20" y="82">on(OrderCreated)</text>
+    <text class="mono" x="20" y="98">on(ItemAdded)</text>
+    <text class="mono" x="20" y="114">on(OrderPaid)</text>
+    <text class="mono" x="20" y="130" fill="#fbbf24">Upsert Read View</text>
+  </g>
+
+  <!-- Arrow: Projector -> Read DB -->
+  <path class="arrow-active" d="M 682 174 L 722 174" stroke="#a855f7" marker-end="url(#arr-purple)"/>
+  <circle r="4" fill="#c084fc">
+    <animateMotion dur="1.5s" repeatCount="indefinite" path="M 682 174 L 722 174"/>
+  </circle>
+
+  <!-- Step 4: Indexed Read DB -->
+  <g transform="translate(728, 84)">
+    <rect class="card" x="0" y="0" width="208" height="204" stroke="#a855f7"/>
+    <rect x="12" y="12" width="134" height="20" rx="4" fill="#a855f7"/>
+    <text class="badge-text" x="20" y="26">4. INDEXED READ DB</text>
+    <text class="h3" x="12" y="52">order_view (Denormalized)</text>
+
+    <rect class="subcard" x="12" y="64" width="184" height="126"/>
+    <text class="mono" x="20" y="82" fill="#e9d5ff">PK: order_id = 101</text>
+    <text class="mono" x="20" y="98">customer: "Alice Smith"</text>
+    <text class="mono" x="20" y="114">items: 1 | total: $99.00</text>
+    <text class="mono" x="20" y="130" fill="#34d399">status: PAID</text>
+    <line x1="20" y1="142" x2="188" y2="142" stroke="#334155" stroke-width="1"/>
+    <text class="mono" x="20" y="158" fill="#38bdf8">IDX: (customer_id, created)</text>
+    <text class="mono" x="20" y="174" fill="#38bdf8">Query Side: &lt; 5ms O(1) read</text>
+  </g>
+
+  <!-- Bottom Legend Bar -->
+  <g transform="translate(24, 326)">
+    <rect class="card" x="0" y="0" width="292" height="86" stroke="#334155"/>
+    <circle cx="22" cy="24" r="6" fill="#10b981"/>
+    <text class="h3" x="36" y="28">Immutable Append-Only Log</text>
+    <text class="label" x="16" y="50">Every state change is a permanent fact;</text>
+    <text class="label" x="16" y="66">supports full audit &amp; time-travel queries.</text>
+
+    <rect class="card" x="310" y="0" width="292" height="86" stroke="#334155"/>
+    <circle cx="332" cy="24" r="6" fill="#f59e0b"/>
+    <text class="h3" x="346" y="28">Snapshot Checkpointing</text>
+    <text class="label" x="326" y="50">Periodically caches aggregate state so</text>
+    <text class="label" x="326" y="66">replays never scan millions of old events.</text>
+
+    <rect class="card" x="620" y="0" width="296" height="86" stroke="#334155"/>
+    <circle cx="642" cy="24" r="6" fill="#a855f7"/>
+    <text class="h3" x="656" y="28">CQRS Read Optimization</text>
+    <text class="label" x="636" y="50">Projections build denormalized, indexed</text>
+    <text class="label" x="636" y="66">views tailored for fast UI/analytics queries.</text>
+  </g>
+</svg>

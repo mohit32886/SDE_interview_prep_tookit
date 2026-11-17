@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Transactional Outbox and Debezium CDC Pipeline</title>
+  <desc id="desc">Animated diagram showing an Order Service writing Order and OutboxEvent in one local ACID transaction, Debezium tailing the database WAL, publishing to Kafka, and an idempotent consumer deduplicating events.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke-width: 1.5; rx: 10; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 6; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .h3 { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f1f5f9; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; fill: #cbd5e1; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #94a3b8; }
+      .badge-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 700; fill: #0f172a; }
+      .arrow { fill: none; stroke: #475569; stroke-width: 2; stroke-dasharray: 5 4; }
+      .arrow-active { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 6; animation: dashFlow 1.6s linear infinite; }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      @keyframes txPulse {
+        0%, 100% { stroke: #10b981; stroke-opacity: 0.5; }
+        50% { stroke: #34d399; stroke-opacity: 1; }
+      }
+      @keyframes walShift {
+        0%, 100% { opacity: 0.45; }
+        50% { opacity: 1; }
+      }
+      @keyframes badgeGlow {
+        0%, 100% { opacity: 0.85; }
+        50% { opacity: 1; }
+      }
+      .tx-box { animation: txPulse 2.4s ease-in-out infinite; }
+      .wal-block { animation: walShift 1.8s ease-in-out infinite; }
+      .glow { animation: badgeGlow 2s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowhead-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrowhead-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#a855f7"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" x="0" y="0" width="960" height="440" rx="12"/>
+  <rect x="8" y="8" width="944" height="424" rx="10" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text class="title" x="28" y="38">Transactional Outbox + Debezium CDC Pipeline</text>
+  <text class="subtitle" x="28" y="56">Atomic local ACID commit -&gt; WAL tailing -&gt; At-least-once Kafka -&gt; Idempotent Consumer</text>
+
+  <!-- Step 1: Order Service -->
+  <g transform="translate(24, 92)">
+    <rect class="card" x="0" y="0" width="166" height="178" stroke="#38bdf8"/>
+    <rect class="glow" x="12" y="12" width="104" height="20" rx="4" fill="#38bdf8"/>
+    <text class="badge-text" x="20" y="26">1. LOCAL ACID TX</text>
+    <text class="h3" x="12" y="52">Order Service</text>
+
+    <rect class="subcard" x="12" y="64" width="142" height="98"/>
+    <text class="mono" x="20" y="82" fill="#38bdf8">BEGIN TX</text>
+    <text class="mono" x="20" y="100">INSERT orders</text>
+    <text class="mono" x="20" y="118">INSERT outbox_events</text>
+    <text class="mono" x="20" y="136" fill="#34d399">COMMIT</text>
+    <text class="label" x="20" y="154" fill="#94a3b8">Single DB connection</text>
+  </g>
+
+  <!-- Arrows: Order Service -> Postgres Tables -->
+  <path class="arrow-active" d="M 190 150 L 236 128" marker-end="url(#arrowhead)"/>
+  <path class="arrow-active" d="M 190 198 L 236 218" marker-end="url(#arrowhead)"/>
+
+  <!-- Animated packet splitting -->
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 190 150 L 236 128"/>
+  </circle>
+  <circle r="4" fill="#34d399">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 190 198 L 236 218"/>
+  </circle>
+
+  <!-- Step 2: PostgreSQL DB -->
+  <g transform="translate(242, 76)">
+    <rect class="card tx-box" x="0" y="0" width="208" height="222" stroke="#10b981"/>
+    <rect x="12" y="12" width="112" height="20" rx="4" fill="#10b981"/>
+    <text class="badge-text" x="20" y="26">2. POSTGRESQL DB</text>
+
+    <!-- orders table -->
+    <rect class="subcard" x="12" y="42" width="184" height="58"/>
+    <text class="h3" x="20" y="59" fill="#38bdf8">orders</text>
+    <text class="mono" x="20" y="76">id: 101 | total: $99.00</text>
+    <text class="mono" x="20" y="90">status: PENDING</text>
+
+    <!-- outbox_events table -->
+    <rect class="subcard" x="12" y="108" width="184" height="62"/>
+    <text class="h3" x="20" y="125" fill="#34d399">outbox_events</text>
+    <text class="mono" x="20" y="142">id: e9f2 | type: OrderCreated</text>
+    <text class="mono" x="20" y="156">payload: {"orderId":101}</text>
+
+    <!-- WAL strip -->
+    <rect x="12" y="178" width="184" height="32" rx="6" fill="#0f172a" stroke="#f59e0b" stroke-width="1"/>
+    <text class="mono" x="20" y="198" fill="#fbbf24">WAL:</text>
+    <rect class="wal-block" x="56" y="186" width="26" height="16" rx="3" fill="#f59e0b" opacity="0.8"/>
+    <rect class="wal-block" x="88" y="186" width="26" height="16" rx="3" fill="#10b981" opacity="0.8"/>
+    <rect class="wal-block" x="120" y="186" width="26" height="16" rx="3" fill="#38bdf8" opacity="0.8"/>
+    <rect class="wal-block" x="152" y="186" width="34" height="16" rx="3" fill="#f59e0b" opacity="0.6"/>
+  </g>
+
+  <!-- Arrow: Postgres WAL -> Debezium -->
+  <path class="arrow-active" d="M 450 270 L 494 218" stroke="#f59e0b" marker-end="url(#arrowhead-amber)"/>
+  <circle r="4" fill="#fbbf24">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 450 270 L 494 218"/>
+  </circle>
+
+  <!-- Step 3: Debezium CDC -->
+  <g transform="translate(500, 106)">
+    <rect class="card" x="0" y="0" width="144" height="148" stroke="#f59e0b"/>
+    <rect x="12" y="12" width="108" height="20" rx="4" fill="#f59e0b"/>
+    <text class="badge-text" x="20" y="26">3. DEBEZIUM CDC</text>
+    <text class="h3" x="12" y="52">WAL Connector</text>
+
+    <rect class="subcard" x="12" y="64" width="120" height="72"/>
+    <text class="mono" x="20" y="82">pgoutput slot</text>
+    <text class="mono" x="20" y="98">Outbox EventRouter</text>
+    <text class="mono" x="20" y="114" fill="#fbbf24">Zero polling!</text>
+
+    <!-- Spinning gear indicator -->
+    <g transform="translate(116, 122)">
+      <circle cx="0" cy="0" r="8" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="3 2">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="4s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="0" cy="0" r="2.5" fill="#fbbf24"/>
+    </g>
+  </g>
+
+  <!-- Arrow: Debezium -> Kafka -->
+  <path class="arrow-active" d="M 644 180 L 682 180" marker-end="url(#arrowhead-purple)"/>
+  <circle r="4" fill="#c084fc">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 644 180 L 682 180"/>
+  </circle>
+
+  <!-- Step 4: Kafka -->
+  <g transform="translate(688, 102)">
+    <rect class="card" x="0" y="0" width="114" height="156" stroke="#a855f7"/>
+    <rect x="10" y="12" width="76" height="20" rx="4" fill="#a855f7"/>
+    <text class="badge-text" x="18" y="26">4. KAFKA</text>
+    <text class="mono" x="10" y="50" fill="#e9d5ff">order.events</text>
+
+    <rect class="subcard" x="10" y="62" width="94" height="24"/>
+    <text class="mono" x="18" y="78">P0 [e9f1, e9f2]</text>
+    <rect class="subcard" x="10" y="92" width="94" height="24"/>
+    <text class="mono" x="18" y="108">P1 [e8a4]</text>
+    <rect class="subcard" x="10" y="122" width="94" height="24"/>
+    <text class="mono" x="18" y="138">P2 [e7c0]</text>
+  </g>
+
+  <!-- Arrow: Kafka -> Consumer -->
+  <path class="arrow-active" d="M 802 180 L 832 180" marker-end="url(#arrowhead)"/>
+  <circle r="4" fill="#f472b6">
+    <animateMotion dur="1.5s" repeatCount="indefinite" path="M 802 180 L 832 180"/>
+  </circle>
+
+  <!-- Step 5: Idempotent Consumer -->
+  <g transform="translate(838, 92)">
+    <rect class="card" x="0" y="0" width="102" height="178" stroke="#ec4899"/>
+    <rect x="8" y="12" width="86" height="20" rx="4" fill="#ec4899"/>
+    <text class="badge-text" x="14" y="26">5. CONSUMER</text>
+    <text class="h3" x="10" y="50">Payment Svc</text>
+
+    <rect class="subcard" x="8" y="62" width="86" height="102"/>
+    <text class="mono" x="14" y="80" fill="#f9a8d4">Dedup Check:</text>
+    <text class="mono" x="14" y="96">processed_</text>
+    <text class="mono" x="14" y="108">events(e9f2)</text>
+    <text class="mono" x="14" y="130" fill="#34d399">PK unique -&gt;</text>
+    <text class="mono" x="14" y="144" fill="#34d399">Skip Dupes</text>
+  </g>
+
+  <!-- Bottom Guarantees Bar -->
+  <g transform="translate(24, 326)">
+    <rect class="card" x="0" y="0" width="292" height="86" stroke="#334155"/>
+    <circle cx="22" cy="24" r="6" fill="#38bdf8"/>
+    <text class="h3" x="36" y="28">Eliminates Dual-Write Bug</text>
+    <text class="label" x="16" y="50">Order and OutboxEvent commit atomically</text>
+    <text class="label" x="16" y="66">in one local ACID DB transaction.</text>
+
+    <rect class="card" x="310" y="0" width="292" height="86" stroke="#334155"/>
+    <circle cx="332" cy="24" r="6" fill="#f59e0b"/>
+    <text class="h3" x="346" y="28">Low-Latency WAL Tailing</text>
+    <text class="label" x="326" y="50">Debezium streams binlog/WAL changes</text>
+    <text class="label" x="326" y="66">without polling load on primary tables.</text>
+
+    <rect class="card" x="620" y="0" width="296" height="86" stroke="#334155"/>
+    <circle cx="642" cy="24" r="6" fill="#ec4899"/>
+    <text class="h3" x="656" y="28">Idempotent At-Least-Once</text>
+    <text class="label" x="636" y="50">Consumers track event_id in a dedup</text>
+    <text class="label" x="636" y="66">table to safely ignore redeliveries.</text>
+  </g>
+</svg>

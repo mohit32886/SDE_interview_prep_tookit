@@ -15,7 +15,31 @@
 
 ## Synchronous Communication
 
-Synchronous communication means the caller waits for a response before proceeding.
+Synchronous communication means the caller blocks and waits for a response before proceeding. It provides immediate feedback and simpler mental models, at the cost of temporal coupling.
+
+- **REST (HTTP/JSON):** Best for public APIs, browser clients, and standard CRUD with HTTP caching.
+- **gRPC (HTTP/2 + Protobuf):** Best for low-latency internal service-to-service calls and streaming.
+- **GraphQL (BFF / Aggregation):** Best for preventing over-fetching/under-fetching across multiple backend services for UI clients.
+
+```mermaid
+flowchart LR
+    C["Client / Browser / Mobile"] --> GW["API Gateway / BFF"]
+    GW -->|"REST (JSON/HTTP)"| PS["Product Service"]
+    GW -->|"gRPC (HTTP/2 Protobuf)"| OS["Order Service"]
+    GW -->|"GraphQL Query"| AGG["GraphQL Aggregator"]
+    AGG -->|"gRPC"| PS
+    AGG -->|"gRPC"| IS["Inventory Service"]
+
+    classDef client fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef gw fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    classDef svc fill:#1e293b,stroke:#a78bfa,color:#f1f5f9,stroke-width:2px
+    class C client
+    class GW,AGG gw
+    class PS,OS,IS svc
+```
+
+> [!TIP]
+> Use **REST** at the public edge for universal tooling and HTTP caching, and **gRPC** internally where binary serialization, strict `.proto` contracts, and HTTP/2 multiplexing cut p99 latency.
 
 ### REST (RESTful APIs)
 
@@ -465,48 +489,127 @@ public class ProductGrpcClient {
 | Multiple RPC types | Requires code generation |
 | Multiplexing (HTTP/2) | Harder to debug |
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as gRPC Server (HTTP/2)
+    Note over C,S: 1. Unary RPC
+    C->>S: GetProductRequest
+    S-->>C: ProductResponse
+    Note over C,S: 2. Server-Side Streaming
+    C->>S: SearchRequest
+    S-->>C: ProductResponse (1..N)
+    Note over C,S: 3. Bidirectional Streaming
+    C->>S: InventoryRequest (stream)
+    S-->>C: InventoryResponse (stream)
+```
+
 ---
 
-### When to use REST vs gRPC
+### GraphQL (API Aggregation / BFF)
 
+GraphQL lets clients request **exactly the fields they need** in a single round-trip, making it ideal for Backend-for-Frontend (BFF) aggregation over multiple microservices.
+
+```graphql
+# schema.graphqls
+type Query {
+    orderDetails(id: ID!): OrderDetails
+}
+
+type OrderDetails {
+    id: ID!
+    status: String!
+    total: Float!
+    items: [ProductSummary!]!
+}
+
+type ProductSummary {
+    id: ID!
+    name: String!
+    price: Float!
+}
 ```
-Use REST when:
-- Simple CRUD operations
-- Public APIs (external clients)
-- Need browser compatibility
-- Team unfamiliar with gRPC
-- Debugging is important
-- HTTP caching needed
 
-Use gRPC when:
-- High performance needed
-- Internal service-to-service
-- Real-time bidirectional streams
-- Bandwidth constrained
-- Heavy load, many requests
-- Complex data structures
-- Microservice mesh environment (Istio)
+```java
+// Spring for GraphQL Controller aggregating Order + Product services
+@Controller
+public class OrderGraphQLController {
 
-Real Example:
+    private final OrderService orderService;
+    private final ProductGrpcClient productClient;
 
-API Gateway → Clients: REST
-  (Public API, browser support)
+    public OrderGraphQLController(OrderService orderService, ProductGrpcClient productClient) {
+        this.orderService = orderService;
+        this.productClient = productClient;
+    }
 
-API Gateway → Product Service: gRPC
-  (Internal, high frequency, performance critical)
+    @QueryMapping
+    public OrderDetails orderDetails(@Argument Long id) {
+        Order order = orderService.findById(id);
+        return new OrderDetails(order.getId(), order.getStatus().name(), order.getTotal());
+    }
 
-Product Service → Database: N/A
-  (Direct access, not RPC)
-
-Product Service → Cache: N/A
-  (Library, not RPC)
+    @SchemaMapping(typeName = "OrderDetails", field = "items")
+    public List<ProductSummary> items(OrderDetails order) {
+        return productClient.getProductsForOrder(order.getId());
+    }
+}
 ```
+
+---
+
+### When to use REST vs gRPC vs GraphQL
+
+| Dimension | REST (HTTP/JSON) | gRPC (HTTP/2 + Protobuf) | GraphQL (HTTP + Schema) |
+|-----------|------------------|--------------------------|-------------------------|
+| **Payload** | Text (JSON), verbose | Binary (Protobuf), compact | Text (JSON), client-shaped |
+| **Streaming** | Polling / SSE / WebSocket | Native 4-mode HTTP/2 streaming | Subscriptions (WebSocket) |
+| **Browser Support** | Native | Requires gRPC-Web proxy | Native |
+| **Contract** | OpenAPI (optional) | Strict `.proto` (mandatory) | Strongly-typed SDL schema |
+| **Best For** | Public APIs, CRUD, caching | Internal service-to-service | Mobile/UI BFF aggregation |
+
+- **Real-world hybrid topology:**
+  - `Client → API Gateway`: **REST** or **GraphQL** (browser compatibility, flexible UI queries).
+  - `API Gateway / BFF → Product / Order Service`: **gRPC** (internal, high-frequency, low-latency).
+  - `Service → Database / Cache`: Direct driver/library (not RPC).
+
+> [!WARNING]
+> Long synchronous call chains (`A → B → C → D`) multiply tail latency and create **cascading failures** when any downstream service slows down. Always pair synchronous calls with timeouts, circuit breakers, and bulkheads.
 
 ---
 
 ## Asynchronous Communication
 
-Services don't wait for responses. Decouples services in time.
+Services don't wait for responses—decoupling producers and consumers in **time**, **availability**, and **throughput** via a durable message broker.
+
+- **Message Queue (Point-to-Point / RabbitMQ):** Broker routes messages through an Exchange and Binding to a Queue; each message is processed once by a competing consumer.
+- **Event Stream (Pub/Sub / Kafka):** Producers append immutable events to partitioned topics; multiple independent consumer groups replay or tail the log at their own pace.
+
+```mermaid
+flowchart LR
+    subgraph RMQ["Message Queue (RabbitMQ)"]
+        P1["Order Service"] --> EX["Topic Exchange"]
+        EX -->|"routing: order.submitted"| Q["order-submitted-queue"]
+        Q --> C1["Payment Worker 1"]
+        Q --> C2["Payment Worker 2"]
+    end
+
+    subgraph KFK["Event Stream (Kafka)"]
+        P2["Order Service"] --> T["Topic: orders (Partitions 0..N)"]
+        T --> G1["Group: payment-service"]
+        T --> G2["Group: analytics-service"]
+    end
+
+    classDef prod fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef broker fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    classDef cons fill:#1e293b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    class P1,P2 prod
+    class EX,Q,T broker
+    class C1,C2,G1,G2 cons
+```
+
+> [!IMPORTANT]
+> Never publish directly to Kafka/RabbitMQ inside a `@Transactional` DB method without the **Transactional Outbox Pattern** if you need guaranteed atomicity—otherwise the DB commit can succeed while the broker publish fails (or vice versa).
 
 ### Message Queue Pattern
 
@@ -691,11 +794,72 @@ spring:
 | Automatic retry | More complex architecture |
 | Scalable | Possible message duplication |
 
+### Message Queue (RabbitMQ) vs Event Stream (Kafka)
+
+| Feature | RabbitMQ (Message Queue) | Apache Kafka (Event Stream) |
+|---------|--------------------------|-----------------------------|
+| **Model** | Smart broker, dumb consumer (push) | Dumb broker, smart consumer (pull) |
+| **Retention** | Deleted after consumer ACK | Retained by time/size; replayable |
+| **Ordering** | Per-queue FIFO (single consumer) | Per-partition strict ordering |
+| **Throughput** | Tens of thousands msg/sec | Millions of msg/sec |
+| **Best For** | Task queues, complex routing, RPC | Event sourcing, audit logs, high-volume pub/sub |
+
+```mermaid
+sequenceDiagram
+    participant O as Order Service
+    participant K as Kafka (orders / payments)
+    participant P as Payment Service
+    participant S as Shipping Service
+    O->>K: Publish OrderSubmittedEvent (key=orderId)
+    O-->>O: Return 202 Accepted immediately
+    K->>P: Consume OrderSubmittedEvent
+    P->>K: Publish PaymentApprovedEvent
+    K->>S: Consume PaymentApprovedEvent
+    S-->>S: Create Shipment
+```
+
+> [!TIP]
+> Always partition Kafka topics by aggregate ID (e.g., `orderId`) so all events for the same order land on the same partition and are processed in strict order.
+
 ---
 
 ## Request-Reply Pattern
 
-Synchronous request with asynchronous message delivery.
+Synchronous semantics layered over asynchronous message delivery using a dedicated **reply queue** and a **Correlation ID**.
+
+- **Reply-To Header:** Tells the consumer which queue to send the response back to.
+- **Correlation ID:** Matches an incoming async reply to the exact waiting request thread.
+- **Bounded Timeout:** Prevents caller threads from hanging indefinitely if the worker crashes.
+
+```mermaid
+sequenceDiagram
+    participant O as Order Service
+    participant ReqQ as payment-request-queue
+    participant P as Payment Processor
+    participant RepQ as order-123-reply
+    O->>ReqQ: Send ProcessPaymentRequest (CorrelationId=c1, ReplyTo=order-123-reply)
+    ReqQ->>P: Deliver request
+    P-->>P: Process payment
+    P->>RepQ: Publish PaymentResponse (CorrelationId=c1)
+    RepQ->>O: Deliver matched response
+```
+
+```mermaid
+flowchart LR
+    OS["Order Service"] -->|"1. Send + CorrelationId"| EX["payment-request-exchange"]
+    EX --> PQ["payment-request-queue"]
+    PQ --> PP["Payment Processor"]
+    PP -->|"2. Reply + Same CorrelationId"| RQ["Reply Queue"]
+    RQ -->|"3. Match or Timeout"| OS
+
+    classDef svc fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef broker fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    class OS,PP svc
+    class EX,PQ,RQ broker
+```
+
+> [!WARNING]
+> Blocking a web thread via `convertSendAndReceive` still couples availability and consumes thread-pool capacity. For long-running operations (&gt;2s), prefer returning `202 Accepted` with webhooks or polling.
 
 ```java
 // Order Service sends request to Payment Service
@@ -808,23 +972,28 @@ public class PaymentProcessor {
 
 ## Event-Driven Architecture
 
-Services react to events published by other services.
+Services react to immutable domain events published by other services, eliminating direct point-to-point dependencies.
 
 ### Event Notification Pattern
 
-```
-Order Service publishes event → Multiple services subscribe
+```mermaid
+flowchart TD
+    OS["Order Service"] -->|"Publishes: OrderSubmittedEvent"| EB["Event Bus"]
+    EB --> PS["Payment Service"]
+    EB --> IS["Inventory Service"]
+    EB --> NS["Notification Service"]
+    EB --> AS["Analytics Service"]
 
-Order Service
-    └─ publishes: OrderSubmittedEvent
-         ├─ Payment Service listens
-         ├─ Inventory Service listens
-         ├─ Notification Service listens
-         └─ Analytics Service listens
-
-Advantage: Loose coupling, services don't know about each other
-Disadvantage: Flow of control implicit, harder to debug
+    classDef pub fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef bus fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    classDef sub fill:#1e293b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    class OS pub
+    class EB bus
+    class PS,IS,NS,AS sub
 ```
+
+- **Advantage:** Loose coupling—publishers have zero knowledge of downstream subscribers.
+- **Disadvantage:** Implicit flow of control—harder to trace end-to-end business processes without distributed tracing.
 
 ```java
 // Order Service publishes event
@@ -951,30 +1120,86 @@ public class InventoryEventListener {
 
 **Trade-off**: Larger events vs reduced inter-service calls.
 
+### Event Notification vs Event-Carried State Transfer
+
+```mermaid
+flowchart LR
+    subgraph EN["Event Notification (Thin Event)"]
+        O1["Order Service"] -->|"OrderSubmitted (orderId)"| B1["Broker"]
+        B1 --> I1["Inventory Service"]
+        I1 -->|"Sync GET /orders/123"| O1
+    end
+
+    subgraph ECST["Event-Carried State Transfer (Fat Event)"]
+        O2["Order Service"] -->|"OrderSubmitted (full items, address, total)"| B2["Broker"]
+        B2 --> I2["Inventory Service (Local Processing)"]
+    end
+
+    classDef svc fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef bus fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    class O1,I1,O2,I2 svc
+    class B1,B2 bus
+```
+
+| Aspect | Event Notification | Event-Carried State Transfer (ECST) |
+|--------|--------------------|-------------------------------------|
+| **Payload Size** | Small (IDs + event type) | Larger (full entity snapshot) |
+| **Coupling** | Subscribers must call back to producer | Zero runtime callback; works if producer is down |
+| **Data Freshness** | Always fetches latest state | Snapshot at event emission time |
+| **Schema Sensitivity** | Low | High (requires backward-compatible evolution) |
+
+> [!IMPORTANT]
+> When using Event-Carried State Transfer, enforce schema evolution rules (e.g., Avro/Protobuf with a Schema Registry) so adding fields never breaks existing consumers.
+
 ---
 
 ## CQRS Pattern
 
-Command Query Responsibility Segregation - Separate write and read models.
+Command Query Responsibility Segregation — separate the **write model** (commands, invariants, ACID transactions) from the **read model** (denormalized views, fast queries, independent scaling).
 
+![Synchronous vs Asynchronous CQRS](./assets/02-sync-vs-async-cqrs.svg)
+
+```mermaid
+flowchart LR
+    subgraph TRAD["Traditional CRUD"]
+        C0["Client"] -->|"Reads & Writes"| RW["Single Normalized DB"]
+    end
+
+    subgraph CQRS["CQRS Architecture"]
+        CMD["Command API (POST/PUT)"] --> WM["Write Model (ACID DB)"]
+        WM -->|"Domain Events"| EB["Event Bus"]
+        EB --> PRJ["OrderViewProjector"]
+        PRJ -->|"Async Projection"| RM["Read Model (Denormalized DB / Elastic)"]
+        QRY["Query API (GET)"] --> RM
+    end
+
+    classDef api fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef db fill:#1e293b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    classDef bus fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    class C0,CMD,QRY,PRJ api
+    class RW,WM,RM db
+    class EB bus
 ```
-Traditional approach:
-┌─────────────────────────┐
-│   Read/Write Model      │
-│  (same database)        │
-│  - Complex queries      │
-│  - Update side effects  │
-└─────────────────────────┘
 
-CQRS approach:
-┌──────────────────┐     ┌──────────────────┐
-│ Write Model      │     │ Read Model       │
-│ (Command side)   │────▶│ (Query side)     │
-│ - Normalized     │     │ - Denormalized   │
-│ - ACID           │     │ - Optimized      │
-│ - DB optimized   │     │ - Eventual sync  │
-│ for writes       │     │ from events      │
-└──────────────────┘     └──────────────────┘
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant Cmd as OrderCommandService
+    participant WDB as Write DB
+    participant Bus as Event Bus
+    participant Prj as OrderViewProjector
+    participant RDB as Read DB
+    participant Qry as OrderQueryService
+    C->>Cmd: POST /api/orders
+    Cmd->>WDB: Save normalized Order (ACID)
+    Cmd->>Bus: Publish OrderSubmittedEvent
+    Cmd-->>C: 201 Created (orderId)
+    Bus->>Prj: Deliver OrderSubmittedEvent
+    Prj->>RDB: Upsert denormalized OrderView
+    Note over C,RDB: Brief eventual consistency window
+    C->>Qry: GET /api/orders/{id}
+    Qry->>RDB: Fast single-table lookup
+    RDB-->>C: OrderSummary
 ```
 
 ```java
@@ -1168,6 +1393,16 @@ public class OrderController {
 - More databases to manage
 - Harder to debug (flow across read/write models)
 
+| Dimension | Traditional CRUD | CQRS |
+|-----------|------------------|------|
+| **Data Model** | Single shared schema | Separate write (normalized) & read (denormalized) |
+| **Consistency** | Immediate strong consistency | Eventual consistency on read side |
+| **Scaling** | Coupled read/write scaling | Independent read & write scaling |
+| **Query Complexity** | Expensive multi-table `JOIN`s | Pre-joined materialized views |
+
+> [!TIP]
+> To handle **read-your-own-writes** right after a command in CQRS, return the created resource ID/version in the `POST` response or optimistically update the UI while the projection catches up.
+
 ---
 
 ## Choreography vs Orchestration
@@ -1176,23 +1411,20 @@ How services coordinate complex workflows.
 
 ### Choreography
 
-Services listen to events and react independently. Event-driven.
+Services listen to events and react independently without a central coordinator.
 
-```
-Order Submitted
-    ├─ Order Service publishes: OrderSubmitted
-    │
-    ├─ Payment Service listens, processes payment
-    │   └─ publishes: PaymentApproved
-    │       ├─ Inventory Service listens, reserves items
-    │       │   └─ publishes: ItemsReserved
-    │       │       ├─ Shipping Service listens, creates shipment
-    │       │       │   └─ publishes: ShipmentCreated
-    │       │       │       └─ Notification Service listens, sends email
-    │       │       │
-    │       │       └─ Analytics Service listens, records order
+```mermaid
+flowchart LR
+    OS["Order Service"] -->|"OrderSubmitted"| PS["Payment Service"]
+    PS -->|"PaymentApproved"| IS["Inventory Service"]
+    IS -->|"ItemsReserved"| SS["Shipping Service"]
+    IS -->|"ItemsReserved"| AS["Analytics Service"]
+    SS -->|"ShipmentCreated"| NS["Notification Service"]
 
-Each service is independent, no central orchestrator
+    classDef svc fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef leaf fill:#1e293b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    class OS,PS,IS,SS svc
+    class AS,NS leaf
 ```
 
 ```java
@@ -1240,22 +1472,21 @@ public class ShippingProcessor {
 
 ### Orchestration
 
-Central orchestrator directs workflow. Service calls each other in sequence.
+A central orchestrator explicitly directs each step of the workflow and handles compensating rollbacks.
 
-```
-Order Orchestrator
-    │
-    ├─ calls → Order Service: Create order
-    │                           │
-    ├─ calls → Payment Service: Process payment
-    │                           │
-    ├─ calls → Inventory Service: Reserve items
-    │                           │
-    ├─ calls → Shipping Service: Create shipment
-    │                           │
-    └─ calls → Notification Service: Send email
+```mermaid
+flowchart TD
+    ORCH["OrderOrchestrator (Central Coordinator)"]
+    ORCH -->|"1. Create Order"| OS["Order Service"]
+    ORCH -->|"2. Process Payment"| PS["Payment Service"]
+    ORCH -->|"3. Reserve Items"| IS["Inventory Service"]
+    ORCH -->|"4. Create Shipment"| SS["Shipping Service"]
+    ORCH -->|"5. Send Email"| NS["Notification Service"]
 
-Central control, explicit flow
+    classDef orch fill:#0f172a,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    classDef svc fill:#1e293b,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    class ORCH orch
+    class OS,PS,IS,SS,NS svc
 ```
 
 ```java
@@ -1386,39 +1617,46 @@ public class OrderWorkflowImpl implements OrderWorkflow {
 - Tightly coupled to orchestrator
 - Scaling challenges
 
+### Choreography vs Orchestration Comparison
+
+| Dimension | Choreography | Orchestration |
+|-----------|--------------|---------------|
+| **Control Flow** | Implicit (distributed across event listeners) | Explicit (centralized state machine) |
+| **Coupling** | Very loose (services only know events) | Orchestrator depends on all participants |
+| **Visibility & Debugging** | Harder; requires correlation/trace IDs | Easy; single place tracks workflow state |
+| **Failure / Rollback** | Complex as steps grow | Straightforward reverse compensation |
+| **Best For** | 2–4 services, simple event reactions | 4+ services, complex branching, Temporal workflows |
+
+> [!IMPORTANT]
+> Avoid "smart" choreography that encodes multi-step conditional business logic across 6+ topics—it quickly turns into a distributed spaghetti state machine. Switch to **Orchestration** (e.g., Temporal) once workflows exceed 3–4 steps.
+
 ---
 
 ## Saga Pattern
 
-Managing distributed transactions across services.
+Managing distributed transactions across multiple microservices without 2-Phase Commit (2PC), using a sequence of **local ACID transactions** paired with **compensating transactions** on failure.
+
+![Saga Choreography vs Orchestration](./assets/02-saga-orchestration-vs-choreography.svg)
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: CreateOrder
+    PENDING --> PAYMENT_COMPLETED: PaymentCompletedEvent
+    PENDING --> CANCELLED: PaymentFailedEvent
+    PAYMENT_COMPLETED --> INVENTORY_RESERVED: InventoryReservedEvent
+    PAYMENT_COMPLETED --> COMPENSATING_PAYMENT: InventoryReservationFailedEvent
+    COMPENSATING_PAYMENT --> CANCELLED: PaymentRefundedEvent
+    INVENTORY_RESERVED --> COMPLETED: ShipmentCreatedEvent
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+```
 
 ### Choreography-Based Saga
 
-```
-Order Saga (Choreography)
-
-1. Order Service receives CreateOrderRequest
-   ├─ Creates Order (status: PENDING)
-   └─ publishes: OrderCreatedEvent
-
-2. Payment Service listens
-   ├─ Processes payment
-   ├─ If success: publishes PaymentCompletedEvent
-   └─ If fail: publishes PaymentFailedEvent
-        └─ Order Service listens and cancels order
-
-3. Inventory Service listens (on PaymentCompletedEvent)
-   ├─ Reserves items
-   ├─ If success: publishes InventoryReservedEvent
-   └─ If fail: publishes InventoryReservationFailedEvent
-        └─ Payment Service listens and refunds
-        └─ Order Service listens and cancels
-
-4. Shipping Service listens (on InventoryReservedEvent)
-   ├─ Creates shipment
-   ├─ Publishes ShipmentCreatedEvent
-   └─ Order Service updates status to COMPLETED
-```
+1. **Order Service** creates order (`PENDING`) and publishes `OrderCreatedEvent`.
+2. **Payment Service** charges customer and publishes `PaymentCompletedEvent` (or `PaymentFailedEvent` -> Order cancels).
+3. **Inventory Service** reserves stock and publishes `InventoryReservedEvent` (or `InventoryReservationFailedEvent` -> Payment refunds & Order cancels).
+4. **Shipping Service** creates shipment and publishes `ShipmentCreatedEvent` -> Order marks `COMPLETED`.
 
 ```java
 // Choreography-based saga implementation
@@ -1648,6 +1886,33 @@ public class ShippingService {
 
 ### Orchestration-Based Saga
 
+```mermaid
+sequenceDiagram
+    participant Orch as OrderSagaOrchestrator
+    participant O as Order Service
+    participant P as Payment Service
+    participant I as Inventory Service
+    participant S as Shipping Service
+    Orch->>O: createOrder(request)
+    O-->>Orch: orderId (PENDING)
+    Orch->>P: processPayment(orderId, total)
+    P-->>Orch: transactionId
+    Orch->>I: reserveItems(orderId)
+    alt Inventory Available
+        I-->>Orch: reservationId
+        Orch->>S: createShipment(orderId)
+        S-->>Orch: shipmentId
+        Orch->>O: markAsCompleted(orderId)
+    else InventoryException
+        I-->>Orch: Error (Out of Stock)
+        Orch->>P: refund(transactionId)
+        Orch->>O: cancelOrder(orderId)
+    end
+```
+
+> [!WARNING]
+> Sagas provide **ACD** (Atomicity, Consistency, Durability) but **NOT Isolation**—other requests can read intermediate uncommitted saga states (e.g., `PENDING`). Use semantic locks (status flags) and make every compensating action **idempotent** and **retryable**.
+
 ```java
 // Using a saga orchestrator pattern
 
@@ -1722,29 +1987,44 @@ public class OrderSagaOrchestrator {
 
 ## Idempotency
 
-Ensure that repeated requests have the same effect as a single request.
+Ensure that repeated identical requests (due to client retries, network timeouts, or broker at-least-once delivery) produce the **same side effects and result** as a single request.
 
 ### Why Idempotency Matters
 
+- **Without idempotency:** A lost ACK after payment processing causes a client retry to charge the customer twice.
+- **With `Idempotency-Key`:** The server records the key atomically, executes once, and returns the cached result for any retry with the same key.
+
+```mermaid
+flowchart TD
+    REQ["POST /api/payments (Idempotency-Key: k1)"] --> CHK{"Key k1 exists in DB?"}
+    CHK -->|"No (New)"| INS["Insert k1 = PENDING (Unique Constraint)"]
+    INS --> PROC["Charge Payment Gateway"]
+    PROC -->|"Success"| COMP["Update k1 = COMPLETED + paymentId"]
+    COMP --> RET1["Return 201 Created"]
+    PROC -->|"Error"| FAIL["Update k1 = FAILED"]
+    CHK -->|"Yes: PENDING"| PEND["Return 409 Conflict / Retry Later"]
+    CHK -->|"Yes: COMPLETED"| RET2["Return Cached 201 Payment"]
+
+    classDef req fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef dec fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    classDef ok fill:#1e293b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    classDef warn fill:#1e293b,stroke:#f43f5e,color:#ffe4e6,stroke-width:2px
+    class REQ,INS,PROC req
+    class CHK dec
+    class COMP,RET1,RET2 ok
+    class PEND,FAIL warn
 ```
-Without idempotency:
-Customer submits payment request
-    ├─ Payment processed
-    └─ Network timeout (response lost)
 
-Customer retries:
-    ├─ Payment processed AGAIN (duplicate charge)
-    └─ Customer sees duplicate charges
-
-With idempotency:
-Customer submits payment request with idempotency-key: "order-123-payment"
-    ├─ Payment processed, stored with key
-    └─ Network timeout
-
-Customer retries with same key:
-    ├─ Detects duplicate (same key)
-    └─ Returns cached result (no duplicate charge)
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Acquire Idempotency Lock
+    PENDING --> COMPLETED: Payment Succeeded
+    PENDING --> FAILED: Payment Exception
+    COMPLETED --> COMPLETED: Retry returns cached response
 ```
+
+> [!IMPORTANT]
+> Enforce a `UNIQUE` constraint on `idempotency_key` at the database level (or `SETNX` in Redis). A plain `SELECT` followed by `INSERT` has a TOCTOU race condition under concurrent retries.
 
 ### Implementation
 
@@ -1883,6 +2163,14 @@ curl -X POST https://api.example.com/payments \
 
 ### Idempotent Operation Patterns
 
+| HTTP Method | Naturally Idempotent? | Safe on Retry? | Strategy |
+|-------------|-----------------------|----------------|----------|
+| `GET` | Yes | Yes | Read-only; no side effects |
+| `PUT` | Yes | Yes | Full resource replacement with same state |
+| `DELETE` | Yes | Yes | First call deletes (`204`), repeat returns `404`/`204` |
+| `POST` | **No** | **No** | Requires client-supplied `Idempotency-Key` header |
+| `PATCH` | Depends | Depends | Idempotent if absolute set; non-idempotent if relative (`+10`) |
+
 ```java
 // GET is naturally idempotent (read-only)
 GET /api/orders/123  // Always returns same order
@@ -1940,35 +2228,32 @@ POST /api/payments {
 
 **Answer**:
 
+```mermaid
+flowchart LR
+    C["Client"] -->|"1. POST /payments + Idempotency-Key"| GW["API Gateway (REST)"]
+    GW -->|"2. Return 202 Accepted"| C
+    GW -->|"3. Enqueue Job"| K["Kafka / RabbitMQ"]
+    K --> PS["Payment Service (10+ Instances)"]
+    PS -->|"4. PaymentProcessedEvent"| EB["Event Stream"]
+    EB --> NS["Notification Service"]
+    EB --> AS["Analytics Service"]
+
+    classDef client fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef broker fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    classDef svc fill:#1e293b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    class C,GW client
+    class K,EB broker
+    class PS,NS,AS svc
 ```
-Architecture for high throughput payment system:
 
-API Gateway
-    │
-    ├─ REST: Accept payment requests (sync)
-    │
-    └─ RabbitMQ/Kafka: Queue payment jobs
-         │
-         ├─ Payment Service (10 instances)
-         │   ├─ Process payment
-         │   ├─ Update ledger
-         │   └─ Publish PaymentProcessed event
-         │
-         ├─ Notification Service
-         │   └─ Send confirmation (async)
-         │
-         └─ Analytics Service
-             └─ Record metrics
-
-Key decisions:
+**Key decisions:**
 1. Accept via REST for reliability
 2. Queue immediately with idempotency key
 3. Process asynchronously at rate system can handle
-4. Return "processing" status to client
+4. Return `"processing"` (`202 Accepted`) status to client
 5. Notify when complete via webhook/polling
 6. Use event stream for multiple subscribers
 7. Replicate data to read-only replicas for queries
-```
 
 ### Q3: How would you handle a failed payment in a saga?
 
@@ -2024,18 +2309,17 @@ Key principles:
 
 CQRS separates read and write models:
 
-```
-Traditional:
-User Service DB
-    ├─ Write: User profile updates
-    └─ Read: Query user profile (same model)
+```mermaid
+flowchart LR
+    WM["Write Model (Normalized, ACID)"] -->|"Domain Events"| BUS["Event Bus"]
+    BUS -->|"Async Projection"| RM["Read Model (Denormalized, Eventual)"]
 
-CQRS:
-Write Model (User Service)       Read Model (User Query Service)
-    ├─ Normalized schema             ├─ Denormalized
-    ├─ ACID consistency             ├─ Eventual consistency
-    ├─ Optimized for writes         ├─ Optimized for reads
-    └─ Events published             └─ Updated from events
+    classDef write fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef bus fill:#1e293b,stroke:#fbbf24,color:#fef3c7,stroke-width:2px
+    classDef read fill:#1e293b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    class WM write
+    class BUS bus
+    class RM read
 ```
 
 **When to use CQRS:**
@@ -2091,52 +2375,29 @@ Key principles:
 
 **Answer**:
 
+```mermaid
+sequenceDiagram
+    participant O as Order Service
+    participant P as Payment Service
+    participant Z as Zipkin / Jaeger
+    Note over O,Z: Trace ID: abc123 propagated via HTTP/Kafka headers
+    O->>Z: Span 1: OrderCreated
+    O->>P: Call Payment (traceId=abc123)
+    P--xO: Timeout!
+    O->>Z: Span 2: PaymentTimeout + Compensate Inventory
 ```
-Distributed transaction failed. How to investigate:
 
-1. Distributed Tracing
-   - Every request gets trace ID
-   - Each service logs with trace ID
-   - Can follow request across services
-   - Tools: Sleuth + Zipkin
+1. **Distributed Tracing:** Every request gets a `traceId` propagated across HTTP/gRPC/Kafka headers (Sleuth/OpenTelemetry + Zipkin/Jaeger).
+2. **Centralized Logging:** Aggregate all logs (ELK/Loki) and filter by `traceId` to correlate errors across services.
+3. **Sequence Reconstruction:** Follow spans to pinpoint the exact failing hop (e.g., `Payment timeout` -> `Compensate inventory`).
+4. **Event Log Inspection:** Check Kafka consumer lag, topic offsets, and dead-letter queues (DLQ).
+5. **Service Health:** Check pod restarts, DB connection pools, network latency, and resource saturation.
 
-2. Centralized Logging
-   - All logs aggregated (ELK stack)
-   - Search by trace ID
-   - See all service interactions
-   - Correlate errors
-
-3. Sequence Diagrams
-   - Reconstruct request flow:
-     Order Service
-         → call Payment Service (trace: abc123)
-           → ✗ Payment timeout
-         ← return error
-     Order Service: Compensate inventory reservation
-
-4. Event Log
-   - If event-driven: check event store
-   - See which events were published/consumed
-   - Verify event ordering
-
-5. Service Health
-   - Check if failing service is down
-   - Check database connectivity
-   - Check network latency
-   - Check resource usage
-
-Example troubleshooting:
-
-Error: Order created but payment never processed
-Trace ID: abc123
-
-Step 1: Find trace in Zipkin
-Step 2: See Order Service published OrderCreated event
-Step 3: See Payment Service never received event (no log with trace ID)
-Step 4: Check Kafka broker - events queued but Payment Service not reading
-Step 5: Payment Service pod restarted, missed events
-Solution: Reset consumer group offset, reprocess events
-```
+**Example troubleshooting (`traceId: abc123`, Order created but payment never processed):**
+- **Step 1:** Find trace in Zipkin -> `Order Service` published `OrderCreated`.
+- **Step 2:** `Payment Service` has no log with `abc123`.
+- **Step 3:** Inspect Kafka consumer group lag -> events queued, `Payment Service` pod restarted/stalled.
+- **Solution:** Fix consumer health, reset/replay consumer group offset (with idempotency).
 
 ### Q7: What are the failure modes in event-driven architecture?
 
@@ -2202,4 +2463,19 @@ public class PaymentEventListener {
     }
 }
 ```
+
+### Quick-Reference Interview Cheat Sheet
+
+| Scenario | Recommended Pattern | Why |
+|----------|---------------------|-----|
+| Public browser/mobile API | **REST** or **GraphQL BFF** | Universal HTTP support; GraphQL prevents over-fetching |
+| High-throughput internal RPC | **gRPC (HTTP/2 + Protobuf)** | Binary framing, multiplexing, strict `.proto` contracts |
+| Decoupled background work | **Async Queue / Kafka** | Temporal decoupling, buffering spikes, replayability |
+| Complex multi-service transaction | **Orchestrated Saga** | Explicit state machine + reverse compensating rollbacks |
+| Heavy read/write skew | **CQRS** | Independent read/write scaling with denormalized views |
+| Safe retries over unreliable networks | **Idempotency-Key + Unique DB Constraint** | Prevents duplicate charges/mutations |
+
+> [!TIP]
+> In system design interviews, always pair **Asynchronous Messaging** with **Idempotent Consumers**, **Dead Letter Queues (DLQ)**, and **Distributed Tracing (`traceId`)**—interviewers specifically probe for those three failure-handling details.
+
 

@@ -1,5 +1,8 @@
 # Data Management in Microservices
 
+> [!IMPORTANT]
+> **Core Principle:** Each microservice owns its private data and exposes it only through well-defined APIs or domain events. Cross-service database joins and distributed 2PC transactions are replaced by **Sagas**, **Transactional Outbox + CDC**, **CQRS**, and **Event Sourcing**.
+
 ## Table of Contents
 1. [Database per Service Pattern](#database-per-service)
 2. [Data Consistency](#data-consistency)
@@ -7,7 +10,7 @@
 4. [Event Sourcing](#event-sourcing)
 5. [CQRS Implementation](#cqrs-implementation)
 6. [Distributed Caching](#distributed-caching)
-7. [API Composition for Queries](#api-composition)
+7. [API Composition for Queries](#api-composition-for-queries)
 8. [Data Replication](#data-replication)
 9. [Interview Questions](#interview-questions)
 
@@ -19,47 +22,81 @@ Each service owns its database. No shared database between services.
 
 ### Why Database per Service?
 
+```mermaid
+flowchart TD
+    subgraph Monolith["Monolith (Shared Database)"]
+        M["Monolith App: User, Order, Product, Payment, Inventory"]
+        MDB[("Shared Database: Users | Orders | Products | Payments")]
+        M --> MDB
+    end
+
+    subgraph Microservices["Microservices (Database per Service)"]
+        OS["Order Service"]
+        PS["Product Service"]
+        PayS["Payment Service"]
+        ODB[("Order DB (MySQL Normalized)")]
+        PDB[("Product DB (MongoDB Denormalized)")]
+        PayDB[("Payment DB (PostgreSQL ACID)")]
+        OS --> ODB
+        PS --> PDB
+        PayS --> PayDB
+    end
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef warn fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    class M warn
+    class MDB warn
+    class OS,PS,PayS svc
+    class ODB,PDB,PayDB db
 ```
-Monolith (Shared Database):
-┌──────────────────────────────────┐
-│        Monolith App              │
-├──────────────────────────────────┤
-│ User Logic  │ Order Logic        │
-│ Product     │ Payment Logic      │
-│ Inventory   │ Notification       │
-├──────────────────────────────────┤
-│        Shared Database           │
-│ Users | Orders | Products | ...  │
-└──────────────────────────────────┘
 
-Problems:
-├─ If DB slow, entire app slow
-├─ Schema changes affect all services
-├─ Cannot optimize schema per service
-├─ Tight coupling at database level
-└─ Difficult to scale (only option: scale entire app)
+**Monolith (Shared Database) Problems:**
+- **Single bottleneck:** If the database is slow, the entire application slows down.
+- **Schema coupling:** Schema changes affect multiple modules and teams simultaneously.
+- **No polyglot persistence:** Cannot optimize schema or engine per workload.
+- **Tight coupling:** Services depend directly on internal tables of other domains.
+- **Coarse scaling:** Difficult to scale independently—only option is scaling the entire app/DB.
 
-Microservices (Database per Service):
-┌────────────────┐ ┌────────────────┐ ┌────────────────┐
-│ Order Service  │ │Product Service │ │ Payment Service│
-├────────────────┤ ├────────────────┤ ├────────────────┤
-│  Order DB      │ │ Product DB     │ │ Payment DB     │
-│ (normalized)   │ │ (denormalized) │ │ (optimized)    │
-└────────────────┘ └────────────────┘ └────────────────┘
+**Microservices (Database per Service) Benefits & Tradeoffs:**
+- **Benefits:** Independent scaling, polyglot persistence (SQL vs NoSQL), independent schema evolution, loose coupling, and workload-tuned performance.
+- **Tradeoffs:** Distributed transactions are complex, cross-service queries are harder, eventual consistency must be handled, and more database instances must be operated.
 
-Benefits:
-├─ Services scale independently
-├─ Can use different DB tech (SQL vs NoSQL)
-├─ Schema evolution independent
-├─ Loose coupling
-└─ Better performance per service
-
-Tradeoffs:
-├─ Distributed transactions complex
-├─ Distributed queries harder
-├─ Data consistency challenges
-└─ More databases to operate
+```mermaid
+erDiagram
+    ORDER_DB_ORDERS {
+        bigint id PK
+        bigint customer_id
+        datetime created_at
+        varchar status
+    }
+    ORDER_DB_ORDER_ITEMS {
+        bigint id PK
+        bigint order_id FK
+        varchar product_id
+        int quantity
+    }
+    PAYMENT_DB_PAYMENTS {
+        bigint id PK
+        bigint order_id "Logical Ref (No Cross-DB FK)"
+        decimal amount
+        varchar status
+        varchar transaction_id
+    }
+    ORDER_DB_ORDERS ||--o{ ORDER_DB_ORDER_ITEMS : "contains"
+    ORDER_DB_ORDERS ||..o{ PAYMENT_DB_PAYMENTS : "referenced via API or Event"
 ```
+
+| Aspect | Shared Database | Database per Service |
+| :--- | :--- | :--- |
+| **Coupling** | Tight (schema-level dependencies) | Loose (API & event contracts) |
+| **DB Technology** | Single engine for all domains | Polyglot (MySQL, MongoDB, Redis, etc.) |
+| **Scaling** | Vertical / whole-DB scaling | Per-service independent scaling |
+| **Transactions** | Local ACID joins | Sagas & eventual consistency |
+| **Queries** | Simple SQL `JOIN` | API Composition or CQRS views |
+
+> [!WARNING]
+> **Shared Database Anti-Pattern:** Allowing multiple services to read/write the same tables creates hidden runtime coupling. A column rename in `payments` can silently break `OrderService` deployments.
 
 ### Implementation
 
@@ -109,8 +146,10 @@ public class ProductDatabaseConfiguration {
         return new MongoTemplate(mongoDatabaseFactory);
     }
 }
+```
 
-// application.yml
+```yaml
+# application.yml
 spring:
   datasource:
     order:
@@ -122,8 +161,10 @@ spring:
   data:
     mongodb:
       uri: mongodb://product-db:27017/product_service
+```
 
-# Order Service entities
+```java
+// Order Service entities (MySQL - Normalized schema, optimized for transactions)
 @Entity
 @Table(name = "orders")
 public class Order {
@@ -131,18 +172,16 @@ public class Order {
     private Long id;
     private Long customerId;
     private LocalDateTime createdAt;
-    // Normalized schema, optimized for transactions
 }
 
-# Product Service entities (MongoDB)
+// Product Service entities (MongoDB - Denormalized schema, optimized for querying)
 @Document(collection = "products")
 public class Product {
     @Id
     private String id;
     private String name;
-    private List<Review> reviews;        // Embedded
+    private List<Review> reviews;         // Embedded
     private Map<String, Object> metadata; // Flexible schema
-    // Denormalized schema, optimized for querying
 }
 ```
 
@@ -196,47 +235,70 @@ public class Payment {
 // Services communicate via events or APIs, not shared database
 ```
 
+> [!IMPORTANT]
+> Always store **logical IDs** (e.g., `orderId`, `customerId`) instead of cross-service foreign keys. Enforce referential integrity asynchronously via domain events or synchronously at API boundaries.
+
 ---
 
 ## Data Consistency
 
-### Eventual vs Strong Consistency
+### 2PC (Two-Phase Commit) vs Eventual Consistency
 
+In a monolith, a single ACID transaction guarantees **Strong Consistency** (`Account A: $100 -> $70` and `Account B: $50 -> $80` both succeed or both fail). Across microservices, **2PC (XA transactions)** attempts distributed ACID by locking resources across services, whereas **Eventual Consistency** uses asynchronous events and compensating actions.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Transaction Coordinator
+    participant ODB as Order DB
+    participant PDB as Payment DB
+
+    Note over C,PDB: Phase 1 - Prepare (Locks Acquired)
+    C->>ODB: PREPARE tx_101
+    ODB-->>C: VOTE_COMMIT (Rows Locked)
+    C->>PDB: PREPARE tx_101
+    PDB-->>C: VOTE_COMMIT (Rows Locked)
+
+    Note over C,PDB: Phase 2 - Commit (Blocking if Coordinator Crashes)
+    C->>ODB: COMMIT tx_101
+    C->>PDB: COMMIT tx_101
+    ODB-->>C: ACK
+    PDB-->>C: ACK
 ```
-STRONG CONSISTENCY:
-Account A: $100      Account B: $50
-Transfer $30 from A to B
 
-Atomic transaction:
-1. A: $100 → $70
-2. B: $50 → $80
-Both succeed or both fail
+```mermaid
+flowchart LR
+    Start["Data Operation"] --> Q{"Cross-Service & High Scale?"}
+    Q -->|"No (Single DB)"| Strong["Strong Consistency: Local ACID Tx"]
+    Q -->|"Yes (Microservices)"| Choice{"Consistency Requirement"}
+    Choice -->|"Financial / Inventory"| Saga["Eventual Consistency via Saga + Compensation"]
+    Choice -->|"Analytics / Notifications / Recs"| Async["Eventual Consistency via Async Events"]
 
-If you query at any point, you see consistent state
+    Saga --> S1["1. Order: PAYMENT_PENDING"]
+    S1 --> S2["2. Payment: APPROVED"]
+    S2 --> S3["3. Order: PAYMENT_APPROVED"]
 
-EVENTUAL CONSISTENCY:
-Order Service submits order
-Payment Service processes payment (asynchronously)
-
-States:
-1. Order created, payment pending
-2. Payment processed
-3. Order marked as paid
-
-Between these states, system is inconsistent
-Application must tolerate this
-
-When to use STRONG:
-├─ Financial transactions (money must not disappear)
-├─ Inventory (cannot oversell)
-└─ ACID critical operations
-
-When to use EVENTUAL:
-├─ Recommendations (slightly stale is OK)
-├─ View counts (eventual accuracy sufficient)
-├─ User notifications (can be delayed)
-└─ Analytics (eventual consistency acceptable)
+    classDef node fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef strong fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef eventual fill:#312e81,stroke:#a855f7,stroke-width:2px,color:#ede9fe
+    class Start,Q,Choice node
+    class Strong strong
+    class Saga,Async,S1,S2,S3 eventual
 ```
+
+| Dimension | 2PC (Two-Phase Commit) | Eventual Consistency (Saga / Events) |
+| :--- | :--- | :--- |
+| **Consistency** | Strong (immediate global ACID) | Eventual (temporary intermediate states) |
+| **Availability** | Low (blocks if coordinator or participant fails) | High (services operate independently) |
+| **Locking** | Long-lived distributed locks across DBs | Short-lived local locks only |
+| **Latency & Throughput** | High latency, poor horizontal scale | Low latency, high throughput |
+| **Protocol Support** | Requires XA-compliant resources (no REST/Kafka) | Works with any DB, REST, gRPC, or Kafka |
+
+- **When to use Strong Consistency (local ACID):** Financial ledger transfers within a single service, inventory reservation within a single DB, and ACID-critical invariants.
+- **When to use Eventual Consistency:** Cross-service workflows (Order -> Payment -> Shipping), recommendations, view counts, user notifications, and analytics.
+
+> [!WARNING]
+> **Avoid 2PC in Microservices:** 2PC violates service autonomy, holds database locks across network calls, and is unsupported by modern brokers like Kafka or NoSQL stores. Use **Sagas** instead.
 
 ### Handling Eventual Consistency
 
@@ -314,51 +376,51 @@ public class PaymentEventListener {
 }
 ```
 
+> [!TIP]
+> Prefer **push-based event notifications** (Kafka listeners, WebSockets, or SSE) over fixed-delay database polling. Polling adds unnecessary DB load and increases end-to-end latency.
+
 ---
 
 ## Saga Pattern Deep Dive
 
-Managing distributed transactions across services without ACID.
+A **Saga** manages distributed transactions across microservices as a sequence of **local transactions**. If any step fails, the saga executes **compensating transactions** to undo prior steps.
 
 ### Choreography-Based Saga (Event-Driven)
 
-```
-Each service publishes events, others react independently
+Each service publishes domain events and reacts independently without a central coordinator.
 
-Order Creation Saga:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant O as Order Service
+    participant P as Payment Service
+    participant I as Inventory Service
+    participant S as Shipping Service
 
-1. Client calls Order Service
-   Order Service
-   ├─ Create order (PENDING)
-   └─ Publish: OrderCreated
-        ├─ orderId, customerId, items, total
-        └─ Event published to Kafka
+    C->>O: POST /orders
+    O->>O: Save Order (PENDING)
+    O-->>P: Event: OrderCreated
 
-2. Payment Service listens to OrderCreated
-   Payment Service
-   ├─ Try to process payment
-   ├─ If success: Publish: PaymentApproved
-   └─ If fail: Publish: PaymentFailed
-         └─ Reason for failure
-
-3. If PaymentFailed:
-   Order Service listens to PaymentFailed
-   ├─ Update order status to CANCELLED
-   └─ Publish: OrderCancelled
-
-4. If PaymentApproved:
-   Inventory Service listens to PaymentApproved
-   ├─ Try to reserve items
-   ├─ If success: Publish: InventoryReserved
-   └─ If fail: Publish: InventoryReservationFailed
-         └─ Order Service listens and cancels order
-         └─ Payment Service listens and refunds payment
-
-5. If InventoryReserved:
-   Shipping Service listens
-   ├─ Create shipment
-   └─ Publish: ShipmentCreated
-         └─ Order Service listens and marks COMPLETED
+    P->>P: Charge Payment
+    alt Payment Fails
+        P-->>O: Event: PaymentFailed
+        O->>O: Mark Order CANCELLED
+    else Payment Approved
+        P-->>I: Event: PaymentApproved
+        I->>I: Reserve Stock
+        alt Out of Stock (Compensation)
+            I-->>P: Event: RefundRequest
+            I-->>O: Event: InventoryReservationFailed
+            P->>P: Refund Payment
+            O->>O: Mark Order CANCELLED
+        else Stock Reserved
+            I-->>S: Event: InventoryReserved
+            S->>S: Create Shipment
+            S-->>O: Event: ShipmentCreated
+            O->>O: Mark Order COMPLETED
+        end
+    end
 ```
 
 ```java
@@ -531,6 +593,29 @@ public class InventoryService {
 
 ### Orchestration-Based Saga (Centralized Control)
 
+A single orchestrator coordinates every forward step and compensating rollback explicitly.
+
+```mermaid
+flowchart TD
+    Start["OrderSagaOrchestrator.processOrder"] --> S1["1. OrderService: createOrder"]
+    S1 --> S2["2. PaymentService: processPayment"]
+    S2 -->|"Success"| S3["3. InventoryService: reserveInventory"]
+    S2 -->|"PaymentFailedException"| C1["Compensate: orderService.markCancelled"]
+
+    S3 -->|"Success"| S4["4. ShippingService: createShipment"]
+    S3 -->|"InventoryException"| C2["Compensate: payment.refund + order.markCancelled"]
+
+    S4 -->|"Success"| S5["5. OrderService: markCompleted"]
+    S4 -->|"ShippingException"| C3["Compensate: releaseReservation + refund + markCancelled"]
+
+    classDef step fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef comp fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    class Start,S1,S2,S3,S4 step
+    class S5 ok
+    class C1,C2,C3 comp
+```
+
 ```java
 // Single orchestrator coordinates the workflow
 @Service
@@ -620,7 +705,7 @@ public class OrderSagaOrchestrator {
 ### Choreography vs Orchestration
 
 | Aspect | Choreography | Orchestration |
-|--------|--------------|---------------|
+| :--- | :--- | :--- |
 | **Control** | Distributed, implicit | Centralized, explicit |
 | **Visibility** | Flow hidden in events | Clear step-by-step |
 | **Debugging** | Hard (flow across multiple services) | Easy (single point to debug) |
@@ -628,45 +713,56 @@ public class OrderSagaOrchestrator {
 | **Scalability** | Scales well | Orchestrator can bottleneck |
 | **New service** | Add listener, pick relevant events | Update orchestrator |
 | **Failure handling** | Each service handles its failures | Orchestrator coordinates |
+| **Best For** | Simple 2–4 step workflows | Complex workflows with branching/retries |
+
+> [!IMPORTANT]
+> **Saga Isolation & Idempotency:** Sagas lack **Isolation (I in ACID)**—concurrent sagas can read dirty intermediate states. Mitigate this with **Semantic Locks** (`PENDING` flags), **Commutative Updates**, and **Idempotent Compensations** (compensations must be retriable safely).
 
 ---
 
 ## Event Sourcing
 
-Store complete history of state changes as immutable events.
+Store the complete history of state changes as an **immutable, append-only log of domain events** rather than overwriting current state in place.
 
+![Event Sourcing with Snapshots and CQRS Projection](./assets/05-event-sourcing-cqrs.svg)
+
+```mermaid
+flowchart LR
+    subgraph Traditional["Traditional CRUD Persistence"]
+        T1["Update Row in Place: Order 123 Status = COMPLETED, Total = $99.99"]
+        T2["No Audit Trail / Lost History"]
+        T1 --> T2
+    end
+
+    subgraph ES["Event Sourcing (Append-Only Log)"]
+        E1["v1: OrderCreatedEvent"] --> E2["v2: OrderSubmittedEvent"]
+        E2 --> E3["v3: PaymentApprovedEvent"]
+        E3 --> E4["v4: InventoryReservedEvent"]
+        E4 --> E5["v5: OrderShippedEvent"]
+        E5 --> Replay["Replay Events → Current State"]
+    end
+
+    classDef bad fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    classDef ev fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef replay fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    class T1,T2 bad
+    class E1,E2,E3,E4,E5 ev
+    class Replay replay
 ```
-Traditional approach:
-Current State:
-├─ Order ID: 123
-├─ Status: COMPLETED
-├─ Total: $99.99
 
-Problem: No audit trail, can't know how we got here
+- **Advantages:** Complete audit trail, time-travel / temporal queries (state at time $T$), effortless debugging via replay, natural fit for event-driven architectures.
+- **Disadvantages:** Higher implementation complexity, event schema evolution (versioning/upcasting), eventual consistency on read models, and unbounded storage growth (mitigated by snapshots).
 
-Event Sourcing approach:
-Event Log (immutable, append-only):
-├─ OrderCreatedEvent (OrderId=123, CustomerId=456, Total=$99.99)
-├─ OrderSubmittedEvent (OrderId=123)
-├─ PaymentApprovedEvent (OrderId=123, Amount=$99.99)
-├─ InventoryReservedEvent (OrderId=123, Items=[...])
-└─ OrderShippedEvent (OrderId=123, ShipmentId=789)
+| Feature | Traditional State Persistence | Event Sourcing |
+| :--- | :--- | :--- |
+| **Storage Model** | Mutable rows (latest state only) | Immutable append-only event log |
+| **Audit Trail** | Requires separate audit table/triggers | Built-in by design |
+| **Temporal Queries** | Not supported natively | Replay events up to timestamp $T$ |
+| **Read Performance** | Direct PK lookup | Requires replay or CQRS read model |
+| **Schema Evolution** | `ALTER TABLE` migrations | Event upcasting / versioned deserializers |
 
-Current state derived by replaying all events
-
-Advantages:
-├─ Complete audit trail
-├─ Can replay any point in time
-├─ Easy debugging (see exactly what happened)
-├─ Natural event-driven architecture
-└─ Temporal queries (what was state at time T?)
-
-Disadvantages:
-├─ Complex to implement correctly
-├─ Event schema evolution challenging
-├─ Eventually consistent (rebuilding state takes time)
-└─ Storage grows indefinitely
-```
+> [!IMPORTANT]
+> **Optimistic Concurrency Control:** Always enforce a unique constraint on `(aggregate_id, event_version)` in `event_store`. If two concurrent writers attempt to append `version = 5`, the database rejects the second write cleanly.
 
 ### Event Sourcing Implementation
 
@@ -872,6 +968,27 @@ public class OrderServiceWithEventSourcing {
 
 ### Event Store with Snapshots
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as EventStoreWithSnapshots
+    participant SR as SnapshotRepository
+    participant ER as EventStoreRepository
+
+    S->>SR: findLatestSnapshot(orderId)
+    alt Snapshot Found (v10)
+        SR-->>S: Snapshot(v10, serializedOrder)
+        S->>ER: findEvents(orderId, version &gt; 10)
+        ER-->>S: [v11, v12]
+        S->>S: order.apply(v11), order.apply(v12)
+    else No Snapshot
+        SR-->>S: Empty
+        S->>ER: findEvents(orderId, version &gt; 0)
+        ER-->>S: [v1..v12]
+        S->>S: Replay all events from v1
+    end
+```
+
 ```java
 // Snapshot: cached state at specific version
 @Entity
@@ -954,9 +1071,65 @@ public class EventStoreWithSnapshots {
 }
 ```
 
+> [!WARNING]
+> **Event Schema Evolution:** Never mutate or delete old events in `event_store`. When fields change, add defaults or write an **Upcaster** that transforms `v1` JSON into `v2` in memory during deserialization.
+
 ---
 
 ## CQRS Implementation
+
+**Command Query Responsibility Segregation (CQRS)** separates the **Write Model (Commands)** from the **Read Model (Queries)** so each side can scale, index, and evolve independently.
+
+```mermaid
+flowchart LR
+    Client["Client"] -->|"Write: SubmitOrderCommand"| CmdSvc["OrderCommandService"]
+    Client -->|"Read: getOrderSummary / searchOrders"| QrySvc["OrderQueryService"]
+
+    CmdSvc -->|"Save Normalized"| WriteDB[("Write DB (MySQL)")]
+    CmdSvc -->|"Publish Event"| Bus["Event Bus / Kafka"]
+    Bus -->|"OrderSubmittedEvent / OrderShippedEvent"| Proj["OrderViewProjector"]
+    Proj -->|"Upsert Denormalized View"| ReadDB[("Read DB (order_view / MongoDB)")]
+    QrySvc -->|"Fast Indexed Query"| ReadDB
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef bus fill:#312e81,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    class Client,CmdSvc,QrySvc,Proj svc
+    class WriteDB,ReadDB db
+    class Bus bus
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant Cmd as OrderCommandService
+    participant WDB as Write DB
+    participant P as OrderViewProjector
+    participant RDB as Read DB (order_view)
+    participant Q as OrderQueryService
+
+    C->>Cmd: submitOrder(command)
+    Cmd->>WDB: INSERT order
+    Cmd-->>P: Publish OrderSubmittedEvent
+    Cmd-->>C: 202 Accepted (orderId)
+
+    par Async Projection
+        P->>RDB: Upsert OrderView (denormalized)
+    and Subsequent Read
+        C->>Q: getOrderSummary(orderId)
+        Q->>RDB: SELECT * FROM order_view
+        RDB-->>Q: OrderSummary DTO
+        Q-->>C: 200 OK
+    end
+```
+
+| Dimension | Command Side (Write) | Query Side (Read) |
+| :--- | :--- | :--- |
+| **Responsibility** | Business validation, invariants, state mutations | Fast lookups, search, pagination, analytics |
+| **Data Model** | Normalized (3NF) or Event Stream | Denormalized, pre-joined `OrderView` |
+| **Database Choice** | ACID RDBMS (PostgreSQL / MySQL) | Elasticsearch, MongoDB, Redis, or read-optimized SQL |
+| **Consistency** | Strongly consistent per aggregate | Eventually consistent (projection lag) |
 
 ```java
 // CQRS: Command side (write) and Query side (read)
@@ -1118,37 +1291,75 @@ public class OrderViewProjector {
 }
 ```
 
+> [!WARNING]
+> **Read-Your-Own-Writes Lag:** Because `OrderViewProjector` runs asynchronously, a user who submits an order and immediately refreshes the order list might not see it yet. Mitigate by returning the created resource in the command response or showing optimistic UI state.
+
 ---
 
 ## Distributed Caching
 
 ### Redis Cache Strategies
 
+```mermaid
+flowchart TD
+    subgraph CA["1. Cache-Aside (Lazy Loading)"]
+        C1["Client Read"] --> R1{"Redis Hit?"}
+        R1 -->|"Yes"| Ret1["Return Cached Data"]
+        R1 -->|"No (Miss)"| DB1["Query DB → Set Redis TTL → Return"]
+    end
+
+    subgraph WT["2. Write-Through"]
+        C2["Client Write"] --> W2["Write DB + Write Redis Sync"] --> Ret2["Return Success"]
+    end
+
+    subgraph WB["3. Write-Behind (Write-Back)"]
+        C3["Client Write"] --> W3["Write Redis Only"] --> Ret3["Return Immediately"]
+        W3 -.->|"Async Batch / Executor"| DB3["Flush to DB Later"]
+    end
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef warn fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    class C1,C2,C3,R1,W2,W3 svc
+    class Ret1,Ret2,DB1 ok
+    class Ret3,DB3 warn
 ```
-CACHE-ASIDE (Lazy Loading):
-Client
-  │
-  ├─ Check cache
-  │   ├─ Hit: return data
-  │   └─ Miss: fetch from DB
-  │            ├─ Update cache
-  │            └─ Return data
 
-WRITE-THROUGH:
-Client writes data
-  ├─ Write to cache
-  ├─ Write to DB
-  └─ Return to client
+| Strategy | Read Path | Write Path | Consistency | Data Loss Risk | Best For |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Cache-Aside** | App checks cache; on miss loads DB | App updates DB, invalidates/updates cache | Eventual (TTL-bound) | None (DB is source of truth) | Read-heavy workloads (90%+ reads) |
+| **Write-Through** | App reads cache | App/cache writes DB + cache synchronously | Strong (cache & DB in sync) | None | Read-after-write consistency |
+| **Write-Behind** | App reads cache | App writes cache; async flush to DB | Eventual | High if Redis crashes before flush | Write-heavy counters, telemetry |
 
-Both always in sync
-More consistent, slower writes
+### Cache Stampede (Thundering Herd) Protection
 
-WRITE-BEHIND (Write-Back):
-Client writes data
-  ├─ Write to cache only
-  ├─ Return to client immediately
-  ├─ Async write to DB
-  └─ Higher risk of data loss if cache fails
+When a hot key expires under high concurrency, hundreds of threads simultaneously miss the cache and hammer the database.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T1 as Thread 1
+    participant T2 as Thread 2..N
+    participant R as Redis Cache
+    participant DB as Database
+
+    T1->>R: GET product:123
+    T2->>R: GET product:123
+    R-->>T1: MISS
+    R-->>T2: MISS
+
+    T1->>R: SETNX lock:product:123 (Acquire Mutex)
+    R-->>T1: OK (Lock Acquired)
+    T2->>R: SETNX lock:product:123
+    R-->>T2: FAIL (Wait 50ms &amp; Retry Cache)
+
+    T1->>DB: SELECT * FROM products WHERE id = 123
+    DB-->>T1: Product
+    T1->>R: SET product:123 (TTL + Random Jitter)
+    T1->>R: DEL lock:product:123
+
+    T2->>R: GET product:123 (Retry)
+    R-->>T2: HIT (Served without hitting DB)
 ```
 
 ```java
@@ -1220,6 +1431,59 @@ public class ProductServiceCacheAside {
         );
 
         return product;
+    }
+}
+
+// Cache-Aside with Stampede Protection (Distributed Mutex + Jittered TTL)
+@Service
+public class ProductServiceStampedeSafe {
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @Autowired
+    private RedisTemplate<String, Product> redisTemplate;
+
+    public Product getProductSafe(Long productId) {
+        String cacheKey = "product:" + productId;
+        String lockKey = "lock:product:" + productId;
+
+        Product cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        // Only one thread rebuilds the cache for this key
+        Boolean locked = redisTemplate.opsForValue()
+            .setIfAbsent(lockKey, null, Duration.ofSeconds(10));
+
+        if (Boolean.TRUE.equals(locked)) {
+            try {
+                // Double-check after acquiring lock
+                Product recheck = redisTemplate.opsForValue().get(cacheKey);
+                if (recheck != null) return recheck;
+
+                Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new ProductNotFoundException(productId));
+
+                // Add random TTL jitter (55-65 min) to prevent synchronized expiration
+                long jitterSeconds = ThreadLocalRandom.current().nextLong(0, 600);
+                redisTemplate.opsForValue().set(
+                    cacheKey, product, Duration.ofMinutes(55).plusSeconds(jitterSeconds)
+                );
+                return product;
+            } finally {
+                redisTemplate.delete(lockKey);
+            }
+        }
+
+        // Other threads briefly back off and retry cache read
+        try {
+            Thread.sleep(50);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return getProductSafe(productId);
     }
 }
 
@@ -1307,9 +1571,11 @@ public class ProductServiceWriteBehind {
         });
     }
 }
+```
 
-// Cache Invalidation Patterns
+### Cache Invalidation Patterns
 
+```java
 // Pattern 1: TTL-based
 redisTemplate.opsForValue().set(
     cacheKey,
@@ -1359,47 +1625,73 @@ public class CacheWarmer {
 }
 ```
 
-### Cache Invalidation Challenges
+**Cache Invalidation Recommendations:**
+- Use **short TTLs (5–10 minutes)** + **random jitter** for baseline consistency and stampede prevention.
+- Use **event-based invalidation** for critical data (e.g., price or inventory changes).
+- Use **versioned keys** (`product:123:v4`) so old entries expire naturally without race conditions.
+- Use **cache warming** on startup for hot data and continuously monitor cache hit rates.
 
-```
-Cache Invalidation: One of the hardest problems in computer science
-
-Problem:
-┌─────────────────────────────────┐
-│   Cache: Product #123           │
-│   Price: $99.99                 │
-│   Expires: 1 hour               │
-└─────────────────────────────────┘
-
-Price updated to $89.99
-
-Options:
-1. Invalidate immediately
-   └─ Consistent but forces cache misses
-
-2. Wait for TTL to expire
-   └─ Stale data served for up to 1 hour
-
-3. Use event-based invalidation
-   └─ Fast and consistent but requires orchestration
-
-4. Use versioning
-   └─ Cache key includes version number
-   └─ Update version when data changes
-   └─ Old cache entries expire naturally
-
-Recommendation:
-└─ Short TTL (5-10 minutes) for consistency
-└─ Event-based invalidation for critical data
-└─ Cache warming for hot data
-└─ Monitor cache hit rates
-```
+> [!TIP]
+> Never run `redisTemplate.keys(...)` (`KEYS *`) in production Redis—it is $O(N)$ and blocks the single-threaded Redis event loop. Use `SCAN`, Redis Sets tracking derived keys, or versioned cache keys instead.
 
 ---
 
 ## API Composition for Queries
 
-When query spans multiple services' data.
+When a query spans multiple services' databases (e.g., Order + Customer + Products), **API Composition** fetches data from each service in parallel and joins in memory, whereas **CQRS** maintains a pre-joined materialized view.
+
+```mermaid
+flowchart LR
+    subgraph Comp["API Composition (Scatter-Gather)"]
+        GW["OrderCompositeQueryService"] -->|"1. getOrder"| OS["Order Service"]
+        GW -->|"2. getCustomer"| CS["Customer Service"]
+        GW -->|"3. getProduct (Fan-out)"| PS["Product Service"]
+        OS & CS & PS --> Join["In-Memory Join"]
+    end
+
+    subgraph CQRS["CQRS Materialized View"]
+        Q["Query Service"] -->|"Single Indexed Read"| V[("order_details_view")]
+    end
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    class GW,OS,CS,PS,Join,Q svc
+    class V db
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant Comp as OrderCompositeQueryService
+    participant OS as Order Service
+    participant CS as Customer Service
+    participant PS as Product Service
+
+    C->>Comp: getOrderDetails(orderId)
+    Comp->>OS: getOrder(orderId)
+    OS-->>Comp: Order (customerId, itemIds)
+
+    par Fetch Customer &amp; Products in Parallel
+        Comp->>CS: getCustomer(customerId)
+        CS-->>Comp: Customer
+    and
+        Comp->>PS: getProduct(item1)
+        Comp->>PS: getProduct(item2)
+        PS-->>Comp: ProductDTOs
+    end
+
+    Comp->>Comp: Aggregate into OrderDetailDTO
+    Comp-->>C: OrderDetailDTO
+```
+
+| Aspect | API Composition | CQRS Materialized View |
+| :--- | :--- | :--- |
+| **Implementation** | Simple scatter-gather (`CompletableFuture`) | Requires event pipeline + projector + read DB |
+| **Consistency** | Fresh (reads live services) | Eventually consistent |
+| **Latency** | Bound by slowest service (tail latency) | Sub-10ms single-DB lookup |
+| **Pagination & Filtering** | Hard across large datasets | Native indexed SQL/Elasticsearch queries |
+| **Availability** | Fails if any downstream service is down | Resilient (read DB serves even if writers are down) |
 
 ```java
 // Problem: Need order with customer name and product names
@@ -1492,11 +1784,87 @@ public class OrderDetailProjector {
 }
 ```
 
+> [!WARNING]
+> **Tail-Latency & N+1 Fan-Out:** API Composition multiplies failure surface area and p99 latency. If an order has 50 items, avoid 50 individual calls—use batch endpoints (`GET /products?ids=1,2,...`) or switch to a **CQRS Materialized View**.
+
 ---
 
 ## Data Replication
 
-Synchronizing data across services.
+Synchronizing reference data (like product name and price) into another service's local database avoids synchronous runtime calls, but requires solving the **Dual-Write Problem** using the **Transactional Outbox + Change Data Capture (CDC)** pattern.
+
+![Transactional Outbox and Debezium CDC Pipeline](./assets/05-transactional-outbox-cdc.svg)
+
+```mermaid
+flowchart LR
+    subgraph DualWrite["Anti-Pattern: Dual Write"]
+        S1["Service"] -->|"1. DB Commit OK"| DB1[("DB")]
+        S1 -.->|"2. Crash Before Kafka Send!"| K1["Kafka (Event Lost)"]
+    end
+
+    subgraph OutboxCDC["Solution: Transactional Outbox + CDC"]
+        S2["Service"] -->|"1. Single ACID Tx: Save Entity + Outbox"| DB2[("DB + outbox_events")]
+        DB2 -->|"2. WAL Stream"| Deb["Debezium CDC"]
+        Deb -->|"3. Reliable Publish"| K2["Kafka"]
+        K2 -->|"4. Idempotent Dedup"| Con["Replica Consumer"]
+    end
+
+    classDef bad fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fecaca
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    classDef cdc fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    class K1 bad
+    class S1,S2,Con svc
+    class DB1,DB2 db
+    class Deb,K2 cdc
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant PS as ProductService
+    participant PDB as Product DB
+    participant Deb as Debezium CDC
+    participant K as Kafka (products)
+    participant Con as OrderServiceReplicaListener
+    participant ODB as Order DB
+
+    PS->>PDB: BEGIN; UPDATE products; INSERT outbox_events; COMMIT;
+    Deb->>PDB: Tail WAL (pgoutput / binlog)
+    Deb->>K: Publish ProductUpdatedEvent (id, version)
+    K->>Con: Deliver Event (At-Least-Once)
+    Con->>ODB: Check processed_events &amp; event.version &gt; replica.version
+    alt New &amp; Higher Version
+        Con->>ODB: Upsert ProductReplica + Insert processed_events
+    else Duplicate or Stale Version
+        Con->>Con: Ignore safely (Idempotent)
+    end
+```
+
+### Outbox & Deduplication Schema (SQL)
+
+```sql
+-- 1. Outbox table in the producer's database (written in same ACID TX)
+CREATE TABLE outbox_events (
+    id              UUID PRIMARY KEY,
+    aggregate_type  VARCHAR(100) NOT NULL,  -- e.g. 'Product'
+    aggregate_id    VARCHAR(100) NOT NULL,  -- Kafka partition key
+    event_type      VARCHAR(100) NOT NULL,  -- e.g. 'ProductUpdatedEvent'
+    payload         JSONB        NOT NULL,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- 2. Deduplication table in the consumer's database
+CREATE TABLE processed_events (
+    event_id        UUID PRIMARY KEY,
+    processed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+> [!IMPORTANT]
+> **Why Outbox + CDC Beats Dual Writes:** Calling `repository.save()` and `kafkaTemplate.send()` in sequence is **not atomic**—if the app crashes or Kafka times out after DB commit, the event is lost forever. Writing to `outbox_events` in the same local DB transaction and tailing the WAL with Debezium guarantees **at-least-once** delivery.
+
+### Eventual Consistency & Replica Sync Implementation
 
 ```java
 // Service A: Source of truth
@@ -1517,7 +1885,7 @@ public class ProductService {
 
         productRepository.save(product);
 
-        // Publish event
+        // Publish event (In production: write to outbox_events in same TX for Debezium CDC)
         kafkaTemplate.send("products", new ProductUpdatedEvent(
             productId,
             product.getName(),
@@ -1602,55 +1970,76 @@ public class DataReplicationSyncer {
 }
 ```
 
+> [!TIP]
+> Always combine **CDC + Versioned Idempotency** (`event.getVersion() > replica.getVersion()`) with a **periodic reconciliation job** (`DataReplicationSyncer`) for critical reference data to catch any missed or out-of-order updates.
+
 ---
 
 ## Interview Questions
+
+```mermaid
+flowchart TD
+    Q["Microservices Data Problem"] --> T{"Write or Read?"}
+    T -->|"Cross-Service Write"| W{"Steps & Complexity?"}
+    W -->|"2-4 Simple Steps"| Chor["Choreography Saga + Outbox CDC"]
+    W -->|"Complex Branching / Retries"| Orch["Orchestration Saga + Outbox CDC"]
+    W -->|"Full Audit / Time Travel"| ES["Event Sourcing + Snapshots"]
+
+    T -->|"Cross-Service Read"| R{"Query Complexity?"}
+    R -->|"Simple Key Lookup"| API["API Composition + Redis Cache"]
+    R -->|"Joins / Search / Analytics"| CQRS["CQRS Materialized View"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ans fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5
+    class Q,T,W,R root
+    class Chor,Orch,ES,API,CQRS ans
+```
 
 ### Q1: How would you handle an order that spans multiple services with different consistency requirements?
 
 **Answer**:
 
-```
-Order requirements:
-1. Customer payment: STRONG consistency (money can't disappear)
-2. Inventory: STRONG consistency (can't oversell)
-3. Recommendation: EVENTUAL consistency (can be stale)
+| Requirement | Consistency Level | Pattern / Mechanism |
+| :--- | :--- | :--- |
+| **Customer Payment** | Strong (money cannot disappear) | Local ACID TX + Saga compensation (refund) |
+| **Inventory** | Strong (cannot oversell) | Local ACID TX / optimistic locking + Saga release |
+| **Recommendations** | Eventual (slightly stale is OK) | Async Kafka events + Redis cache |
 
-Design:
-
-Command Side (Write):
-├─ Accept order submission
-├─ Use saga pattern for distributed transaction
-│  ├─ Step 1: Reserve inventory (STRONG)
-│  ├─ Step 2: Process payment (STRONG)
-│  └─ Compensate if either fails
-├─ Publish order events
-
-Query Side (Read):
-├─ Eventually consistent read model
-├─ For critical operations (payment): read from source of truth
-├─ For display (recommendations): read from cache
-```
+**Design:**
+- **Command Side (Write):**
+  - Accept order submission (`PENDING` semantic lock).
+  - Use the **Saga pattern** (with **Transactional Outbox + CDC** for reliable event publishing):
+    - Step 1: Reserve inventory (Strong local ACID).
+    - Step 2: Process payment (Strong local ACID).
+    - Compensate (release reservation / refund) if either fails.
+  - Publish order events to Kafka.
+- **Query Side (Read):**
+  - Maintain an eventually consistent **CQRS read model** for order history/dashboards.
+  - For critical operations (e.g., payment verification), read directly from the source of truth.
+  - For display widgets (e.g., recommendations), read from distributed cache (Redis).
 
 ### Q2: When would you choose event sourcing over traditional persistence?
 
 **Answer**:
 
 **Choose Event Sourcing when:**
-- Need complete audit trail (financial, compliance)
-- Need temporal queries (state at time T)
-- Debugging is critical (replay to point in time)
-- Event-driven architecture natural fit
-- Multiple read models needed (CQRS)
+- You need a **complete, immutable audit trail** (financial ledgers, compliance, healthcare).
+- You need **temporal queries** (reconstructing exact state at time $T$).
+- **Debugging** is critical (replaying production event streams to reproduce bugs).
+- An **event-driven architecture** is a natural fit.
+- **Multiple read models (CQRS)** must be derived and rebuilt from the same source of truth.
 
-**Don't choose when:**
-- Simple CRUD operations
-- Large amounts of data (storage grows)
-- Team inexperienced with patterns
-- Performance critical (reconstruction overhead)
+**Don't choose Event Sourcing when:**
+- Building simple CRUD applications.
+- Storage growth is a hard constraint and history has low business value.
+- The team is inexperienced with eventual consistency, upcasting, and snapshotting.
+- Ultra-low-latency direct state reads are required without maintaining CQRS projections.
 
 **Example use case:**
-E-commerce order system - order history important
-- Can replay entire order lifecycle
-- Audit trail for disputes
-- Multiple views (customer, admin, analytics)
+E-commerce order system — order history is critical:
+- Can replay the entire order lifecycle.
+- Built-in audit trail for customer disputes and chargebacks.
+- Feeds multiple CQRS views (customer order tracking, admin support portal, analytics warehouse).
+
+> [!TIP]
+> **Interview Framing:** Always state *why* you avoid 2PC (blocking & coupling), name the **Saga type** (Orchestration vs Choreography) and **reliable event delivery** (Transactional Outbox + Debezium CDC), and explicitly call out **idempotency** on consumers.

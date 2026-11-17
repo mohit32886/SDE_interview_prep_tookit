@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="Strangler Fig Migration Pattern Animation">
+  <defs>
+    <style>
+      .title { font: 700 20px system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 12px system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+      .label { font: 600 13px system-ui, -apple-system, sans-serif; fill: #f1f5f9; }
+      .sublabel { font: 400 11px system-ui, -apple-system, sans-serif; fill: #cbd5e1; }
+      .mono { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .badge { font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      @keyframes pulseGlow {
+        0%, 100% { stroke-opacity: 0.55; }
+        50% { stroke-opacity: 1; }
+      }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      @keyframes phase1 {
+        0%, 30% { opacity: 1; }
+        33%, 100% { opacity: 0.18; }
+      }
+      @keyframes phase2 {
+        0%, 30% { opacity: 0.18; }
+        33%, 63% { opacity: 1; }
+        66%, 100% { opacity: 0.18; }
+      }
+      @keyframes phase3 {
+        0%, 63% { opacity: 0.18; }
+        66%, 97% { opacity: 1; }
+        100% { opacity: 0.18; }
+      }
+      @keyframes barShift {
+        0%, 30% { width: 22px; fill: #38bdf8; }
+        33%, 63% { width: 110px; fill: #34d399; }
+        66%, 97% { width: 220px; fill: #22c55e; }
+        100% { width: 22px; fill: #38bdf8; }
+      }
+      @keyframes legacyFade {
+        0%, 30% { opacity: 1; }
+        33%, 63% { opacity: 0.72; }
+        66%, 97% { opacity: 0.32; }
+        100% { opacity: 1; }
+      }
+
+      .flow-new { stroke-dasharray: 6 6; animation: dashFlow 1.2s linear infinite; }
+      .flow-cdc { stroke-dasharray: 5 5; animation: dashFlow 1.5s linear infinite; }
+      .glow-green { animation: pulseGlow 2.4s ease-in-out infinite; }
+      .p1 { animation: phase1 9s infinite; }
+      .p2 { animation: phase2 9s infinite; }
+      .p3 { animation: phase3 9s infinite; }
+      .bar-anim { animation: barShift 9s infinite; }
+      .legacy-group { animation: legacyFade 9s infinite; }
+    </style>
+
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Canvas -->
+  <rect x="0" y="0" width="960" height="540" rx="16" fill="#0f172a"/>
+  <rect x="16" y="16" width="928" height="508" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="40" y="52" class="title">Strangler Fig Migration Pattern</text>
+  <text x="40" y="72" class="subtitle">Progressive traffic shifting (10% &#8594; 50% &#8594; 100%) from Legacy Monolith to Microservices via API Gateway + CDC Sync</text>
+
+  <!-- Phase Indicator Pill Bar (Top Right) -->
+  <rect x="540" y="34" width="380" height="48" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="556" y="53" class="mono" fill="#94a3b8">TRAFFIC TO MICROSERVICES:</text>
+  <rect x="556" y="62" width="220" height="10" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <rect x="556" y="62" width="22" height="10" rx="5" class="bar-anim"/>
+
+  <text x="790" y="64" class="badge p1" fill="#38bdf8">PHASE 1: 10%</text>
+  <text x="790" y="64" class="badge p2" fill="#34d399">PHASE 2: 50%</text>
+  <text x="790" y="64" class="badge p3" fill="#22c55e">PHASE 3: 100%</text>
+
+  <!-- Client Node -->
+  <rect x="40" y="220" width="110" height="90" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="95" y="256" text-anchor="middle" class="label">Clients</text>
+  <text x="95" y="275" text-anchor="middle" class="sublabel">Web / Mobile</text>
+  <text x="95" y="293" text-anchor="middle" class="mono" fill="#38bdf8">HTTPS</text>
+
+  <!-- API Gateway / Routing Proxy -->
+  <rect x="200" y="190" width="160" height="150" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+  <text x="280" y="222" text-anchor="middle" class="label">API Gateway</text>
+  <text x="280" y="240" text-anchor="middle" class="sublabel">Strangler Routing Proxy</text>
+  <rect x="216" y="256" width="128" height="24" rx="5" fill="#1e293b" stroke="#334155"/>
+  <text x="280" y="272" text-anchor="middle" class="mono" fill="#34d399">/api/orders &#8594; New</text>
+  <rect x="216" y="288" width="128" height="24" rx="5" fill="#1e293b" stroke="#334155"/>
+  <text x="280" y="304" text-anchor="middle" class="mono" fill="#fbbf24">/** &#8594; Monolith</text>
+
+  <!-- Connection: Client -> Gateway -->
+  <path id="pathClientGw" d="M 150 265 L 196 265" stroke="#38bdf8" stroke-width="2.5" fill="none" marker-end="url(#arrowBlue)"/>
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 150 265 L 196 265"/>
+  </circle>
+
+  <!-- Extracted Microservices Container -->
+  <rect x="430" y="106" width="490" height="200" rx="12" fill="#0f172a" stroke="#22c55e" stroke-width="1.5" class="glow-green"/>
+  <text x="450" y="130" class="mono" fill="#34d399">EXTRACTED MICROSERVICES (NEW STACK)</text>
+
+  <!-- Order Service -->
+  <rect x="450" y="146" width="136" height="84" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="518" y="170" text-anchor="middle" class="label">Order Service</text>
+  <text x="518" y="188" text-anchor="middle" class="sublabel">REST / gRPC</text>
+  <rect x="466" y="198" width="104" height="22" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1"/>
+  <text x="518" y="213" text-anchor="middle" class="mono" fill="#34d399">Order DB</text>
+
+  <!-- Payment Service -->
+  <rect x="606" y="146" width="136" height="84" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="674" y="170" text-anchor="middle" class="label">Payment Service</text>
+  <text x="674" y="188" text-anchor="middle" class="sublabel">Idempotent API</text>
+  <rect x="622" y="198" width="104" height="22" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1"/>
+  <text x="674" y="213" text-anchor="middle" class="mono" fill="#34d399">Payment DB</text>
+
+  <!-- Inventory Service -->
+  <rect x="762" y="146" width="136" height="84" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="830" y="170" text-anchor="middle" class="label">Inventory Service</text>
+  <text x="830" y="188" text-anchor="middle" class="sublabel">Stock &amp; Reserve</text>
+  <rect x="778" y="198" width="104" height="22" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1"/>
+  <text x="830" y="213" text-anchor="middle" class="mono" fill="#34d399">Inventory DB</text>
+
+  <!-- Event Bus inside Microservices -->
+  <rect x="450" y="246" width="448" height="40" rx="6" fill="#1e293b" stroke="#a855f7" stroke-width="1"/>
+  <text x="674" y="270" text-anchor="middle" class="mono" fill="#c084fc">Domain Event Bus (OrderSubmitted &#8594; PaymentApproved &#8594; StockReserved)</text>
+
+  <!-- Legacy Monolith Container -->
+  <g class="legacy-group">
+    <rect x="430" y="346" width="490" height="148" rx="12" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="450" y="370" class="mono" fill="#fbbf24">LEGACY MONOLITH (SHRINKING FOOTPRINT)</text>
+
+    <rect x="450" y="384" width="270" height="90" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.2"/>
+    <text x="585" y="408" text-anchor="middle" class="label">Monolith Application</text>
+    <text x="585" y="428" text-anchor="middle" class="sublabel">Remaining modules: Users, Reporting</text>
+    <text x="585" y="446" text-anchor="middle" class="sublabel">Fallback routes during Canary / Rollout</text>
+    <text x="585" y="464" text-anchor="middle" class="mono" fill="#fbbf24">Decommissioned at 100%</text>
+
+    <rect x="748" y="384" width="150" height="90" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.2"/>
+    <text x="823" y="416" text-anchor="middle" class="label">Monolith DB</text>
+    <text x="823" y="436" text-anchor="middle" class="sublabel">Shared Legacy Schema</text>
+    <text x="823" y="456" text-anchor="middle" class="mono" fill="#fbbf24">Source of CDC</text>
+  </g>
+
+  <!-- Routing Path: Gateway -> Microservices (Green Animated) -->
+  <path d="M 360 230 C 395 230, 395 188, 444 188" stroke="#34d399" stroke-width="2.5" fill="none" class="flow-new" marker-end="url(#arrowGreen)"/>
+  <circle r="4.5" fill="#34d399">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 360 230 C 395 230, 395 188, 444 188"/>
+  </circle>
+  <circle r="4.5" fill="#34d399">
+    <animateMotion dur="1.8s" begin="0.9s" repeatCount="indefinite" path="M 360 230 C 395 230, 395 188, 444 188"/>
+  </circle>
+
+  <!-- Routing Path: Gateway -> Monolith (Amber) -->
+  <path d="M 360 300 C 395 300, 395 425, 444 425" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arrowAmber)" class="legacy-group"/>
+  <circle r="4" fill="#fbbf24" class="legacy-group">
+    <animateMotion dur="2.2s" repeatCount="indefinite" path="M 360 300 C 395 300, 395 425, 444 425"/>
+  </circle>
+
+  <!-- CDC Sync Path: Monolith DB -> Microservice DBs -->
+  <path d="M 823 384 L 823 310" stroke="#c084fc" stroke-width="2" fill="none" class="flow-cdc" marker-end="url(#arrowPurple)"/>
+  <rect x="742" y="314" width="162" height="22" rx="4" fill="#1e293b" stroke="#c084fc" stroke-width="1"/>
+  <text x="823" y="329" text-anchor="middle" class="mono" fill="#c084fc">CDC / Outbox Sync</text>
+  <circle r="3.5" fill="#c084fc">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M 823 384 L 823 310"/>
+  </circle>
+</svg>

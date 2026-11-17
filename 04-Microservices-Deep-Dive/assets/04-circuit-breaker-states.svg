@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 460" width="920" height="460" role="img" aria-labelledby="cb-title cb-desc">
+  <title id="cb-title">Circuit Breaker State Machine Animation</title>
+  <desc id="cb-desc">Animated diagram showing Circuit Breaker transitions between CLOSED, OPEN, and HALF_OPEN states, including failure rate counting, fail-fast fallback, waitDuration timer, and probe request recovery.</desc>
+  <defs>
+    <style>
+      .bg-card { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .title-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .state-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 15px; font-weight: 700; }
+      .body-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; fill: #cbd5e1; }
+      .mono-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; font-weight: 600; }
+      .edge-label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; }
+
+      @keyframes pulseClosed {
+        0%, 28% { stroke: #22c55e; stroke-width: 2.8; filter: drop-shadow(0 0 8px rgba(34,197,94,0.45)); }
+        34%, 78% { stroke: #334155; stroke-width: 1.5; filter: none; }
+        84%, 100% { stroke: #22c55e; stroke-width: 2.8; filter: drop-shadow(0 0 8px rgba(34,197,94,0.45)); }
+      }
+      @keyframes pulseOpen {
+        0%, 28% { stroke: #334155; stroke-width: 1.5; filter: none; }
+        34%, 58% { stroke: #ef4444; stroke-width: 2.8; filter: drop-shadow(0 0 8px rgba(239,68,68,0.45)); }
+        64%, 100% { stroke: #334155; stroke-width: 1.5; filter: none; }
+      }
+      @keyframes pulseHalfOpen {
+        0%, 58% { stroke: #334155; stroke-width: 1.5; filter: none; }
+        64%, 82% { stroke: #f59e0b; stroke-width: 2.8; filter: drop-shadow(0 0 8px rgba(245,158,11,0.45)); }
+        88%, 100% { stroke: #334155; stroke-width: 1.5; filter: none; }
+      }
+      @keyframes timerProgress {
+        0%, 33% { width: 0px; opacity: 0.2; }
+        35% { width: 0px; opacity: 1; }
+        58% { width: 140px; opacity: 1; }
+        63%, 100% { width: 140px; opacity: 0.25; }
+      }
+      @keyframes failBarGrow {
+        0%, 10% { width: 22px; fill: #22c55e; }
+        22% { width: 78px; fill: #f59e0b; }
+        30%, 60% { width: 132px; fill: #ef4444; }
+        85%, 100% { width: 22px; fill: #22c55e; }
+      }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+
+      .card-closed { animation: pulseClosed 12s infinite ease-in-out; }
+      .card-open { animation: pulseOpen 12s infinite ease-in-out; }
+      .card-half { animation: pulseHalfOpen 12s infinite ease-in-out; }
+      .timer-bar { animation: timerProgress 12s infinite linear; }
+      .fail-bar { animation: failBarGrow 12s infinite ease-in-out; }
+      .flow-line { stroke-dasharray: 6 6; animation: dashFlow 1.2s infinite linear; }
+    </style>
+
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e" />
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect class="bg-card" x="0" y="0" width="920" height="460" rx="14" />
+  <rect x="1" y="1" width="918" height="458" rx="13" fill="none" stroke="#334155" stroke-width="1" />
+
+  <!-- Header -->
+  <text class="title-text" x="28" y="36">Circuit Breaker State Machine (Resilience4j)</text>
+  <text class="subtitle-text" x="28" y="56">Tracks sliding-window failure rate, trips to fail-fast fallback, waits for cooldown, and probes recovery</text>
+
+  <!-- Legend Pills -->
+  <rect x="650" y="22" width="76" height="22" rx="11" fill="#052e16" stroke="#22c55e" stroke-width="1" />
+  <text class="badge-text" x="688" y="37" text-anchor="middle" fill="#4ade80">CLOSED</text>
+  <rect x="734" y="22" width="66" height="22" rx="11" fill="#450a0a" stroke="#ef4444" stroke-width="1" />
+  <text class="badge-text" x="767" y="37" text-anchor="middle" fill="#f87171">OPEN</text>
+  <rect x="808" y="22" width="88" height="22" rx="11" fill="#451a03" stroke="#f59e0b" stroke-width="1" />
+  <text class="badge-text" x="852" y="37" text-anchor="middle" fill="#fbbf24">HALF_OPEN</text>
+
+  <!-- STATE 1: CLOSED -->
+  <g transform="translate(36, 98)">
+    <rect class="panel card-closed" x="0" y="0" width="230" height="168" rx="12" />
+    <rect x="0" y="0" width="230" height="34" rx="12" fill="#14532d" opacity="0.55" />
+    <circle cx="20" cy="17" r="6" fill="#22c55e" />
+    <text class="state-title" x="34" y="22" fill="#4ade80">CLOSED</text>
+    <text class="mono-text" x="216" y="21" text-anchor="end" fill="#86efac">Normal</text>
+
+    <text class="body-text" x="16" y="56">• Requests pass to PaymentClient</text>
+    <text class="body-text" x="16" y="76">• Sliding window: last 100 calls</text>
+    <text class="body-text" x="16" y="96">• Threshold: failureRate &gt;= 50%</text>
+
+    <text class="mono-text" x="16" y="124" fill="#94a3b8">Failure Rate Meter:</text>
+    <rect x="16" y="132" width="198" height="12" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1" />
+    <rect class="fail-bar" x="17" y="133" width="22" height="10" rx="5" fill="#22c55e" />
+    <line x1="115" y1="129" x2="115" y2="147" stroke="#f8fafc" stroke-width="1.2" stroke-dasharray="2 2" />
+    <text class="mono-text" x="115" y="158" text-anchor="middle" fill="#cbd5e1">50% trip line</text>
+  </g>
+
+  <!-- STATE 2: OPEN -->
+  <g transform="translate(345, 98)">
+    <rect class="panel card-open" x="0" y="0" width="230" height="168" rx="12" />
+    <rect x="0" y="0" width="230" height="34" rx="12" fill="#7f1d1d" opacity="0.55" />
+    <circle cx="20" cy="17" r="6" fill="#ef4444" />
+    <text class="state-title" x="34" y="22" fill="#f87171">OPEN</text>
+    <text class="mono-text" x="216" y="21" text-anchor="end" fill="#fca5a5">Fail-Fast</text>
+
+    <text class="body-text" x="16" y="56">• Blocks downstream calls instantly</text>
+    <text class="body-text" x="16" y="76">• Throws CallNotPermittedException</text>
+    <text class="body-text" x="16" y="96">• Routes to fallbackProcessPayment</text>
+
+    <text class="mono-text" x="16" y="124" fill="#94a3b8">waitDurationInOpenState (30s):</text>
+    <rect x="16" y="132" width="198" height="12" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1" />
+    <rect class="timer-bar" x="17" y="133" width="0" height="10" rx="5" fill="#f59e0b" />
+    <text class="mono-text" x="115" y="158" text-anchor="middle" fill="#fbbf24">Cooldown timer</text>
+  </g>
+
+  <!-- STATE 3: HALF_OPEN -->
+  <g transform="translate(654, 98)">
+    <rect class="panel card-half" x="0" y="0" width="230" height="168" rx="12" />
+    <rect x="0" y="0" width="230" height="34" rx="12" fill="#78350f" opacity="0.55" />
+    <circle cx="20" cy="17" r="6" fill="#f59e0b" />
+    <text class="state-title" x="34" y="22" fill="#fbbf24">HALF_OPEN</text>
+    <text class="mono-text" x="216" y="21" text-anchor="end" fill="#fde68a">Probing</text>
+
+    <text class="body-text" x="16" y="56">• Allows 3 permitted probe calls</text>
+    <text class="body-text" x="16" y="76">• All 3 succeed → CLOSED</text>
+    <text class="body-text" x="16" y="96">• Any probe fails → OPEN</text>
+
+    <text class="mono-text" x="16" y="124" fill="#94a3b8">Probe Calls (3/3):</text>
+    <circle cx="32" cy="142" r="8" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5">
+      <animate attributeName="fill" values="#0f172a;#0f172a;#22c55e;#22c55e;#0f172a" keyTimes="0;0.64;0.70;0.85;1" dur="12s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="62" cy="142" r="8" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5">
+      <animate attributeName="fill" values="#0f172a;#0f172a;#22c55e;#22c55e;#0f172a" keyTimes="0;0.70;0.76;0.85;1" dur="12s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="92" cy="142" r="8" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5">
+      <animate attributeName="fill" values="#0f172a;#0f172a;#22c55e;#22c55e;#0f172a" keyTimes="0;0.76;0.82;0.85;1" dur="12s" repeatCount="indefinite" />
+    </circle>
+    <text class="mono-text" x="114" y="146" fill="#cbd5e1">health check</text>
+  </g>
+
+  <!-- Transition: CLOSED -> OPEN -->
+  <path class="flow-line" d="M 268 164 L 341 164" stroke="#ef4444" stroke-width="2.2" fill="none" marker-end="url(#arrow-red)" />
+  <rect x="271" y="138" width="68" height="18" rx="4" fill="#0f172a" />
+  <text class="edge-label" x="305" y="151" text-anchor="middle" fill="#f87171">&gt;= 50% fail</text>
+
+  <!-- Transition: OPEN -> HALF_OPEN -->
+  <path class="flow-line" d="M 577 164 L 650 164" stroke="#f59e0b" stroke-width="2.2" fill="none" marker-end="url(#arrow-amber)" />
+  <rect x="580" y="138" width="68" height="18" rx="4" fill="#0f172a" />
+  <text class="edge-label" x="614" y="151" text-anchor="middle" fill="#fbbf24">30s elapsed</text>
+
+  <!-- Transition: HALF_OPEN -> OPEN (Failure) -->
+  <path d="M 769 268 C 769 312, 460 312, 460 272" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#arrow-red)" />
+  <rect x="556" y="294" width="118" height="20" rx="5" fill="#1e293b" stroke="#ef4444" stroke-width="1" />
+  <text class="edge-label" x="615" y="308" text-anchor="middle" fill="#fca5a5">Probe fails → Re-open</text>
+
+  <!-- Transition: HALF_OPEN -> CLOSED (Recovery) -->
+  <path d="M 795 268 C 795 362, 151 362, 151 272" stroke="#22c55e" stroke-width="2.2" fill="none" marker-end="url(#arrow-green)" />
+  <rect x="385" y="338" width="152" height="22" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1" />
+  <text class="edge-label" x="461" y="353" text-anchor="middle" fill="#4ade80">Probes pass → Recover</text>
+
+  <!-- Moving Request Packet along active transitions -->
+  <circle r="5.5" fill="#38bdf8" stroke="#f8fafc" stroke-width="1.2">
+    <animateMotion dur="12s" repeatCount="indefinite"
+      path="M 151 164 L 305 164 L 460 164 L 614 164 L 769 164 L 795 268 C 795 362, 151 362, 151 272 L 151 164" />
+  </circle>
+
+  <!-- Bottom Live Execution Strip -->
+  <g transform="translate(36, 384)">
+    <rect class="panel" x="0" y="0" width="848" height="54" rx="10" />
+    <text class="mono-text" x="18" y="22" fill="#38bdf8">RESILIENCE4J PIPELINE:</text>
+    <text class="body-text" x="172" y="22">OrderService.processPayment()</text>
+    <path d="M 354 18 L 384 18" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#arrow-cyan)" />
+    <text class="mono-text" x="394" y="22" fill="#e2e8f0">@CircuitBreaker("payment-service")</text>
+    <path d="M 624 18 L 654 18" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#arrow-cyan)" />
+    <text class="mono-text" x="664" y="22" fill="#fbbf24">fallbackProcessPayment()</text>
+    <text class="mono-text" x="18" y="41" fill="#94a3b8">Config: slidingWindowSize=100 | failureRateThreshold=50% | slowCallDurationThreshold=2s | waitDurationInOpenState=30s</text>
+  </g>
+</svg>

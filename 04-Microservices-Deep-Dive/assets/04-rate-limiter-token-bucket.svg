@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 460" width="920" height="460" role="img" aria-labelledby="rl-title rl-desc">
+  <title id="rl-title">Token Bucket Rate Limiter and Bulkhead Isolation</title>
+  <desc id="rl-desc">Animated diagram showing Token Bucket Rate Limiter refilling tokens, burst requests consuming tokens, excess requests returning HTTP 429 Too Many Requests, alongside Bulkhead thread-pool isolation between DB calls and Payment Service.</desc>
+  <defs>
+    <style>
+      .bg-card { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .subpanel { fill: #0f172a; stroke: #334155; stroke-width: 1.2; }
+      .title-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .section-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #f1f5f9; }
+      .body-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; fill: #cbd5e1; }
+      .mono-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; font-weight: 700; }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes dropToken {
+        0% { transform: translateY(0px); opacity: 0; }
+        15% { opacity: 1; }
+        75% { transform: translateY(58px); opacity: 1; }
+        90%, 100% { transform: translateY(68px); opacity: 0; }
+      }
+      @keyframes bucketLevel {
+        0%, 15% { height: 74px; y: 206px; fill: #22c55e; }
+        35% { height: 44px; y: 236px; fill: #38bdf8; }
+        55% { height: 14px; y: 266px; fill: #f59e0b; }
+        70% { height: 4px; y: 276px; fill: #ef4444; }
+        88%, 100% { height: 74px; y: 206px; fill: #22c55e; }
+      }
+      @keyframes rejectFlash {
+        0%, 58% { opacity: 0.25; stroke: #475569; }
+        65%, 80% { opacity: 1; stroke: #ef4444; filter: drop-shadow(0 0 6px rgba(239,68,68,0.5)); }
+        88%, 100% { opacity: 0.25; stroke: #475569; }
+      }
+      @keyframes allowPulse {
+        0%, 45% { opacity: 1; stroke: #22c55e; }
+        55%, 82% { opacity: 0.35; stroke: #334155; }
+        90%, 100% { opacity: 1; stroke: #22c55e; }
+      }
+      @keyframes dbThreadPulse {
+        0%, 100% { fill: #22c55e; opacity: 0.85; }
+        50% { fill: #4ade80; opacity: 1; }
+      }
+      @keyframes payThreadStall {
+        0%, 20% { fill: #38bdf8; }
+        35%, 80% { fill: #ef4444; }
+        95%, 100% { fill: #38bdf8; }
+      }
+
+      .flow-line { stroke-dasharray: 5 5; animation: dashFlow 1s infinite linear; }
+      .token-drop-1 { animation: dropToken 3.2s infinite ease-in; }
+      .token-drop-2 { animation: dropToken 3.2s 1.6s infinite ease-in; }
+      .bucket-fill { animation: bucketLevel 10s infinite ease-in-out; }
+      .reject-box { animation: rejectFlash 10s infinite ease-in-out; }
+      .allow-box { animation: allowPulse 10s infinite ease-in-out; }
+      .db-dot { animation: dbThreadPulse 2s infinite ease-in-out; }
+      .pay-dot { animation: payThreadStall 10s infinite ease-in-out; }
+    </style>
+
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e" />
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect class="bg-card" x="0" y="0" width="920" height="460" rx="14" />
+  <rect x="1" y="1" width="918" height="458" rx="13" fill="none" stroke="#334155" stroke-width="1" />
+
+  <!-- Header -->
+  <text class="title-text" x="28" y="36">Rate Limiter (Token Bucket) &amp; Bulkhead Thread-Pool Isolation</text>
+  <text class="subtitle-text" x="28" y="56">Token Bucket absorbs bursts and sheds excess load with HTTP 429; Bulkhead isolates slow dependencies</text>
+
+  <!-- LEFT PANEL: TOKEN BUCKET RATE LIMITER -->
+  <g transform="translate(24, 78)">
+    <rect class="panel" x="0" y="0" width="430" height="358" rx="12" />
+    <rect x="0" y="0" width="430" height="36" rx="12" fill="#0c4a6e" opacity="0.55" />
+    <text class="section-title" x="18" y="23">1. Token Bucket Rate Limiter</text>
+    <text class="mono-text" x="412" y="22" text-anchor="end" fill="#7dd3fc">10 tokens/sec refill</text>
+
+    <!-- Refill Spout -->
+    <rect x="155" y="52" width="120" height="28" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" />
+    <text class="mono-text" x="215" y="70" text-anchor="middle" fill="#38bdf8">Refill: 10 tok/s</text>
+
+    <!-- Falling Tokens -->
+    <circle class="token-drop-1" cx="205" cy="90" r="6" fill="#fbbf24" stroke="#fef08a" stroke-width="1" />
+    <circle class="token-drop-2" cx="225" cy="90" r="6" fill="#fbbf24" stroke="#fef08a" stroke-width="1" />
+
+    <!-- Bucket Container -->
+    <path d="M 155 170 L 165 284 L 265 284 L 275 170" fill="#0f172a" stroke="#64748b" stroke-width="2.5" stroke-linejoin="round" />
+    <!-- Animated Token Level inside Bucket -->
+    <rect class="bucket-fill" x="167" y="206" width="96" height="74" rx="4" opacity="0.82" />
+    <text class="mono-text" x="215" y="162" text-anchor="middle" fill="#cbd5e1">Bucket (Cap: 100)</text>
+
+    <!-- Incoming Burst Requests (Left) -->
+    <rect x="16" y="196" width="106" height="44" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" />
+    <text class="body-text" x="69" y="215" text-anchor="middle" fill="#e2e8f0">Burst Traffic</text>
+    <text class="mono-text" x="69" y="231" text-anchor="middle" fill="#38bdf8">req/s &gt; refill</text>
+    <path class="flow-line" d="M 124 218 L 154 218" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow-cyan)" />
+
+    <!-- Allowed Output (Top Right) -->
+    <rect class="allow-box" x="302" y="172" width="114" height="44" rx="8" fill="#052e16" stroke="#22c55e" stroke-width="1.5" />
+    <text class="badge-text" x="359" y="191" text-anchor="middle" fill="#4ade80">HTTP 200 OK</text>
+    <text class="mono-text" x="359" y="206" text-anchor="middle" fill="#86efac">Token consumed</text>
+    <path class="flow-line" d="M 273 194 L 298 194" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow-green)" />
+
+    <!-- Rejected Output (Bottom Right) -->
+    <rect class="reject-box" x="302" y="236" width="114" height="44" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.5" />
+    <text class="badge-text" x="359" y="255" text-anchor="middle" fill="#f87171">HTTP 429</text>
+    <text class="mono-text" x="359" y="270" text-anchor="middle" fill="#fca5a5">Too Many Requests</text>
+    <path class="flow-line" d="M 271 258 L 298 258" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow-red)" />
+
+    <!-- Bottom Summary Strip -->
+    <rect class="subpanel" x="16" y="300" width="398" height="44" rx="8" />
+    <text class="mono-text" x="28" y="319" fill="#e2e8f0">Resilience4j: limitForPeriod=1000 | limitRefreshPeriod=1m</text>
+    <text class="mono-text" x="28" y="335" fill="#94a3b8">timeoutDuration=0s -&gt; immediate 429 shed when bucket empty</text>
+  </g>
+
+  <!-- RIGHT PANEL: BULKHEAD THREAD-POOL ISOLATION -->
+  <g transform="translate(468, 78)">
+    <rect class="panel" x="0" y="0" width="428" height="358" rx="12" />
+    <rect x="0" y="0" width="428" height="36" rx="12" fill="#3b0764" opacity="0.5" />
+    <text class="section-title" x="18" y="23">2. Bulkhead Pattern (Thread-Pool Isolation)</text>
+    <text class="mono-text" x="410" y="22" text-anchor="end" fill="#d8b4fe">Order Service (20T)</text>
+
+    <!-- Pool 1: Database Calls (Healthy) -->
+    <rect class="subpanel" x="16" y="54" width="396" height="114" rx="10" stroke="#22c55e" stroke-width="1.4" />
+    <text class="section-title" x="30" y="76" fill="#4ade80">Pool 1: Database Calls (10 threads)</text>
+    <text class="mono-text" x="398" y="76" text-anchor="end" fill="#86efac">HEALTHY</text>
+
+    <!-- 10 thread dots -->
+    <circle class="db-dot" cx="38" cy="102" r="7" />
+    <circle class="db-dot" cx="62" cy="102" r="7" />
+    <circle class="db-dot" cx="86" cy="102" r="7" />
+    <circle class="db-dot" cx="110" cy="102" r="7" />
+    <circle class="db-dot" cx="134" cy="102" r="7" />
+    <circle class="db-dot" cx="158" cy="102" r="7" />
+    <circle class="db-dot" cx="182" cy="102" r="7" />
+    <circle class="db-dot" cx="206" cy="102" r="7" />
+    <circle class="db-dot" cx="230" cy="102" r="7" />
+    <circle class="db-dot" cx="254" cy="102" r="7" />
+    <text class="mono-text" x="278" y="106" fill="#cbd5e1">maxConcurrent=20</text>
+    <text class="body-text" x="30" y="136">• Completely isolated from Payment Service hangs</text>
+    <text class="body-text" x="30" y="154">• Order reads &amp; DB queries continue with 0ms impact</text>
+
+    <!-- Steel Partition Wall -->
+    <line x1="16" y1="181" x2="412" y2="181" stroke="#64748b" stroke-width="2" stroke-dasharray="6 4" />
+    <rect x="148" y="171" width="132" height="20" rx="10" fill="#1e293b" stroke="#64748b" stroke-width="1" />
+    <text class="badge-text" x="214" y="185" text-anchor="middle" fill="#cbd5e1">BULKHEAD WALL</text>
+
+    <!-- Pool 2: Payment Service (Isolated Fault) -->
+    <rect class="subpanel" x="16" y="198" width="396" height="106" rx="10" stroke="#ef4444" stroke-width="1.4" />
+    <text class="section-title" x="30" y="220" fill="#f87171">Pool 2: Payment Service (5 threads)</text>
+    <text class="mono-text" x="398" y="220" text-anchor="end" fill="#fca5a5">ISOLATED</text>
+
+    <!-- 5 thread dots -->
+    <circle class="pay-dot" cx="38" cy="246" r="7" />
+    <circle class="pay-dot" cx="62" cy="246" r="7" />
+    <circle class="pay-dot" cx="86" cy="246" r="7" />
+    <circle class="pay-dot" cx="110" cy="246" r="7" />
+    <circle class="pay-dot" cx="134" cy="246" r="7" />
+    <text class="mono-text" x="158" y="250" fill="#fca5a5">5/5 blocked (25% cap)</text>
+    <text class="body-text" x="30" y="278">• 6th call waits maxWaitDuration (3s) -&gt; BulkheadFullException</text>
+    <text class="body-text" x="30" y="294">• Prevents thread-pool starvation across the JVM</text>
+
+    <!-- Bottom Summary Strip -->
+    <rect class="subpanel" x="16" y="314" width="396" height="30" rx="8" />
+    <text class="mono-text" x="28" y="333" fill="#d8b4fe">@Bulkhead(name="payment-service") | SEMAPHORE vs THREADPOOL</text>
+  </g>
+</svg>

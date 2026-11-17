@@ -14,46 +14,82 @@
 
 ## Service Discovery
 
-In a microservices architecture, services are dynamic (instances come and go). Discovery finds available instances.
+In a microservices architecture, service instances are ephemeral and dynamic—instances scale up, scale down, crash, and restart on different IP addresses and ports. **Service Discovery** automatically tracks active instances so callers never hardcode network locations.
 
 ### Without Service Discovery (Manual Registration)
 
-```
-Hardcoded in code:
-├── Order Service: http://payment-service-instance-1:8080
-├── Order Service: http://payment-service-instance-2:8080
-├── Order Service: http://payment-service-instance-3:8080
+Hardcoding URLs in application code or static config files:
+- `http://payment-service-instance-1:8080`
+- `http://payment-service-instance-2:8080`
+- `http://payment-service-instance-3:8080`
 
-Problems:
-1. If instance dies, code fails
-2. No dynamic scaling
-3. Manual update of service URLs
-4. Load balancing manual
+**Problems:**
+1. If an instance dies, requests to it fail until code/config is redeployed.
+2. No dynamic autoscaling—new instances cannot receive traffic automatically.
+3. Manual updates of service URLs across every consumer are error-prone.
+4. Load balancing must be managed manually.
+
+### Service Discovery Architecture & Comparison
+
+```mermaid
+flowchart LR
+    classDef client fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef registry fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef gateway fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef svc fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+
+    subgraph CSD["Client-Side Discovery (Eureka / Ribbon)"]
+        C1["Order Service + Client LB"]:::client
+        R1["Service Registry (Eureka / Consul / etcd)"]:::registry
+        P1["payment-service 10.0.0.5:8080"]:::svc
+        P2["payment-service 10.0.0.6:8080"]:::svc
+        C1 -->|"1. Query instances"| R1
+        C1 -->|"2. Pick instance &amp; call directly"| P1
+        C1 -.->|"2. Or pick instance 2"| P2
+    end
+
+    subgraph SSD["Server-Side Discovery (API Gateway / K8s)"]
+        C2["Client"]:::client
+        GW["API Gateway / Load Balancer"]:::gateway
+        R2["Service Registry"]:::registry
+        O1["order-service:8080"]:::svc
+        I1["inventory-service:8080"]:::svc
+        C2 -->|"1. HTTP request"| GW
+        GW -->|"2. Query registry"| R2
+        GW -->|"3. Route request"| O1
+        GW -.->|"3. Route request"| I1
+    end
 ```
 
-### Service Discovery Architecture
+```mermaid
+sequenceDiagram
+    participant P as Payment Service
+    participant R as Service Registry (Eureka)
+    participant O as Order Service
 
+    P->>R: Register (payment-service, 10.0.0.5:8080)
+    loop Every 30s Heartbeat
+        P->>R: Heartbeat /actuator/health (UP)
+    end
+    O->>R: Fetch Registry (getInstances "payment-service")
+    R-->>O: [10.0.0.5:8080, 10.0.0.6:8080]
+    O->>P: POST /api/payments (Client LB)
+    Note over P,R: If no heartbeat for 90s, instance is evicted
 ```
-┌─────────────────────────────────────────────────────────┐
-│        Service Registry (Eureka, Consul, etcd)          │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ payment-service:                                │   │
-│  │   - instance-1: http://10.0.0.5:8080            │   │
-│  │   - instance-2: http://10.0.0.6:8080            │   │
-│  │   - instance-3: http://10.0.0.7:8080            │   │
-│  │ order-service:                                  │   │
-│  │   - instance-1: http://10.0.0.1:8080            │   │
-│  │   - instance-2: http://10.0.0.2:8080            │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
 
-Services register on startup, deregister on shutdown
-Clients query registry to find service instances
-```
+| Aspect | Client-Side Discovery | Server-Side Discovery | Kubernetes DNS |
+| :--- | :--- | :--- | :--- |
+| **Examples** | Netflix Eureka + Ribbon / LoadBalancer | Spring Cloud Gateway, AWS ALB, NGINX | CoreDNS + `ClusterIP` (`kube-proxy`) |
+| **Who Queries Registry** | Caller microservice | API Gateway / Load Balancer | Platform DNS + `iptables` / IPVS |
+| **Network Hops** | Direct (1 hop) | Extra hop via Gateway/LB | Direct to Pod IP via `kube-proxy` |
+| **Language Coupling** | High (needs client SDK per language) | Low (language-agnostic) | None (standard DNS) |
+
+> [!IMPORTANT]
+> **Eureka Self-Preservation Mode (`enable-self-preservation: true`):** If a network partition prevents heartbeats from reaching Eureka, Eureka stops evicting instances when renewals drop below a threshold (85%). This prioritizes **Availability** over **Consistency** (AP in CAP) so healthy instances are not accidentally dropped during transient network blips.
 
 ### Client-Side Service Discovery
 
-Client finds instances and load balances.
+The client queries the registry, selects an instance, and load balances requests.
 
 ```java
 // Netflix Eureka (Spring Cloud Eureka)
@@ -84,7 +120,7 @@ spring:
 server:
   port: 8080
 
-# Order Service discovers and calls Payment Service
+// Order Service discovers and calls Payment Service
 @Service
 public class OrderService {
 
@@ -103,7 +139,7 @@ public class OrderService {
             throw new ServiceUnavailableException("payment-service not available");
         }
 
-        // Load balance (round-robin)
+        // Load balance (random / round-robin)
         ServiceInstance instance = instances.get(
             (int)(Math.random() * instances.size())
         );
@@ -153,30 +189,10 @@ public class OrderServiceWithRibbon {
 
 ### Server-Side Service Discovery
 
-API Gateway discovers instances and routes requests.
-
-```
-┌─────────────┐
-│  Client     │
-└──────┬──────┘
-       │ HTTP request
-       ▼
-┌──────────────────────────────────┐
-│    API Gateway                   │
-│  (discovers services, routes)    │
-└──────────────────┬───────────────┘
-       │
-       ├─ query Service Registry
-       │
-       ├─ route to payment-service:8080
-       ├─ route to order-service:8080
-       └─ route to inventory-service:8080
-
-Advantages:
-- Client doesn't know about service instances
-- Gateway handles load balancing
-- Client sees single entry point
-```
+The API Gateway discovers instances and routes requests, hiding service topology from clients:
+- Client doesn't know about service instances.
+- Gateway handles load balancing.
+- Client sees a single entry point.
 
 ```java
 // Spring Cloud Gateway with service discovery
@@ -289,7 +305,10 @@ public class PaymentServiceHealthIndicator extends AbstractHealthIndicator {
 
 ### Service Discovery in Kubernetes
 
-Kubernetes has built-in service discovery via DNS.
+Kubernetes has built-in service discovery via DNS (`<service-name>.<namespace>.svc.cluster.local`).
+
+> [!TIP]
+> In Kubernetes, you rarely need Eureka or Ribbon—CoreDNS resolves `http://payment-service:8080` to a stable `ClusterIP`, and `kube-proxy` distributes traffic across healthy Pod endpoints automatically.
 
 ```yaml
 # Kubernetes Service definition
@@ -357,46 +376,62 @@ public class OrderServiceK8s {
 
 ## API Gateway Pattern
 
-Single entry point for all clients. Handles cross-cutting concerns.
+A single entry point for all external clients that centralizes cross-cutting concerns before requests reach internal microservices.
 
-### API Gateway Responsibilities
+### API Gateway Responsibilities & Request Pipeline
 
+1. **Request Routing:** Route `/api/orders` to Order Service, `/api/products` to Product Service.
+2. **Authentication & Authorization:** Verify JWT tokens, check permissions, and enforce per-user rate limiting.
+3. **Request/Response Transformation:** Handle API versioning, protocol conversion (REST/gRPC), header enrichment, and compression.
+4. **Load Balancing & Resilience:** Distribute load across instances and apply circuit breakers with fallbacks.
+5. **Monitoring & Logging:** Log all requests, collect latency/status metrics, and inject distributed tracing headers.
+
+```mermaid
+flowchart TD
+    classDef client fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef filter fill:#1e293b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef svc fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef err fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+
+    C["Clients (Web, Mobile, Third-Party)"]:::client --> F1["1. Logging &amp; Tracing Filter"]:::filter
+    F1 --> F2["2. JWT Auth &amp; RBAC Filter"]:::filter
+    F2 -->|"Invalid Token"| E1["401 Unauthorized"]:::err
+    F2 -->|"Valid JWT"| F3["3. Rate Limiting Filter"]:::filter
+    F3 -->|"Quota Exceeded"| E2["429 Too Many Requests"]:::err
+    F3 -->|"Allowed"| F4["4. Path Rewrite &amp; Circuit Breaker"]:::filter
+    F4 -->|"/api/v1/orders/**"| S1["Order Service"]:::svc
+    F4 -->|"/api/v1/products/**"| S2["Product Service"]:::svc
+    F4 -->|"/api/v1/payments/**"| S3["Payment Service"]:::svc
+    F4 -->|"Circuit Open"| FB["Fallback /forward/fallback/orders"]:::err
 ```
-                    Clients
-                (Web, Mobile, etc)
-                       │
-                       ▼
-        ┌──────────────────────────────────┐
-        │      API Gateway                 │
-        ├──────────────────────────────────┤
-        │ 1. Request Routing               │
-        │    - Route /api/orders → Order   │
-        │    - Route /api/products → Prod  │
-        │                                  │
-        │ 2. Authentication/Authorization  │
-        │    - Verify JWT token            │
-        │    - Check permissions           │
-        │    - Rate limiting per user      │
-        │                                  │
-        │ 3. Request/Response Transformation
-        │    - API versioning              │
-        │    - Protocol conversion (REST)  │
-        │    - Compression                 │
-        │                                  │
-        │ 4. Load Balancing                │
-        │    - Distribute load             │
-        │    - Circuit breaker             │
-        │                                  │
-        │ 5. Monitoring & Logging          │
-        │    - Log all requests            │
-        │    - Metrics collection          │
-        │    - Distributed tracing         │
-        └──────────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-    Order Svc    Product Svc    Payment Svc
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant GW as API Gateway
+    participant O as Order Service
+
+    C->>GW: GET /api/v1/orders/42 (Bearer JWT)
+    GW->>GW: Validate JWT &amp; check rate limit
+    GW->>GW: Mutate headers (X-User-Id, X-User-Roles) &amp; StripPrefix(2)
+    GW->>O: GET /orders/42 (lb://order-service)
+    alt Order Service Healthy
+        O-->>GW: 200 OK (Order JSON)
+        GW-->>C: 200 OK
+    else Order Service Timeout / Error
+        O--xGW: 503 / Timeout
+        GW-->>C: Fallback Response (/fallback/orders)
+    end
 ```
+
+| Gateway Option | Tech Stack | Strengths | Best Fit |
+| :--- | :--- | :--- | :--- |
+| **Spring Cloud Gateway** | Java / Project Reactor (Netty) | Tight Spring Boot / Eureka integration, custom Java filters | Java/Spring microservices ecosystems |
+| **Kong** | NGINX / Lua (OpenResty) | High throughput, rich plugin marketplace, declarative or DB config | Polyglot teams needing turnkey plugins |
+| **Envoy / NGINX** | C++ | Ultra-low latency, native xDS/K8s Ingress &amp; Gateway API support | Cloud-native Kubernetes / Service Mesh |
+
+> [!WARNING]
+> **Avoid the "Smart Gateway" Anti-Pattern:** Never put domain/business logic or complex database joins inside the API Gateway. Because it sits on the critical path for every request, bloat turns the gateway into a tightly coupled bottleneck and single point of failure—always deploy it statelessly behind a load balancer with multiple replicas.
 
 ### Spring Cloud Gateway Implementation
 
@@ -588,33 +623,33 @@ curl -X POST http://localhost:8001/services/order-service/plugins \
 
 ## Backend for Frontend (BFF)
 
-Separate API gateway for each client type (web, mobile, etc).
+A **Backend for Frontend (BFF)** provides a dedicated gateway/aggregation layer tailored to each client experience (Web, Mobile, Third-Party API) instead of forcing one generic API on all consumers.
 
-```
-┌────────────────────────────────────────────────────────┐
-│           Clients                                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
-│  │Web Client│  │Mobile App│  │Third-Pty │            │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘            │
-└───────┼──────────────┼──────────────┼───────────────────┘
-        │              │              │
-        ▼              ▼              ▼
-    ┌────────────┐ ┌──────────────┐ ┌──────────┐
-    │ Web BFF    │ │ Mobile BFF   │ │ API BFF  │
-    │ Gateway    │ │ Gateway      │ │ (public) │
-    └──────┬─────┘ └──────┬───────┘ └────┬─────┘
-           │              │              │
-           └──────────────┼──────────────┘
-                          │
-           ┌──────────────┼──────────────┐
-           ▼              ▼              ▼
-        Order Svc    Product Svc    Payment Svc
+```mermaid
+flowchart TD
+    classDef client fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef bff fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef svc fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
 
-Each BFF optimized for its client:
-- Web BFF: Full data, server-side rendering support
-- Mobile BFF: Minimal data, optimized for bandwidth
-- API BFF: Full API, public access control
+    WC["Web Client"]:::client --> WB["Web BFF Gateway (Full Data &amp; SSR)"]:::bff
+    MA["Mobile App"]:::client --> MB["Mobile BFF Gateway (Minimal Payload)"]:::bff
+    TP["Third-Party Client"]:::client --> PB["Public API BFF (Scoped Access)"]:::bff
+
+    WB --> OS["Order Service"]:::svc
+    WB --> PS["Product Service"]:::svc
+    MB --> OS
+    PB --> OS
+    WB --> PAY["Payment Service"]:::svc
 ```
+
+| BFF Variant | Payload Shape | Aggregation Strategy | Key Optimization |
+| :--- | :--- | :--- | :--- |
+| **Web BFF** | Rich DTOs (`OrderPageDTO`) | Combines Order + Products + Recommendations | Reduces browser round-trips; SSR-friendly |
+| **Mobile BFF** | Minimal DTOs (`OrderMobileDTO`) | Fetches only ID, status, total; lazy-loads details | Saves cellular bandwidth &amp; battery |
+| **Public API BFF** | Strictly scoped (`OrderStatusDTO`) | Exposes only safe, public fields | Enforces strict partner rate limits &amp; ACLs |
+
+> [!TIP]
+> **Team Ownership:** A BFF works best when owned by the frontend team that consumes it (e.g., the iOS/Android team owns Mobile BFF). This eliminates cross-team bottlenecks when UI screens evolve.
 
 ```java
 // Web BFF - optimized for browser clients
@@ -705,16 +740,38 @@ public class PublicAPIController {
 
 ## Load Balancing
 
-Distributes requests across multiple instances.
+Distributes incoming requests across multiple healthy service instances to maximize throughput and prevent single-instance overload.
+
+```mermaid
+flowchart LR
+    classDef lb fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef srv fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef hot fill:#7c2d12,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+
+    Req["Incoming Requests"] --> LB["Load Balancer"]:::lb
+    LB -->|"Round Robin / Weighted (50%)"| A["Server A (Weight: 3, 10 conns)"]:::hot
+    LB -->|"Least Connections (3 conns)"| B["Server B (Weight: 2, 3 conns)"]:::srv
+    LB -->|"Consistent Hash (user-42)"| C["Server C (Weight: 1, 7 conns)"]:::srv
+```
+
+| Algorithm | Selection Rule | Best For | Trade-Off |
+| :--- | :--- | :--- | :--- |
+| **Round Robin** | Cycles sequentially (`A -> B -> C -> A`) | Stateless services with uniform instance sizes | Ignores active load or slow instances |
+| **Least Connections** | Picks instance with fewest active connections | Long-lived or variable-latency requests (WebSockets, DB queries) | Requires tracking connection state |
+| **Weighted** | Distributes proportionally by capacity (`3:2:1`) | Heterogeneous hardware or gradual traffic shifts | Static weights don't adapt to CPU spikes |
+| **Consistent Hashing** | Maps request key (e.g., `userId`) onto a hash ring | Stateful caches, sticky sessions, shard locality | Hot keys can still skew one node |
+
+> [!NOTE]
+> Netflix Ribbon is in maintenance mode in modern Spring Cloud (`>= 2020.0`) and has been replaced by **Spring Cloud LoadBalancer** (`@LoadBalanced` still works identically with `RestTemplate` and `WebClient`).
 
 ### Load Balancing Algorithms
 
 ```java
 // Round Robin (most common)
-// Request 1 → Server A
-// Request 2 → Server B
-// Request 3 → Server C
-// Request 4 → Server A
+// Request 1 -> Server A
+// Request 2 -> Server B
+// Request 3 -> Server C
+// Request 4 -> Server A
 
 @Component
 public class RoundRobinLoadBalancer {
@@ -837,31 +894,39 @@ payment-service:
 
 ## Service Mesh
 
-Infrastructure layer that handles service-to-service communication.
+A **Service Mesh** (e.g., Istio + Envoy) is a dedicated infrastructure layer that handles service-to-service (East-West) communication—retries, timeouts, circuit breaking, mTLS, and telemetry—via sidecar proxies so application code stays focused on business logic.
 
-```
-Without Service Mesh:
-┌─────────────────┐
-│ Order Service   │
-├─────────────────┤
-│ - Business logic│
-│ - Resilience    │ (complicated - retries, timeouts, circuit breaker)
-│ - Security      │ (SSL/TLS)
-│ - Monitoring    │ (metrics, tracing)
-└─────────────────┘
+![API Gateway and Service Mesh](./assets/03-api-gateway-service-mesh.svg)
 
-With Service Mesh (Istio):
-┌─────────────────────────────────────┐
-│ Order Service  │  Service Mesh      │
-├────────────────┼───────────────────┤
-│ - Business     │ - Resilience      │
-│   logic        │ - Security        │
-│                │ - Monitoring      │
-│                │ - Rate limiting   │
-│                │ - Load balancing  │
-│                │ - Service routing │
-└─────────────────────────────────────┘
+```mermaid
+flowchart LR
+    classDef app fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef proxy fill:#172554,stroke:#3b82f6,stroke-width:2px,color:#f8fafc
+    classDef ctrl fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef crd fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+
+    subgraph Before["Without Service Mesh"]
+        Fat["Order Service (Business Logic + Retries + TLS + Metrics)"]:::app
+    end
+
+    subgraph After["With Istio Service Mesh"]
+        App["Order Service (Business Logic Only)"]:::app <-->|"localhost"| Sidecar["Envoy Sidecar (:15000 / :15001)"]:::proxy
+        Istiod["Istio Control Plane"]:::ctrl -->|"xDS Config &amp; mTLS Certs"| Sidecar
+        VS["VirtualService (80/20 Routing)"]:::crd --> Istiod
+        DR["DestinationRule (LEAST_REQUEST &amp; Outlier)"]:::crd --> Istiod
+        PA["PeerAuthentication (mTLS STRICT)"]:::crd --> Istiod
+    end
 ```
+
+| Dimension | API Gateway (North-South) | Service Mesh (East-West) |
+| :--- | :--- | :--- |
+| **Traffic Direction** | External Clients -> Internal Services | Service <-> Service inside cluster |
+| **Primary Concerns** | Edge Auth (JWT/OAuth), API versioning, rate limiting | mTLS, retries, outlier detection, canary splitting |
+| **Deployment Model** | Centralized edge proxy cluster | Sidecar proxy (`istio-proxy`) per Pod |
+| **App Code Changes** | None (clients call Gateway URL) | None (transparent `iptables` interception) |
+
+> [!IMPORTANT]
+> **Zero-Trust Security with `PeerAuthentication`:** Setting `mtls.mode: STRICT` enforces mutual TLS across all mesh workloads—every Envoy sidecar automatically rotates SPIFFE X.509 certificates and rejects plaintext traffic.
 
 ### Istio Components
 
@@ -964,28 +1029,52 @@ spec:
       mountPath: /etc/istio/proxy
 ```
 
-**Service Mesh Benefits**:
+**Service Mesh Benefits:**
 - Centralized traffic management
 - Security (mTLS, authorization)
 - Observability (metrics, tracing)
 - Resilience (retries, circuit breaker)
 - No code changes needed
 
-**Service Mesh Drawbacks**:
+**Service Mesh Drawbacks:**
 - Operational complexity
-- Performance overhead (sidecar proxies)
+- Performance overhead (sidecar proxies add extra network hops)
 - Learning curve
-- Resource overhead (one proxy per pod)
+- Resource overhead (one proxy container per pod)
+
+> [!WARNING]
+> **Evaluate Before Adopting:** For small clusters (&lt; 10–15 services), a service mesh's CPU/memory footprint and operational complexity can outweigh its benefits. Start with Kubernetes DNS + an API Gateway, and adopt Istio when you need uniform mTLS, polyglot resilience, or fine-grained traffic splitting.
 
 ---
 
 ## Configuration Management
 
-Managing configuration across multiple environments and services.
+Centralizes environment-specific settings (timeouts, feature flags, DB URLs, credentials) outside application artifacts so one build runs across dev, staging, and production.
+
+```mermaid
+flowchart LR
+    classDef src fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef srv fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef app fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+
+    Git["Git Config Repo (application.yml / prod)"]:::src -->|"Fetch"| SCC["Spring Cloud Config Server (:8888)"]:::srv
+    SCC -->|"bootstrap.yml + @RefreshScope"| App1["Order Service"]:::app
+    Consul["Consul KV Store (:8500/v1/kv)"]:::srv -->|"Watch &amp; Auto-Refresh"| App1
+    K8sCM["K8s ConfigMap &amp; Secret"]:::srv -->|"Volume Mount / Env Vars"| App2["K8s Pod"]:::app
+```
+
+| Tool | Storage Backend | Dynamic Refresh | Secret Handling |
+| :--- | :--- | :--- | :--- |
+| **Spring Cloud Config** | Git repository (versioned history) | `@RefreshScope` + `/actuator/refresh` (or Spring Cloud Bus) | Supports JCE encryption (`{cipher}...`) |
+| **Consul KV** | Raft-replicated key-value store | Automatic long-polling watch | Pair with HashiCorp Vault |
+| **K8s ConfigMap / Secret** | `etcd` | Env vars need Pod restart; mounted files update eventually | Base64-encoded by default |
+
+> [!WARNING]
+> **Kubernetes `Secret` is NOT encrypted by default:** Base64 is encoding, not encryption. Enable `etcd` encryption at rest, restrict RBAC, or use External Secrets Operator / HashiCorp Vault in production.
 
 ### Spring Cloud Config
 
-Centralized configuration repository.
+Centralized configuration repository backed by Git.
 
 ```yaml
 # config-server/application.yml
@@ -1004,7 +1093,7 @@ server:
   port: 8888
 ```
 
-```yaml
+```text
 # Configuration repository (Git)
 configs/
 ├── application.yml
@@ -1067,9 +1156,12 @@ public class ConfigChangeListener {
 }
 ```
 
+> [!TIP]
+> Pair `@RefreshScope` with `RefreshScopeRefreshedEvent` listeners when you need to re-initialize connection pools or thread pools without restarting the JVM.
+
 ### Consul Key-Value Store
 
-Dynamic configuration with service discovery.
+Dynamic configuration combined with service discovery.
 
 ```java
 @Configuration
@@ -1169,27 +1261,47 @@ spec:
 
 ## Deployment Strategies
 
+Zero-downtime deployment strategies trade off infrastructure cost, rollback speed, and blast radius.
+
+![Canary Release vs Blue-Green Deployment](./assets/03-canary-blue-green-deploy.svg)
+
+```mermaid
+flowchart TD
+    classDef step fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef gate fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef bad fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
+
+    Start["Deploy v2.0 Canary (10% Traffic)"]:::step --> Mon["Monitor 5xx, p99 Latency &amp; Business KPIs"]:::gate
+    Mon -->|"5xx &lt; 1% &amp; p99 OK"| Step2["Shift 20% -&gt; 50% -&gt; 100%"]:::ok
+    Mon -->|"Threshold Breached"| Rollback["Instant Rollback to v1.0 (100%)"]:::bad
+```
+
+```mermaid
+flowchart LR
+    classDef v1 fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef v2 fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+
+    S0["Start: v1, v1, v1"]:::v1 -->|"maxSurge: 1, maxUnavailable: 0"| S1["Step 1: v2, v1, v1 (2/3 old)"]:::v1
+    S1 --> S2["Step 2: v2, v2, v1 (1/3 old)"]:::v2
+    S2 --> S3["Done: v2, v2, v2 (All new)"]:::v2
+```
+
+| Strategy | Traffic Cutover | Rollback Speed | Extra Compute Cost | Blast Radius |
+| :--- | :--- | :--- | :--- | :--- |
+| **Blue-Green** | Instant LB/router switch (0% -> 100%) | Instant (flip pointer back to Blue) | High (2x instances during cutover) | High if bug escapes smoke tests |
+| **Canary Release** | Progressive (`90/10 -> 80/20 -> 50/50 -> 0/100`) | Fast (shift weight back to 100% v1) | Low (only canary slice) | Very low (capped at canary %) |
+| **Rolling Update** | Gradual Pod replacement (`maxSurge` / `maxUnavailable`) | Moderate (roll back Pods one by one) | Minimal (`+maxSurge` pods) | Mixed v1 &amp; v2 serve traffic simultaneously |
+
+> [!IMPORTANT]
+> **Schema Compatibility Rule:** In both Canary and Rolling updates, `v1.0` and `v2.0` run side-by-side against the same database. Always use **expand-and-contract** database migrations so `v2.0` never breaks `v1.0` queries.
+
 ### Blue-Green Deployment
 
-```
-V1.0 (Blue):
-Order Service V1.0 (running, receiving traffic)
-  ├ 3 instances, all at v1.0
-
-V2.0 (Green - being deployed):
-Order Service V2.0 (staged, no traffic)
-  ├ 3 instances, all at v2.0
-  ├ Running tests, verified
-
-Switch:
-Load Balancer switches from Blue (v1.0) to Green (v2.0)
-  └─ Instant cutover, all traffic to v2.0
-  └─ If issue: switch back to v1.0
-
-Cleanup:
-Keep v1.0 running for quick rollback
-  └─ After stability confirmed, shut down v1.0
-```
+1. **V1.0 (Blue):** 3 instances running and receiving 100% of production traffic.
+2. **V2.0 (Green):** 3 instances staged with 0% production traffic; smoke tests run and verified.
+3. **Switch:** Load Balancer cuts over instantly from Blue (`v1.0`) to Green (`v2.0`).
+4. **Cleanup:** Keep `v1.0` warm briefly for instant rollback; shut down once stability is confirmed.
 
 ```java
 // Using Spring Cloud to manage blue-green deployment
@@ -1211,26 +1323,7 @@ public class BlueGreenDeploymentConfig {
 
 ### Canary Release
 
-```
-Current Version (90% traffic):
-Order Service V1.0
-  ├ 90 instances at v1.0
-  └ Receiving 90% of traffic
-
-Canary Version (10% traffic):
-Order Service V2.0
-  ├ 10 instances at v2.0
-  └ Receiving 10% of traffic (metrics monitored)
-
-If metrics good, gradually increase canary:
-  ├ After 1 hour: 80/20 split
-  ├ After 2 hours: 50/50 split
-  ├ After 4 hours: 0/100 (fully switched)
-
-If metrics bad, rollback:
-  ├ Go back to 90/10, investigate
-  ├ Fix and re-deploy
-```
+Route a small slice (e.g., 10% or internal `canary-tester` users) to `v2.0`, verify metrics, and progressively promote (`80/20` after 1h -> `50/50` after 2h -> `0/100` after 4h), or roll back immediately if metrics degrade.
 
 ```yaml
 # Istio VirtualService for canary
@@ -1262,32 +1355,7 @@ spec:
 
 ### Rolling Update
 
-```
-Gradually replace old instances with new instances.
-
-V1.0 (3 instances):
-Instance 1: v1.0
-Instance 2: v1.0
-Instance 3: v1.0
-
-Update Instance 1:
-Instance 1: v2.0 (new)
-Instance 2: v1.0 (old)
-Instance 3: v1.0 (old)
-→ 2/3 old instances still handling traffic
-
-Update Instance 2:
-Instance 1: v2.0 (new)
-Instance 2: v2.0 (new)
-Instance 3: v1.0 (old)
-→ 1/3 old instances still handling traffic
-
-Update Instance 3:
-Instance 1: v2.0 (new)
-Instance 2: v2.0 (new)
-Instance 3: v2.0 (new)
-→ All new version
-```
+Gradually replaces `v1.0` instances with `v2.0` one by one (`3/3 v1` -> `1 v2, 2 v1` -> `2 v2, 1 v1` -> `3/3 v2`) while keeping capacity at or above desired replicas.
 
 ```yaml
 # Kubernetes rolling update
@@ -1321,188 +1389,71 @@ spec:
 
 ### Q1: How would you design service discovery for a system with 100+ microservices?
 
-**Answer**:
+```mermaid
+flowchart TD
+    classDef edge fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
+    classDef mesh fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef k8s fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef obs fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
 
+    Ext["External Clients"] --> GW["API Gateway (Single Entry, Auth, Rate Limit)"]:::edge
+    GW --> K8s["Kubernetes DNS (service.namespace.svc.cluster.local)"]:::k8s
+    K8s --> Mesh["Istio Service Mesh (mTLS, Retries, Circuit Breaker, Canary)"]:::mesh
+    Mesh --> Svc["100+ Microservices (/health Endpoints)"]:::k8s
+    Svc --> Prom["Prometheus Scrapes + PagerDuty Alerts (&gt; 3 Missed Heartbeats)"]:::obs
 ```
-Architecture:
-1. Use Kubernetes or dedicated service registry (Consul, Eureka)
-2. Automated registration/deregistration
-3. Health checks and heartbeat
-4. Load balancing at multiple levels
 
-Implementation:
-├── Kubernetes Service Registry (DNS-based)
-│   ├ service-name.namespace.svc.cluster.local
-│   ├ Automatic updates when pods added/removed
-│   └ Built-in load balancing via ClusterIP
-│
-├── API Gateway for external traffic
-│   ├ Single entry point
-│   ├ Rate limiting, auth at gateway
-│   └ Hide service topology from clients
-│
-├── Service Mesh (Istio) for inter-service communication
-│   ├ Resilience (circuit breaker, retries)
-│   ├ Security (mTLS)
-│   ├ Traffic management (canary, blue-green)
-│   └ Observability (tracing, metrics)
+**Answer:**
+- **Registry & Platform:** Use Kubernetes DNS (`service-name.namespace.svc.cluster.local` + `ClusterIP`) or a dedicated registry (Consul / Eureka) with automated registration and deregistration.
+- **External Edge:** Place an API Gateway in front for single entry point, rate limiting, authentication, and hiding internal topology.
+- **Inter-Service Layer:** Use a Service Mesh (Istio) for uniform resilience (circuit breakers, retries), security (mTLS), traffic management (canary, blue-green), and observability (tracing, metrics).
+- **Monitoring & Eviction:** Every service exposes `/health`; instances missing &gt; 3 heartbeats are deregistered; Prometheus scrapes health metrics and triggers PagerDuty alerts if multiple instances go down.
 
-Monitoring:
-├── Health checks: every service must expose /health
-├── Deregistration: services down > 3 heartbeats removed
-├── Metrics: Prometheus scrapes service health
-└── Alerts: PagerDuty if multiple instances down
-```
+---
 
 ### Q2: Design an API Gateway for a mobile and web application with different requirements.
 
-**Answer**:
+**Answer:**
+1. **Main API Gateway (Shared Edge):** Handles JWT validation, per-user rate limiting, and request signing (for mobile).
+2. **Web BFF Gateway:** Aggregates full product data, reviews, pagination, and recommendations into HTML-friendly/SSR responses.
+3. **Mobile BFF Gateway:** Returns lightweight JSON or binary-encoded responses, minimal fields, cached/offloaded image paths (no inline images) to save bandwidth.
+4. **Core Services:** Order, Product, Payment, and Inventory services remain clean and client-agnostic behind the BFFs.
 
-```
-Gateway Architecture:
-
-┌────────────────────────────────────┐
-│ Clients (Web, Mobile, Third-Party) │
-└────────┬───────────────────────────┘
-         │
-         ▼
-┌────────────────────────────────────┐
-│    Main API Gateway                │
-│ (Authentication, Rate Limiting)    │
-└────────┬────────────────┬──────────┘
-         │                │
-         ▼                ▼
-┌──────────────────┐ ┌──────────────────┐
-│   Web BFF        │ │  Mobile BFF      │
-│   Gateway        │ │  Gateway         │
-├──────────────────┤ ├──────────────────┤
-│ - Full data      │ │ - Minimal data   │
-│ - Complex queries│ │ - Optimized      │
-│ - Pagination     │ │ - Image paths    │
-│ - Recommendations│ │ - No inline pics │
-└──────┬───────────┘ └────┬─────────────┘
-       │                  │
-       └──────────┬───────┘
-                  ▼
-        ┌─────────────────────┐
-        │  Core Services      │
-        │ (Order, Product,    │
-        │  Payment, Inventory)│
-        └─────────────────────┘
-
-Authentication at main gateway:
-├── JWT validation
-├── Per-user rate limiting
-├── Request signing (for mobile)
-
-BFF layer:
-├── Web BFF: Full product data, reviews, recommendations
-├── Mobile BFF: Lightweight responses, cached images
-
-Response optimization:
-├── Web: Full HTML-friendly format
-├── Mobile: Minimal JSON, binary encoding
-```
+---
 
 ### Q3: How would you implement a canary deployment for order service?
 
-**Answer**:
+```mermaid
+flowchart LR
+    classDef phase fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    classDef rb fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#f8fafc
 
+    P0["Baseline: v1.0 (30 inst, 100%) + v2.0 (3 inst, 0%)"]:::phase --> P1["Phase 1: 10% v2.0"]:::phase
+    P1 -->|"Error &lt;= 1% &amp; p99 &lt;= 5s"| P2["Phase 2 (30m): 25% v2.0"]:::phase
+    P2 -->|"Metrics Healthy"| P3["Phase 3 (1h): 50% v2.0"]:::phase
+    P3 -->|"Order KPIs OK"| P4["Phase 4 (2h): 100% v2.0 &amp; Retire v1.0"]:::ok
+    P1 -.->|"5xx &gt; 1% or p99 &gt; 5s or DB CPU &gt; 80%"| RB["Auto-Rollback to v1.0"]:::rb
 ```
-Setup:
-├── Current: Order Service v1.0 (100% traffic, 30 instances)
-├── Canary: Order Service v2.0 (0% traffic, 3 instances)
 
-Phase 1: Deploy v2.0 (10% traffic)
-├── Route 10% of traffic to v2.0
-├── Monitor error rates, latency
-├── If good: proceed, else: rollback
+**Answer:**
+- **Setup:** Keep `Order Service v1.0` at 30 instances (100% traffic) and deploy `v2.0` canary at 3 instances (0% traffic).
+- **Phased Rollout:**
+  - **Phase 1 (10%):** Monitor HTTP `5xx` error rates and latency; proceed if healthy.
+  - **Phase 2 (25%):** After 30 minutes of stability, continue monitoring `v2.0` metrics.
+  - **Phase 3 (50%):** After 1 hour of stability, validate business metrics (order completion rate).
+  - **Phase 4 (100%):** After 2 hours of stability, promote to 100% and decommission `v1.0`.
+- **Metrics & Automated Rollback:** Monitor `5xx` rate, `p50`/`p95`/`p99` latency, order success rate, database performance, and payment failures. Trigger automatic rollback if **error rate &gt; 1%**, **p99 latency &gt; 5 seconds**, or **database CPU &gt; 80%**.
 
-Phase 2: Increase to 25% traffic
-├── After 30 min of stability
-├── Monitor v2.0 metrics
-
-Phase 3: Increase to 50% traffic
-├── After 1 hour of stability
-├── Monitor business metrics (order completion rate)
-
-Phase 4: Increase to 100% traffic
-├── After 2 hours of stability
-├── Decommission v1.0
-
-Metrics to monitor:
-├── Error rates (HTTP 5xx)
-├── Latency (p50, p95, p99)
-├── Order success rate
-├── Database performance
-├── Payment failures
-
-Automatic rollback if:
-├── Error rate > 1%
-├── Latency p99 > 5 seconds
-├── Database CPU > 80%
-```
+---
 
 ### Q4: What's the difference between client-side and server-side service discovery?
 
-**Answer**:
+| Dimension | Client-Side Discovery (e.g., Eureka + Ribbon) | Server-Side Discovery (e.g., K8s DNS, Spring Cloud Gateway) |
+| :--- | :--- | :--- |
+| **Flow** | Client queries registry -> picks instance -> calls directly | Client calls Gateway/LB -> Gateway queries registry -> forwards |
+| **Advantages** | Direct connection (no extra hop); client controls LB strategy | Client is unaware of services; language-agnostic; topology abstracted |
+| **Disadvantages** | Client must know registry &amp; implement LB; language-dependent | Extra network hop; Gateway can be a SPOF; dedicated gateway ops |
 
-```
-CLIENT-SIDE DISCOVERY:
-┌─────────────────────────┐
-│ Client                  │
-├─────────────────────────┤
-│ 1. Query service registry
-│ 2. Select instance
-│ 3. Make request
-└──────┬──────────────────┘
-       │
-       ├─ to Instance A
-       ├─ to Instance B
-       └─ to Instance C
-
-Advantages:
-- Direct connection to service
-- Load balancing logic in client
-
-Disadvantages:
-- Client must know service registry
-- Client must implement load balancing
-- Client language dependent
-
-Example: Netflix Eureka + Ribbon
-
-SERVER-SIDE DISCOVERY:
-┌──────────────┐
-│ Client       │
-└──────┬───────┘
-       │ request to api-gateway
-       ▼
-┌──────────────────────────┐
-│ API Gateway              │
-├──────────────────────────┤
-│ 1. Query service registry
-│ 2. Select instance
-│ 3. Forward request
-└──────┬────────────────────┘
-       │
-       ├─ to Instance A
-       ├─ to Instance B
-       └─ to Instance C
-
-Advantages:
-- Client doesn't know about services
-- Service discovery details abstracted
-- Easier for multiple client languages
-
-Disadvantages:
-- Extra network hop (gateway)
-- Gateway is single point of failure
-- Need dedicated ops for gateway
-
-Example: Kubernetes DNS, Spring Cloud Gateway
-
-Recommendation: Use server-side discovery for simplicity
-Easier to change service topology without client updates
-```
-
+> [!TIP]
+> **Interview Recommendation:** Default to **server-side discovery** (Kubernetes DNS / API Gateway) for simplicity—it lets you evolve internal service topology without updating or redeploying clients across multiple languages.

@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="DDD Bounded Contexts with ACL and Domain Events">
+  <defs>
+    <style>
+      .title { font: 700 20px system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 12px system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+      .ctx-title { font: 700 14px system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+      .model-title { font: 700 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .attr { font: 400 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #cbd5e1; }
+      .mono { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      @keyframes pulseBorder {
+        0%, 100% { stroke-opacity: 0.6; }
+        50% { stroke-opacity: 1; }
+      }
+      .flow-line { stroke-dasharray: 6 6; animation: dashFlow 1.4s linear infinite; }
+      .pulse-acl { animation: pulseBorder 2.2s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Canvas -->
+  <rect x="0" y="0" width="960" height="540" rx="16" fill="#0f172a"/>
+  <rect x="16" y="16" width="928" height="508" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="40" y="50" class="title">DDD Bounded Contexts &amp; Anti-Corruption Layers</text>
+  <text x="40" y="70" class="subtitle">The same Order &amp; Customer concepts have distinct models per context, decoupled via Domain Events &amp; ACLs</text>
+
+  <!-- SALES CONTEXT (Left) -->
+  <rect x="36" y="98" width="276" height="400" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+  <rect x="36" y="98" width="276" height="36" rx="12" fill="#0c4a6e"/>
+  <text x="174" y="121" text-anchor="middle" class="ctx-title">Sales Context</text>
+
+  <!-- Sales: Order Model -->
+  <rect x="54" y="152" width="240" height="144" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="68" y="174" class="model-title" fill="#38bdf8">Order (Aggregate Root)</text>
+  <line x1="54" y1="184" x2="294" y2="184" stroke="#334155"/>
+  <text x="68" y="204" class="attr">+ orderId: OrderId</text>
+  <text x="68" y="224" class="attr">+ items: List&lt;OrderItem&gt;</text>
+  <text x="68" y="244" class="attr">+ totalAmount: Money</text>
+  <text x="68" y="264" class="attr">+ status: SUBMITTED</text>
+  <text x="68" y="284" class="attr">+ submit() &#8594; OrderSubmitted</text>
+
+  <!-- Sales: Customer Model -->
+  <rect x="54" y="314" width="240" height="114" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="68" y="336" class="model-title" fill="#38bdf8">Customer (Buyer Model)</text>
+  <line x1="54" y1="346" x2="294" y2="346" stroke="#334155"/>
+  <text x="68" y="366" class="attr">+ customerId: CustomerId</text>
+  <text x="68" y="386" class="attr">+ loyaltyTier: VIP</text>
+  <text x="68" y="406" class="attr">+ discountRate: 15%</text>
+
+  <text x="174" y="472" text-anchor="middle" class="mono" fill="#38bdf8">Ubiquitous Language: Cart, Quote</text>
+
+  <!-- CENTER: DOMAIN EVENT BUS -->
+  <rect x="348" y="218" width="174" height="154" rx="12" fill="#0f172a" stroke="#c084fc" stroke-width="2" class="pulse-acl"/>
+  <text x="435" y="246" text-anchor="middle" class="ctx-title" fill="#e9d5ff">Domain Event Bus</text>
+  <rect x="364" y="264" width="142" height="26" rx="5" fill="#1e293b" stroke="#a855f7"/>
+  <text x="435" y="281" text-anchor="middle" class="mono" fill="#c084fc">OrderSubmitted</text>
+  <rect x="364" y="298" width="142" height="26" rx="5" fill="#1e293b" stroke="#34d399"/>
+  <text x="435" y="315" text-anchor="middle" class="mono" fill="#34d399">PaymentApproved</text>
+  <rect x="364" y="332" width="142" height="26" rx="5" fill="#1e293b" stroke="#fbbf24"/>
+  <text x="435" y="349" text-anchor="middle" class="mono" fill="#fbbf24">OrderDispatched</text>
+
+  <!-- BILLING CONTEXT (Top Right) -->
+  <rect x="560" y="98" width="364" height="190" rx="12" fill="#0f172a" stroke="#34d399" stroke-width="2"/>
+  <rect x="560" y="98" width="364" height="34" rx="12" fill="#064e3b"/>
+  <text x="742" y="120" text-anchor="middle" class="ctx-title">Billing Context</text>
+
+  <!-- ACL Billing -->
+  <rect x="574" y="146" width="84" height="126" rx="8" fill="#1e293b" stroke="#c084fc" stroke-width="1.5" class="pulse-acl"/>
+  <text x="616" y="176" text-anchor="middle" class="mono" fill="#e9d5ff">ACL</text>
+  <text x="616" y="196" text-anchor="middle" class="attr">Translates</text>
+  <text x="616" y="212" text-anchor="middle" class="attr">Order &#8594;</text>
+  <text x="616" y="228" text-anchor="middle" class="attr">Invoice</text>
+  <text x="616" y="244" text-anchor="middle" class="attr">Contract</text>
+
+  <!-- Billing Models -->
+  <rect x="672" y="146" width="236" height="58" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1"/>
+  <text x="684" y="165" class="model-title" fill="#34d399">Order &#8594; Invoice</text>
+  <text x="684" y="185" class="attr">invoiceId, taxRate, netTotal</text>
+
+  <rect x="672" y="214" width="236" height="58" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1"/>
+  <text x="684" y="233" class="model-title" fill="#34d399">Customer &#8594; PayerAccount</text>
+  <text x="684" y="253" class="attr">accountId, billingAddr, credit</text>
+
+  <!-- FULFILLMENT CONTEXT (Bottom Right) -->
+  <rect x="560" y="308" width="364" height="190" rx="12" fill="#0f172a" stroke="#fbbf24" stroke-width="2"/>
+  <rect x="560" y="308" width="364" height="34" rx="12" fill="#78350f"/>
+  <text x="742" y="330" text-anchor="middle" class="ctx-title">Fulfillment Context</text>
+
+  <!-- ACL Fulfillment -->
+  <rect x="574" y="356" width="84" height="126" rx="8" fill="#1e293b" stroke="#c084fc" stroke-width="1.5" class="pulse-acl"/>
+  <text x="616" y="386" text-anchor="middle" class="mono" fill="#e9d5ff">ACL</text>
+  <text x="616" y="406" text-anchor="middle" class="attr">Translates</text>
+  <text x="616" y="422" text-anchor="middle" class="attr">Order &#8594;</text>
+  <text x="616" y="438" text-anchor="middle" class="attr">Shipment</text>
+  <text x="616" y="454" text-anchor="middle" class="attr">Manifest</text>
+
+  <!-- Fulfillment Models -->
+  <rect x="672" y="356" width="236" height="58" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-width="1"/>
+  <text x="684" y="375" class="model-title" fill="#fbbf24">Order &#8594; Shipment</text>
+  <text x="684" y="395" class="attr">shipmentId, warehouse, weight</text>
+
+  <rect x="672" y="424" width="236" height="58" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-width="1"/>
+  <text x="684" y="443" class="model-title" fill="#fbbf24">Customer &#8594; Recipient</text>
+  <text x="684" y="463" class="attr">name, shippingAddr, phone</text>
+
+  <!-- Animated Event Flows -->
+  <!-- Sales -> Event Bus -->
+  <path d="M 312 276 L 344 276" stroke="#c084fc" stroke-width="2.5" fill="none" class="flow-line" marker-end="url(#arrPurple)"/>
+  <circle r="4" fill="#c084fc">
+    <animateMotion dur="1.2s" repeatCount="indefinite" path="M 312 276 L 344 276"/>
+  </circle>
+
+  <!-- Event Bus -> Billing ACL -->
+  <path d="M 522 260 C 542 260, 542 208, 570 208" stroke="#34d399" stroke-width="2.2" fill="none" class="flow-line" marker-end="url(#arrGreen)"/>
+  <circle r="4" fill="#34d399">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 522 260 C 542 260, 542 208, 570 208"/>
+  </circle>
+
+  <!-- Event Bus -> Fulfillment ACL -->
+  <path d="M 522 330 C 542 330, 542 418, 570 418" stroke="#fbbf24" stroke-width="2.2" fill="none" class="flow-line" marker-end="url(#arrAmber)"/>
+  <circle r="4" fill="#fbbf24">
+    <animateMotion dur="1.8s" begin="0.6s" repeatCount="indefinite" path="M 522 330 C 542 330, 542 418, 570 418"/>
+  </circle>
+</svg>

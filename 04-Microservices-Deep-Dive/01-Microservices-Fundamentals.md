@@ -1,61 +1,64 @@
-# Microservices Fundamentals: A Comprehensive Guide
+# Microservices Fundamentals: A Comprehensive Visual Study Guide
 
 ## Table of Contents
 1. [Monolith vs SOA vs Microservices](#monolith-vs-soa-vs-microservices)
 2. [Domain-Driven Design](#domain-driven-design)
 3. [Decomposition Strategies](#decomposition-strategies)
 4. [Service Boundaries](#service-boundaries)
-5. [The Twelve-Factor App](#twelve-factor-app)
+5. [The Twelve-Factor App](#the-twelve-factor-app)
 6. [Conway's Law](#conways-law)
 7. [Microservices Maturity Model](#microservices-maturity-model)
 8. [Migration Strategies](#migration-strategies)
-9. [Interview Questions](#interview-questions)
+9. [Common Interview Questions](#common-interview-questions)
+10. [Key Takeaways for Interviews](#key-takeaways-for-interviews)
 
 ---
 
 ## Monolith vs SOA vs Microservices
 
-### Architecture Comparison
+Understanding the architectural spectrum from a **Monolith** to **Service-Oriented Architecture (SOA)** to **Microservices** is the foundation of distributed systems design. Each style trades operational simplicity for independent scalability and organizational autonomy.
 
+```mermaid
+flowchart TD
+    subgraph MONO["Monolith Architecture (Single Process)"]
+        M_APP["Single Codebase: User + Product + Order + Payment Logic"]
+        M_DB[("Shared Monolith DB")]
+        M_APP --> M_DB
+    end
+
+    subgraph SOA["SOA Architecture (ESB-Centric)"]
+        S1["Service 1 (Coarse)"]
+        S2["Service 2 (Coarse)"]
+        S3["Service 3 (Coarse)"]
+        ESB["Enterprise Service Bus (SOAP / XML / Orchestration)"]
+        S_DB[("Shared Enterprise DB")]
+        S1 --> ESB
+        S2 --> ESB
+        S3 --> ESB
+        ESB --> S_DB
+    end
+
+    subgraph MICRO["Microservices Architecture (Decentralized)"]
+        U["User Service (Fine)"] --> U_DB[("DB-U")]
+        P["Product Service (Fine)"] --> P_DB[("DB-P")]
+        O["Order Service (Fine)"] --> O_DB[("DB-O")]
+        PAY["Payment Service (Fine)"] --> PAY_DB[("DB-Pay")]
+        O -. "REST / gRPC / Async Events" .-> PAY
+    end
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class M_APP,M_DB amber
+    class S1,S2,S3,ESB,S_DB purple
+    class U,P,O,PAY blue
+    class U_DB,P_DB,O_DB,PAY_DB green
 ```
-MONOLITH ARCHITECTURE
-┌─────────────────────────────────────┐
-│          Single Codebase            │
-│  ┌──────────────────────────────┐  │
-│  │  User Service Logic          │  │
-│  │  Product Service Logic       │  │
-│  │  Order Service Logic         │  │
-│  │  Payment Service Logic       │  │
-│  └──────────────────────────────┘  │
-│  ┌──────────────────────────────┐  │
-│  │      Shared Database         │  │
-│  └──────────────────────────────┘  │
-└─────────────────────────────────────┘
 
-SOA (SERVICE ORIENTED ARCHITECTURE)
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Service 1  │  │   Service 2  │  │   Service 3  │
-│  (Coarse)    │  │  (Coarse)    │  │  (Coarse)    │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       └─────────────────┼─────────────────┘
-                    ESB (Enterprise Service Bus)
-                         │
-                    ┌────────────┐
-                    │ Shared DB  │
-                    └────────────┘
-
-MICROSERVICES ARCHITECTURE
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│User Service │  │Product Srvc │  │Order Service│  │Payment Srvc │
-│  (Fine)     │  │   (Fine)    │  │  (Fine)    │  │   (Fine)    │
-└─────┬───────┘  └─────┬───────┘  └─────┬───────┘  └─────┬───────┘
-      │                │                │                │
-      ▼                ▼                ▼                ▼
-    DB-U            DB-P             DB-O             DB-Pay
-
-    Lightweight communication protocols (REST, gRPC, Async)
-```
+> [!IMPORTANT]
+> **Smart Endpoints, Dumb Pipes:** Unlike SOA—which relies on a heavy, centralized Enterprise Service Bus (ESB) for routing, transformation, and orchestration—microservices keep communication pipes simple (HTTP/REST, gRPC, Kafka/RabbitMQ) and place business logic inside the services themselves.
 
 ### Detailed Comparison Table
 
@@ -63,7 +66,7 @@ MICROSERVICES ARCHITECTURE
 |--------|----------|-----|--------------|
 | **Deployment** | Single unit, all-or-nothing | Services bundled together | Independent, service at a time |
 | **Scaling** | Scale entire app | Scale service clusters | Scale individual services |
-| **Team Size** | Large, coordinated teams | Large teams, slow coordination | Small autonomous teams (8-10 people) |
+| **Team Size** | Large, coordinated teams | Large teams, slow coordination | Small autonomous teams (8–10 people) |
 | **Database** | Single shared DB | Possibly shared, some isolated | Each service owns its DB |
 | **Granularity** | Coarse (business features) | Coarse (business domains) | Fine (single responsibility) |
 | **Communication** | In-process calls | Synchronous (often SOAP/XML) | Sync (REST/gRPC) + Async (Events) |
@@ -76,92 +79,113 @@ MICROSERVICES ARCHITECTURE
 
 ### Trade-offs Analysis
 
-**Monolith Advantages:**
-- Simple deployment: one artifact to test and deploy
-- Easier testing: can test full stack locally
-- Better performance: in-process method calls, shared memory
-- Simpler debugging: full stack traces across features
-- Easier monitoring: single JVM to monitor
+```mermaid
+flowchart LR
+    CHOICE{"System Complexity &amp; Team Scale"}
+    CHOICE -- "Small Team (&lt; 5) / MVP / Simple Domain" --> MONO["Choose Monolith: Fast Iteration, In-Process Calls, Simple Ops"]
+    CHOICE -- "Large Org / High Scale / Complex Domain" --> MICRO["Choose Microservices: Independent Deploys, Isolated Failures, Targeted Scaling"]
+    MONO -. "Hits Scaling &amp; Release Bottlenecks" .-> MIGRATE["Strangler Fig Migration"]
+    MIGRATE -.-> MICRO
 
-**Monolith Disadvantages:**
-- Technology lock-in: entire codebase in one tech stack
-- Scaling inefficiency: must scale entire app even if only one feature needs it
-- Reduced agility: requires coordinating releases across teams
-- Reliability: one bug can crash entire system
-- Hard to maintain: codebase becomes increasingly complex
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
 
-**Microservices Advantages:**
-- Independent deployment: deploy features without full regression
-- Technology diversity: each service can use different stacks
-- Targeted scaling: scale only what needs it
-- Team autonomy: teams own full stack (dev, deploy, monitor)
-- Resilience: failures are isolated
-- Organizational alignment: services match team structure (Conway's Law)
+    class CHOICE amber
+    class MONO blue
+    class MICRO green
+    class MIGRATE blue
+```
 
-**Microservices Disadvantages:**
-- Operational complexity: must manage many services
-- Network latency: all communication goes over network
-- Data consistency: distributed transactions are hard
-- Testing complexity: integration and end-to-end testing is difficult
-- Debugging difficulty: errors span multiple services
-- Infrastructure overhead: need robust CI/CD, monitoring, tracing
+- **Monolith Advantages:**
+  - **Simple deployment:** One artifact to test and deploy.
+  - **Easier testing:** Full stack runs and tests locally in a single process.
+  - **Better performance:** In-process method calls and shared memory (zero serialization/network overhead).
+  - **Simpler debugging & monitoring:** Full stack traces across features; single runtime/JVM to monitor.
+- **Monolith Disadvantages:**
+  - **Technology lock-in:** Entire codebase coupled to one language/framework.
+  - **Scaling inefficiency:** Must scale the entire app even if only one feature is hot.
+  - **Reduced agility & reliability:** Requires coordinating releases across teams; one memory leak or bug can crash the entire system.
+  - **Hard to maintain:** Codebase becomes increasingly tangled over time ("big ball of mud").
+- **Microservices Advantages:**
+  - **Independent deployment:** Ship features without full-system regression cycles.
+  - **Technology diversity:** Each service can adopt the best stack for its workload.
+  - **Targeted scaling & resilience:** Scale only hot paths; failures stay isolated via bulkheads/circuit breakers.
+  - **Team autonomy & organizational alignment:** Teams own full stack (dev, deploy, monitor) aligned with Conway's Law.
+- **Microservices Disadvantages:**
+  - **Operational complexity:** Must manage CI/CD, service discovery, distributed tracing, and observability across many services.
+  - **Network latency & data consistency:** All cross-service calls traverse the network; distributed transactions (Sagas, Outbox) replace simple ACID commits.
+  - **Testing & debugging difficulty:** Integration/E2E testing is complex; errors span multiple services.
 
 ---
 
 ## Domain-Driven Design
 
-### Core Concepts
+Domain-Driven Design (DDD) provides a rigorous framework for decomposing microservices around **business capabilities and domain models**, rather than technical layers (UI, Logic, DB).
 
-Domain-Driven Design provides a framework for decomposing microservices using business logic, not technical layers.
+![DDD Bounded Contexts](./assets/01-ddd-bounded-contexts.svg)
 
-#### 1. Bounded Contexts
+### 1. Bounded Contexts
 
-A bounded context is an explicit boundary around a domain model. It defines the scope of a service.
+A **Bounded Context** is an explicit boundary around a domain model where a particular **Ubiquitous Language** applies. It defines the natural scope of a microservice.
 
+- **E-Commerce Bounded Contexts:**
+  - **Order Context:** `Order` Aggregate, `OrderItem`, `OrderStatus`, `ShippingAddress`. Here, a `Product` is lightweight (ID + quantity + price snapshot).
+  - **Product Context:** `Product` Aggregate, `SKU`, `Price`, `Inventory`. Here, a `Product` is a rich entity with variants, attributes, and reviews.
+  - **Payment Context:** `Payment` Aggregate, `PaymentMethod`, `Transaction`.
+  - **Shipping Context:** `Shipment` Aggregate, `Tracking`, `Destination`.
+
+> [!TIP]
+> **Intentional Model Divergence:** Having different definitions of `Product` or `Customer` across Bounded Contexts is *correct*, not duplication. Services communicate via explicit APIs, Anti-Corruption Layers (ACLs), and Domain Events—never shared database models.
+
+### 2. Aggregates
+
+An **Aggregate** is a cluster of domain objects (Entities and Value Objects) treated as a single unit for data changes and transactional consistency, accessed strictly through its **Aggregate Root**.
+
+```mermaid
+classDiagram
+    class Order {
+        &lt;&lt;Aggregate Root&gt;&gt;
+        -OrderId id
+        -CustomerId customerId
+        -List~OrderItem~ items
+        -ShippingAddress address
+        -OrderStatus status
+        -Money total
+        +addItem(OrderItem item)
+        +submit()
+        +getItems() List~OrderItem~
+    }
+    class OrderItem {
+        &lt;&lt;Entity&gt;&gt;
+        -OrderItemId id
+        -ProductId productId
+        -int quantity
+        -BigDecimal price
+    }
+    class Money {
+        &lt;&lt;Value Object&gt;&gt;
+        -BigDecimal amount
+        -String currency
+        +add(Money other) Money
+    }
+    class ShippingAddress {
+        &lt;&lt;Value Object&gt;&gt;
+        -String street
+        -String city
+        -String postalCode
+    }
+    Order "1" *-- "1..*" OrderItem : owns
+    Order "1" *-- "1" Money : total
+    Order "1" *-- "1" ShippingAddress : ships to
 ```
-E-Commerce System with Bounded Contexts:
-
-┌─────────────────────────────────────────────────────────────────┐
-│                      E-Commerce Domain                          │
-│                                                                 │
-│  ┌──────────────────────┐  ┌──────────────────────┐            │
-│  │  Order Bounded       │  │  Product Bounded     │            │
-│  │  Context             │  │  Context             │            │
-│  │                      │  │                      │            │
-│  │ - Order Aggregate    │  │ - Product Aggregate  │            │
-│  │ - OrderItem          │  │ - SKU                │            │
-│  │ - OrderStatus        │  │ - Price              │            │
-│  │ - ShippingAddress    │  │ - Inventory          │            │
-│  └──────────────────────┘  └──────────────────────┘            │
-│                                                                 │
-│  ┌──────────────────────┐  ┌──────────────────────┐            │
-│  │  Payment Bounded     │  │  Shipping Bounded    │            │
-│  │  Context             │  │  Context             │            │
-│  │                      │  │                      │            │
-│  │ - Payment Aggregate  │  │ - Shipment Aggregate │            │
-│  │ - PaymentMethod      │  │ - Tracking           │            │
-│  │ - Transaction        │  │ - Destination        │            │
-│  └──────────────────────┘  └──────────────────────┘            │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Key Insight**: Order context and Product context have different meanings for "Product":
-- In Order context: Product is just an ID + quantity + price (lightweight)
-- In Product context: Product is a full entity with inventory, variants, reviews
-
-This difference is intentional and correct. Services communicate via APIs, not shared models.
-
-#### 2. Aggregates
-
-An aggregate is a cluster of domain objects that act as a single unit.
 
 ```java
 // ORDER AGGREGATE
 public class Order {
     private OrderId id;
     private CustomerId customerId;
-    private List<OrderItem> items;  // Part of aggregate
+    private List<OrderItem> items;   // Part of aggregate
     private ShippingAddress address; // Part of aggregate
     private OrderStatus status;
     private LocalDateTime createdAt;
@@ -182,7 +206,7 @@ public class Order {
         status = OrderStatus.SUBMITTED;
     }
 
-    // IMPORTANT: Only expose aggregate root, never expose internal entities
+    // IMPORTANT: Only expose aggregate root, never expose mutable internal entities
     public List<OrderItem> getItems() {
         return Collections.unmodifiableList(items);
     }
@@ -196,7 +220,7 @@ public class OrderItem {
     private BigDecimal price;
 
     OrderItem(ProductId productId, int quantity, BigDecimal price) {
-        // Private constructor, only Order can create OrderItems
+        // Package-private constructor: only Order can create OrderItems
         this.productId = productId;
         this.quantity = quantity;
         this.price = price;
@@ -204,14 +228,21 @@ public class OrderItem {
 }
 ```
 
-**Aggregate Rules**:
-- Only expose the aggregate root (Order, not OrderItem)
-- All business logic lives inside the aggregate
-- Aggregates enforce invariants
-- Aggregates are unit of consistency (one database transaction)
-- Keep aggregates small (easier to reason about, less contention)
+**Aggregate Rules:**
+- Only expose the **Aggregate Root** (`Order`, never `OrderItem` directly).
+- All business logic and invariant enforcement live inside the aggregate.
+- Aggregates are the **unit of consistency** (one database transaction per aggregate).
+- Keep aggregates small to minimize lock contention and simplify reasoning.
 
-#### 3. Entities vs Value Objects
+### 3. Entities vs Value Objects
+
+| Characteristic | Entity | Value Object |
+|----------------|--------|--------------|
+| **Identity** | Has a unique, immutable ID (`CustomerId`, `OrderId`) | No identity; defined entirely by its attributes |
+| **Mutability** | Mutable state over its lifecycle | Immutable; operations return a new instance |
+| **Equality** | Equal if IDs match (`id.equals(other.id)`) | Equal if all attributes match |
+| **Persistence** | Persisted with its own table/document identity | Embedded within an Entity/Aggregate |
+| **Examples** | `Customer`, `Order`, `OrderItem` | `Money`, `ShippingAddress`, `DateRange` |
 
 ```java
 // ENTITY: Has identity, mutable, persisted separately
@@ -226,7 +257,7 @@ public class Customer {
     @Override
     public boolean equals(Object other) {
         if (!(other instanceof Customer)) return false;
-        return id.equals(((Customer)other).id);
+        return id.equals(((Customer) other).id);
     }
 }
 
@@ -259,8 +290,8 @@ public class Money {
 
 // In Order aggregate:
 public class Order {
-    private OrderId id;  // Entity, has identity
-    private Money total; // Value object, immutable
+    private OrderId id;              // Entity, has identity
+    private Money total;             // Value object, immutable
     private ShippingAddress address; // Value object
 
     public void setTotal(Money total) {
@@ -269,9 +300,30 @@ public class Order {
 }
 ```
 
-#### 4. Domain Events
+### 4. Domain Events
 
-Domain events capture something important that happened in the business domain.
+**Domain Events** capture immutable facts about something important that happened in the business domain (always named in the past tense, e.g., `OrderSubmittedEvent`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant AppSvc as SubmitOrderService
+    participant Agg as Order Aggregate
+    participant DB as OrderRepository
+    participant Bus as EventPublisher
+    participant Pay as Payment Service
+
+    Client->>AppSvc: submitOrder(orderId)
+    AppSvc->>DB: findById(orderId)
+    DB-->>AppSvc: Order
+    AppSvc->>Agg: order.submit()
+    Agg-->>Agg: Validate invariants &amp; record OrderSubmittedEvent
+    AppSvc->>DB: save(order)
+    AppSvc->>Bus: publishEvent(OrderSubmittedEvent)
+    AppSvc->>Agg: clearDomainEvents()
+    Bus-->>Pay: Async: OrderSubmittedEvent
+```
 
 ```java
 // Domain event
@@ -287,7 +339,6 @@ public class OrderSubmittedEvent {
         this.orderTotal = orderTotal;
         this.submittedAt = LocalDateTime.now();
     }
-
     // Getters, no setters (immutable)
 }
 
@@ -300,29 +351,19 @@ public class Order {
             throw new OrderException("Cannot submit empty order");
         }
         status = OrderStatus.SUBMITTED;
-
         // Domain event captured
         domainEvents.add(new OrderSubmittedEvent(id, customerId, calculateTotal()));
     }
 
-    // Called by persistence layer
-    public List<DomainEvent> getDomainEvents() {
-        return domainEvents;
-    }
-
-    public void clearDomainEvents() {
-        domainEvents.clear();
-    }
+    public List<DomainEvent> getDomainEvents() { return domainEvents; }
+    public void clearDomainEvents() { domainEvents.clear(); }
 }
 
 // Service that publishes events
 @Service
 public class SubmitOrderService {
-    @Autowired
-    private OrderRepository orderRepo;
-
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
+    @Autowired private OrderRepository orderRepo;
+    @Autowired private ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void submitOrder(OrderId orderId) {
@@ -337,291 +378,248 @@ public class SubmitOrderService {
 }
 ```
 
-**Why Domain Events Matter**:
-- Enable loose coupling between services
-- Create audit trail of what happened
-- Enable event sourcing and CQRS
-- Support saga pattern for distributed transactions
+**Why Domain Events Matter:**
+- Enable **loose coupling** between services (no synchronous waiting).
+- Create a natural **audit trail** of business state transitions.
+- Power **Event Sourcing**, **CQRS**, and the **Saga Pattern** for distributed transactions.
 
-#### 5. Ubiquitous Language
+### 5. Ubiquitous Language
 
-A shared vocabulary between business stakeholders and developers.
+A **Ubiquitous Language** is a shared vocabulary used identically by business stakeholders, domain experts, and developers in code, APIs, and diagrams.
 
 ```java
 // BAD: Technical jargon
 public class PaymentProcessor {
-    public void processPaymentTx(Customer cust, double amnt, String curr) {
-        // Implementation
-    }
+    public void processPaymentTx(Customer cust, double amnt, String curr) { }
 }
 
 // GOOD: Business language (Ubiquitous Language)
 public class PaymentService {
-    public void processPayment(Customer customer, Money amount) {
-        // Implementation - domain expert understands this
-    }
+    public void processPayment(Customer customer, Money amount) { }
 }
 
-// Domain model reflects business concepts
+// Domain model reflects business concepts (NOT generic PENDING/PROCESSING)
 public enum OrderStatus {
     CREATED,           // Just created
     SUBMITTED,         // Customer clicked submit
     PAYMENT_APPROVED,  // Payment went through
     READY_FOR_PICKUP,  // In warehouse, waiting
     CANCELLED,         // Order was cancelled
-    COMPLETED         // Customer received it
+    COMPLETED          // Customer received it
 }
-
-// NOT: PENDING, PROCESSING, etc. - too technical
 ```
 
 ---
 
 ## Decomposition Strategies
 
+Choosing the right decomposition axis determines whether your microservices are cohesive and autonomous or tangled in a "distributed monolith."
+
+```mermaid
+flowchart TD
+    BIZ["E-Commerce Platform"]
+
+    subgraph CAP["Strategy 1: By Business Capability (Coarser)"]
+        C1["Product Catalog Management"]
+        C2["Order Management"]
+        C3["Payment Processing"]
+        C4["Customer Management"]
+        C5["Shipping &amp; Fulfillment"]
+        C6["Notification"]
+    end
+
+    subgraph SUB["Strategy 2: By DDD Subdomain (Finer)"]
+        S1["Core: Products"]
+        S2["Core: Inventory"]
+        S3["Supporting: Pricing"]
+        S4["Supporting: Reviews &amp; Ratings"]
+    end
+
+    BIZ --> CAP
+    C1 --> SUB
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class BIZ purple
+    class C1,C2,C3,C4,C5,C6 blue
+    class S1,S2 green
+    class S3,S4 amber
+```
+
 ### Strategy 1: Decompose by Business Capability
 
-Identify high-level business capabilities and create services around them.
+Identify high-level **what the business does** capabilities and align services around them:
+- **Product Catalog Management:** Browse products, manage inventory, pricing.
+- **Order Management:** Create orders, track status, manage returns.
+- **Payment Processing:** Process payments, refunds, payment history.
+- **Customer Management:** Profiles, addresses, preferences, loyalty.
+- **Shipping & Fulfillment:** Picking, packing, shipping, tracking.
+- **Notification:** Email, SMS, push notifications.
 
-```
-Business Capabilities for E-Commerce:
-
-┌──────────────────────────────────────────────────────┐
-│         Product Catalog Management                  │
-│  (Browse products, manage inventory, pricing)       │
-└──────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────┐
-│         Order Management                             │
-│  (Create orders, track status, manage returns)      │
-└──────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────┐
-│         Payment Processing                           │
-│  (Process payments, refunds, payment history)       │
-└──────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────┐
-│         Customer Management                          │
-│  (Profiles, addresses, preferences, loyalty)        │
-└──────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────┐
-│         Shipping & Fulfillment                       │
-│  (Picking, packing, shipping, tracking)             │
-└──────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────┐
-│         Notification                                 │
-│  (Email, SMS, push notifications)                   │
-└──────────────────────────────────────────────────────┘
-```
-
-**Advantages**:
-- Aligned with how business thinks about domain
-- Relatively stable (capabilities don't change often)
-- Clear responsibility ownership
-
-**Disadvantages**:
-- May still result in large services
-- Doesn't directly follow DDD principles
+| Pros | Cons |
+|------|------|
+| Aligned with how the business thinks about the domain | May still result in large, coarse-grained services |
+| Relatively stable (capabilities rarely change) | Doesn't automatically separate Core vs Supporting subdomains |
+| Clear responsibility ownership | — |
 
 ### Strategy 2: Decompose by Subdomain (DDD Approach)
 
-Identify subdomains within a bounded context and create fine-grained services.
+Break down capabilities into **Core**, **Supporting**, and **Generic** subdomains to create fine-grained services:
+- **Core Domain — Products:** Product definition and attributes (competitive differentiator).
+- **Core Domain — Inventory:** Stock levels and reservations.
+- **Supporting Subdomain — Pricing:** Price calculations and promotions.
+- **Supporting Subdomain — Reviews & Ratings:** Customer feedback.
 
-```
-Product Management Subdomain (decomposed):
+| Pros | Cons |
+|------|------|
+| More fine-grained and easier to understand | More services to deploy and operate |
+| Directly aligned with DDD Bounded Contexts | Higher coordination overhead |
+| Clearer boundaries and independent scaling | Risk of over-decomposition (nano-services) |
 
-┌─────────────────────────────────────────┐
-│         Core Domain: Products            │
-│  (Product definition, attributes)       │
-└─────────────────────────────────────────┘
-
-┌─────────────────────────────────────────┐
-│         Core Domain: Inventory           │
-│  (Stock levels, reservations)           │
-└─────────────────────────────────────────┘
-
-┌─────────────────────────────────────────┐
-│         Supporting: Pricing              │
-│  (Price calculations, promotions)       │
-└─────────────────────────────────────────┘
-
-┌─────────────────────────────────────────┐
-│         Supporting: Reviews & Ratings    │
-│  (Customer feedback)                    │
-└─────────────────────────────────────────┘
-```
-
-**Advantages**:
-- More fine-grained, easier to understand
-- Better aligned with DDD
-- Clearer boundaries
-
-**Disadvantages**:
-- More services to manage
-- Higher coordination overhead
-- Risk of over-decomposition
+> [!TIP]
+> **Core vs Supporting vs Generic:** Invest your best engineering talent in **Core Subdomains** (your competitive advantage), keep **Supporting Subdomains** simple, and consider buying SaaS or off-the-shelf solutions for **Generic Subdomains** (e.g., Auth, Analytics, Email).
 
 ---
 
 ## Service Boundaries
 
-### How to Define Service Boundaries
+Well-defined service boundaries maximize **cohesion** (things that change together stay together) and minimize **coupling** (services know as little as possible about each other).
 
-#### 1. Single Responsibility Principle
+```mermaid
+flowchart LR
+    subgraph BAD["BAD: High Sync Coupling (Cascading Failure)"]
+        O1["Order Service"] --> P1["Product Service"]
+        O1 --> PAY1["Payment Service"]
+        O1 --> C1["Customer Service"]
+        O1 --> I1["Inventory Service"]
+        O1 --> S1["Shipping Service"]
+    end
 
-Each service should have one reason to change.
+    subgraph GOOD["GOOD: Async Event-Driven Decoupling"]
+        O2["Order Service"] -- "publishes OrderSubmitted" --> BUS(["Event Bus"])
+        BUS -- "subscribes" --> P2["Product Service"]
+        BUS -- "subscribes" --> PAY2["Payment Service"]
+        PAY2 -- "publishes PaymentApproved" --> BUS
+        BUS -- "subscribes" --> S2["Shipping Service"]
+    end
+
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class O1,P1,PAY1,C1,I1,S1 red
+    class O2,P2,PAY2,S2 green
+    class BUS purple
+```
+
+### 1. Single Responsibility Principle (SRP)
+
+Each service should have **one reason to change**.
 
 ```java
 // BAD: Multiple reasons to change
 @RestController
 @RequestMapping("/api")
 public class UserProductPaymentController {
-
-    // Changes if user management requirements change
-    @PostMapping("/users")
-    public void createUser(CreateUserRequest request) { }
-
-    // Changes if product catalog requirements change
-    @GetMapping("/products")
-    public List<Product> getProducts() { }
-
-    // Changes if payment requirements change
-    @PostMapping("/payments")
-    public void processPayment(PaymentRequest request) { }
+    @PostMapping("/users") public void createUser(CreateUserRequest request) { }
+    @GetMapping("/products") public List<Product> getProducts() { }
+    @PostMapping("/payments") public void processPayment(PaymentRequest request) { }
 }
 
 // GOOD: Separate services by responsibility
-@RestController
-@RequestMapping("/api/users")
+@RestController @RequestMapping("/api/users")
 public class UserController {
-    @PostMapping
-    public void createUser(CreateUserRequest request) { }
+    @PostMapping public void createUser(CreateUserRequest request) { }
 }
 
-@RestController
-@RequestMapping("/api/products")
+@RestController @RequestMapping("/api/products")
 public class ProductController {
-    @GetMapping
-    public List<Product> getProducts() { }
+    @GetMapping public List<Product> getProducts() { }
 }
 
-@RestController
-@RequestMapping("/api/payments")
+@RestController @RequestMapping("/api/payments")
 public class PaymentController {
-    @PostMapping
-    public void processPayment(PaymentRequest request) { }
+    @PostMapping public void processPayment(PaymentRequest request) { }
 }
 ```
 
-#### 2. Minimize Inter-Service Dependencies
+### 2. Minimize Inter-Service Dependencies
 
-Create services with minimal coupling.
+- **High Sync Coupling (Anti-Pattern):** If `Order Service` synchronously calls `Product`, `Payment`, `Customer`, `Inventory`, and `Shipping` on every request, any downstream outage crashes `Order Service`.
+- **Async Events (Best Practice):** `Order Service` publishes `OrderSubmitted`, `Payment Service` subscribes and publishes `PaymentApproved`, and `Shipping Service` reacts to `PaymentApproved`. If `Payment Service` is temporarily down, orders are still accepted and processed eventually.
 
+### 3. Avoid Chatty Interfaces
+
+If two services make N+1 round-trips per operation, either batch the API into bulk calls or merge the services.
+
+```mermaid
+sequenceDiagram
+    participant O as Order Service
+    participant P as Product Service
+
+    Note over O,P: BAD: Chatty Interface (4N Network Calls)
+    loop For each item in Order
+        O->>P: getProduct(id)
+        O->>P: checkAvailability(id, qty)
+        O->>P: getPrice(id)
+        O->>P: reserveInventory(id, qty)
+    end
+
+    Note over O,P: GOOD: Bulk Interface (2 Network Calls Total)
+    O->>P: getProductsInfo(List&lt;productIds&gt;)
+    P-->>O: Map&lt;Long, ProductInfo&gt;
+    O->>P: reserveInventory(List&lt;OrderItemRequest&gt;)
+    P-->>O: ReservationConfirmed
 ```
-BAD: High coupling with many sync calls
-
-Order Service
-    ├─ calls → Product Service
-    ├─ calls → Payment Service
-    ├─ calls → Customer Service
-    ├─ calls → Inventory Service
-    └─ calls → Shipping Service
-
-If any service is down, Order Service fails.
-```
-
-```
-GOOD: Async events, reduced coupling
-
-Order Service (core logic)
-    ├─ publishes → OrderSubmitted event
-    ├─ publishes → OrderShipped event
-    └─ subscribes ← PaymentApproved event
-
-Product Service
-    └─ subscribes ← OrderSubmitted event (updates inventory)
-
-Payment Service
-    ├─ subscribes ← OrderSubmitted event (processes payment)
-    └─ publishes → PaymentApproved event
-
-Shipping Service
-    └─ subscribes ← PaymentApproved event (initiates shipment)
-
-If Payment Service is down, Order is created but payment is eventually processed.
-```
-
-#### 3. Avoid Chatty Interfaces
-
-If two services must talk frequently, they might belong together.
 
 ```java
-// BAD: Chatty interface (Order Service calling Product Service multiple times)
+// BAD: Chatty interface (Order Service calling Product Service 4x per item)
 @Service
-public class OrderService {
-
-    @Autowired
-    private ProductClient productClient;
+public class ChattyOrderService {
+    @Autowired private ProductClient productClient;
 
     @Transactional
     public void createOrder(CreateOrderRequest request) {
         Order order = new Order();
-
         for (OrderItemRequest item : request.getItems()) {
-            // Call 1: Get product
             Product product = productClient.getProduct(item.getProductId());
-
-            // Call 2: Check availability
             boolean available = productClient.checkAvailability(item.getProductId(), item.getQuantity());
-
-            // Call 3: Get current price
             BigDecimal price = productClient.getPrice(item.getProductId());
-
-            // Call 4: Reserve inventory
             productClient.reserveInventory(item.getProductId(), item.getQuantity());
-
             order.addItem(item.getProductId(), item.getQuantity(), price);
         }
-
         orderRepository.save(order);
     }
 }
 
 // GOOD: Bulk operation, fewer calls
 @Service
-public class OrderService {
-
-    @Autowired
-    private ProductClient productClient;
+public class BulkOrderService {
+    @Autowired private ProductClient productClient;
 
     @Transactional
     public void createOrder(CreateOrderRequest request) {
         Order order = new Order();
-
-        // Single call: get all product info at once
-        List<Long> productIds = request.getItems()
-            .stream()
+        List<Long> productIds = request.getItems().stream()
             .map(OrderItemRequest::getProductId)
             .collect(Collectors.toList());
 
+        // Single call: get all product info at once
         Map<Long, ProductInfo> products = productClient.getProductsInfo(productIds);
 
         for (OrderItemRequest item : request.getItems()) {
             ProductInfo productInfo = products.get(item.getProductId());
-
             if (!productInfo.isAvailable(item.getQuantity())) {
                 throw new OutOfStockException(item.getProductId());
             }
-
             order.addItem(item.getProductId(), item.getQuantity(), productInfo.getPrice());
         }
 
         // Single call: reserve all inventory
         productClient.reserveInventory(request.getItems());
-
         orderRepository.save(order);
     }
 }
@@ -629,25 +627,59 @@ public class OrderService {
 
 ### Common Mistakes in Defining Boundaries
 
-1. **Shared Database** - Forces tight coupling
-2. **One Entity = One Service** - Too fine-grained, chatty
-3. **Following Technical Layers** - Service for persistence, one for logic
-4. **Circular Dependencies** - Service A calls B, B calls A
-5. **Ignoring Transactions** - Create services where one can't work without another
-6. **Following Current Org Structure** - Rigid, can't evolve
-7. **Business Anti-Patterns** - Services that don't respect business rules
+> [!WARNING]
+> **7 Boundary Anti-Patterns to Avoid:**
+> 1. **Shared Database:** Forces tight schema coupling across teams.
+> 2. **One Entity = One Service:** Creates ultra-chatty nano-services.
+> 3. **Following Technical Layers:** Splitting into a "Persistence Service" and "Logic Service."
+> 4. **Circular Dependencies:** Service A calls B, and B calls A.
+> 5. **Ignoring Transactions:** Splitting entities that require strict atomic consistency.
+> 6. **Following Current Org Structure:** Locking in silos that cannot evolve.
+> 7. **Business Anti-Patterns:** Services that violate domain invariants.
 
 ---
 
-## Twelve-Factor App Methodology
+## The Twelve-Factor App
 
-A methodology for building scalable, maintainable applications (including microservices).
+The **Twelve-Factor App** methodology defines best practices for building cloud-native, portable, horizontally scalable microservices.
+
+```mermaid
+flowchart LR
+    subgraph DEV["Code &amp; Config"]
+        F1["1. Codebase (1 Repo / Service)"]
+        F2["2. Dependencies (Explicit)"]
+        F3["3. Config (Env Vars)"]
+        F4["4. Backing Services (Attached)"]
+    end
+
+    subgraph PIPE["Build, Release, Run"]
+        F5["5. Strict Stage Separation"]
+        F6["6. Stateless Processes"]
+        F7["7. Port Binding"]
+        F8["8. Concurrency (Scale Out)"]
+    end
+
+    subgraph OPS["Runtime &amp; Ops"]
+        F9["9. Disposability (Fast Graceful)"]
+        F10["10. Dev/Prod Parity"]
+        F11["11. Logs (stdout Streams)"]
+        F12["12. Admin Processes (One-Off)"]
+    end
+
+    DEV --> PIPE --> OPS
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class F1,F2,F3,F4 blue
+    class F5,F6,F7,F8 green
+    class F9,F10,F11,F12 purple
+```
 
 ### 1. Codebase
-
-One codebase per service, tracked in version control.
-
-```
+One codebase per service, tracked in version control, with many deploys (dev, staging, prod):
+```text
 ecommerce-system/
 ├── order-service/
 │   ├── pom.xml
@@ -664,9 +696,7 @@ ecommerce-system/
 ```
 
 ### 2. Dependencies
-
-Explicitly declare and isolate dependencies (Maven/Gradle).
-
+Explicitly declare and isolate dependencies (Maven/Gradle) — never rely on implicit system-wide packages:
 ```xml
 <!-- pom.xml -->
 <dependencies>
@@ -684,12 +714,10 @@ Explicitly declare and isolate dependencies (Maven/Gradle).
 ```
 
 ### 3. Config
-
-Store configuration in environment variables, not code.
-
+Store environment-specific configuration in **environment variables**, never hardcoded in source:
 ```java
 // BAD: Config in code
-public class DatabaseConfig {
+public class BadDatabaseConfig {
     private static final String DB_URL = "jdbc:mysql://prod-db:3306/orders";
     private static final String DB_USER = "admin";
     private static final String DB_PASSWORD = "secretpassword123";
@@ -698,7 +726,6 @@ public class DatabaseConfig {
 // GOOD: Config from environment
 @Configuration
 public class DatabaseConfig {
-
     @Bean
     public DataSource dataSource(
         @Value("${DB_HOST:localhost}") String host,
@@ -717,8 +744,8 @@ public class DatabaseConfig {
 }
 ```
 
-application.yml:
 ```yaml
+# application.yml
 spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/orders}
@@ -728,14 +755,10 @@ spring:
 ```
 
 ### 4. Backing Services
-
-Treat backing services (DB, cache, messaging) as attached resources.
-
+Treat backing services (databases, Redis caches, message brokers) as **attached, replaceable resources** accessed via URL/credentials:
 ```java
 @Configuration
 public class ServiceConfiguration {
-
-    // Treat as replaceable resource
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
@@ -757,11 +780,9 @@ public class ServiceConfiguration {
 ```
 
 ### 5. Build, Release, Run
-
-Strict separation of build, release, and run stages.
-
+Maintain strict separation between the **Build** (compile artifact), **Release** (combine build + config), and **Run** (execute in environment) stages:
 ```dockerfile
-# Dockerfile - build stage
+# Dockerfile - Build stage
 FROM maven:3.9-eclipse-temurin-17 AS builder
 COPY . /app
 WORKDIR /app
@@ -774,16 +795,15 @@ EXPOSE 8080
 CMD ["java", "-jar", "/app/order-service.jar"]
 ```
 
-Deployed via:
 ```bash
 # Build
 mvn clean package
 
-# Release with config
+# Release with immutable image tag
 docker build -t order-service:v1.2.3 .
 docker push order-service:v1.2.3
 
-# Run with environment
+# Run with runtime environment config
 docker run \
   -e DB_HOST=prod-db \
   -e DB_USER=admin \
@@ -791,276 +811,137 @@ docker run \
   order-service:v1.2.3
 ```
 
-### 6-12. Other Factors
+### 6–12. Runtime, Scaling & Operations Factors
 
-- **Processes**: Stateless, share nothing
-- **Port Binding**: Self-contained (embedded Tomcat)
-- **Concurrency**: Scale horizontally, multiple instances
-- **Disposability**: Fast startup, graceful shutdown
-- **Dev/Prod Parity**: Same tools, services, OS across environments
-- **Logs**: Write to stdout, aggregated by infrastructure
-- **Admin Tasks**: One-off tasks run against live database with same config
+| Factor | Core Principle | Microservices Implementation |
+|--------|----------------|------------------------------|
+| **6. Processes** | Stateless, share-nothing execution | Store session/state in Redis or DB, never in local memory |
+| **7. Port Binding** | Self-contained via port binding | Embedded server (Tomcat/Netty) listening on `$PORT` |
+| **8. Concurrency** | Scale out via process model | Horizontal pod autoscaling (multiple stateless instances) |
+| **9. Disposability** | Fast startup, graceful shutdown | Handle `SIGTERM`, drain in-flight requests, fast boot |
+| **10. Dev/Prod Parity** | Keep dev, staging, prod as similar as possible | Use Docker/Testcontainers locally to match prod DBs/brokers |
+| **11. Logs** | Treat logs as event streams | Write JSON logs to `stdout`; infrastructure (Fluentd/ELK) aggregates |
+| **12. Admin Tasks** | Run admin/migration tasks as one-off processes | Execute DB migrations (Flyway/Liquibase) using the same release image |
 
 ---
 
 ## Conway's Law
 
-"Any organization that designs a system will produce a design whose structure is a copy of the organization's communication structure." - Melvin Conway (1968)
+> *"Any organization that designs a system will produce a design whose structure is a copy of the organization's communication structure."* — **Melvin Conway (1968)**
 
-### Implications for Microservices
+```mermaid
+flowchart TD
+    subgraph SILO["Anti-Pattern: Functional Silos"]
+        FE["Frontend Team"]
+        BE["Backend Team (Order + Payment + Inventory)"]
+        OPS["Ops Team"]
+        FE -- "Handoffs &amp; Tickets" --> BE
+        BE -- "Deploy Tickets" --> OPS
+        BE --> COUPLED["Result: Tightly Coupled Services &amp; Slow Delivery"]
+    end
 
-```
-Organization Structure:
+    subgraph RCM["Reverse Conway Maneuver: Cross-Functional Squads"]
+        SQ1["Squad 1: Order Service (5 Engineers)"]
+        SQ2["Squad 2: Payment Service (3 Engineers)"]
+        SQ3["Squad 3: Inventory + Shipping (6 Engineers)"]
+        SQ4["Platform Team: K8s, Observability, CI/CD"]
+        SQ1 --> S_ORD["Autonomous Order Service"]
+        SQ2 --> S_PAY["Autonomous Payment Service"]
+        SQ3 --> S_INV["Autonomous Inventory &amp; Shipping"]
+        SQ4 -. "Self-Service Golden Paths" .-> SQ1
+        SQ4 -.-> SQ2
+        SQ4 -.-> SQ3
+    end
 
-Founder
-├── CTO
-├── Product Manager
-├── Engineering Manager
-│   ├── Backend Team (4 engineers)
-│   │   ├── Order Domain Expert
-│   │   ├── Inventory Domain Expert
-│   │   └── 2 Developers
-│   ├── Frontend Team (3 engineers)
-│   └── DevOps (2 engineers)
-└── Operations (1)
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
 
-Will likely produce:
-
-Services:
-├── Order Service (owned by Order Domain Expert)
-├── Inventory Service (owned by Inventory Domain Expert)
-├── Frontend (owned by Frontend Team)
-├── DevOps Shared (owned by DevOps)
-└── Notification (shared, no owner)
-```
-
-### Reverse Conway Maneuver
-
-Structure your organization to match desired architecture.
-
-```
-If you want:
-- Order Service
-- Payment Service
-- Inventory Service
-- Shipping Service
-- Notification Service
-
-Structure as:
-- Squad 1: Order Service (5 engineers)
-- Squad 2: Payment Service (3 engineers)
-- Squad 3: Inventory + Shipping (6 engineers)
-- Squad 4: Platform (DevOps, Monitoring, Shared Libraries)
-- Squad 5: Notification (2 engineers)
-
-Each squad:
-- Owns their service completely
-- Responsible for dev, test, deploy, monitor
-- Has dedicated DevOps engineer or receives Platform support
-- Can choose technology stack (with constraints)
-- Autonomous decision-making
+    class FE,BE,OPS,COUPLED red
+    class SQ1,SQ2,SQ3,S_ORD,S_PAY,S_INV green
+    class SQ4 blue
 ```
 
-### Organizational Anti-Patterns
-
-```
-Problem: Silos (tight coupling in code, loose in organization)
-
-Organization:
-├── Backend Team → builds Order, Payment, Inventory services
-└── Frontend Team → builds UI, talks to Backend Team
-
-Result: Services heavily coupled, frequent coordination, slow delivery
-
-Solution: Cross-functional squads
-
-Organization:
-├── Squad 1: Features A, B, C (backend + frontend + QA)
-├── Squad 2: Features D, E, F (backend + frontend + QA)
-├── Platform: Shared services, DevOps, Monitoring
-```
+### Implications & Reverse Conway Maneuver
+- **Natural Conway Effect:** If you have a Backend Team, Frontend Team, and DevOps Team, you will inevitably build a coupled backend monolith, a separate frontend, and manual ops handoffs.
+- **Reverse Conway Maneuver:** Intentionally **restructure your organization** into small, cross-functional, "two-pizza" squads aligned with your desired Bounded Contexts:
+  - **Squad 1:** Order Service (5 engineers)
+  - **Squad 2:** Payment Service (3 engineers)
+  - **Squad 3:** Inventory + Shipping (6 engineers)
+  - **Squad 4:** Platform (DevOps, Monitoring, Shared Libraries)
+  - **Squad 5:** Notification (2 engineers)
+- **Full Ownership ("You Build It, You Run It"):** Each squad owns dev, test, deploy, and on-call monitoring for their service, supported by self-service Platform tooling.
 
 ---
 
 ## Microservices Maturity Model
 
-### Level 0: Monolith
+Organizations rarely jump straight to Netflix-scale microservices. Maturity evolves across 6 distinct levels:
 
-- Single codebase, single deployment unit
-- All features in one process
-- Shared database
+```mermaid
+flowchart LR
+    L0["Level 0: Monolith"] --> L1["Level 1: Modular Monolith"]
+    L1 --> L2["Level 2: Service Per Team"]
+    L2 --> L3["Level 3: Domain-Driven Services"]
+    L3 --> L4["Level 4: Platform &amp; Ecosystem"]
+    L4 --> L5["Level 5: Autonomous &amp; Resilient"]
 
-### Level 1: Modular Monolith
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
 
-- Multiple modules within one codebase
-- Clear package structure
-- Logical separation of concerns
-- Still single deployment unit
-- **Example**: Separate packages for user, order, payment but deployed together
-
-```
-package structure:
-src/
-├── com/ecommerce/user/
-│   ├── UserController
-│   ├── UserService
-│   └── UserRepository
-├── com/ecommerce/order/
-│   ├── OrderController
-│   ├── OrderService
-│   └── OrderRepository
-└── com/ecommerce/payment/
-    ├── PaymentController
-    ├── PaymentService
-    └── PaymentRepository
+    class L0,L1 amber
+    class L2,L3 blue
+    class L4 green
+    class L5 purple
 ```
 
-### Level 2: Service Per Team
+| Level | Architecture | Data & Communication | Key Characteristics |
+|-------|-------------|----------------------|---------------------|
+| **Level 0: Monolith** | Single codebase, single deployment unit | Shared DB, in-process calls | All features in one process |
+| **Level 1: Modular Monolith** | Logical modules/packages in one codebase | Shared DB, strict module interfaces | Separate `user/`, `order/`, `payment/` packages; still 1 deploy unit |
+| **Level 2: Service Per Team** | 1–2 coarse-grained services per team | Shared DB acceptable; independent deploy | Order Service (Team A), Product Service (Team B) |
+| **Level 3: Domain-Driven Services** | Aligned with DDD Bounded Contexts | Separate DB per service; async domain events | `OrderSubmittedEvent` → `PaymentService` |
+| **Level 4: Platform & Ecosystem** | Dedicated Platform team + self-service | Standardized REST/gRPC/Events | K8s, Istio, Jaeger, ELK, Prometheus/Grafana, Vault, Kong |
+| **Level 5: Autonomous & Resilient** | Multi-region, self-healing | Chaos engineering, circuit breakers | Simian Army, bulkhead isolation, automatic failover, graceful degradation |
 
-- One or two services per engineering team
-- Services are coarse-grained (entire business domain)
-- Possibly shared database between services (acceptable at this level)
-- Independent deployment
-
-```
-Order Service (Team A owns everything about orders)
-├── User/Customer logic
-├── Order creation
-├── Order fulfillment
-├── Order analytics
-└── Shared Order DB
-
-Product Service (Team B owns everything about products)
-├── Catalog
-├── Inventory
-├── Pricing
-└── Shared Product DB
-```
-
-### Level 3: Domain-Driven Services
-
-- Services aligned with business domains and DDD bounded contexts
-- Multiple services per team possible
-- Truly separate databases
-- Async communication via events
-
-```
-Order Service (can be owned by Order Squad)
-├── Order Aggregate
-└── Order DB
-
-Payment Service (can be owned by Order Squad or Payment Squad)
-├── Payment Aggregate
-└── Payment DB
-
-Async integration via OrderSubmittedEvent → PaymentService processes payment
-```
-
-### Level 4: Platform & Ecosystem
-
-- Dedicated Platform team providing infrastructure
-- Teams focus on business features
-- Standardized deployment (Kubernetes, Docker)
-- Standardized monitoring (Prometheus, ELK)
-- Standardized communication (REST, gRPC, event streams)
-- Self-service DevOps capabilities
-
-```
-Platform provides:
-├── Container orchestration (Kubernetes)
-├── Service mesh (Istio)
-├── Distributed tracing (Jaeger)
-├── Centralized logging (ELK)
-├── Metrics & monitoring (Prometheus, Grafana)
-├── Secret management (Vault)
-├── Configuration management (Consul/Spring Cloud Config)
-└── API Gateway (Kong/Spring Cloud Gateway)
-
-Each squad gets:
-├── Deployment pipelines
-├── Monitoring dashboards
-├── Alerting
-├── Log aggregation
-└── Service discovery (automatic)
-```
-
-### Level 5: Autonomous & Resilient
-
-- Services fail gracefully
-- Chaotic engineering and fault tolerance
-- Multiple data centers/regions
-- Automatic scaling
-- Self-healing capabilities
-
-```
-Netflix level operations:
-- Simian Army (chaos engineering)
-- Multi-region deployment with automatic failover
-- Bulkhead isolation
-- Circuit breaker everywhere
-- Fallback strategies
-- Graceful degradation
-```
+> [!TIP]
+> **Start at Level 1 (Modular Monolith):** For greenfield projects, a Modular Monolith with clean package boundaries (`com.ecommerce.user`, `com.ecommerce.order`, `com.ecommerce.payment`) gives you monolith speed today and painless service extraction later.
 
 ---
 
 ## Migration Strategies
 
+Migrating a live monolith requires incremental, zero-downtime patterns rather than a risky "big bang" rewrite.
+
+![Strangler Fig Migration](./assets/01-strangler-fig-migration.svg)
+
 ### Strategy 1: Strangler Fig Pattern
 
-Gradually replace the monolith by creating new microservices and routing old traffic to them.
+Gradually replace the monolith by building new microservices alongside it and shifting traffic progressively (`10% → 50% → 100%`) at the **API Gateway** until the monolith is decommissioned.
 
+```mermaid
+flowchart TD
+    GW["API Gateway (Strangler Proxy)"]
+    GW -- "Phase 1: /api/orders/**" --> ORD["New Order Service"]
+    GW -- "Phase 2: /api/payments/** (70%)" --> PAY["New Payment Service"]
+    GW -- "Fallback / Remaining Traffic" --> MONO["Legacy Monolith"]
+    MONO -. "CDC / Outbox Sync" .-> ORD
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    class GW blue
+    class ORD,PAY green
+    class MONO amber
 ```
-Phase 1: New service alongside monolith
-
-    ┌─────────────────┐
-    │ API Gateway     │
-    └────────┬────────┘
-             │
-       ┌─────┴─────┐
-       │           │
-    ┌──▼──┐   ┌────▼─────┐
-    │New  │   │ Monolith  │
-    │Order│   │ (original)│
-    │Srvc │   └───────────┘
-    └─────┘
-
-Phase 2: Route more traffic to new services
-
-    ┌─────────────────┐
-    │ API Gateway     │
-    └────────┬────────┘
-             │
-    ┌────────┴──────────┐
-    │                   │
- ┌──▼──────┐  ┌────────┼──────┐
- │New Order│  │New Pay │Monolith
- │Service  │  │Service │
- │(100%)   │  │(70%)   │
- └─────────┘  └───┬────┴───┬──┘
-               (30%)      (rest)
-
-Phase 3: Decommission monolith
-
-    ┌─────────────────┐
-    │ API Gateway     │
-    └────────┬────────┘
-             │
-    ┌────────┼───────────┐
-    │        │           │
- ┌──▼──┐ ┌──▼──┐    ┌──▼──┐
- │Order│ │Pay  │ .. │User │
- │Srvc │ │Srvc │    │Srvc │
- └─────┘ └─────┘    └─────┘
-```
-
-**Implementation**:
 
 ```java
-// API Gateway routes based on request type
+// API Gateway routes based on request path
 @Configuration
 public class GatewayConfiguration {
-
     @Bean
     public RouteLocator routes(RouteLocatorBuilder builder) {
         return builder.routes()
@@ -1068,7 +949,6 @@ public class GatewayConfiguration {
             .route("order-service", r -> r
                 .path("/api/orders/**")
                 .uri("http://order-service:8080"))
-
             // Still using monolith for other features
             .route("monolith-fallback", r -> r
                 .path("/**")
@@ -1077,16 +957,13 @@ public class GatewayConfiguration {
     }
 }
 
-// Monolith can call new services
+// Monolith can also delegate internally to new services
 @Service
 public class OrderController {
-
-    @Autowired
-    private RestTemplate restTemplate;
+    @Autowired private RestTemplate restTemplate;
 
     @PostMapping("/orders")
     public Order createOrder(CreateOrderRequest request) {
-        // New service handles order creation
         return restTemplate.postForObject(
             "http://order-service:8080/api/orders",
             request,
@@ -1098,7 +975,23 @@ public class OrderController {
 
 ### Strategy 2: Branch by Abstraction
 
-Create an abstraction layer, gradually move functionality behind it.
+Introduce an internal interface inside the monolith, implement the new microservice client behind it, and use a **feature flag / traffic splitter** with automatic fallback to migrate safely.
+
+```mermaid
+flowchart LR
+    CALLER["Monolith Caller"] --> IFACE["PaymentProcessor Interface"]
+    IFACE --> SWITCH["SwitchingPaymentProcessor (Feature Flag / %)"]
+    SWITCH -- "Traffic %" --> NEW["PaymentServiceClient (HTTP / gRPC)"]
+    SWITCH -- "Remaining % or Fallback" --> OLD["MonolithPaymentProcessor"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    class CALLER,IFACE,SWITCH blue
+    class NEW green
+    class OLD amber
+```
 
 ```java
 // Phase 1: Abstract behind interface
@@ -1106,27 +999,13 @@ public interface PaymentProcessor {
     PaymentResult processPayment(PaymentRequest request);
 }
 
-// Monolith implementation
+// Phase 2: Monolith & New Service implementations
 public class MonolithPaymentProcessor implements PaymentProcessor {
-    public PaymentResult processPayment(PaymentRequest request) {
-        // Original implementation
-    }
+    public PaymentResult processPayment(PaymentRequest request) { /* Legacy */ return null; }
 }
 
-// Wire up monolith version initially
-@Configuration
-public class PaymentConfiguration {
-    @Bean
-    public PaymentProcessor paymentProcessor() {
-        return new MonolithPaymentProcessor();
-    }
-}
-
-// Phase 2: Create new service implementation
 public class PaymentServiceClient implements PaymentProcessor {
-
-    @Autowired
-    private RestTemplate restTemplate;
+    @Autowired private RestTemplate restTemplate;
 
     public PaymentResult processPayment(PaymentRequest request) {
         return restTemplate.postForObject(
@@ -1137,26 +1016,9 @@ public class PaymentServiceClient implements PaymentProcessor {
     }
 }
 
-// Phase 3: Switch implementation gradually
-@Configuration
-public class PaymentConfiguration {
-
-    @Bean
-    public PaymentProcessor paymentProcessor(
-        @Value("${payment.use-service:false}") boolean useService
-    ) {
-        if (useService) {
-            return new PaymentServiceClient();  // New service
-        } else {
-            return new MonolithPaymentProcessor(); // Still monolith
-        }
-    }
-}
-
-// Even better: use decorator pattern to support both
+// Phase 3: Decorator pattern for gradual percentage rollout + fallback
 @Component
 public class SwitchingPaymentProcessor implements PaymentProcessor {
-
     private final PaymentProcessor monolith;
     private final PaymentProcessor service;
     private final double serviceTrafficPercentage;
@@ -1174,18 +1036,15 @@ public class SwitchingPaymentProcessor implements PaymentProcessor {
 
     @Override
     public PaymentResult processPayment(PaymentRequest request) {
-        boolean useService = Math.random() < serviceTrafficPercentage;
-
-        if (useService) {
+        if (Math.random() < serviceTrafficPercentage) {
             try {
                 return service.processPayment(request);
             } catch (Exception e) {
-                // Fallback to monolith if service fails
+                // Safe fallback to monolith if new service fails
                 return monolith.processPayment(request);
             }
-        } else {
-            return monolith.processPayment(request);
         }
+        return monolith.processPayment(request);
     }
 }
 ```
@@ -1194,192 +1053,101 @@ public class SwitchingPaymentProcessor implements PaymentProcessor {
 
 ## Common Interview Questions
 
+```mermaid
+flowchart TD
+    Q["Should We Use Microservices?"]
+    Q -- "Team &lt; 5 or MVP or Simple Domain" --> NO["NO: Use Modular Monolith"]
+    Q -- "Tight ACID Consistency or Ultra-Low Latency" --> NO
+    Q -- "Large Org + Complex Domain + Independent Scaling" --> YES["YES: Decompose via DDD &amp; Strangler Fig"]
+
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+    class Q amber
+    class NO red
+    class YES green
+```
+
 ### Q1: When should you NOT use microservices?
-
-**Answer**: You should NOT use microservices when:
-
-1. **Team is small** (< 5 engineers) - Overhead not justified, monolith is better
-2. **Simple domain** - No complex scaling needs, monolith sufficient
-3. **Early stage product** - Need to move fast, unknown requirements
-4. **Tight data consistency required** - Distributed transactions are hard
-5. **Performance critical** - In-process calls faster than network calls
-6. **Low traffic/scale** - Operational overhead not justified
-7. **Team not experienced with distributed systems** - High risk of failure
-
-**Real world example**: A startup building a marketplace might use monolith for first year, split services when they hit specific scaling bottlenecks.
+You should **avoid** microservices when:
+1. **Team is small (< 5 engineers)** — Operational overhead outweighs benefits.
+2. **Simple domain / low traffic** — No complex scaling needs.
+3. **Early-stage product / MVP** — Requirements are still shifting; monoliths pivot faster.
+4. **Tight ACID data consistency required** — Distributed transactions are complex and slower.
+5. **Ultra-low latency critical** — In-process calls beat network serialization.
+6. **Team lacks distributed systems experience** — High risk of building a distributed monolith.
 
 ### Q2: How do you determine the right service boundaries?
-
-**Answer**: Use combination of approaches:
-
-1. **Business domains** (from DDD) - Start with bounded contexts
-2. **Team structure** (Conway's Law) - Services align with team ownership
-3. **Deployment cycles** - Services that change together stay together
-4. **Scalability** - Separate services that need different scaling
-5. **Technology** - Separate if different tech stacks needed
-6. **Data** - Separate if different data models/schemas
-
-```
-Example: E-Commerce Service Boundaries
-
-Too coarse (monolith masquerading as services):
-- Product Catalog Service: 100,000 lines, 20 engineers
-  Contains: products, reviews, recommendations, pricing, inventory
-
-Correct granularity (DDD):
-- Product Service: products, attributes
-- Inventory Service: stock levels, reservations
-- Pricing Service: price calculations, promotions
-- Reviews Service: customer feedback, ratings
-- Recommendation Service: ML-based recommendations
-```
+Combine six lenses: **DDD Bounded Contexts**, **Team Ownership (Conway's Law)**, **Deployment Cycles** (things that change together stay together), **Scalability Needs**, **Technology Diversity**, and **Data Affinity**.
+- *Too coarse:* A 100k-line `Product Catalog Service` mixing products, reviews, recommendations, pricing, and inventory.
+- *Right granularity:* Separate `Product`, `Inventory`, `Pricing`, `Reviews`, and `Recommendation` services.
 
 ### Q3: Explain the difference between business capability and subdomain decomposition.
-
-**Answer**:
-
-**Business Capability Decomposition**:
-- Identifies high-level business functions
-- Coarser granularity
-- What business does (browses products, makes payments, ships orders)
-- More stable, changes less frequently
-
-**Subdomain Decomposition** (DDD):
-- Breaks down business capabilities into subdomains
-- Finer granularity
-- Separates core, supporting, and generic subdomains
-- More aligned with how domain experts think
-
-```
-Business Capability → Subdomains
-
-Product Catalog (capability)
-├── Product Information (core subdomain)
-├── Inventory Management (core subdomain)
-├── Pricing Engine (supporting)
-└── Reviews & Ratings (supporting)
-
-Order Management (capability)
-├── Order Processing (core)
-├── Order Fulfillment (core)
-├── Returns & Refunds (supporting)
-└── Order Analytics (generic - could buy or build)
-```
+- **Business Capability:** Coarser, based on high-level *what the business does* (e.g., `Product Catalog`, `Order Management`). Stable over time.
+- **Subdomain (DDD):** Finer-grained, splits capabilities into **Core** (competitive edge, e.g., `Order Processing`), **Supporting** (e.g., `Returns & Refunds`), and **Generic** (commodities, e.g., `Order Analytics`).
 
 ### Q4: What's a realistic migration plan from monolith to microservices?
-
-**Answer**: Phased approach over 12-24 months:
-
-```
-Timeline:
-Month 1-2: Assessment
-- Identify bottlenecks and scaling issues
-- Define domain boundaries
-- Build infrastructure (Docker, K8s, CI/CD)
-
-Month 3-6: Extract first service (Strangler Fig)
-- Choose non-critical service (e.g., Notifications)
-- Run alongside monolith
-- Route traffic gradually
-- Build operational maturity (monitoring, logging, deployment)
-
-Month 7-12: Extract core services
-- Extract Payment Service (critical)
-- Extract Order Service (complex)
-- Real distributed transaction challenges emerge
-- Build saga pattern, event publishing
-
-Month 13-18: Extract remaining services
-- User Service, Product Service, Inventory Service
-- Build resilience patterns
-- Improve coordination across teams
-
-Month 19-24: Monolith decommissioning
-- Verify all functionality migrated
-- Migrate data
-- Decommission legacy system
-- Optimize service-to-service communication
-```
+A phased **12–24 month** roadmap:
+1. **Months 1–2 (Assessment):** Identify bottlenecks, define DDD boundaries, build K8s/CI/CD foundation.
+2. **Months 3–6 (First Extraction):** Use Strangler Fig on a non-critical edge service (e.g., `Notifications`); build observability maturity.
+3. **Months 7–12 (Core Services):** Extract `Payment` and `Order` services; introduce Sagas, Outbox, and Domain Events.
+4. **Months 13–18 (Remaining Services):** Extract `User`, `Product`, `Inventory`; harden resilience (circuit breakers, bulkheads).
+5. **Months 19–24 (Decommission):** Migrate remaining data, verify parity, and retire the legacy monolith.
 
 ### Q5: How would you split a massive User Service?
+Decompose a 50k-line `User Service` across **DDD**, **Scalability**, and **Data Affinity**:
 
-**Answer**: Consider multiple axes:
+```mermaid
+flowchart LR
+    MONO_U["Massive User Service (50k Lines)"] --> AUTH["Authentication Service: Login, Passwords, Sessions (Redis)"]
+    MONO_U --> PROF["User Profile Service: Personal Info, Preferences (Read-Heavy)"]
+    MONO_U --> AUTHZ["Authorization Service: Roles, Permissions, RBAC"]
 
-```
-User Service (50,000 lines, 10 engineers) - TOO BIG
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
 
-Decompose by:
-
-1. Business domain (DDD):
-   - User Profile Service (personal info)
-   - Authentication Service (login, security)
-   - Authorization Service (permissions)
-   - Notification Preferences Service
-
-2. Scalability:
-   - Session Management (high write rate, accessed frequently)
-   - User Profile (read-heavy)
-   - Authentication (CPU intensive, separate scaling)
-
-3. Data affinity:
-   - Real-time user data (profile, preferences)
-   - Audit log (append-only)
-   - Session data (ephemeral, Redis)
-
-Result:
-├── Authentication Service (6 engineers)
-│   ├── Login/logout
-│   ├── Password management
-│   ├── Session management
-│   └── DB: Users, Sessions, Audit
-│
-├── User Profile Service (3 engineers)
-│   ├── Get/update user info
-│   ├── Preferences
-│   └── DB: User Profiles
-│
-└── Authorization Service (2 engineers)
-    ├── Check permissions
-    ├── Role management
-    └── DB: Roles, Permissions
+    class MONO_U red
+    class AUTH,PROF,AUTHZ green
 ```
 
-### Q6: What challenges did you face going from monolith to microservices in your experience?
+### Q6: What challenges emerge when moving from monolith to microservices?
 
-**Answer** (if you have experience; otherwise speak hypothetically):
-
-Common challenges:
-
-1. **Operational complexity** - Now managing 10+ services instead of 1
-   - Solution: Invest in automation, monitoring, CI/CD
-
-2. **Data consistency** - Can't use ACID transactions across services
-   - Solution: Embrace eventual consistency, implement sagas
-
-3. **Debugging** - Errors span multiple services and networks
-   - Solution: Implement distributed tracing (Sleuth/Zipkin)
-
-4. **Testing** - Integration tests become complex
-   - Solution: Contract testing, service isolation in tests
-
-5. **Team coordination** - More teams, more potential conflicts
-   - Solution: Clear API contracts, governance
-
-6. **Network latency** - Suddenly dealing with network calls everywhere
-   - Solution: Batch operations, cache aggressively, async where possible
-
-7. **Deployment coordination** - Services with dependencies
-   - Solution: Backward-compatible APIs, semantic versioning
+| Challenge | Root Cause | Proven Solution |
+|-----------|------------|-----------------|
+| **Operational Complexity** | Managing 10+ services instead of 1 | Automation, Kubernetes, CI/CD pipelines |
+| **Data Consistency** | No cross-service ACID transactions | Eventual consistency, Saga pattern, Outbox |
+| **Debugging** | Errors span multiple network hops | Distributed tracing (OpenTelemetry / Jaeger / Zipkin) |
+| **Testing** | Fragile E2E environments | Contract testing (Pact), isolated component tests |
+| **Team Coordination** | Breaking API changes across squads | Backward-compatible APIs, semantic versioning |
+| **Network Latency** | Chatty sync calls over the wire | Bulk APIs, aggressive caching, async events |
 
 ---
 
 ## Key Takeaways for Interviews
 
-1. **Microservices are not silver bullet** - Know when NOT to use them
-2. **Start with organization** - Conway's Law is real
-3. **Clear boundaries from start** - Using DDD principles
-4. **Expect distributed system challenges** - Network, consistency, failure
-5. **Plan migration carefully** - Strangler Fig pattern with gradual rollout
-6. **Operational excellence required** - Monitoring, tracing, deployment automation
-7. **Team structure matters** - 2 pizza teams, full ownership
+```mermaid
+flowchart LR
+    T1["1. Not a Silver Bullet"] --> T2["2. Align Org (Conway's Law)"]
+    T2 --> T3["3. DDD Boundaries First"]
+    T3 --> T4["4. Design for Failure &amp; Async"]
+    T4 --> T5["5. Strangler Fig Migration"]
+    T5 --> T6["6. Platform &amp; Observability"]
+    T6 --> T7["7. Two-Pizza Full Ownership"]
 
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class T1,T2,T3 blue
+    class T4,T5 green
+    class T6,T7 purple
+```
+
+1. **Microservices are not a silver bullet** — Always justify *why* a Modular Monolith isn't sufficient first.
+2. **Start with organization** — Conway's Law dictates that team structure shapes system architecture.
+3. **Clear boundaries from the start** — Use DDD Bounded Contexts, Aggregates, and Domain Events.
+4. **Expect distributed system challenges** — Network latency, partial failures, and eventual consistency are guaranteed.
+5. **Plan migration carefully** — Use Strangler Fig and Branch by Abstraction with gradual traffic shifting.
+6. **Operational excellence is mandatory** — Invest in CI/CD, distributed tracing, and centralized logging before scaling out services.
+7. **Team structure matters** — Empower autonomous two-pizza teams with end-to-end ownership.

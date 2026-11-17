@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" width="100%" height="auto" role="img" aria-label="Three Pillars of Observability: Logs, Metrics, and Distributed Traces">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .svc-gw { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.8; rx: 10; }
+      .svc-order { fill: #1e293b; stroke: #a78bfa; stroke-width: 1.8; rx: 10; }
+      .svc-pay { fill: #1e293b; stroke: #34d399; stroke-width: 1.8; rx: 10; }
+      .svc-kafka { fill: #1e293b; stroke: #fbbf24; stroke-width: 1.8; rx: 10; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .node-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+      .node-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; }
+      .beam { fill: none; stroke-width: 1.8; stroke-dasharray: 5 5; animation: dashDown 1.4s linear infinite; }
+      .bar-anim { animation: barPulse 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: left; }
+      .span-anim { animation: spanGlow 2.8s ease-in-out infinite; }
+      @keyframes dashDown {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes barPulse {
+        0%, 100% { opacity: 0.75; transform: scaleX(0.96); }
+        50% { opacity: 1; transform: scaleX(1.03); }
+      }
+      @keyframes spanGlow {
+        0%, 100% { opacity: 0.8; }
+        50% { opacity: 1; }
+      }
+    </style>
+
+    <marker id="arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arr-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399" />
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="1100" height="540" rx="14" />
+
+  <!-- Header -->
+  <text x="36" y="40" class="title">Three Pillars of Observability: Context Propagation &amp; Telemetry</text>
+  <text x="36" y="62" class="subtitle">W3C traceparent (traceId + spanId) Flowing Across Sync HTTP &amp; Async Kafka into Logs, Metrics &amp; Traces</text>
+
+  <!-- Request Flow Track -->
+  <rect x="30" y="80" width="1040" height="130" rx="12" fill="#0b1220" stroke="#1e293b" stroke-width="1.5" />
+  <text x="44" y="98" class="badge-text" fill="#38bdf8">DISTRIBUTED REQUEST PATH (W3C traceparent: 00-a1b2c3d4-spanId-01)</text>
+
+  <!-- Service 1: API Gateway -->
+  <rect x="44" y="110" width="175" height="84" class="svc-gw" />
+  <text x="131" y="133" text-anchor="middle" class="node-title">API Gateway</text>
+  <text x="131" y="150" text-anchor="middle" class="mono-sm" fill="#38bdf8">Injects traceparent</text>
+  <rect x="56" y="160" width="151" height="24" rx="5" fill="#0f172a" stroke="#334155" />
+  <text x="131" y="176" text-anchor="middle" class="mono-sm" fill="#cbd5e1">traceId: a1b2 | s: 001</text>
+
+  <!-- Service 2: Order Service -->
+  <rect x="290" y="110" width="185" height="84" class="svc-order" />
+  <text x="382" y="133" text-anchor="middle" class="node-title">Order Service</text>
+  <text x="382" y="150" text-anchor="middle" class="mono-sm" fill="#a78bfa">MDC + OTel Span</text>
+  <rect x="302" y="160" width="161" height="24" rx="5" fill="#0f172a" stroke="#334155" />
+  <text x="382" y="176" text-anchor="middle" class="mono-sm" fill="#cbd5e1">traceId: a1b2 | s: 002</text>
+
+  <!-- Service 3: Payment Service -->
+  <rect x="546" y="110" width="190" height="84" class="svc-pay" />
+  <text x="641" y="133" text-anchor="middle" class="node-title">Payment Service</text>
+  <text x="641" y="150" text-anchor="middle" class="mono-sm" fill="#34d399">DB + External Call</text>
+  <rect x="558" y="160" width="166" height="24" rx="5" fill="#0f172a" stroke="#334155" />
+  <text x="641" y="176" text-anchor="middle" class="mono-sm" fill="#cbd5e1">traceId: a1b2 | s: 003</text>
+
+  <!-- Service 4: Kafka Broker -->
+  <rect x="810" y="110" width="242" height="84" class="svc-kafka" />
+  <text x="931" y="133" text-anchor="middle" class="node-title">Kafka (order.paid)</text>
+  <text x="931" y="150" text-anchor="middle" class="mono-sm" fill="#fbbf24">Async Header Propagation</text>
+  <rect x="822" y="160" width="218" height="24" rx="5" fill="#0f172a" stroke="#334155" />
+  <text x="931" y="176" text-anchor="middle" class="mono-sm" fill="#cbd5e1">Header traceId: a1b2 | s: 004</text>
+
+  <!-- Horizontal Request Arrows -->
+  <line x1="219" y1="152" x2="284" y2="152" stroke="#38bdf8" stroke-width="2.2" marker-end="url(#arr-cyan)" />
+  <text x="253" y="142" text-anchor="middle" class="mono-sm" fill="#38bdf8">HTTP</text>
+
+  <line x1="475" y1="152" x2="540" y2="152" stroke="#34d399" stroke-width="2.2" marker-end="url(#arr-emerald)" />
+  <text x="509" y="142" text-anchor="middle" class="mono-sm" fill="#34d399">gRPC</text>
+
+  <line x1="736" y1="152" x2="804" y2="152" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#arr-amber)" />
+  <text x="772" y="142" text-anchor="middle" class="mono-sm" fill="#fbbf24">Async</text>
+
+  <!-- Animated traceparent packet traversing the entire pipeline -->
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="4s" repeatCount="indefinite" path="M 219 152 L 806 152" />
+  </circle>
+
+  <!-- Telemetry Emission Beams (Downward to 3 Pillars) -->
+  <!-- Beam to Logs -->
+  <path d="M 350 194 L 350 225 L 195 225 L 195 256" class="beam" stroke="#38bdf8" marker-end="url(#arr-cyan)" />
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 350 194 L 350 225 L 195 225 L 195 256" />
+  </circle>
+
+  <!-- Beam to Metrics -->
+  <path d="M 610 194 L 610 225 L 550 225 L 550 256" class="beam" stroke="#34d399" marker-end="url(#arr-emerald)" />
+  <circle r="4" fill="#34d399">
+    <animateMotion dur="2s" begin="0.6s" repeatCount="indefinite" path="M 610 194 L 610 225 L 550 225 L 550 256" />
+  </circle>
+
+  <!-- Beam to Traces -->
+  <path d="M 900 194 L 900 256" class="beam" stroke="#fbbf24" marker-end="url(#arr-amber)" />
+  <circle r="4" fill="#fbbf24">
+    <animateMotion dur="1.8s" begin="1.1s" repeatCount="indefinite" path="M 900 194 L 900 256" />
+  </circle>
+
+  <!-- Pillar 1: Structured JSON Logs -->
+  <rect x="30" y="262" width="330" height="232" class="card" />
+  <rect x="30" y="262" width="330" height="6" rx="3" fill="#38bdf8" />
+  <text x="48" y="292" class="node-title">1. Structured Logs (ELK / Loki)</text>
+  <text x="48" y="310" class="node-sub">MDC auto-attaches traceId &amp; spanId to every log</text>
+
+  <rect x="46" y="324" width="298" height="118" rx="8" fill="#0b1220" stroke="#334155" />
+  <text x="58" y="344" class="mono" fill="#94a3b8">{</text>
+  <text x="68" y="362" class="mono" fill="#38bdf8">"ts": "2026-11-17T10:30:45Z",</text>
+  <text x="68" y="380" class="mono" fill="#34d399">"level": "INFO", "svc": "order",</text>
+  <text x="68" y="398" class="mono" fill="#fbbf24">"traceId": "a1b2", "spanId": "002",</text>
+  <text x="68" y="416" class="mono" fill="#cbd5e1">"orderId": 9841, "ms": 42</text>
+  <text x="58" y="434" class="mono" fill="#94a3b8">}</text>
+
+  <text x="48" y="466" class="node-sub">Query: service="order" AND traceId="a1b2"</text>
+  <text x="48" y="482" class="node-sub">Answers: "What happened in this exact request?"</text>
+
+  <!-- Pillar 2: Prometheus RED Metrics -->
+  <rect x="385" y="262" width="330" height="232" class="card" />
+  <rect x="385" y="262" width="330" height="6" rx="3" fill="#34d399" />
+  <text x="403" y="292" class="node-title">2. Prometheus RED Metrics</text>
+  <text x="403" y="310" class="node-sub">Scraped every 15s via /actuator/prometheus</text>
+
+  <rect x="401" y="324" width="298" height="118" rx="8" fill="#0b1220" stroke="#334155" />
+  <text x="415" y="346" class="mono" fill="#38bdf8">R  http_requests_total</text>
+  <rect x="415" y="354" width="210" height="8" rx="4" fill="#38bdf8" class="bar-anim" />
+
+  <text x="415" y="382" class="mono" fill="#fb7185">E  http_errors_total (&lt; 1%)</text>
+  <rect x="415" y="390" width="46" height="8" rx="4" fill="#fb7185" class="bar-anim" />
+
+  <text x="415" y="418" class="mono" fill="#34d399">D  http_duration_p99 (42ms)</text>
+  <rect x="415" y="426" width="145" height="8" rx="4" fill="#34d399" class="bar-anim" />
+
+  <text x="403" y="466" class="node-sub">Aggregatable time-series + PromQL alerting</text>
+  <text x="403" y="482" class="node-sub">Answers: "Is the service healthy right now?"</text>
+
+  <!-- Pillar 3: Distributed Traces -->
+  <rect x="740" y="262" width="330" height="232" class="card" />
+  <rect x="740" y="262" width="330" height="6" rx="3" fill="#fbbf24" />
+  <text x="758" y="292" class="node-title">3. OTel Distributed Traces</text>
+  <text x="758" y="310" class="node-sub">Waterfall view across services (Jaeger / Tempo)</text>
+
+  <rect x="756" y="324" width="298" height="118" rx="8" fill="#0b1220" stroke="#334155" />
+  <text x="768" y="346" class="mono-sm" fill="#38bdf8">Gateway [001]</text>
+  <rect x="852" y="336" width="186" height="12" rx="3" fill="#38bdf8" class="span-anim" />
+
+  <text x="768" y="374" class="mono-sm" fill="#a78bfa">Order   [002]</text>
+  <rect x="870" y="364" width="150" height="12" rx="3" fill="#a78bfa" class="span-anim" />
+
+  <text x="768" y="402" class="mono-sm" fill="#34d399">Payment [003]</text>
+  <rect x="895" y="392" width="84" height="12" rx="3" fill="#34d399" class="span-anim" />
+
+  <text x="768" y="430" class="mono-sm" fill="#fbbf24">Kafka   [004]</text>
+  <rect x="984" y="420" width="36" height="12" rx="3" fill="#fbbf24" class="span-anim" />
+
+  <text x="758" y="466" class="node-sub">Pinpoints slow hops, retries &amp; N+1 DB calls</text>
+  <text x="758" y="482" class="node-sub">Answers: "Where is the latency bottleneck?"</text>
+
+  <!-- Footer -->
+  <circle cx="42" cy="518" r="5" fill="#38bdf8" />
+  <text x="54" y="522" class="node-sub">Logs: Event Detail (ELK/Loki)</text>
+  <circle cx="270" cy="518" r="5" fill="#34d399" />
+  <text x="282" y="522" class="node-sub">Metrics: Aggregates &amp; SLOs (Prometheus)</text>
+  <circle cx="555" cy="518" r="5" fill="#fbbf24" />
+  <text x="567" y="522" class="node-sub">Traces: Request Waterfall (OTel/Jaeger)</text>
+  <text x="860" y="522" class="mono-sm" fill="#94a3b8">Linked via traceId + Exemplars</text>
+</svg>

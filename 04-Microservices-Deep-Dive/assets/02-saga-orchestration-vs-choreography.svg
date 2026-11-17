@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 620" width="100%" height="100%" role="img" aria-labelledby="sagaTitle sagaDesc">
+  <title id="sagaTitle">Saga Pattern: Choreography vs Orchestration</title>
+  <desc id="sagaDesc">Animated comparison of Choreography event-driven saga with compensating events versus Orchestration central SagaOrchestrator coordinating commands and rollbacks.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 14; }
+      .header-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #f8fafc; }
+      .sub-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 500; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; }
+      .node-box { fill: #0f172a; stroke-width: 2; rx: 10; }
+      .node-title { font-family: system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 13px; fill: #f1f5f9; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .badge { rx: 6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; }
+      .fwd-line { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.55; }
+      .comp-line { fill: none; stroke: #f43f5e; stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.65; }
+      .orch-line { fill: none; stroke: #fbbf24; stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.55; }
+      @keyframes pulseFail {
+        0%, 34%, 100% { stroke: #f43f5e; fill: #0f172a; }
+        42%, 56% { stroke: #fb7185; fill: #3f1221; }
+      }
+      @keyframes pulseOrch {
+        0%, 100% { stroke: #fbbf24; }
+        50% { stroke: #fde68a; }
+      }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -18; }
+      }
+      .anim-dash { animation: dashFlow 1.2s linear infinite; }
+      .fail-node { animation: pulseFail 9s ease-in-out infinite; }
+      .orch-node { animation: pulseOrch 3s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrowCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrowRose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24" />
+    </marker>
+  </defs>
+
+  <!-- Canvas -->
+  <rect class="bg" width="1100" height="620" rx="16" />
+
+  <!-- Top Title -->
+  <text x="550" y="34" text-anchor="middle" class="header-text" font-size="20">Saga Pattern: Choreography vs Orchestration (Rollback on Inventory Failure)</text>
+  <text x="550" y="54" text-anchor="middle" class="sub-text" font-size="12.5">Forward execution (cyan/amber) followed by reverse compensating transactions (rose)</text>
+
+  <!-- ==================== LEFT PANEL: CHOREOGRAPHY ==================== -->
+  <rect x="24" y="72" width="516" height="524" class="panel" />
+  <text x="48" y="102" class="header-text" font-size="16">1. Choreography (Event-Driven)</text>
+  <text x="48" y="120" class="sub-text" font-size="11.5">No central brain — services react to domain events on the broker</text>
+
+  <!-- Event Bus Banner -->
+  <rect x="48" y="140" width="468" height="36" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1.5" />
+  <text x="282" y="162" text-anchor="middle" class="mono" font-size="12" fill="#38bdf8">Event Broker (Kafka / RabbitMQ Topics)</text>
+
+  <!-- Choreography Nodes -->
+  <!-- Order Service -->
+  <rect x="52" y="236" width="136" height="72" class="node-box" stroke="#38bdf8" />
+  <text x="120" y="264" text-anchor="middle" class="node-title">Order Service</text>
+  <text x="120" y="282" text-anchor="middle" class="node-sub">1. PENDING</text>
+  <text x="120" y="297" text-anchor="middle" class="node-sub" fill="#f43f5e">5. CANCELLED</text>
+
+  <!-- Payment Service -->
+  <rect x="214" y="236" width="136" height="72" class="node-box" stroke="#a78bfa" />
+  <text x="282" y="264" text-anchor="middle" class="node-title">Payment Service</text>
+  <text x="282" y="282" text-anchor="middle" class="node-sub">2. Charged</text>
+  <text x="282" y="297" text-anchor="middle" class="node-sub" fill="#f43f5e">4. Refunded</text>
+
+  <!-- Inventory Service -->
+  <rect x="376" y="236" width="136" height="72" class="node-box fail-node" stroke="#f43f5e" />
+  <text x="444" y="264" text-anchor="middle" class="node-title">Inventory Service</text>
+  <text x="444" y="282" text-anchor="middle" class="node-sub" fill="#fb7185">3. Out of Stock!</text>
+  <text x="444" y="297" text-anchor="middle" class="node-sub">Emits Failure</text>
+
+  <!-- Choreography Paths -->
+  <!-- OrderCreated: Order -> Broker -> Payment -->
+  <path id="choreoFwd1" d="M 120 236 L 120 176 L 282 176 L 282 234" class="fwd-line anim-dash" marker-end="url(#arrowCyan)" />
+  <!-- PaymentCharged: Payment -> Broker -> Inventory -->
+  <path id="choreoFwd2" d="M 300 236 L 300 192 L 444 192 L 444 234" class="fwd-line anim-dash" marker-end="url(#arrowCyan)" />
+  <!-- InventoryFailed: Inventory -> Broker -> Payment & Order -->
+  <path id="choreoComp1" d="M 430 308 L 430 378 L 282 378 L 282 310" class="comp-line anim-dash" marker-end="url(#arrowRose)" />
+  <path id="choreoComp2" d="M 264 308 L 264 416 L 120 416 L 120 310" class="comp-line anim-dash" marker-end="url(#arrowRose)" />
+
+  <!-- Labels on Choreography Paths -->
+  <rect x="136" y="164" width="106" height="20" rx="5" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1" />
+  <text x="189" y="178" text-anchor="middle" class="mono" font-size="10" fill="#e0f2fe">OrderCreated</text>
+
+  <rect x="322" y="182" width="114" height="20" rx="5" fill="#2e1065" stroke="#a78bfa" stroke-width="1" />
+  <text x="379" y="196" text-anchor="middle" class="mono" font-size="10" fill="#ede9fe">PaymentCharged</text>
+
+  <rect x="304" y="366" width="116" height="20" rx="5" fill="#4c0519" stroke="#f43f5e" stroke-width="1" />
+  <text x="362" y="380" text-anchor="middle" class="mono" font-size="10" fill="#ffe4e6">InventoryFailed</text>
+
+  <rect x="130" y="404" width="118" height="20" rx="5" fill="#4c0519" stroke="#f43f5e" stroke-width="1" />
+  <text x="189" y="418" text-anchor="middle" class="mono" font-size="10" fill="#ffe4e6">PaymentRefunded</text>
+
+  <!-- Animated Packets (Choreography) -->
+  <circle r="6" fill="#38bdf8">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;1;1;1" keyTimes="0;0.22;0.99;1">
+      <mpath href="#choreoFwd1" />
+    </animateMotion>
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.21;0.23;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="6" fill="#a78bfa">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.22;0.44;1">
+      <mpath href="#choreoFwd2" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.21;0.23;0.43;0.45;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="6" fill="#f43f5e">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.48;0.70;1">
+      <mpath href="#choreoComp1" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.47;0.49;0.69;0.71;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="6" fill="#fb7185">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.70;0.92;1">
+      <mpath href="#choreoComp2" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.69;0.71;0.91;0.93;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Choreography Summary Card -->
+  <rect x="48" y="462" width="468" height="114" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1" />
+  <text x="64" y="486" class="header-text" font-size="12.5" fill="#38bdf8">Choreography Trade-offs</text>
+  <text x="64" y="508" class="sub-text" font-size="11.5">+ Loose coupling, no single point of failure</text>
+  <text x="64" y="528" class="sub-text" font-size="11.5">- Implicit flow across topics; hard to trace full saga state</text>
+  <text x="64" y="548" class="sub-text" font-size="11.5">- Risk of cyclic event loops as workflow grows</text>
+  <text x="64" y="566" class="mono" font-size="10.5" fill="#64748b">Best for: 2–4 services, simple linear workflows</text>
+
+  <!-- ==================== RIGHT PANEL: ORCHESTRATION ==================== -->
+  <rect x="560" y="72" width="516" height="524" class="panel" />
+  <text x="584" y="102" class="header-text" font-size="16">2. Orchestration (Central Coordinator)</text>
+  <text x="584" y="120" class="sub-text" font-size="11.5">SagaOrchestrator state machine directs commands &amp; rollbacks</text>
+
+  <!-- Orchestrator Box -->
+  <rect x="698" y="142" width="240" height="68" class="node-box orch-node" stroke="#fbbf24" />
+  <text x="818" y="168" text-anchor="middle" class="node-title" fill="#fde68a">SagaOrchestrator</text>
+  <text x="818" y="186" text-anchor="middle" class="node-sub">State Machine + Retry + Timeout</text>
+  <text x="818" y="200" text-anchor="middle" class="node-sub" fill="#fbbf24">Temporal / Camunda / Spring</text>
+
+  <!-- Orchestration Participant Nodes -->
+  <rect x="584" y="340" width="136" height="72" class="node-box" stroke="#38bdf8" />
+  <text x="652" y="368" text-anchor="middle" class="node-title">Order Service</text>
+  <text x="652" y="386" text-anchor="middle" class="node-sub">Cmd: Create</text>
+  <text x="652" y="401" text-anchor="middle" class="node-sub" fill="#f43f5e">Comp: Cancel</text>
+
+  <rect x="750" y="340" width="136" height="72" class="node-box" stroke="#a78bfa" />
+  <text x="818" y="368" text-anchor="middle" class="node-title">Payment Service</text>
+  <text x="818" y="386" text-anchor="middle" class="node-sub">Cmd: Charge</text>
+  <text x="818" y="401" text-anchor="middle" class="node-sub" fill="#f43f5e">Comp: Refund</text>
+
+  <rect x="916" y="340" width="136" height="72" class="node-box fail-node" stroke="#f43f5e" />
+  <text x="984" y="368" text-anchor="middle" class="node-title">Inventory Service</text>
+  <text x="984" y="386" text-anchor="middle" class="node-sub">Cmd: Reserve</text>
+  <text x="984" y="401" text-anchor="middle" class="node-sub" fill="#fb7185">Throws Exception</text>
+
+  <!-- Orchestration Command & Rollback Paths -->
+  <!-- 1. CreateOrder -->
+  <path id="orchCmd1" d="M 730 210 L 652 338" class="orch-line anim-dash" marker-end="url(#arrowAmber)" />
+  <!-- 2. ChargePayment -->
+  <path id="orchCmd2" d="M 818 210 L 818 338" class="orch-line anim-dash" marker-end="url(#arrowAmber)" />
+  <!-- 3. ReserveInventory -->
+  <path id="orchCmd3" d="M 906 210 L 984 338" class="orch-line anim-dash" marker-end="url(#arrowAmber)" />
+  <!-- 4. RefundPayment -->
+  <path id="orchComp1" d="M 836 210 L 836 338" class="comp-line anim-dash" marker-end="url(#arrowRose)" />
+  <!-- 5. CancelOrder -->
+  <path id="orchComp2" d="M 750 210 L 672 338" class="comp-line anim-dash" marker-end="url(#arrowRose)" />
+
+  <!-- Step Badges -->
+  <rect x="634" y="256" width="84" height="20" rx="5" fill="#451a03" stroke="#fbbf24" stroke-width="1" />
+  <text x="676" y="270" text-anchor="middle" class="mono" font-size="10" fill="#fef3c7">1. Create</text>
+
+  <rect x="772" y="256" width="92" height="20" rx="5" fill="#451a03" stroke="#fbbf24" stroke-width="1" />
+  <text x="818" y="270" text-anchor="middle" class="mono" font-size="10" fill="#fef3c7">2. Charge</text>
+
+  <rect x="920" y="256" width="92" height="20" rx="5" fill="#451a03" stroke="#fbbf24" stroke-width="1" />
+  <text x="966" y="270" text-anchor="middle" class="mono" font-size="10" fill="#fef3c7">3. Reserve</text>
+
+  <rect x="780" y="294" width="94" height="20" rx="5" fill="#4c0519" stroke="#f43f5e" stroke-width="1" />
+  <text x="827" y="308" text-anchor="middle" class="mono" font-size="10" fill="#ffe4e6">4. Refund</text>
+
+  <rect x="646" y="294" width="90" height="20" rx="5" fill="#4c0519" stroke="#f43f5e" stroke-width="1" />
+  <text x="691" y="308" text-anchor="middle" class="mono" font-size="10" fill="#ffe4e6">5. Cancel</text>
+
+  <!-- Animated Packets (Orchestration) -->
+  <circle r="6" fill="#fbbf24">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;1;1;1" keyTimes="0;0.16;0.99;1">
+      <mpath href="#orchCmd1" />
+    </animateMotion>
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.15;0.17;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="6" fill="#fbbf24">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.18;0.34;1">
+      <mpath href="#orchCmd2" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.17;0.19;0.33;0.35;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="6" fill="#fbbf24">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.35;0.51;1">
+      <mpath href="#orchCmd3" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.34;0.36;0.50;0.52;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="6" fill="#f43f5e">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.56;0.74;1">
+      <mpath href="#orchComp1" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.55;0.57;0.73;0.75;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="6" fill="#fb7185">
+    <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.74;0.92;1">
+      <mpath href="#orchComp2" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.73;0.75;0.91;0.93;1" dur="9s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Orchestration Summary Card -->
+  <rect x="584" y="462" width="468" height="114" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1" />
+  <text x="600" y="486" class="header-text" font-size="12.5" fill="#fbbf24">Orchestration Trade-offs</text>
+  <text x="600" y="508" class="sub-text" font-size="11.5">+ Explicit state machine, centralized rollback &amp; observability</text>
+  <text x="600" y="528" class="sub-text" font-size="11.5">+ Easy to add/reorder steps without changing participant services</text>
+  <text x="600" y="548" class="sub-text" font-size="11.5">- Orchestrator can become a bottleneck or single point of failure</text>
+  <text x="600" y="566" class="mono" font-size="10.5" fill="#64748b">Best for: 4+ services, complex branching &amp; compensation</text>
+</svg>

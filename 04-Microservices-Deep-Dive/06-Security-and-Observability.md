@@ -1,9 +1,14 @@
 # Security and Observability in Microservices
 
+> [!IMPORTANT]
+> In a distributed microservices architecture, **security** shifts from perimeter-only defense to **zero-trust identity verification at every hop**, while **observability** shifts from single-host log tailing to **correlating logs, metrics, and distributed traces** via a shared `traceId`.
+
+---
+
 ## Table of Contents
 1. [Authentication and Authorization](#authentication-and-authorization)
-2. [Token-Based Authentication](#token-based-auth)
-3. [Service-to-Service Authentication](#service-to-service)
+2. [Token-Based Authentication](#token-based-authentication)
+3. [Service-to-Service Authentication](#service-to-service-authentication)
 4. [API Security](#api-security)
 5. [Distributed Logging](#distributed-logging)
 6. [Metrics and Monitoring](#metrics-and-monitoring)
@@ -14,43 +19,76 @@
 
 ## Authentication and Authorization
 
-### OAuth 2.0 Flow
+**Authentication (AuthN)** proves *who* the caller is (`401 Unauthorized` on failure), whereas **Authorization (AuthZ)** determines *what* the verified identity is permitted to do (`403 Forbidden` on failure).
 
+### OAuth 2.0 + OIDC Authorization Code Flow (with PKCE)
+
+Modern web and mobile clients use **Authorization Code + PKCE (Proof Key for Code Exchange)** so authorization codes cannot be intercepted and exchanged without the client's cryptographic `code_verifier`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Client as Client App (SPA / Mobile)
+    participant IdP as Auth Server / IdP (Okta / Keycloak)
+    participant API as Resource API / Gateway
+
+    User->>Client: Clicks "Login"
+    Client->>Client: Generate code_verifier & SHA-256 code_challenge
+    Client->>IdP: Redirect /authorize (client_id, scope=openid, code_challenge)
+    IdP->>User: Prompt for credentials & MFA
+    User->>IdP: Submits credentials
+    IdP-->>Client: Redirect back with authorization_code
+    Client->>IdP: POST /oauth/token (code + code_verifier)
+    IdP-->>Client: Access Token (JWT) + ID Token + Refresh Token
+    Client->>API: GET /api/orders (Authorization: Bearer {JWT})
+    API-->>Client: 200 OK (Order payload)
 ```
-User logs in through application:
 
-1. User clicks "Login"
-   └─ Application redirects to OAuth provider
-      (e.g., Google, GitHub, Okta)
+- **Step 1–2 (Redirect & Authenticate):** The application delegates credential handling to a trusted Identity Provider (Google, GitHub, Okta, Keycloak) so user passwords never touch application servers.
+- **Step 3–4 (Code Exchange):** The IdP returns a short-lived authorization code, which the backend (or PKCE-enabled public client) exchanges for an Access Token and ID Token.
+- **Step 5–6 (User Info & Session/Stateless Context):** The application extracts user identity/claims from the OIDC ID Token or `/userinfo` endpoint and attaches the Access Token to downstream API calls.
 
-2. User authenticates with provider
-   └─ User enters credentials on provider's site
+### AuthN vs. AuthZ & Protocol Comparison
 
-3. Provider redirects back to application
-   └─ With authorization code
+| Dimension | OAuth 2.0 | OpenID Connect (OIDC) | SAML 2.0 |
+| :--- | :--- | :--- | :--- |
+| **Primary Purpose** | Delegated **Authorization** | **Authentication** + Identity layer on OAuth 2.0 | Enterprise SSO **Authentication** |
+| **Token Format** | Opaque or JWT (Access Token) | **JWT** (ID Token + Access Token) | **XML** Assertions |
+| **Best For** | API access & microservices | Web, Mobile, SPA, modern APIs | Legacy enterprise & B2B portals |
+| **Transport** | JSON / REST over HTTPS | JSON / REST over HTTPS | HTTP POST / Redirect XML bindings |
 
-4. Application exchanges code for token (backend)
-   └─ Application secret + code → Access token
+### JWT (JSON Web Token) Anatomy & Verification
 
-5. Application uses token to fetch user info
-   └─ Access token → User details
+A JWT consists of three Base64URL-encoded segments separated by dots: `Header.Payload.Signature`.
 
-6. Application creates session
-   └─ User logged in
+```mermaid
+flowchart LR
+    H["Header: alg=HS256 or RS256, typ=JWT"] --> B["Base64URL(Header) + '.' + Base64URL(Payload)"]
+    P["Payload: sub, name, roles, iat, exp"] --> B
+    B --> S["Signature: HMAC or RSA Sign(B, Secret / PrivateKey)"]
+    S --> V["Gateway / Service Verifies Signature + exp + iss + aud"]
+    V -->|"Valid"| OK["Populate SecurityContext (roles &amp; sub)"]
+    V -->|"Invalid / Expired"| ERR["Reject with HTTP 401 Unauthorized"]
+
+    classDef part fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef proc fill:#0f172a,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef ok fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef err fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#f8fafc
+    class H,P part
+    class B,S,V proc
+    class OK ok
+    class ERR err
 ```
 
-### JWT (JSON Web Token)
-
-```
-Header.Payload.Signature
-
-Header:
+```json
+// Header
 {
   "alg": "HS256",
   "typ": "JWT"
 }
 
-Payload:
+// Payload (Claims)
 {
   "sub": "user123",
   "name": "John Doe",
@@ -58,9 +96,11 @@ Payload:
   "iat": 1675000000,
   "exp": 1675003600
 }
+```
 
+```text
 Signature:
-HMACSHA256(base64(header) + "." + base64(payload), secret)
+HMACSHA256(base64UrlEncode(header) + "." + base64UrlEncode(payload), secret)
 
 Full JWT:
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
@@ -68,9 +108,78 @@ eyJzdWIiOiJ1c2VyMTIzIiwibmFtZSI6IkpvaG4gRG9lIiwicm9sZXMiOlsiYWRtaW4iLCJ1c2VyIl0s
 TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ
 ```
 
+> [!WARNING]
+> **JWT payloads are Base64URL-encoded, NOT encrypted.** Anyone with the token can decode the payload—never store PII, passwords, or secrets inside JWT claims unless using JWE (JSON Web Encryption).
+
+### Authorization Models: RBAC vs. ABAC
+
+| Model | How Decisions Are Made | Pros | Cons |
+| :--- | :--- | :--- | :--- |
+| **RBAC (Role-Based)** | Permissions bound to roles (`ROLE_ADMIN`, `ROLE_USER`) | Simple to audit, maps cleanly to JWT `roles` claim | Role explosion for fine-grained resource rules |
+| **ABAC (Attribute-Based)** | Policies evaluate user, resource, and environment attributes (`user.dept == doc.dept`) | Expressive, context-aware (time, IP, ownership) | Higher policy evaluation complexity (e.g., OPA / Cedar) |
+
 ---
 
 ## Token-Based Authentication
+
+Stateless token authentication eliminates shared server-side session stores, allowing any microservice replica to validate requests independently.
+
+![OAuth2 PKCE, JWT and Service-to-Service mTLS Flow](./assets/06-oauth2-jwt-mtls-flow.svg)
+
+### Spring Security Stateless Filter Chain
+
+```mermaid
+flowchart TD
+    REQ["Incoming HTTP Request (Authorization: Bearer &lt;JWT&gt;)"] --> F1["JwtAuthenticationFilter (OncePerRequestFilter)"]
+    F1 -->|"Extract Bearer Token"| VAL{"tokenProvider.validateJWT(jwt)"}
+    VAL -->|"Valid Signature &amp; Not Expired"| CTX["Set UsernamePasswordAuthenticationToken in SecurityContextHolder"]
+    VAL -->|"Missing / Invalid"| ANON["Leave SecurityContext Empty"]
+    CTX --> AUTH["AuthorizationFilter (antMatchers / hasRole)"]
+    ANON --> AUTH
+    AUTH -->|"Permitted / Authenticated"| CTRL["@RestController Handler"]
+    AUTH -->|"Unauthenticated"| E401["AuthenticationEntryPoint -&gt; 401 Unauthorized"]
+    AUTH -->|"Missing Role"| E403["AccessDeniedHandler -&gt; 403 Forbidden"]
+
+    classDef filter fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef check fill:#0f172a,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef pass fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef fail fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#f8fafc
+    class REQ,F1,CTX,ANON,AUTH filter
+    class VAL check
+    class CTRL pass
+    class E401,E403 fail
+```
+
+### Token Lifecycle: Issuance, Refresh Rotation & Revocation
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant Auth as AuthController
+    participant Provider as JwtTokenProvider
+    participant Store as Redis Deny-List / Refresh Store
+
+    Client->>Auth: POST /api/auth/login (username, password)
+    Auth->>Provider: generateToken(username, authorities)
+    Provider-->>Client: Short-lived Access JWT (15m-1h) + Refresh Token
+    Note over Client,Auth: Access token expires after TTL
+    Client->>Auth: POST /api/auth/refresh (Refresh / Valid Token)
+    Auth->>Store: Verify refresh token not revoked &amp; rotate
+    Auth->>Provider: generateToken(username, latest authorities)
+    Provider-->>Client: New Access JWT + Rotated Refresh Token
+```
+
+> [!TIP]
+> **How do you revoke stateless JWTs before `exp`?** Keep Access Token TTLs short (**5–15 minutes**), pair them with **Refresh Token Rotation** stored server-side, and maintain a small **Redis deny-list** keyed by `jti` (JWT ID) with a TTL matching the remaining token lifetime for emergency logouts or compromised accounts.
+
+### Symmetric vs. Asymmetric JWT Signing
+
+| Property | Symmetric (`HS256` / `HS512`) | Asymmetric (`RS256` / `ES256` / `EdDSA`) |
+| :--- | :--- | :--- |
+| **Key Type** | Single shared secret key | Private key (Auth Server signs) + Public key (Services verify) |
+| **Key Distribution** | Every verifier must hold the secret (higher blast radius) | Public keys published via `/.well-known/jwks.json` |
+| **Best Used For** | Monoliths or single-service token validation | **Microservices** & multi-team zero-trust environments |
 
 ### JWT Implementation with Spring Security
 
@@ -299,7 +408,60 @@ jwt:
 
 ## Service-to-Service Authentication
 
-### Mutual TLS (mTLS)
+Network-level trust ("we are inside the same VPC") fails under zero-trust principles. Every east-west call must authenticate both the **calling workload** and, when applicable, the **end-user context**.
+
+### Mutual TLS (mTLS) Handshake & SPIFFE Identity
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SvcA as Service A (Order)
+    participant SvcB as Service B (Payment)
+    participant CA as Mesh CA / SPIRE
+
+    Note over SvcA,CA: Workload X.509 certs rotated automatically (SPIFFE ID in SAN)
+    SvcA->>SvcB: TLS ClientHello
+    SvcB-->>SvcA: ServerHello + Server Certificate (spiffe://prod/ns/pay/sa/payment)
+    SvcA->>SvcA: Verify Server Cert against TrustStore CA
+    SvcA->>SvcB: Client Certificate (spiffe://prod/ns/ord/sa/order) + CertVerify
+    SvcB->>SvcB: Verify Client Cert against TrustStore CA &amp; AuthZ Policy
+    SvcA->>SvcB: Encrypted HTTP/gRPC Request + Propagated End-User JWT
+    SvcB-->>SvcA: Encrypted Response
+```
+
+### Choosing a Service-to-Service Auth Strategy
+
+```mermaid
+flowchart LR
+    START["East-West Service Call"] --> Q1{"Running in Service Mesh (Istio / Linkerd)?"}
+    Q1 -->|"Yes"| MTLS["mTLS + SPIFFE Workload Identity"]
+    Q1 -->|"No"| Q2{"Need End-User Identity Downstream?"}
+    Q2 -->|"Yes"| OBO["mTLS/TLS + JWT Propagation or OAuth2 Token Exchange"]
+    Q2 -->|"No"| Q3{"High-Security / Zero-Trust Requirement?"}
+    Q3 -->|"Yes"| SAJWT["OAuth2 Client Credentials JWT"]
+    Q3 -->|"Simple Internal / Legacy"| APIKEY["Scoped API Key + Secret Manager Rotation"]
+
+    classDef start fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef dec fill:#0f172a,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef opt fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class START start
+    class Q1,Q2,Q3 dec
+    class MTLS,OBO,SAJWT,APIKEY opt
+```
+
+### Comparison of Service-to-Service Mechanisms
+
+| Mechanism | Identity Granularity | Encryption | Key Rotation Overhead | Best Fit |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mutual TLS (mTLS + SPIFFE)** | Workload / Pod (`spiffe://...`) | TLS 1.3 in-transit | Automated via Istio/SPIRE | Kubernetes & service mesh environments |
+| **OAuth2 Client Credentials JWT** | Service Account + Scopes | Requires HTTPS/TLS | Automated via IdP JWKS | Cloud-native services without a mesh |
+| **API Keys (`X-API-Key`)** | Service-level static secret | Requires HTTPS/TLS | Manual or Secret Manager | Simple internal tools / legacy integration |
+| **Token Exchange (RFC 8693)** | Workload + End-User (`act` claim) | Requires HTTPS/TLS | Automated via IdP | Multi-hop calls needing least-privilege delegation |
+
+> [!IMPORTANT]
+> In Kubernetes service meshes (e.g., Istio), enforce strict mTLS declaratively using `PeerAuthentication` (`mode: STRICT`) so plain-text east-west traffic is rejected at the sidecar proxy without changing application code.
+
+### Mutual TLS (mTLS) in Java / Spring
 
 ```java
 // Service A: Client configuration
@@ -430,9 +592,56 @@ api-keys:
   shipping-service: ${SHIPPING_SERVICE_API_KEY}
 ```
 
+> [!WARNING]
+> **Always use constant-time comparison** (`MessageDigest.isEqual`) when validating API keys or HMAC signatures in production to prevent timing side-channel attacks, and store keys in a Secrets Manager (Vault, AWS Secrets Manager) rather than static config files.
+
 ---
 
 ## API Security
+
+API security applies **defense-in-depth**: edge rate limiting and CORS enforcement, strict schema & business-invariant validation, and object-level authorization checks.
+
+### Defense-in-Depth Request Pipeline
+
+```mermaid
+flowchart LR
+    EXT["External Client"] --> WAF["TLS + WAF + DDoS Shield"]
+    WAF --> RL["Rate Limiter (429 Too Many Requests)"]
+    RL --> CORS["CORS &amp; Security Headers"]
+    CORS --> VAL["Bean Validation (@Valid DTO)"]
+    VAL --> BIZ["Business Invariant &amp; BOLA Check"]
+    BIZ --> SVC["Order Service / DB"]
+
+    classDef edge fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef app fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef core fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class EXT,WAF,RL edge
+    class CORS,VAL,BIZ app
+    class SVC core
+```
+
+### Rate Limiting Algorithms
+
+```mermaid
+flowchart TD
+    REQ["Incoming API Request"] --> ALG{"Choose Rate Limit Algorithm"}
+    ALG -->|"Allows Controlled Bursts"| TB["Token Bucket (Refill R tokens/sec, max capacity B)"]
+    ALG -->|"Smooth Constant Output"| LB["Leaky Bucket (Fixed-rate queue drain)"]
+    ALG -->|"Strict Window Accuracy"| SW["Sliding Window Log / Counter (Redis ZSET / Lua)"]
+    ALG -->|"Simple, Low Memory"| FW["Fixed Window Counter (Bucket per minute, burst at boundary)"]
+
+    classDef q fill:#0f172a,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef alg fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    class REQ,ALG q
+    class TB,LB,SW,FW alg
+```
+
+| Algorithm | Burst Handling | Memory Cost | Boundary Spike Risk | Common Usage |
+| :--- | :--- | :--- | :--- | :--- |
+| **Token Bucket** | Allows bursts up to bucket capacity | O(1) per user | Low | API Gateways (Envoy, AWS API GW, Resilience4j) |
+| **Sliding Window Counter** | Smooths bursts across sub-windows | O(1) per user | Very Low | Distributed Redis rate limiters |
+| **Fixed Window Counter** | 2x burst possible at window edge | O(1) per user | High | Simple internal quotas |
+| **Leaky Bucket** | No bursts; strictly smooths egress | O(queue) | None | Downstream protection / traffic shaping |
 
 ### Input Validation
 
@@ -566,9 +775,56 @@ public class CorsConfig {
 }
 ```
 
+> [!WARNING]
+> **OWASP API1 — Broken Object Level Authorization (BOLA):** Validating a JWT only proves *who* the user is, not whether they own `/api/orders/{orderId}`. Always scope database queries with the authenticated `userId` (`WHERE id = :orderId AND customer_id = :authUserId`), and never combine `allowedOrigins("*")` with `allowCredentials(true)` in CORS.
+
 ---
 
 ## Distributed Logging
+
+In microservices, a single user action fans out across dozens of containers. **Structured JSON logging** combined with **MDC (Mapped Diagnostic Context)** and **W3C `traceparent` propagation** lets you reconstruct the full story of any request.
+
+![Three Pillars of Observability: Logs, Metrics and Traces](./assets/06-three-pillars-observability.svg)
+
+### Distributed Log & Context Propagation Pipeline
+
+```mermaid
+flowchart LR
+    APP["Microservice (SLF4J + MDC traceId/spanId)"] --> ENC["LogstashEncoder (Structured JSON)"]
+    ENC --> SHIP["Log Shipper (Logstash / Fluent Bit / Vector)"]
+    SHIP --> STORE["Central Store (Elasticsearch / Grafana Loki)"]
+    STORE --> UI["Search &amp; Dashboards (Kibana / Grafana)"]
+    STORE --> ARCH["Cold Archive (S3 / GCS Lifecycle)"]
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef pipe fill:#0f172a,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef store fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class APP,ENC svc
+    class SHIP pipe
+    class STORE,UI,ARCH store
+```
+
+### Correlation ID & W3C `traceparent` Propagation
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GW as API Gateway
+    participant ORD as Order Service
+    participant PAY as Payment Service
+    participant KFK as Kafka Topic
+
+    GW->>GW: Generate traceId=a1b2c3, spanId=001
+    GW->>ORD: HTTP POST /orders (traceparent: 00-a1b2c3-001-01)
+    Note over ORD: MDC automatically populated with traceId=a1b2c3, spanId=002
+    ORD->>PAY: gRPC / HTTP (traceparent: 00-a1b2c3-002-01)
+    Note over PAY: Logs emit {"traceId":"a1b2c3","spanId":"003"}
+    PAY-->>ORD: 200 OK
+    ORD->>KFK: Publish Event (Header: traceparent=00-a1b2c3-002-01)
+```
+
+> [!TIP]
+> **Spring Boot 3 Migration Note:** `spring-cloud-starter-sleuth` reached end-of-life with Spring Boot 2.x. For Spring Boot 3+, use **Micrometer Tracing** (`micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`), which automatically populates `%X{traceId}` and `%X{spanId}` in SLF4J MDC and propagates W3C `traceparent` headers.
 
 ### ELK Stack (Elasticsearch, Logstash, Kibana)
 
@@ -610,7 +866,9 @@ public class CorsConfig {
         <appender-ref ref="LOGSTASH"/>
     </root>
 </configuration>
+```
 
+```yaml
 # logback config in YAML
 logging:
   level:
@@ -670,9 +928,9 @@ public class OrderService {
 }
 ```
 
-### Log Aggregation Query
+### Log Aggregation Query & Stack Comparison
 
-```
+```text
 Query in Kibana:
 service: "order-service" AND level: "ERROR" AND timestamp: [now-1h TO now]
 
@@ -691,11 +949,68 @@ Fields in Elasticsearch:
 └─ spanId: xyz789
 ```
 
+| Stack | Indexing Strategy | Storage & Cost | Best Fit |
+| :--- | :--- | :--- | :--- |
+| **ELK (Elasticsearch + Logstash + Kibana)** | Full-text inverted index on all JSON fields | Higher RAM/disk; fast ad-hoc search | Rich analytics & complex full-text queries |
+| **Grafana Loki (+ Promtail/Alloy)** | Indexes **labels only** (`service`, `env`), compresses log chunks in S3 | Very low cost; cloud-native | Kubernetes shops already using Prometheus/Grafana |
+| **Managed SaaS (Datadog / CloudWatch)** | Managed indexing + correlation with APM | Pay-per-GB ingested & indexed | Teams prioritizing zero ops overhead |
+
 ---
 
 ## Metrics and Monitoring
 
-### Prometheus Metrics
+Metrics are compact, numeric time-series that power real-time dashboards and automated alerting at a fraction of the cost of raw logs.
+
+### Prometheus Pull-Based Scraping & Grafana Pipeline
+
+```mermaid
+flowchart LR
+    SVC1["Order Service (/actuator/prometheus)"] -->|"Pull every 15s"| PROM["Prometheus Server (TSDB)"]
+    SVC2["Payment Service (/actuator/prometheus)"] -->|"Pull every 15s"| PROM
+    PROM -->|"PromQL Queries"| GRAF["Grafana Dashboards"]
+    PROM -->|"Evaluate Alert Rules"| AM["AlertManager"]
+
+    classDef svc fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef prom fill:#0f172a,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef out fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    class SVC1,SVC2 svc
+    class PROM prom
+    class GRAF,AM out
+```
+
+### Observability Methodologies: RED vs. USE vs. Four Golden Signals
+
+```mermaid
+flowchart TD
+    OBS["Metric Methodologies"] --> RED["RED Method (Request-Driven Services)"]
+    OBS --> USE["USE Method (Infrastructure Resources)"]
+    OBS --> GS["Google SRE Four Golden Signals"]
+
+    RED --> R1["Rate (req/sec) + Errors (%) + Duration (p95/p99)"]
+    USE --> U1["Utilization (%) + Saturation (queue depth) + Errors"]
+    GS --> G1["Latency + Traffic + Errors + Saturation"]
+
+    classDef root fill:#0f172a,stroke:#a78bfa,stroke-width:2px,color:#f8fafc
+    classDef cat fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef leaf fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class OBS root
+    class RED,USE,GS cat
+    class R1,U1,G1 leaf
+```
+
+### Prometheus Metric Types
+
+| Metric Type | Behavior | Typical Use Case | Example |
+| :--- | :--- | :--- | :--- |
+| **Counter** | Monotonically increasing (resets to 0 on restart) | Request counts, errors, orders created | `orders_created_total` |
+| **Gauge** | Point-in-time value that goes up or down | Active threads, pending orders, memory used | `orders_pending` |
+| **Histogram** | Samples observations into configurable buckets | Request latency (`p50`, `p95`, `p99`), payload sizes | `http_request_duration_ms_bucket` |
+| **Summary** | Client-side quantiles over a sliding time window | Single-instance quantiles (cannot aggregate across pods) | `rpc_duration_seconds` |
+
+> [!WARNING]
+> **Avoid High-Cardinality Labels in Prometheus!** Never put `userId`, `orderId`, `requestId`, or raw URLs with IDs into metric `.tag(...)` labels. Each unique label combination creates a new time-series in Prometheus TSDB, causing memory exhaustion and query timeouts.
+
+### Prometheus Metrics with Micrometer
 
 ```xml
 <!-- pom.xml -->
@@ -763,8 +1078,10 @@ public class OrderService {
         meterRegistry.counter("orders_completed_total").increment();
     }
 }
+```
 
-// Expose metrics endpoint
+```yaml
+# Expose metrics endpoint
 spring:
   application:
     name: order-service
@@ -787,21 +1104,9 @@ management:
 
 ### Key Metrics (RED Method)
 
-```
-RED Method for microservices:
-
-R - REQUEST RATE
-├─ Requests per second
-├─ Alert: Rate > X requests/sec
-
-E - ERROR RATE
-├─ Percentage of failed requests
-├─ Alert: Error rate > 1%
-
-D - DURATION (Latency)
-├─ Response time distribution
-├─ Alert: p99 latency > 5 seconds
-```
+- **R — Request Rate:** Requests per second (`rate(http_requests_total[1m])`)
+- **E — Error Rate:** Percentage of failed requests (`rate(http_requests_errors_total[1m]) / rate(http_requests_total[1m])`)
+- **D — Duration (Latency):** Response time distribution (`p50`, `p95`, `p99` via `histogram_quantile`)
 
 ```java
 // Implement RED metrics
@@ -856,8 +1161,10 @@ public class MetricsCollector {
         }
     }
 }
+```
 
-// Prometheus scrape config
+```yaml
+# Prometheus scrape config
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -876,7 +1183,7 @@ scrape_configs:
 
 ### Grafana Dashboards
 
-```
+```text
 Dashboard: Order Service Health
 
 Panels:
@@ -907,6 +1214,56 @@ Alerts:
 ---
 
 ## Alerting
+
+Effective alerting pages engineers on **user-impacting symptoms** (error rate, latency SLO burn, service down) rather than noisy infrastructure causes, using grouping and deduplication to prevent alert fatigue.
+
+### Alerting & Incident Routing Pipeline
+
+```mermaid
+flowchart LR
+    PROM["Prometheus Rule Evaluation (interval: 30s)"] -->|"Condition True for Duration"| AM["AlertManager"]
+    AM -->|"Group, Deduplicate, Silence, Inhibit"| ROUTE{"Severity Route"}
+    ROUTE -->|"severity: critical"| PD["PagerDuty (Page On-Call)"]
+    ROUTE -->|"severity: warning"| SLK["Slack #warnings"]
+    ROUTE -->|"default"| DEF["Slack #alerts"]
+
+    classDef eval fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef am fill:#0f172a,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef crit fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#f8fafc
+    classDef warn fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class PROM eval
+    class AM,ROUTE am
+    class PD crit
+    class SLK,DEF warn
+```
+
+### Alert State Lifecycle
+
+```mermaid
+flowchart TD
+    IN["Inactive (Expression False)"] -->|"Expr Becomes True"| PEND["Pending (Waiting 'for' Duration)"]
+    PEND -->|"Expr Turns False Early"| IN
+    PEND -->|"Remains True &gt;= 'for' Duration"| FIRE["Firing (Sent to AlertManager)"]
+    FIRE -->|"Expr Turns False"| RES["Resolved (Notification Sent)"]
+
+    classDef ok fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    classDef pend fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef fire fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#f8fafc
+    class IN,RES ok
+    class PEND pend
+    class FIRE fire
+```
+
+### Severity & Routing Matrix
+
+| Severity | Meaning | Example Condition | Routing Target | Response Expectation |
+| :--- | :--- | :--- | :--- | :--- |
+| **Critical (P1)** | Active user impact or SLO burn | `HighErrorRate > 1%` for 5m, `ServiceDown` | PagerDuty + Slack `#incidents` | Immediate page (< 5 min ack) |
+| **Warning (P2)** | Degraded performance / approaching threshold | `SlowResponse p95 > 5s` for 2m | Slack `#warnings` | Investigate during business hours |
+| **Inhibition** | Suppress downstream noise during root failure | Suppress `HighLatency` when `ServiceDown == 1` | AlertManager `inhibit_rules` | Reduces alert storm |
+
+> [!TIP]
+> **Multi-Window SLO Burn-Rate Alerting:** Instead of static thresholds that break during traffic spikes, alert when your **error budget** burns too fast (e.g., consuming 2% of a 30-day error budget within 1 hour across both a 5m and 1h window).
 
 ### Alert Rules
 
@@ -1001,81 +1358,72 @@ receivers:
 
 ### Q1: Design authentication for microservices where services need to talk to each other
 
-**Answer**:
+```mermaid
+flowchart TD
+    CL["Client (Web / Mobile)"] -->|"1. OAuth2 + Bearer JWT"| GW["API Gateway (Validate JWKS + Cache)"]
+    GW -->|"2. mTLS + Propagated JWT"| SA["Order Service"]
+    SA -->|"Option A: mTLS (Istio/SPIFFE)"| SB["Payment Service"]
+    SA -->|"Option B: API Key (X-API-Key)"| SB
+    SA -->|"Option C: Client Credentials JWT"| SB
 
+    classDef client fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef gw fill:#0f172a,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef svc fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class CL client
+    class GW gw
+    class SA,SB svc
 ```
-Architecture:
 
-1. Client → API Gateway: JWT token
-   ├─ Authorization header: "Bearer <JWT>"
-   └─ Gateway validates token
+**Answer:**
 
-2. API Gateway → Microservices: Service-to-service calls
+1. **Client → API Gateway (North-South):**
+   - Client sends `Authorization: Bearer <JWT>` obtained from a central IdP (Keycloak, Okta, Auth0) via OAuth 2.0 + OIDC.
+   - API Gateway validates the JWT signature locally using cached JWKS public keys to minimize latency.
+2. **API Gateway → Microservices & East-West Calls:**
+   - **Option 1: mTLS (Mutual TLS):** Each service has an X.509 certificate; both sides verify certificates to establish an encrypted channel. Most secure, requires certificate rotation, ideal for **Istio / Service Mesh** environments.
+   - **Option 2: API Key:** Service A sends `X-API-Key` in headers; Service B validates it against a Secrets Manager. Simpler than mTLS with less overhead, suitable for direct service calls.
+   - **Option 3: JWT with Service Account (OAuth2 Client Credentials):** Service A authenticates with service account credentials, obtains a JWT from the Auth Server, and sends it to Service B—reusing the same token validation pipeline as client auth.
+3. **Production Implementation Checklist:**
+   - Client auth: OAuth 2.0 + PKCE + JWT.
+   - Service-to-service: mTLS in Kubernetes, or API key / Service Account JWT.
+   - Central auth server (Keycloak, Okta) with JWKS key caching and short-lived token refresh.
 
-   Option 1: mTLS (Mutual TLS)
-   ├─ Each service has certificate
-   ├─ Encrypted channel between services
-   ├─ Most secure, requires cert management
-   ├─ Suitable for: Istio/Service Mesh environments
-
-   Option 2: API Key
-   ├─ Service A sends API key in header
-   ├─ Service B validates key
-   ├─ Simpler than mTLS, less overhead
-   ├─ Suitable for: Direct service calls
-
-   Option 3: JWT with Service Account
-   ├─ Service A uses service account credentials
-   ├─ Gets JWT token from auth service
-   ├─ Sends JWT to Service B
-   ├─ Reuses same token validation as client auth
-
-Implementation:
-├─ Client auth: OAuth 2.0 + JWT
-├─ Service-to-service: mTLS in Kubernetes, or API key/JWT
-├─ Central auth server (Keycloak, Okta)
-├─ Token validation caching to reduce latency
-└─ Token refresh mechanism
-```
+---
 
 ### Q2: Your application is generating too many logs. How would you manage them?
 
-**Answer**:
+```mermaid
+flowchart LR
+    GEN["High-Volume App Logs"] --> LVL["1. Dynamic Log Levels (INFO/ERROR in Prod)"]
+    LVL --> SAMP["2. Tail/Level Sampling (100% ERROR, 10% INFO, 1% DEBUG)"]
+    SAMP --> STR["3. Structured JSON + traceId/orderId"]
+    STR --> HOT["4. Hot Index (Errors 30d, Warn 14d, Info 7d)"]
+    HOT --> COLD["5. Cold Archive to S3 / Object Storage"]
 
-```
-Log Management Strategy:
-
-1. Log Levels
-   ├─ DEBUG: development only
-   ├─ INFO: important business events
-   ├─ WARN: recoverable issues
-   ├─ ERROR: service failures
-   ├─ Environment-specific levels
-
-2. Sampling
-   ├─ Log 100% of errors
-   ├─ Log 10% of info (random sampling)
-   ├─ Log 1% of debug
-   ├─ Reduces storage while maintaining visibility
-
-3. Log Retention
-   ├─ Errors: 30 days
-   ├─ Warnings: 14 days
-   ├─ Info: 7 days
-   ├─ Archive old logs to S3
-
-4. Structured Logging
-   ├─ Include context fields (userId, orderId, traceId)
-   ├─ Enables efficient searching
-   ├─ Easier parsing and analysis
-
-5. Aggregation
-   ├─ Centralize logs (ELK, Datadog)
-   ├─ Index by timestamp, service, level
-   ├─ Efficient querying
-
-Example query:
-service: order-service AND level: ERROR AND timestamp: [now-24h TO now]
-Returns: All errors in last 24 hours
+    classDef app fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef ctrl fill:#0f172a,stroke:#fbbf24,stroke-width:2px,color:#f8fafc
+    classDef store fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc
+    class GEN,STR app
+    class LVL,SAMP ctrl
+    class HOT,COLD store
 ```
 
+**Answer:**
+
+1. **Enforce Environment-Specific Log Levels:**
+   - `DEBUG` in development only; `INFO` for key business events; `WARN` for recoverable issues; `ERROR` for service failures. Support runtime level toggling via Spring Boot Actuator (`/actuator/loggers`).
+2. **Apply Smart Sampling:**
+   - Log **100% of `ERROR`**, **10% of `INFO`** (random/head or tail-based sampling), and **1% of `DEBUG`**. Reduces ingestion and storage costs while preserving full failure visibility.
+3. **Tiered Log Retention & Archival:**
+   - Hot storage: `ERROR` for **30 days**, `WARN` for **14 days**, `INFO` for **7 days**.
+   - Archive older logs to **S3 / GCS** for compliance at a fraction of the cost.
+4. **Structured Logging:**
+   - Emit JSON with context fields (`userId`, `orderId`, `traceId`) to enable fast, indexed filtering without expensive regex parsing.
+5. **Centralized Aggregation & Indexing:**
+   - Centralize in ELK, Grafana Loki, or Datadog; index by `timestamp`, `service`, and `level`:
+     `service: order-service AND level: ERROR AND timestamp: [now-24h TO now]`
+
+> [!TIP]
+> **Bonus Follow-Up Questions to Prepare For:**
+> - **How do you prevent PII leaks in logs?** Mask/redact sensitive fields (`email`, `cardNumber`, `Authorization` headers) at the Logback converter or log-shipper layer before ingestion.
+> - **Why did Prometheus OOM after a deploy?** Usually a **high-cardinality label** (like `customerId` or unparameterized URLs) was added to a metric, exploding the number of active time-series.

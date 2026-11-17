@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 600" width="100%" height="100%" role="img" aria-labelledby="cqrsTitle cqrsDesc">
+  <title id="cqrsTitle">Synchronous Blocking REST/gRPC vs Asynchronous Event-Driven CQRS with Idempotency</title>
+  <desc id="cqrsDesc">Animated comparison of synchronous blocking call chains versus asynchronous event-driven CQRS with write model, event bus, read model projection, and Idempotency-Key deduplication.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 14; }
+      .header-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #f8fafc; }
+      .sub-text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 500; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; }
+      .node-box { fill: #0f172a; stroke-width: 2; rx: 10; }
+      .node-title { font-family: system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 12.5px; fill: #f1f5f9; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; fill: #94a3b8; }
+      .sync-line { fill: none; stroke: #f97316; stroke-width: 2.2; }
+      .async-line { fill: none; stroke: #38bdf8; stroke-width: 2.2; stroke-dasharray: 6 4; }
+      .read-line { fill: none; stroke: #10b981; stroke-width: 2.2; stroke-dasharray: 6 4; }
+      .dup-line { fill: none; stroke: #f43f5e; stroke-width: 2; stroke-dasharray: 4 4; }
+      @keyframes dashMove {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes blockPulse {
+        0%, 100% { opacity: 0.45; }
+        50% { opacity: 1; }
+      }
+      .anim-dash { animation: dashMove 1.1s linear infinite; }
+      .thread-block { animation: blockPulse 2.4s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f97316" />
+    </marker>
+    <marker id="arrCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+    </marker>
+    <marker id="arrRose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
+    </marker>
+  </defs>
+
+  <!-- Canvas -->
+  <rect class="bg" width="1100" height="600" rx="16" />
+
+  <!-- Main Title -->
+  <text x="550" y="34" text-anchor="middle" class="header-text" font-size="20">Synchronous Blocking RPC vs Asynchronous Event-Driven CQRS</text>
+  <text x="550" y="54" text-anchor="middle" class="sub-text" font-size="12.5">Temporal coupling &amp; thread blocking vs decoupled write/read scaling with Idempotency-Key deduplication</text>
+
+  <!-- ==================== TOP PANEL: SYNCHRONOUS BLOCKING ==================== -->
+  <rect x="24" y="72" width="1052" height="192" class="panel" />
+  <text x="48" y="100" class="header-text" font-size="15" fill="#fb923c">1. Synchronous Blocking (REST / gRPC Call Chain)</text>
+  <text x="48" y="118" class="sub-text" font-size="11.5">Caller thread blocks until every downstream service responds; latency &amp; failure compound</text>
+
+  <!-- Sync Nodes -->
+  <rect x="48" y="142" width="130" height="64" class="node-box" stroke="#fb923c" />
+  <text x="113" y="170" text-anchor="middle" class="node-title">Client</text>
+  <text x="113" y="187" text-anchor="middle" class="node-sub thread-block" fill="#fdba74">Thread Blocked</text>
+
+  <rect x="258" y="142" width="150" height="64" class="node-box" stroke="#fb923c" />
+  <text x="333" y="170" text-anchor="middle" class="node-title">API Gateway</text>
+  <text x="333" y="187" text-anchor="middle" class="node-sub">REST / HTTP 1.1</text>
+
+  <rect x="488" y="142" width="156" height="64" class="node-box" stroke="#fb923c" />
+  <text x="566" y="170" text-anchor="middle" class="node-title">Order Service</text>
+  <text x="566" y="187" text-anchor="middle" class="node-sub">gRPC BlockingStub</text>
+
+  <rect x="724" y="142" width="156" height="64" class="node-box" stroke="#fb923c" />
+  <text x="802" y="170" text-anchor="middle" class="node-title">Payment Service</text>
+  <text x="802" y="187" text-anchor="middle" class="node-sub">Waits on Ledger</text>
+
+  <rect x="944" y="142" width="110" height="64" class="node-box" stroke="#fb923c" />
+  <text x="999" y="170" text-anchor="middle" class="node-title">Inventory</text>
+  <text x="999" y="187" text-anchor="middle" class="node-sub">DB Lock</text>
+
+  <!-- Sync Paths -->
+  <path id="syncReq" d="M 178 164 L 256 164 M 408 164 L 486 164 M 644 164 L 722 164 M 880 164 L 942 164" class="sync-line" marker-end="url(#arrOrange)" />
+  <path id="syncFullFwd" d="M 178 164 L 942 164" fill="none" stroke="none" />
+  <path id="syncFullBack" d="M 942 188 L 178 188" fill="none" stroke="none" />
+  <path d="M 942 188 L 882 188 M 722 188 L 646 188 M 486 188 L 410 188 M 256 188 L 180 188" class="sync-line" stroke-dasharray="4 3" opacity="0.65" marker-end="url(#arrOrange)" />
+
+  <!-- Sync Blocking Indicator Bar -->
+  <rect x="48" y="220" width="1006" height="28" rx="6" fill="#0f172a" stroke="#7c2d12" stroke-width="1" />
+  <text x="551" y="238" text-anchor="middle" class="mono" font-size="11" fill="#fdba74">Total Latency = T(Gateway) + T(Order) + T(Payment) + T(Inventory)  |  If Inventory is down, entire chain fails</text>
+
+  <!-- Animated Sync Packets -->
+  <circle r="6" fill="#fb923c">
+    <animateMotion dur="5s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.48;1">
+      <mpath href="#syncFullFwd" />
+    </animateMotion>
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.47;0.49;1" dur="5s" repeatCount="indefinite" />
+  </circle>
+  <circle r="6" fill="#fde047">
+    <animateMotion dur="5s" repeatCount="indefinite" keyPoints="0;0;1" keyTimes="0;0.50;0.98">
+      <mpath href="#syncFullBack" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.49;0.51;0.97;1" dur="5s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- ==================== BOTTOM PANEL: ASYNC CQRS + IDEMPOTENCY ==================== -->
+  <rect x="24" y="282" width="1052" height="296" class="panel" />
+  <text x="48" y="310" class="header-text" font-size="15" fill="#38bdf8">2. Asynchronous Event-Driven CQRS + Idempotency-Key Deduplication</text>
+  <text x="48" y="328" class="sub-text" font-size="11.5">Write side validates idempotency &amp; emits domain events; Read side projects denormalized views asynchronously</text>
+
+  <!-- Client -->
+  <rect x="48" y="366" width="118" height="72" class="node-box" stroke="#38bdf8" />
+  <text x="107" y="394" text-anchor="middle" class="node-title">Client</text>
+  <text x="107" y="411" text-anchor="middle" class="node-sub">POST /orders</text>
+  <text x="107" y="426" text-anchor="middle" class="node-sub" fill="#38bdf8">Key: k-101</text>
+
+  <!-- Idempotency Gate -->
+  <rect x="224" y="352" width="164" height="96" class="node-box" stroke="#a78bfa" />
+  <text x="306" y="378" text-anchor="middle" class="node-title" fill="#ddd6fe">Idempotency Gate</text>
+  <text x="306" y="396" text-anchor="middle" class="node-sub">Check Key: k-101</text>
+  <text x="306" y="412" text-anchor="middle" class="node-sub" fill="#34d399">New -> Process</text>
+  <text x="306" y="428" text-anchor="middle" class="node-sub" fill="#fb7185">Retry -> Cached 201</text>
+
+  <!-- Write Model -->
+  <rect x="444" y="352" width="166" height="96" class="node-box" stroke="#38bdf8" />
+  <text x="527" y="378" text-anchor="middle" class="node-title">Write Model (Cmd)</text>
+  <text x="527" y="396" text-anchor="middle" class="node-sub">OrderCommandService</text>
+  <text x="527" y="412" text-anchor="middle" class="node-sub">Normalized Write DB</text>
+  <text x="527" y="428" text-anchor="middle" class="node-sub" fill="#38bdf8">ACID Transaction</text>
+
+  <!-- Event Bus -->
+  <rect x="666" y="366" width="144" height="68" class="node-box" stroke="#fbbf24" />
+  <text x="738" y="394" text-anchor="middle" class="node-title" fill="#fde68a">Event Bus</text>
+  <text x="738" y="411" text-anchor="middle" class="node-sub">Kafka: orders</text>
+  <text x="738" y="425" text-anchor="middle" class="node-sub">OrderSubmittedEvent</text>
+
+  <!-- Projector + Read DB -->
+  <rect x="868" y="352" width="184" height="96" class="node-box" stroke="#10b981" />
+  <text x="960" y="378" text-anchor="middle" class="node-title" fill="#6ee7b7">Read Model (Query)</text>
+  <text x="960" y="396" text-anchor="middle" class="node-sub">OrderViewProjector</text>
+  <text x="960" y="412" text-anchor="middle" class="node-sub">Denormalized Read DB</text>
+  <text x="960" y="428" text-anchor="middle" class="node-sub" fill="#34d399">Fast GET / Search</text>
+
+  <!-- Query Path (Client -> Read Model) -->
+  <rect x="444" y="486" width="608" height="44" rx="8" fill="#0f172a" stroke="#10b981" stroke-width="1.2" />
+  <text x="748" y="512" text-anchor="middle" class="mono" font-size="11" fill="#6ee7b7">GET /api/orders/{id}  --&gt;  OrderQueryService reads directly from Denormalized Read DB (Independent Read Scaling)</text>
+
+  <!-- Duplicate Retry Box -->
+  <rect x="48" y="486" width="340" height="44" rx="8" fill="#0f172a" stroke="#f43f5e" stroke-width="1.2" />
+  <text x="218" y="512" text-anchor="middle" class="mono" font-size="11" fill="#fda4af">Retry with same Idempotency-Key: Deduplicated (No double charge)</text>
+
+  <!-- Async Paths -->
+  <path id="cqrsPath1" d="M 166 392 L 222 392" class="async-line anim-dash" marker-end="url(#arrCyan)" />
+  <path id="cqrsPath2" d="M 388 392 L 442 392" class="async-line anim-dash" marker-end="url(#arrCyan)" />
+  <path id="cqrsPath3" d="M 610 392 L 664 392" class="async-line anim-dash" marker-end="url(#arrCyan)" />
+  <path id="cqrsPath4" d="M 810 392 L 866 392" class="read-line anim-dash" marker-end="url(#arrGreen)" />
+  <path id="dupPath" d="M 166 420 L 222 420" class="dup-line anim-dash" marker-end="url(#arrRose)" />
+
+  <!-- Animated Async Packets -->
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.20;1">
+      <mpath href="#cqrsPath1" />
+    </animateMotion>
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.19;0.21;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.20;0.42;1">
+      <mpath href="#cqrsPath2" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.19;0.21;0.41;0.43;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="5.5" fill="#fbbf24">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.42;0.65;1">
+      <mpath href="#cqrsPath3" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.41;0.43;0.64;0.66;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <circle r="5.5" fill="#10b981">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.65;0.90;1">
+      <mpath href="#cqrsPath4" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.64;0.66;0.89;0.91;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Duplicate Retry Packet -->
+  <circle r="5" fill="#f43f5e">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;0;1;0" keyTimes="0;0.30;0.50;1">
+      <mpath href="#dupPath" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.29;0.31;0.52;0.55" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Bottom Legend -->
+  <text x="550" y="562" text-anchor="middle" class="mono" font-size="11" fill="#64748b">Write &amp; Read models scale independently  |  Eventual consistency between Write DB and Read DB</text>
+</svg>
