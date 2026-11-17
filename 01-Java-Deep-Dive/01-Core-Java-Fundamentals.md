@@ -17,31 +17,73 @@
 
 ## OOP Principles
 
-### Abstraction vs Encapsulation: The Real Difference
+### Abstraction vs Encapsulation
 
-These two terms are often confused, but they serve different purposes in OOP design:
+| Dimension | Abstraction | Encapsulation |
+|-----------|-------------|---------------|
+| **Core Question** | *What* does the object do? | *How* is internal state protected and accessed? |
+| **Mechanism** | Interfaces, `abstract` classes, public contracts | `private` fields, helper methods, validated setters |
+| **Interview Value** | Enforces separation of concerns & SOLID (DIP/ISP) | Preserves class invariants & prevents invalid state |
 
-**Abstraction** is about hiding complexity and showing only essential features. It answers: "What does the object do?"
-**Encapsulation** is about bundling data and methods together and controlling access. It answers: "How do I control access to data?"
+```mermaid
+classDiagram
+    class PaymentProcessor {
+        <<interface>>
+        +processPayment(double amount) void
+        +validatePayment() boolean
+    }
+    class CreditCardProcessor {
+        -String cardNumber
+        -String cvv
+        -double balance
+        +processPayment(double amount) void
+        +validatePayment() boolean
+        -isCardValid() boolean
+        -isExpired() boolean
+        +getBalance() double
+        +setBalance(double balance) void
+    }
+    class Animal {
+        <<abstract>>
+        +makeSound() void
+        +sleep() void
+    }
+    class Dog {
+        +makeSound() void
+    }
+    class Cat {
+        +makeSound() void
+    }
+    class DataProvider {
+        <<interface>>
+        +getData() String
+    }
+    class BetterApproach {
+        -DataProvider provider
+        +process() void
+    }
+
+    PaymentProcessor <|.. CreditCardProcessor : Abstraction + Encapsulation
+    Animal <|-- Dog : Overrides makeSound
+    Animal <|-- Cat : Overrides makeSound
+    BetterApproach o--> DataProvider : Composition over Inheritance
+```
 
 ```java
-// ABSTRACTION: Interface defines WHAT the object does
+// ABSTRACTION: Defines WHAT the processor does
 public interface PaymentProcessor {
     void processPayment(double amount);
     boolean validatePayment();
 }
 
-// ENCAPSULATION: Implementation controls HOW and WHO can access it
+// ENCAPSULATION: Protects HOW card data and balance are validated/mutated
 public class CreditCardProcessor implements PaymentProcessor {
-    // Private data - encapsulation
     private String cardNumber;
     private String cvv;
     private double balance;
 
-    // Encapsulation + Abstraction combined
     @Override
     public void processPayment(double amount) {
-        // Client doesn't need to know internal validation logic
         if (validatePayment() && amount <= balance) {
             balance -= amount;
         }
@@ -49,288 +91,173 @@ public class CreditCardProcessor implements PaymentProcessor {
 
     @Override
     public boolean validatePayment() {
-        // Implementation details hidden from caller
         return isCardValid() && !isExpired();
     }
 
-    // Private helper methods - part of encapsulation
-    private boolean isCardValid() {
-        // Luhn algorithm or similar
-        return cardNumber.length() == 16;
-    }
+    private boolean isCardValid() { return cardNumber != null && cardNumber.length() == 16; }
+    private boolean isExpired() { return false; }
 
-    private boolean isExpired() {
-        // Check expiration
-        return false;
-    }
-
-    // Getters/Setters control encapsulation
-    public double getBalance() {
-        return balance;
-    }
-
+    public double getBalance() { return balance; }
     public void setBalance(double balance) {
-        if (balance >= 0) {
-            this.balance = balance;
-        }
+        if (balance >= 0) this.balance = balance; // Invariant guard
     }
 }
 
-// Usage: Client cares about abstraction (interface), not encapsulation (implementation)
+// Client codes against abstraction, decoupled from internal implementation
 PaymentProcessor processor = new CreditCardProcessor();
-processor.processPayment(100.0); // Don't care HOW it's done, just WHAT it does
+processor.processPayment(100.0);
 ```
-
-**Why it matters in interviews:**
-- Shows understanding of separation of concerns
-- Demonstrates knowledge of SOLID principles
-- Proves you can design maintainable systems
-
----
 
 ### Polymorphism: Compile-Time vs Runtime
 
-**Compile-Time Polymorphism (Method Overloading):**
-- Resolved during compilation
-- Based on method signature (name + parameters)
-- NO runtime overhead
-- Cannot override with different return type (except covariant returns)
+```mermaid
+flowchart LR
+    subgraph Design["Design Pillars"]
+        AB["Abstraction: Public Contract (WHAT)"]
+        EN["Encapsulation: Private State + Invariants (HOW)"]
+        AB -->|"Hides complexity"| EN
+    end
+
+    subgraph Dispatch["Polymorphism Bytecode Dispatch"]
+        CT["Compile-Time: Overloading, static, private, super"]
+        RT["Runtime: Method Overriding (Animal a = new Dog)"]
+        B1["invokestatic / invokespecial / Exact Overload Descriptor"]
+        B2["invokevirtual → Object Class v-table Lookup"]
+        D1["Resolved by javac (Zero dispatch overhead)"]
+        D2["Resolved at runtime → Dog::makeSound() (JIT inlines monomorphic)"]
+        CT --> B1 --> D1
+        RT --> B2 --> D2
+    end
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class AB,CT blue
+    class EN,RT purple
+    class B1,D1 green
+    class B2,D2 amber
+```
+
+| Aspect | Compile-Time Polymorphism (Overloading) | Runtime Polymorphism (Overriding) |
+|--------|-----------------------------------------|-----------------------------------|
+| **Resolution** | Compile time by method signature (name + parameter types) | Runtime by actual heap object type via **v-table** (`invokevirtual`) |
+| **Return Type** | Cannot overload differing *only* by return type | Supports **covariant return types** (returning a subtype) |
+| **Exclusions** | Static/private methods bind statically (`invokestatic`/`invokespecial`) | `final`, `static`, and `private` methods are **not** polymorphic (excluded from v-table override) |
+| **Performance** | Zero lookup overhead | v-table lookup overhead (JIT often devirtualizes/inlines monomorphic calls) |
 
 ```java
 public class Calculator {
-    // Method overloading - compile-time polymorphism
-    public int add(int a, int b) {
-        return a + b;
-    }
-
-    public double add(double a, double b) {
-        return a + b;
-    }
-
-    public int add(int a, int b, int c) {
-        return a + b + c;
-    }
-
-    // Covariant return type is allowed (returns subtype)
-    public Number addNumbers(Number a, Number b) {
-        return 0;
-    }
+    public int add(int a, int b) { return a + b; }
+    public double add(double a, double b) { return a + b; }
+    public int add(int a, int b, int c) { return a + b + c; }
+    public Number addNumbers(Number a, Number b) { return 0; } // Subclass may return Integer (covariant)
 }
 
-// How compiler sees this:
-// add(int, int) -> method signature determined at compile time
-// add(double, double) -> different signature
-// add(int, int, int) -> yet another signature
-```
-
-**Runtime Polymorphism (Method Overriding):**
-- Resolved during execution
-- Based on actual object type at runtime
-- Uses virtual method dispatch (v-table lookup)
-- Method must be inherited, not overloaded
-
-```java
 public abstract class Animal {
-    // Virtual method - resolved at runtime
-    public void makeSound() {
-        System.out.println("Generic animal sound");
-    }
-
-    public final void sleep() {
-        System.out.println("Sleeping"); // Final methods are NOT polymorphic
-    }
+    public void makeSound() { System.out.println("Generic animal sound"); } // In v-table
+    public final void sleep() { System.out.println("Sleeping"); }           // final: not overridable
 }
 
 public class Dog extends Animal {
-    @Override
-    public void makeSound() {
-        System.out.println("Woof!");
-    }
+    @Override public void makeSound() { System.out.println("Woof!"); }
 }
 
 public class Cat extends Animal {
-    @Override
-    public void makeSound() {
-        System.out.println("Meow!");
-    }
+    @Override public void makeSound() { System.out.println("Meow!"); }
 }
 
-public class PolymorphismDemo {
-    public static void main(String[] args) {
-        // Runtime polymorphism in action
-        Animal animal1 = new Dog();
-        Animal animal2 = new Cat();
-
-        animal1.makeSound(); // OUTPUT: Woof! (based on actual object type: Dog)
-        animal2.makeSound(); // OUTPUT: Meow! (based on actual object type: Cat)
-
-        // Method dispatch happens at runtime via v-table
-        // JVM checks actual object type at runtime, not declared type
-    }
-}
-
-// Performance note: JIT compilation often inlines monomorphic calls
-// But polymorphic calls have lookup overhead
+Animal a1 = new Dog();
+Animal a2 = new Cat();
+a1.makeSound(); // Woof! — JVM checks actual object v-table: Dog::makeSound
+a2.makeSound(); // Meow! — JVM checks actual object v-table: Cat::makeSound
 ```
 
-**Method Dispatch Under the Hood:**
+### Inheritance Pitfalls & Remedies
+
+- **1. Fragile Base Class Problem:** A base method (`process()`) calls an overridable method (`getData()`). Subclass overrides change base behavior unexpectedly. **Fix:** Prefer **composition over inheritance** (`BetterApproach` delegates to injected `DataProvider`).
+- **2. Diamond Problem:** Java forbids multiple class inheritance to avoid method/state ambiguity. With interfaces using Java 8+ `default` methods, an implementing class must explicitly resolve conflicts (`C.super.method()`).
+- **3. Constructor Chaining Complexity:** Every subclass constructor must invoke `super(...)` as its first statement; `Base` always initializes before `Child`.
+
 ```java
-// Simplified version of what JVM does for runtime polymorphism:
-public class VirtualMethodDispatch {
-    // Every class has a v-table (virtual method table)
-    // Animal.v-table:
-    //   makeSound() -> Animal::makeSound
-    //   sleep() -> Animal::sleep (final, not in v-table)
-
-    // Dog.v-table:
-    //   makeSound() -> Dog::makeSound (overridden)
-    //   sleep() -> Animal::sleep (inherited)
-
-    public void demonstrateDispatch(Animal a) {
-        a.makeSound(); // JVM does: lookup a.getClass().v-table().get("makeSound")()
-    }
-}
-```
-
----
-
-### Inheritance Pitfalls
-
-**Pitfall 1: Fragile Base Class Problem**
-```java
-public class BadBase {
-    public void process() {
-        getData(); // Assumes subclass won't override this
-    }
-
-    protected String getData() {
-        return "base data";
-    }
-}
-
-public class FragileSubclass extends BadBase {
-    @Override
-    protected String getData() {
-        return "subclass data"; // Seems safe, but...
-    }
-
-    public void refresh() {
-        process(); // Now this behaves differently than in BadBase
-    }
-}
-
-// SOLUTION: Use composition over inheritance
+// Pitfall 1 Fix: Composition over Inheritance
+public interface DataProvider { String getData(); }
 public class BetterApproach {
-    private DataProvider provider; // Composition, not inheritance
-
-    public BetterApproach(DataProvider provider) {
-        this.provider = provider;
-    }
-
-    public void process() {
-        String data = provider.getData();
-        // Process data
-    }
+    private final DataProvider provider;
+    public BetterApproach(DataProvider provider) { this.provider = provider; }
+    public void process() { String data = provider.getData(); }
 }
 
-public interface DataProvider {
-    String getData();
-}
-```
-
-**Pitfall 2: Diamond Problem (Java doesn't support multiple inheritance)**
-```java
-// This is NOT allowed in Java, but shows why:
-// interface A { void method(); }
-// interface B extends A { }
-// interface C extends A { }
-// class D implements B, C { } // Which method() implementation?
-
-// SOLUTION: Use interfaces (provide default implementation if needed)
-public interface A {
-    default void method() {
-        System.out.println("Default A");
-    }
-}
-
-public interface B extends A {
-    // Inherits default method from A
-}
-
-public interface C extends A {
-    @Override
-    default void method() {
-        System.out.println("Default C");
-    }
-}
-
+// Pitfall 2 Fix: Explicit disambiguation for default interface methods
+public interface A { default void method() { System.out.println("Default A"); } }
+public interface B extends A {}
+public interface C extends A { @Override default void method() { System.out.println("Default C"); } }
 public class D implements B, C {
-    @Override
-    public void method() {
-        // Must explicitly implement to resolve ambiguity
-        C.super.method(); // Can choose which parent to call
-    }
+    @Override public void method() { C.super.method(); } // Must resolve ambiguity explicitly
 }
-```
 
-**Pitfall 3: Constructor Chaining Complexity**
-```java
+// Pitfall 3: Constructor chaining order (Base executes first, then Child)
 public class Base {
-    private String data;
-
-    public Base(String data) {
-        System.out.println("Base constructor called");
-        this.data = data;
-    }
+    private final String data;
+    public Base(String data) { this.data = data; }
 }
-
 public class Child extends Base {
-    private int value;
-
+    private final int value;
     public Child(String data, int value) {
-        super(data); // MUST call super constructor first
-        System.out.println("Child constructor called");
+        super(data); // MUST be first statement
         this.value = value;
     }
-
-    // Common mistake: forgetting super() call
-    // Child c = new Child("test", 5);
-    // OUTPUT: Base constructor called
-    //         Child constructor called
 }
 ```
 
-**Key Takeaway:** Inheritance creates tight coupling. Use composition unless there's a true IS-A relationship.
+> [!IMPORTANT]
+> **30-Second Revision:** **Abstraction** exposes *what* a component does (interfaces); **Encapsulation** protects *how* it maintains invariants (`private` state + checks). Inheritance creates tight coupling and fragile base-class bugs—default to **composition** unless there is a strict, stable IS-A relationship.
 
 ---
 
 ## equals() and hashCode() Contract
 
-This is one of the most important concepts in Java and frequently tested in interviews.
+### The Contract Rules
 
-### The Contract
+Overriding `equals()` creates two non-negotiable obligations:
+1. **5 `equals()` Properties:**
+   - **Reflexive:** `x.equals(x)` is `true`
+   - **Symmetric:** `x.equals(y)` iff `y.equals(x)`
+   - **Transitive:** `x.equals(y)` and `y.equals(z)` implies `x.equals(z)`
+   - **Consistent:** Repeated calls return the same boolean while fields are unchanged
+   - **Null-safe:** `x.equals(null)` always returns `false`
+2. **Hash Consistency Rule:** If `a.equals(b)` is `true`, then `a.hashCode() == b.hashCode()` **must** be `true`. The converse is **false**—unequal objects may share a hash code (a hash collision).
 
-If you override `equals()`, you MUST override `hashCode()` such that:
-1. **Reflexive:** `x.equals(x)` returns `true`
-2. **Symmetric:** if `x.equals(y)` then `y.equals(x)`
-3. **Transitive:** if `x.equals(y)` and `y.equals(z)` then `x.equals(z)`
-4. **Consistent:** multiple calls return the same result (assuming data doesn't change)
-5. **Null handling:** `x.equals(null)` always returns `false`
+```mermaid
+flowchart TD
+    Start["map.put(p1, data): p1 = Person('John', 30)"] --> H1["p1.hashCode() computes hash"]
+    H1 --> B1["Store entry in Bucket[i]: hash &amp; (n - 1)"]
+    B1 --> Query["map.get(p2) where p1.equals(p2) is true"]
+    Query --> Check{"Did class override hashCode() consistently?"}
+    Check -->|"Yes: Same hashCode()"| Same["Lands in same Bucket[i]"]
+    Same --> EqCheck{"Iterate bucket: key.equals(p2)?"}
+    EqCheck -->|"true"| Found["Returns value; HashSet keeps size == 1"]
+    Check -->|"No: Default Object.hashCode() (identity-based)"| Diff["Lands in wrong Bucket[j]"]
+    Diff --> Miss["Bucket miss → returns null; HashSet size == 2 (Duplicate!)"]
 
-**Critical Rule:** If `a.equals(b)` then `a.hashCode() == b.hashCode()`. But the reverse is NOT true.
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class Start,H1,B1,Query blue
+    class Check,EqCheck amber
+    class Same,Found green
+    class Diff,Miss red
+```
 
-### Breaking the Contract - Real Consequences
+### Broken vs Correct Implementation
 
 ```java
-// WRONG: equals() without hashCode()
+// BROKEN: Overrides equals() without hashCode()
 public class BrokenPerson {
     private String name;
     private int age;
-
-    public BrokenPerson(String name, int age) {
-        this.name = name;
-        this.age = age;
-    }
+    public BrokenPerson(String name, int age) { this.name = name; this.age = age; }
 
     @Override
     public boolean equals(Object obj) {
@@ -339,1574 +266,807 @@ public class BrokenPerson {
         BrokenPerson other = (BrokenPerson) obj;
         return age == other.age && Objects.equals(name, other.name);
     }
-
-    // NO hashCode() override - BIG MISTAKE!
+    // Missing hashCode() -> uses Object.hashCode() (different per instance!)
 }
 
-public class HashMapBroken {
-    public static void main(String[] args) {
-        BrokenPerson p1 = new BrokenPerson("John", 30);
-        BrokenPerson p2 = new BrokenPerson("John", 30);
+// FAILURE IN COLLECTIONS:
+BrokenPerson p1 = new BrokenPerson("John", 30);
+BrokenPerson p2 = new BrokenPerson("John", 30); // p1.equals(p2) == true, hashCodes differ!
 
-        System.out.println("p1.equals(p2): " + p1.equals(p2)); // true - CORRECT
-        System.out.println("p1.hashCode() == p2.hashCode(): "
-            + (p1.hashCode() == p2.hashCode())); // false - WRONG!
+Map<BrokenPerson, String> map = new HashMap<>();
+map.put(p1, "John's data");
+map.get(p2); // null! HashMap computes hash % bucketSize -> looks in wrong bucket!
 
-        // This breaks HashMap!
-        Map<BrokenPerson, String> map = new HashMap<>();
-        map.put(p1, "John's data");
-
-        System.out.println("map.get(p1): " + map.get(p1)); // Works: "John's data"
-        System.out.println("map.get(p2): " + map.get(p2)); // NULL! - BROKEN
-        // Different hash codes cause HashMap to look in different bucket
-
-        // This breaks HashSet too!
-        Set<BrokenPerson> set = new HashSet<>();
-        set.add(p1);
-        set.add(p2);
-        System.out.println("set.size(): " + set.size()); // 2 - WRONG! Should be 1
-        // Both objects in set even though they're equal
-    }
-}
+Set<BrokenPerson> set = new HashSet<>();
+set.add(p1);
+set.add(p2);
+set.size(); // 2! Duplicate logical object inserted because buckets differ!
 ```
 
-### Correct Implementation
-
 ```java
-// CORRECT: Both equals() and hashCode()
+// CORRECT: Same fields in both equals() and hashCode()
 public class CorrectPerson {
-    private String name;
-    private int age;
-
-    public CorrectPerson(String name, int age) {
-        this.name = name;
-        this.age = age;
-    }
+    private final String name;
+    private final int age;
+    public CorrectPerson(String name, int age) { this.name = name; this.age = age; }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true; // Reflexive + performance
-        if (obj == null || getClass() != obj.getClass()) return false; // Null check
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
         CorrectPerson other = (CorrectPerson) obj;
-        return age == other.age && Objects.equals(name, other.name); // Transitive + consistent
+        return age == other.age && Objects.equals(name, other.name);
     }
 
     @Override
     public int hashCode() {
-        // Same fields used in equals() must be used in hashCode()
-        return Objects.hash(name, age); // Java 7+, much safer than manual calculation
+        return Objects.hash(name, age); // Java 7+, safe & concise
     }
 
-    // Alternative manual hashCode (for education):
+    // Manual prime-31 alternative (odd prime 31 reduces collisions & optimizes to (i << 5) - i):
     public int hashCodeManual() {
-        int result = 31 * 1 + (name == null ? 0 : name.hashCode());
-        result = 31 * result + age;
-        return result;
-        // Uses prime number 31 (chosen for hashCode distribution)
-        // Must be consistent with equals() fields
+        int result = 31 + (name == null ? 0 : name.hashCode());
+        return 31 * result + age;
     }
 }
-
-public class HashMapCorrect {
-    public static void main(String[] args) {
-        CorrectPerson p1 = new CorrectPerson("John", 30);
-        CorrectPerson p2 = new CorrectPerson("John", 30);
-
-        System.out.println("p1.equals(p2): " + p1.equals(p2)); // true
-        System.out.println("p1.hashCode() == p2.hashCode(): "
-            + (p1.hashCode() == p2.hashCode())); // true
-
-        Map<CorrectPerson, String> map = new HashMap<>();
-        map.put(p1, "John's data");
-        System.out.println("map.get(p2): " + map.get(p2)); // "John's data" - CORRECT!
-
-        Set<CorrectPerson> set = new HashSet<>();
-        set.add(p1);
-        set.add(p2);
-        System.out.println("set.size(): " + set.size()); // 1 - CORRECT!
-    }
-}
+// map.get(p2) -> "John's data" | set.size() -> 1
 ```
 
-### Why Collections Fail Without Proper hashCode()
-
-```java
-public class HashMapInternals {
-    // Simplified HashMap behavior
-    public static void main(String[] args) {
-        Map<BrokenPerson, String> map = new HashMap<>();
-        BrokenPerson p1 = new BrokenPerson("John", 30);
-
-        // HashMap internally:
-        // 1. Calls p1.hashCode() -> returns some random object hash
-        // 2. Calculates bucket index: hash % bucketSize
-        // 3. Stores at that bucket: bucket[index] = (key, value)
-
-        map.put(p1, "data");
-
-        BrokenPerson p2 = new BrokenPerson("John", 30); // equals p1 but different hashCode
-
-        // On retrieval:
-        // 1. Calls p2.hashCode() -> returns DIFFERENT random hash
-        // 2. Calculates different bucket index
-        // 3. Looks in wrong bucket -> key not found
-        // 4. Returns null
-
-        System.out.println(map.get(p2)); // null - DATA LOSS!
-    }
-}
-```
-
-**Key Takeaway:** Always use IDE-generated equals() and hashCode() methods. The contract is non-negotiable for data structure correctness.
+> [!WARNING]
+> **Interview Gotcha:** Never use mutable fields in `equals()`/`hashCode()` for objects stored as `HashMap` keys or `HashSet` elements. Mutating a field after insertion changes its `hashCode()`, stranding the entry in the old bucket and making it unreachable via `get()` or `remove()`.
 
 ---
 
 ## String Internals
 
-### String Pool and Immutability
+### String Pool, Heap & Compact Strings (Java 9+)
 
-```java
-public class StringPoolExample {
-    public static void main(String[] args) {
-        // String literals are automatically pooled
-        String s1 = "hello";
-        String s2 = "hello";
-        System.out.println(s1 == s2); // true - SAME reference (pooled)
+- **String Literals** (`"hello"`) are resolved in the **String Pool** (`StringTable`, sized via `-XX:StringTableSize`), which moved from **PermGen to the Heap in Java 7/8+**.
+- **`new String("hello")`** always allocates a distinct `String` object on the Heap (outside the pool). Calling **`.intern()`** returns the pooled canonical reference (or inserts it into the pool if absent).
+- **Compile-time vs Runtime Concatenation:** `"hello" + " " + "world"` folds into one pooled literal during compilation; `prefix + " world"` allocates a new `String` at runtime.
+- **Java 9+ Compact Strings:** Replaced `char[]` (2 bytes/char) with `byte[] value` + `byte coder` (`LATIN1 = 0` for 1 byte/char, `UTF16 = 1` for 2 bytes/char), reducing String heap memory up to ~50% for ASCII/Latin-1 workloads.
 
-        // Strings created with new() are NOT automatically pooled
-        String s3 = new String("hello");
-        System.out.println(s1 == s3); // false - different objects
-        System.out.println(s1.equals(s3)); // true - same content
+```mermaid
+flowchart LR
+    subgraph Src["Java Expressions"]
+        L1["String s1 = 'hello'"]
+        L2["String s2 = 'hello'"]
+        N1["String s3 = new String('hello')"]
+        I1["String s4 = s3.intern()"]
+    end
 
-        // intern() forces entry into pool
-        String s4 = new String("hello").intern();
-        System.out.println(s1 == s4); // true - intern() returns pooled reference
+    subgraph Heap["JVM Heap (Java 7/8+)"]
+        H1["Heap String: byte[] + coder (distinct object)"]
+        subgraph Pool["String Pool (StringTable)"]
+            P1["Pooled 'hello': byte[] + coder=LATIN1"]
+        end
+    end
 
-        // String concatenation at compile time is optimized
-        String s5 = "hello" + " " + "world"; // Compiled to single literal
+    L1 -->|"Pools literal"| P1
+    L2 -->|"Reuses ref (s1 == s2)"| P1
+    N1 -->|"New allocation (s1 != s3)"| H1
+    H1 -.->|"intern() looks up / adds"| P1
+    I1 -->|"Returns pooled ref (s1 == s4)"| P1
 
-        // String concatenation at runtime creates new objects
-        String prefix = "hello";
-        String s6 = prefix + " world"; // New String object created at runtime
-    }
-}
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class L1,L2,I1 blue
+    class P1 green
+    class N1,H1 amber
 ```
 
-### Why Immutability Matters
+### Why `String` Is Immutable
+
+1. **Thread Safety:** Multiple threads can share `String` instances without synchronization.
+2. **Safe `HashMap` Keys:** Hash code never changes after insertion (and is lazily cached).
+3. **Security:** Passwords, class names, and URLs passed across APIs cannot be mutated behind the caller's back.
+4. **String Pool Deduplication:** Millions of identical literals safely share one canonical instance.
+
+### `String` vs `StringBuilder` vs `StringBuffer`
+
+| Type | Mutable? | Thread-Safe? | Best Use Case | Loop Trap |
+|------|----------|--------------|---------------|-----------|
+| **`String`** | No (`final`) | Yes | Constants, map keys, shared values | `+=` in loop creates `O(n^2)` copies |
+| **`StringBuilder`** | Yes | No | Single-threaded string building (**100x–1000x faster** than `+`) | Creating `new StringBuilder()` *inside* a loop defeats pooling |
+| **`StringBuffer`** | Yes | Yes (`synchronized`) | Legacy multi-threaded shared buffer | Unnecessary lock overhead in single threads |
 
 ```java
-public class ImmutabilityBenefits {
-    // 1. Thread safety without synchronization
-    // Multiple threads can share String safely
-    public void threadSafeSharing(String immutableString) {
-        // No synchronization needed - String can't change
-    }
+// Pool & intern behavior
+String s1 = "hello";
+String s2 = "hello";
+String s3 = new String("hello");
+String s4 = s3.intern();
+// s1 == s2 (true) | s1 == s3 (false) | s1.equals(s3) (true) | s1 == s4 (true)
 
-    // 2. Used as HashMap keys safely
-    public void hashMapKeyUse() {
-        Map<String, String> map = new HashMap<>();
-        String key = "important_key";
-        map.put(key, "value");
-        // Even if we could modify the key, HashMap would still find it
-        // (But we can't modify it because String is immutable)
-    }
+// Compile-time vs Runtime concatenation
+String s5 = "hello" + " " + "world"; // Single pooled literal
+String prefix = "hello";
+String s6 = prefix + " world";        // New runtime String object
 
-    // 3. Security - prevents hacker modification
-    public class SecurityExample {
-        private String password; // Even if password is exposed, can't be modified
-
-        public SecurityExample(String password) {
-            this.password = password; // Safe because String is immutable
-            // If someone had reference to password string, can't change it
-        }
-    }
-
-    // 4. String pool efficiency - deduplication
-    public void poolingBenefits() {
-        // 1 million "hello" strings all point to same object
-        // Memory efficiency through sharing
-    }
+// Loop concatenation: declare StringBuilder OUTSIDE the loop
+StringBuilder sb = new StringBuilder();
+for (int i = 0; i < 10_000; i++) {
+    sb.append("x"); // Mutates internal buffer; avoid `new StringBuilder()` inside loop!
 }
+String result = sb.toString();
 ```
 
-### String Pool Internals
-
-```java
-public class StringPoolInternals {
-    public static void main(String[] args) {
-        // String pool is essentially a HashMap inside JVM
-        // Simplified: Map<String content, String reference> pool
-
-        String s1 = "hello"; // JVM: check if "hello" in pool
-                              // Not found, create and add
-                              // Return reference
-
-        String s2 = "hello"; // JVM: check if "hello" in pool
-                              // Found! Return same reference
-
-        // Java 8+: String pool is in Heap (used to be in PermGen)
-        // Can observe impact with -XX:StringTableSize JVM flag
-
-        // Dangerous: intern() on user input can cause memory leak
-        String userInput = readUserInput(); // "a_" repeated many times
-        userInput = userInput.intern(); // Could fill up string pool
-                                        // Interned strings are never garbage collected
-    }
-}
-```
-
-### StringBuilder vs StringBuffer
-
-```java
-public class StringBuilderVsStringBuffer {
-    // Both are mutable and avoid String concatenation overhead
-
-    // StringBuffer: Synchronized (thread-safe)
-    public void stringBufferUse() {
-        StringBuffer buffer = new StringBuffer();
-        buffer.append("Hello");
-        buffer.append(" ");
-        buffer.append("World");
-        // All methods synchronized - prevents concurrent modification
-        // Performance: slower due to synchronization overhead
-    }
-
-    // StringBuilder: NOT synchronized (not thread-safe)
-    public void stringBuilderUse() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Hello");
-        builder.append(" ");
-        builder.append("World");
-        // No synchronization - faster if used in single thread
-        // Performance: significantly faster than StringBuffer
-    }
-
-    public void performanceComparison() {
-        // String concatenation with + operator
-        long start = System.nanoTime();
-        String result = "";
-        for (int i = 0; i < 10000; i++) {
-            result += "x"; // Creates new String object each iteration
-        }
-        long stringTime = System.nanoTime() - start;
-
-        // StringBuilder
-        start = System.nanoTime();
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 10000; i++) {
-            sb.append("x"); // Modifies internal char array
-        }
-        String result2 = sb.toString();
-        long builderTime = System.nanoTime() - start;
-
-        // StringBuilder is typically 100x-1000x faster for this pattern
-        System.out.println("String concatenation time: " + stringTime);
-        System.out.println("StringBuilder time: " + builderTime);
-    }
-
-    // When NOT to use StringBuilder
-    public void wrongUseOfStringBuilder() {
-        // DON'T: Creating StringBuilder in loop - defeats purpose
-        String result = "";
-        for (int i = 0; i < 1000; i++) {
-            StringBuilder sb = new StringBuilder(); // Created every iteration
-            sb.append("x");
-            result += sb.toString(); // Back to String concatenation
-        }
-
-        // DO: Create StringBuilder outside loop
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
-            sb.append("x"); // Single StringBuilder instance
-        }
-        result = sb.toString();
-    }
-}
-```
-
-### String.intern() - Careful!
-
-```java
-public class StringInternWarning {
-    public static void main(String[] args) {
-        // Good use: known, controlled strings
-        String s1 = new String("config_key");
-        String s2 = "config_key";
-        System.out.println(s1 == s2); // false without intern
-        System.out.println(s1 == s2.intern()); // true with intern
-
-        // BAD use: User-generated content
-        Set<String> interned = new HashSet<>();
-        for (int i = 0; i < 1000000; i++) {
-            String userInput = getUserInput(); // User can send unique strings
-            interned.add(userInput.intern()); // MEMORY LEAK RISK
-            // Interned strings never garbage collected
-            // Eventually OutOfMemoryError
-        }
-
-        // Java 8.242+: intern() strings get garbage collected
-        // But still not recommended for untrusted input
-    }
-}
-```
-
-**Key Takeaway:** Strings are immutable for thread-safety and security. Use StringBuilder for concatenation in loops. Avoid intern() on user input.
+> [!WARNING]
+> **Memory Leak & OOM Risk with `intern()`:** Only `intern()` known, bounded strings (e.g., `"config_key"`). Calling `intern()` on untrusted or high-cardinality user input swells `StringTable` and risks `OutOfMemoryError` if references are retained (even though modern JVMs since Java 8u242+ can GC unreachable interned strings, unbounded `intern()` still causes severe `StringTable` overhead and OOM when tracked).
 
 ---
 
 ## Generics Deep Dive
 
-### Type Erasure - The Core Concept
+### Type Erasure & Bridge Methods
+
+Java generics are enforced at **compile time only** via **Type Erasure**:
+- `javac` replaces unbounded `<T>` with `Object` and bounded `<T extends Number>` with `Number`.
+- The compiler inserts explicit casts at read sites (e.g., `(String) list.get(0)`).
+- **Bridge Methods:** When a subclass implements/overrides a parameterized supertype (e.g., `Comparable<MyNode>`), `javac` generates a synthetic bridge method (`compareTo(Object)`) that casts and delegates to `compareTo(MyNode)` so runtime polymorphism survives erasure.
+- **Runtime Consequences:**
+  - `new ArrayList<String>().getClass() == new ArrayList<Integer>().getClass()` is `true` (both are `ArrayList`).
+  - Cannot overload methods differing only in type arguments (`foo(List<String>)` vs `foo(List<Integer>)` clash after erasure); overloading different raw types (`List<String>` vs `Set<String>`) is legal.
+  - Primitives are disallowed (`List<int>` fails; must use `List<Integer>`).
+
+```mermaid
+flowchart TD
+    Src["Compile-Time: List&lt;String&gt; or class MyNode implements Comparable&lt;MyNode&gt;"] --> Check["javac Type Check &amp; Inference"]
+    Check --> Erase["Type Erasure: T → Object (or upper bound); raw List"]
+    Erase --> Cast["Insert Casts at Call Sites: (String) list.get(0)"]
+    Erase --> Bridge["Generate Synthetic Bridge Method: compareTo(Object)"]
+    Bridge --> Delegate["Bridge delegates to compareTo(MyNode) for polymorphism"]
+    Check -->|"Illegal Declarations"| Blocked["Blocked: overload List&lt;String&gt;/List&lt;Integer&gt;, or List&lt;int&gt;"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class Src,Check blue
+    class Erase,Bridge purple
+    class Cast,Delegate green
+    class Blocked red
+```
+
+### Bounded Wildcards & PECS (`Producer Extends, Consumer Super`)
+
+```mermaid
+flowchart TD
+    Goal{"How does the method interact with the generic parameter?"}
+    Goal -->|"Producer: Reads T values out"| Ext["Upper Bound: List&lt;? extends T&gt; (Covariant)"]
+    Goal -->|"Consumer: Writes T values in"| Sup["Lower Bound: List&lt;? super T&gt; (Contravariant)"]
+    Goal -->|"Read-only, type-agnostic"| Unb["Unbounded Wildcard: List&lt;?&gt;"]
+    Goal -->|"Relate multiple params / return"| Typ["Type Parameter: &lt;T&gt; void swap(List&lt;T&gt;, int, int)"]
+
+    Ext --> ExtOk["READ as T OK: sum(List&lt;? extends Number&gt;)"]
+    Ext --> ExtNo["WRITE blocked (except null): could be List&lt;Double&gt;"]
+    Sup --> SupOk["WRITE T or subtypes OK: Collections.copy(dest, src)"]
+    Sup --> SupNo["READ returns Object only"]
+
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class Goal amber
+    class Ext,Sup,Unb,Typ blue
+    class ExtOk,SupOk green
+    class ExtNo,SupNo red
+```
 
 ```java
-public class TypeErasureDemo {
-    // Java generics are implemented via TYPE ERASURE
-    // Generic type info is removed at compile time
+// Producer Extends: reads Number subtypes safely; cannot add elements (except null)
+public double sum(List<? extends Number> numbers) {
+    double total = 0;
+    for (Number n : numbers) total += n.doubleValue();
+    return total;
+}
 
-    public static void main(String[] args) {
-        // What you write
-        List<String> strings = new ArrayList<String>();
-        strings.add("hello");
+// Consumer Super: writes Integer safely into List<Integer>, List<Number>, or List<Object>
+public void fill(List<? super Integer> list, Integer value) {
+    for (int i = 0; i < 10; i++) list.add(value);
+    Object obj = list.get(0); // Only guaranteed readable type is Object
+}
 
-        // What gets compiled (type erasure)
-        List strings_compiled = new ArrayList(); // <String> is removed
-        strings_compiled.add((String) "hello"); // Casts added where necessary
+// Classic PECS in JDK: Collections.copy(dest, src)
+public static <T> void copy(List<? super T> dest, List<? extends T> src) {
+    for (T item : src) dest.add(item);
+}
 
-        // Consequence: Generics are compile-time only
-        List<String> stringList = new ArrayList<>();
-        List<Integer> intList = new ArrayList<>();
+// Generic Methods: inference, multiple params, recursive bound, wildcard vs <T>
+public <T> T getFirst(List<T> list) { return list.isEmpty() ? null : list.get(0); }
+public <K, V> Map<K, V> createMap(K key, V value) { return Map.of(key, value); }
 
-        System.out.println(stringList.getClass() == intList.getClass());
-        // true - At runtime, both are just List
-        // No way to distinguish at runtime
-    }
+public <T extends Comparable<T>> T max(List<T> list) { // Recursive type bound
+    if (list.isEmpty()) return null;
+    T max = list.get(0);
+    for (T t : list) if (t.compareTo(max) > 0) max = t;
+    return max;
+}
 
-    // Can't do this - type info erased
-    // public <T> void doSomething(List<String> list) { }
-    // public <T> void doSomething(List<Integer> list) { }
-    // ERROR: Erasure makes these identical at runtime
-
-    // Can do this - different raw types
-    public void overload(List<String> strings) { }
-    public void overload(Set<String> strings) { } // Different raw types
-
-    // No primitives in generics - consequence of type erasure
-    // List<int> list = new ArrayList<>(); // ERROR
-    List<Integer> list = new ArrayList<>(); // Must use wrapper
+public <T> void swap(List<T> list, int i, int j) { // Needs <T> to relate two positions
+    T tmp = list.get(i); list.set(i, list.get(j)); list.set(j, tmp);
+}
+public void printList(List<?> list) {               // <?> sufficient when no relation needed
+    for (Object item : list) System.out.println(item);
 }
 ```
 
-### Bounded Type Parameters
-
-```java
-public class BoundedTypeParameters {
-    // Upper Bound: ? extends T (covariant)
-    public void upperBoundExample() {
-        List<Integer> intList = Arrays.asList(1, 2, 3);
-
-        // Can read from ? extends Number
-        List<? extends Number> numbers = intList;
-        Number n = numbers.get(0); // Safe to read
-
-        // Can't write to ? extends Number (except null)
-        // numbers.add(1); // ERROR - can't guarantee type safety
-        // Why? List could be List<Double> underneath, adding Integer would be wrong
-
-        // Practical use: reading from heterogeneous collection
-        public double sum(List<? extends Number> numbers) {
-            double sum = 0;
-            for (Number n : numbers) {
-                sum += n.doubleValue();
-            }
-            return sum;
-        }
-
-        sum(Arrays.asList(1, 2, 3)); // List<Integer>
-        sum(Arrays.asList(1.5, 2.5, 3.5)); // List<Double>
-    }
-
-    // Lower Bound: ? super T (contravariant)
-    public void lowerBoundExample() {
-        List<Number> numberList = new ArrayList<>();
-
-        // Can write to ? super Integer
-        List<? super Integer> integers = numberList;
-        integers.add(1); // Safe - Integer is subtype of Number
-
-        // Can't reliably read (except as Object)
-        // Integer i = integers.get(0); // ERROR
-        Object o = integers.get(0); // Must use Object
-
-        // Practical use: writing to collection
-        public void copyIntegers(List<Integer> from, List<? super Integer> to) {
-            for (Integer i : from) {
-                to.add(i); // Can safely add Integer to ? super Integer
-            }
-        }
-    }
-}
-```
-
-### PECS Principle - Producer Extends, Consumer Super
-
-```java
-public class PECSPrinciple {
-    // PECS: Producer Extends, Consumer Super
-
-    // Producer (reading): Use ? extends T
-    public <T> double sum(List<? extends Number> numbers) {
-        // Think of this as "producing" numbers from the list
-        double sum = 0;
-        for (Number n : numbers) {
-            sum += n.doubleValue();
-        }
-        return sum;
-    }
-
-    // Consumer (writing): Use ? super T
-    public <T> void fill(List<? super Integer> list, Integer value) {
-        // Think of this as "consuming" integers into the list
-        for (int i = 0; i < 10; i++) {
-            list.add(value);
-        }
-    }
-
-    // Real-world example: Collections.copy()
-    public class CollectionsCopyExample {
-        public static <T> void copy(List<? super T> dest, List<? extends T> src) {
-            // src is producer - use ? extends T
-            // dest is consumer - use ? super T
-            for (T item : src) {
-                dest.add(item);
-            }
-        }
-
-        public void demonstratePECS() {
-            List<Number> numbers = new ArrayList<>();
-            List<Integer> integers = Arrays.asList(1, 2, 3);
-
-            copy(numbers, integers); // Works perfectly
-        }
-    }
-}
-```
-
-### Generic Methods
-
-```java
-public class GenericMethods {
-    // Generic method: type parameter defined at method level
-    public <T> T getFirst(List<T> list) {
-        return list.isEmpty() ? null : list.get(0);
-    }
-
-    // Type parameter inferred from argument
-    public void testGenericMethod() {
-        List<String> strings = Arrays.asList("a", "b");
-        String first = getFirst(strings); // T inferred as String
-
-        List<Integer> integers = Arrays.asList(1, 2);
-        Integer first2 = getFirst(integers); // T inferred as Integer
-    }
-
-    // Multiple type parameters
-    public <K, V> Map<K, V> createMap(K key, V value) {
-        Map<K, V> map = new HashMap<>();
-        map.put(key, value);
-        return map;
-    }
-
-    // Recursive type bound (advanced)
-    public <T extends Comparable<T>> T max(List<T> list) {
-        // T must extend Comparable<T>
-        if (list.isEmpty()) return null;
-        T max = list.get(0);
-        for (T t : list) {
-            if (t.compareTo(max) > 0) {
-                max = t;
-            }
-        }
-        return max;
-    }
-
-    // Wildcard vs Type Parameter
-    public void wildcardVsTypeParameter() {
-        // Use type parameter when you need to relate multiple arguments
-        public <T> void swap(List<T> list, int i, int j) {
-            // T connects both positions in list
-            T temp = list.get(i);
-            list.set(i, list.get(j));
-            list.set(j, temp);
-        }
-
-        // Use wildcard when you don't need to relate arguments
-        public void printList(List<?> list) {
-            // <?> is sufficient, no need for type parameter
-            for (Object item : list) {
-                System.out.println(item);
-            }
-        }
-    }
-}
-```
-
-**Key Takeaway:** Type erasure is why generics are a compile-time feature. Use bounded wildcards wisely with PECS principle.
+> [!IMPORTANT]
+> **30-Second Revision:** Type erasure wipes generic parameters at runtime (no `List<int>`, no overloading `List<String>` vs `List<Integer>`). Memorize **PECS**: if a parameter *produces* `T` for you to read, use `? extends T`; if it *consumes* `T` that you write, use `? super T` (just like `Collections.copy(dest, src)`).
 
 ---
 
 ## Autoboxing and Unboxing
 
-### How Autoboxing Works
+- **Autoboxing:** `Integer wrapped = 5;` compiles to `Integer.valueOf(5)`.
+- **Unboxing:** `int unwrapped = wrapped;` compiles to `wrapped.intValue()`.
+- **Integer Cache:** `Integer.valueOf(int)` caches values from **`-128` to `127`** (upper bound configurable via `-XX:AutoBoxCacheMax=1000`). Values outside the range allocate a fresh `Integer` object; `new Integer(127)` always bypasses the cache.
 
-```java
-public class AutoboxingDemo {
-    public static void main(String[] args) {
-        // Autoboxing: primitive -> wrapper object (compiler magic)
-        Integer wrapped = 5; // Compiled to: Integer.valueOf(5)
+```mermaid
+flowchart LR
+    Val["Autoboxing: Integer x = n (Integer.valueOf(n))"] --> Range{"Is -128 &lt;= n &lt;= 127 (or AutoBoxCacheMax)?"}
+    Range -->|"Yes (Cached)"| Cache["Returns shared IntegerCache instance"]
+    Cache --> EqTrue["a == b is true (TRAP: masks reference check!)"]
+    Range -->|"No (e.g. 200) or new Integer()"| Heap["Allocates new Heap Integer object"]
+    Heap --> EqFalse["c == d is false! Always use .equals()"]
+    NullBox["Unboxing null wrapper (x.intValue())"] --> NPE["Throws NullPointerException!"]
 
-        // Unboxing: wrapper object -> primitive (compiler magic)
-        int unwrapped = wrapped; // Compiled to: wrapped.intValue()
-
-        // Practical implications:
-        Integer a = 5; // autoboxed
-        Integer b = 5; // autoboxed
-        System.out.println(a == b); // true - Integer caching (-128 to 127)
-
-        Integer c = 200; // autoboxed
-        Integer d = 200; // autoboxed
-        System.out.println(c == d); // false - outside cache range!
-    }
-
-    // Autoboxing in collections
-    public void collectionsAutoboxing() {
-        List<Integer> list = new ArrayList<>();
-        list.add(5); // autoboxing: Integer.valueOf(5)
-        int value = list.get(0); // unboxing: value.intValue()
-
-        // Dangerous: unboxing null
-        List<Integer> nullList = new ArrayList<>();
-        nullList.add(null);
-        int val = nullList.get(0); // NullPointerException!
-    }
-}
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class Val blue
+    class Range amber
+    class Cache,EqTrue green
+    class Heap,EqFalse,NullBox,NPE red
 ```
 
-### Integer Caching (-128 to 127)
-
 ```java
-public class IntegerCaching {
-    public static void main(String[] args) {
-        // Java caches Integer objects from -128 to 127
-        // Optimization to reduce memory usage
+// IntegerCache (-128 to 127) reference equality trap
+Integer a = 127, b = 127;               // Cached -> a == b is true
+Integer c = 128, d = 128;               // Uncached -> c == d is false
+Integer e = new Integer(127);           // Explicit new -> a == e is false
+boolean safe = c.equals(d);             // ALWAYS use .equals() for wrapper comparison!
 
-        Integer i1 = 127;
-        Integer i2 = 127;
-        System.out.println(i1 == i2); // true - cached
+// NullPointerException trap on unboxing null
+List<Integer> list = new ArrayList<>();
+list.add(null);
+int val = list.get(0); // Compiles to list.get(0).intValue() -> NullPointerException!
 
-        Integer i3 = 128;
-        Integer i4 = 128;
-        System.out.println(i3 == i4); // false - not cached
+// Performance cost: ArrayList<Integer> vs int[] (arrays are typically 10-20x faster)
+List<Integer> boxed = new ArrayList<>();
+for (int i = 0; i < 1_000_000; i++) boxed.add(i); // Allocates ~1M wrapper objects!
 
-        Integer i5 = Integer.valueOf(127);
-        Integer i6 = Integer.valueOf(127);
-        System.out.println(i5 == i6); // true - valueOf uses cache
+int[] primitive = new int[1_000_000];
+for (int i = 0; i < 1_000_000; i++) primitive[i] = i; // Zero boxing overhead
 
-        Integer i7 = new Integer(127);
-        Integer i8 = new Integer(127);
-        System.out.println(i7 == i8); // false - new creates separate objects
-
-        // Cache range configurable: -XX:AutoBoxCacheMax=1000
-    }
-
-    public void whyComparisonMatters() {
-        List<Integer> list1 = Arrays.asList(1, 2, 3);
-        List<Integer> list2 = Arrays.asList(1, 2, 3);
-
-        // WRONG: comparing with ==
-        for (int i = 0; i < list1.size(); i++) {
-            if (list1.get(i) == list2.get(i)) { // Might fail for values > 127
-                // relies on caching, fragile
-            }
-        }
-
-        // CORRECT: comparing with equals()
-        for (int i = 0; i < list1.size(); i++) {
-            if (list1.get(i).equals(list2.get(i))) { // Always correct
-                // Compares values, not references
-            }
-        }
-    }
-}
+// Double-wrapping anti-pattern
+Integer x = 5;
+Integer y = Integer.valueOf(x); // Unboxes x then re-boxes unnecessarily
 ```
 
-### Performance Implications
-
-```java
-public class AutoboxingPerformance {
-    public static void main(String[] args) {
-        // Autoboxing adds overhead
-
-        // Inefficient: ArrayList of Integer
-        List<Integer> list = new ArrayList<>();
-        long start = System.nanoTime();
-        for (int i = 0; i < 1000000; i++) {
-            list.add(i); // autoboxing overhead
-        }
-        long listTime = System.nanoTime() - start;
-
-        // Efficient: direct array of int
-        int[] array = new int[1000000];
-        start = System.nanoTime();
-        for (int i = 0; i < 1000000; i++) {
-            array[i] = i; // no boxing
-        }
-        long arrayTime = System.nanoTime() - start;
-
-        System.out.println("ArrayList<Integer> time: " + listTime);
-        System.out.println("int[] time: " + arrayTime);
-        // array is typically 10-20x faster due to no autoboxing overhead
-    }
-
-    // Double wrapping - dangerous
-    public void doubleWrappingDanger() {
-        Integer a = 5; // autoboxed once
-        Integer b = Integer.valueOf(a); // unnecessary boxing (already boxed)
-        // Creates extra object unnecessarily
-    }
-}
-```
-
-**Key Takeaway:** Autoboxing is convenient but has performance cost. Use == only on primitives or when you understand caching. Always use .equals() for wrapper object comparison.
+> [!WARNING]
+> **Interview Gotcha:** Always compare wrapper objects (`Integer`, `Long`) with `.equals()`, never `==`, because `==` passes unit tests on small numbers (`-128..127`) and silently fails in production above `127`. Watch for hidden `NullPointerException` whenever unboxing nullable database or collection wrappers.
 
 ---
 
 ## final, finally, finalize
 
-### final Keyword
+| Keyword / Method | Category | Purpose & Scope | Execution / Enforcement |
+|------------------|----------|-----------------|-------------------------|
+| **`final`** | Modifier | Variable: immutable reference (`effective final` in Java 8+ lambdas); Method: cannot override; Class: cannot subclass (e.g., `String`) | Enforced at compile time |
+| **`finally`** | Exception Block | Guaranteed cleanup after `try`/`catch` (prefer `try-with-resources` + `AutoCloseable` for streams) | Always executes (even on early `return` or uncaught exception), unless JVM exits/crashes or infinite loop |
+| **`finalize()`** | `Object` Method (**Deprecated**) | Pre-GC cleanup hook; suffers unpredictable timing, GC delays, finalizer-thread bottlenecks, no shutdown guarantee, and **object resurrection** | Called unpredictably by GC before reclamation |
 
-```java
-public class FinalKeyword {
-    // 1. Final variable: can't be reassigned
-    public void finalVariable() {
-        final int value = 10;
-        // value = 20; // ERROR - can't reassign
+```mermaid
+flowchart TD
+    Try["Enter try block"] --> Outcome{"How does try exit?"}
+    Outcome -->|"Normal or early return val"| Save["Hold pending return val"]
+    Outcome -->|"Exception thrown"| CatchCheck{"Matching catch block?"}
+    CatchCheck -->|"Yes"| Catch["Execute catch block"]
+    CatchCheck -->|"No"| Propagate["Hold pending exception"]
+    Save --> Fin["Execute finally block"]
+    Catch --> Fin
+    Propagate --> Fin
+    Fin --> FinOut{"Does finally return or throw?"}
+    FinOut -->|"No (normal completion)"| Resume["Complete pending return val or rethrow exception"]
+    FinOut -->|"Yes (return or throw)"| Override["Overrides try/catch return value or swallows exception!"]
+    Kill["System.exit(), JVM crash, OS kill, or infinite loop"] -.->|"Bypasses finally"| Never["finally never runs"]
 
-        // Effective final (Java 8+)
-        int effectivelyFinal = 10;
-        // effectivelyFinal = 20; // ERROR - can't reassign
-        new Runnable() { // Can use in anonymous class
-            public void run() {
-                System.out.println(effectivelyFinal);
-            }
-        };
-    }
-
-    // 2. Final method: can't be overridden
-    public class Parent {
-        public final void criticalMethod() {
-            // Implementation can't be overridden by subclass
-        }
-    }
-
-    // 3. Final class: can't be subclassed
-    public final class ImmutableClass {
-        // No subclass can extend this
-    }
-
-    // Why make String final?
-    // public final class String { }
-    // Reasons:
-    // - Immutability guarantee
-    // - Security (can't subclass to add mutable behavior)
-    // - Performance (JVM can optimize better)
-    // - String pool efficiency
-}
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class Try,Save,Catch,Propagate blue
+    class Outcome,CatchCheck,FinOut amber
+    class Fin,Resume green
+    class Override,Kill,Never red
 ```
 
-### finally Block
-
 ```java
-public class FinallyBlock {
-    // finally: Always executes (except JVM exit, infinite loop, OS kills)
+// 1. final: variable, effectively final (Java 8+), method, class
+final int value = 10;
+int effectivelyFinal = 10; // Never reassigned -> usable inside anonymous class / lambda
+new Runnable() { public void run() { System.out.println(effectivelyFinal); } };
 
-    public void basicFinally() {
-        try {
-            System.out.println("Try block");
-        } catch (Exception e) {
-            System.out.println("Catch block");
-        } finally {
-            System.out.println("Finally block"); // ALWAYS executes
-        }
-        // OUTPUT: Try block
-        //         Finally block
+// Why String is `public final class String`:
+// - Immutability guarantee & String Pool safety
+// - Security (cannot subclass to inject mutable behavior)
+// - JVM optimization (monomorphic/devirtualized calls)
+
+// 2. finally with early return vs try-with-resources
+public String finallyWithReturn() {
+    try {
+        return "from try"; // Evaluated first, held while finally runs
+    } finally {
+        System.out.println("Finally runs BEFORE caller receives 'from try'");
     }
+}
 
-    public void finallyWithReturn() {
-        try {
-            return "from try";
-        } finally {
-            // Executes even if returning from try
-            System.out.println("Finally with return");
-        }
-        // OUTPUT: Finally with return
-        //         Method returns "from try"
+// Preferred cleanup: try-with-resources (compiler inserts closing + suppressed exceptions)
+try (BufferedReader reader = new BufferedReader(new FileReader("file.txt"))) {
+    String line = reader.readLine();
+}
+
+// 3. Deprecated finalize() & Object Resurrection danger -> replace with AutoCloseable
+public class ResurrectionDanger {
+    private static ResurrectionDanger instance;
+    @Deprecated @Override
+    protected void finalize() {
+        instance = this; // Resurrects dying object back onto live graph!
     }
+}
 
-    public void finallyWithException() {
-        try {
-            throw new RuntimeException("Error!");
-        } catch (RuntimeException e) {
-            System.out.println("Caught: " + e.getMessage());
-        } finally {
-            System.out.println("Finally executes");
-        }
-        // OUTPUT: Caught: Error!
-        //         Finally executes
-    }
-
-    // Try-with-resources (better than finally for cleanup)
-    public void trialWithResources() throws IOException {
-        try (BufferedReader reader = new BufferedReader(new FileReader("file.txt"))) {
-            String line = reader.readLine();
-        } // reader automatically closed here
-        // No finally needed - compiler adds it
+public class BetterResourceHolder implements AutoCloseable {
+    private FileInputStream fis;
+    @Override public void close() throws IOException {
+        if (fis != null) fis.close();
     }
 }
 ```
 
-### finalize() Method
-
-```java
-public class FinalizeMethod {
-    // finalize(): Called by GC before object is reclaimed (DEPRECATED)
-
-    public class ResourceHolder {
-        private FileInputStream fis;
-
-        @Deprecated
-        @Override
-        protected void finalize() throws Throwable {
-            try {
-                if (fis != null) {
-                    fis.close(); // Try to cleanup
-                }
-            } finally {
-                super.finalize();
-            }
-        }
-
-        // Problems with finalize:
-        // 1. Unpredictable when called (depends on GC)
-        // 2. Can cause performance issues (finalizer thread)
-        // 3. Objects with finalizers take longer to garbage collect
-        // 4. Not guaranteed to execute before JVM shutdown
-        // 5. Can resurrect objects (access this in finalize)
-    }
-
-    // BETTER: Use try-with-resources or explicit cleanup
-    public class BetterResourceHolder implements AutoCloseable {
-        private FileInputStream fis;
-
-        @Override
-        public void close() throws IOException {
-            // Explicitly close resources
-            if (fis != null) {
-                fis.close();
-            }
-        }
-    }
-
-    public void demonstrateCleanup() throws IOException {
-        try (BetterResourceHolder holder = new BetterResourceHolder()) {
-            // Use holder
-        } // close() automatically called here
-    }
-
-    // Object resurrection - dangerous
-    public class ResurrectionDanger {
-        private static ResurrectionDanger instance;
-
-        @Deprecated
-        @Override
-        protected void finalize() {
-            instance = this; // Resurrect object!
-        }
-
-        public void doThis() {
-            ResurrectionDanger obj = new ResurrectionDanger();
-            // obj eligible for GC
-            // But finalize() might resurrect it
-        }
-    }
-}
-```
-
-### Differences Summary
-
-| Feature | Purpose | Executes |
-|---------|---------|----------|
-| **final** | Prevent modification/override | Compile-time |
-| **finally** | Guaranteed cleanup code | Always (except JVM exit) |
-| **finalize()** | Pre-GC cleanup (DEPRECATED) | Before GC reclaims object (unpredictable) |
-
-**Key Takeaway:** Use final for immutability and security. Use finally (or try-with-resources) for cleanup. Avoid finalize() - use AutoCloseable instead.
+> [!CAUTION]
+> **Critical Traps:** Never put a `return` or throw an unhandled exception inside a `finally` block—it overrides `try`/`catch` return values and silently swallows original exceptions. Never rely on `finalize()` for resource release; use `AutoCloseable` with `try-with-resources`.
 
 ---
 
 ## static Keyword
 
-### Static Variables
+### Core Mechanics & Initialization Order
 
-```java
-public class StaticVariables {
-    public static int counter = 0; // Class variable - shared across instances
-    private int instanceVar = 0; // Instance variable - one per object
+- **Static Variables:** Belong to the class, shared across all instances. Mutable static state (`public static List<String>`) creates global side effects and concurrency hazards; prefer `public static final` immutable collections (`Collections.unmodifiableList(...)`).
+- **Static Methods:** Cannot access `this` or instance state directly. Best for stateless utilities (enforce non-instantiability with a `private` constructor throwing `AssertionError`).
+- **Class Initialization Order:** `static` fields and `static` initializer blocks execute **once when the class loads** (in source order, Parent before Child). Instance fields, instance initializer blocks (`{}`), and constructors run **per `new` object** (Parent before Child).
 
-    public StaticVariables() {
-        counter++; // Incremented for every object created
-    }
+```mermaid
+flowchart TD
+    Load["Class First Referenced / Loaded (Parent then Child)"] --> PS["1. Parent static fields &amp; static blocks (once, in source order)"]
+    PS --> CS["2. Child static fields &amp; static blocks (once, in source order)"]
+    CS --> New["new Child() Invoked"]
+    New --> PI["3. Parent instance fields &amp; instance initializer blocks"]
+    PI --> PC["4. Parent constructor super(...)"]
+    PC --> CI["5. Child instance fields &amp; instance initializer blocks"]
+    CI --> CC["6. Child constructor body"]
 
-    public void demonstrateStatic() {
-        StaticVariables obj1 = new StaticVariables();
-        StaticVariables obj2 = new StaticVariables();
-
-        System.out.println("counter: " + StaticVariables.counter); // 2
-
-        obj1.counter = 100; // Modifies class variable, affects all instances
-        System.out.println("obj2.counter: " + obj2.counter); // 100 - same variable!
-    }
-
-    // Problem: mutable static state
-    public class MutableStaticDanger {
-        public static List<String> sharedList = new ArrayList<>(); // Mutable!
-
-        public void addName(String name) {
-            sharedList.add(name); // Modifies shared state
-        }
-    }
-
-    // Better: immutable static
-    public class ImmutableStaticGood {
-        public static final List<String> CONSTANT_LIST =
-            Collections.unmodifiableList(Arrays.asList("a", "b"));
-    }
-}
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class Load,New amber
+    class PS,CS purple
+    class PI,PC blue
+    class CI,CC green
 ```
 
-### Static Methods
+### Static Method Hiding & Inner Classes
 
-```java
-public class StaticMethods {
-    public static void staticMethod() {
-        // Can't access instance variables
-        // Can only access static variables and other static methods
-        // Called on class, not instance
-    }
+```mermaid
+flowchart LR
+    subgraph Hiding["Static Method Hiding (Not Overriding)"]
+        Ref["Parent p = new Child(); p.method()"] --> Decl["Bound to Declared Type: Parent"]
+        Decl --> OutP["Prints 'Parent' (Violates LSP!)"]
+    end
 
-    private int instanceVar = 10;
+    subgraph Inner["Inner Class Outer Reference"]
+        SI["static class StaticInner"] --> NoRef["No outer 'this' ref (Static members only; no leak)"]
+        NI["class InstanceInner"] --> HasRef["Implicit Outer.this ref (Risk of retaining outer instance!)"]
+    end
 
-    public void callStaticFromInstance() {
-        // Can call static from instance (but not recommended)
-        staticMethod(); // OK but confusing
-        StaticMethods.staticMethod(); // Better - clear it's static
-    }
-
-    // Common pattern: utility methods
-    public class MathUtil {
-        public static int add(int a, int b) {
-            return a + b;
-        }
-
-        // Prevent instantiation of utility class
-        private MathUtil() {
-            throw new AssertionError("Can't instantiate");
-        }
-    }
-
-    public void usage() {
-        int result = MathUtil.add(5, 3); // Don't need object instance
-    }
-}
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class Ref,Decl blue
+    class SI,NoRef green
+    class OutP,NI,HasRef red
 ```
 
-### Static Blocks
-
 ```java
+// Immutable static constant & non-instantiable utility class
+public final class MathUtil {
+    public static final List<String> CONSTANT_LIST =
+        Collections.unmodifiableList(Arrays.asList("a", "b"));
+
+    private MathUtil() { throw new AssertionError("Can't instantiate"); }
+    public static int add(int a, int b) { return a + b; }
+}
+
+// Static blocks vs instance initializer block vs constructor
 public class StaticBlocks {
     private static int value;
     public static final String CONSTANT;
-
-    // Static initializer block - executed once when class loads
-    static {
-        System.out.println("Static block executed");
-        value = 10;
-    }
-
-    // Static block for complex initialization
-    static {
-        // Can have multiple static blocks - executed in order
-        int temp = 20;
-        value += temp;
-    }
-
-    static {
-        // Initialize constants
-        CONSTANT = "constant value";
-    }
-
-    public static void main(String[] args) {
-        // OUTPUT: Static block executed
-        //         (printed when class loads, before main)
-        System.out.println("Main method");
-    }
-
-    // Instance initializer block (rarely used)
     private int instanceValue;
 
-    {
-        // Executed every time instance created, BEFORE constructor
-        instanceValue = 100;
-    }
+    static { value = 10; }                      // Runs 1st on class load
+    static { value += 20; CONSTANT = "const"; } // Runs 2nd on class load (before main)
+    { instanceValue = 100; }                    // Runs before constructor on every new()
 
-    public StaticBlocks() {
-        System.out.println("Constructor, instanceValue: " + instanceValue);
-    }
+    public StaticBlocks() { System.out.println("Constructor: " + instanceValue); }
 }
+
+// Gotcha 1: Interface fields are implicitly `public static final`
+public interface Constants { String KEY = "value"; }
+
+// Gotcha 2: Static method HIDING (resolved by reference type, not runtime type!)
+class Parent { public static void method() { System.out.println("Parent"); } }
+class Child extends Parent { public static void method() { System.out.println("Child"); } }
+Parent p = new Child();
+p.method();     // Prints "Parent"! (Use Child.method() instead)
+
+// Gotcha 3: Static blocks only execute if/when the class is actually loaded
 ```
 
-### Static Inner Classes
-
-```java
-public class StaticInnerClasses {
-    private int outerVar = 10;
-    private static int staticVar = 20;
-
-    // Static inner class - doesn't have implicit reference to outer instance
-    public static class StaticInnerClass {
-        public void method() {
-            // Can access static members of outer class
-            System.out.println(staticVar);
-
-            // Can't access instance members without instance reference
-            // System.out.println(outerVar); // ERROR
-        }
-    }
-
-    // Non-static inner class - has implicit reference to outer instance
-    public class InstanceInnerClass {
-        public void method() {
-            // Can access both instance and static members
-            System.out.println(outerVar); // OK
-            System.out.println(staticVar); // OK
-        }
-    }
-
-    public void demonstrateUsage() {
-        StaticInnerClass static_inner = new StaticInnerClass(); // No outer reference needed
-        InstanceInnerClass inner = new InstanceInnerClass(); // Implicitly captures outer
-    }
-}
-```
-
-### Static Gotchas
-
-```java
-public class StaticGotchas {
-    public static void main(String[] args) {
-        // Gotcha 1: Static variables in interfaces (implicit public static final)
-        public interface Constants {
-            String KEY = "value"; // public static final String KEY
-        }
-
-        // Gotcha 2: Static method hiding (not overriding)
-        class Parent {
-            public static void method() {
-                System.out.println("Parent");
-            }
-        }
-
-        class Child extends Parent {
-            public static void method() { // Hides parent method, doesn't override
-                System.out.println("Child");
-            }
-        }
-
-        Parent p = new Child();
-        p.method(); // Prints "Parent" (based on declared type, not runtime type)
-        Child.method(); // Prints "Child"
-        // This violates Liskov Substitution Principle!
-
-        // Gotcha 3: Class loading for static initialization
-        // Static blocks execute when class first loads, not when object created
-        // If you never load the class, static block never executes
-    }
-}
-```
-
-**Key Takeaway:** Static variables are shared across all instances. Static methods can't access instance state. Use static sparingly - it creates tight coupling and makes testing harder.
+> [!WARNING]
+> **Interview Gotcha:** `static` methods **hide**, never override—`Parent p = new Child(); p.method()` executes `Parent.method()` because dispatch uses the declared reference type (`invokestatic`). Also prefer `static` nested classes unless you explicitly need `Outer.this`, as non-static inner classes can keep large outer objects alive from GC.
 
 ---
 
 ## Marker Interfaces vs Annotations
 
-### Marker Interfaces
-
-```java
-public class MarkerInterfaces {
-    // Marker interface: no methods, just marks a type
-    public interface Serializable {
-        // No methods
-    }
-
-    public interface Cloneable {
-        // No methods
-    }
-
-    public class Person implements Serializable {
-        // Compiler checks: "This class is marked as Serializable"
-        // JVM uses this information at runtime
-    }
-
-    public void usage() {
-        Object obj = new Person();
-        if (obj instanceof Serializable) {
-            // Object has been marked as Serializable
-            // Can perform serialization
-        }
-    }
-
-    // Problems with marker interfaces:
-    // 1. Can't tell if class implements interface without instanceof checks
-    // 2. Violated at compile time only if explicitly checked
-    // 3. Subclasses automatically inherit marker
-    public class Child extends Person {
-        // Automatically implements Serializable
-        // Even if this subclass shouldn't be Serializable
-    }
-}
-```
-
-### Annotations
-
-```java
-public class AnnotationsApproach {
-    // Annotation: more powerful alternative to marker interfaces
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.TYPE)
-    public @interface Serializable {
-        // Can include metadata
-    }
-
-    @Serializable
-    public class Person {
-        // Marked with annotation
-    }
-
-    public void usageWithReflection() {
-        Class<?> personClass = Person.class;
-        if (personClass.isAnnotationPresent(Serializable.class)) {
-            // Check annotation at runtime
-        }
-
-        Serializable annotation = personClass.getAnnotation(Serializable.class);
-    }
-
-    // Advantages of annotations over marker interfaces:
-    // 1. Can be processed by tools (compile-time or runtime)
-    // 2. Can include metadata values
-    // 3. Can be applied to specific elements (methods, fields, parameters)
-    // 4. Don't get inherited to subclasses (unless specified)
-    // 5. More flexible retention policies
-}
-```
-
-### Comparison
-
 | Feature | Marker Interface | Annotation |
 |---------|------------------|------------|
-| **Syntax** | Explicit interface implementation | @ syntax |
-| **Inheritance** | Automatic to subclasses | Can be configured |
-| **Metadata** | Can't add metadata | Can include metadata |
-| **Type-checking** | Compile-time with instanceof | Runtime with reflection |
-| **Tool processing** | Limited | Rich support (APT, frameworks) |
-| **Discoverability** | Must check explicitly | Visible in documentation tools |
+| **Syntax** | Empty interface (`implements Serializable`) | `@interface` (`@TestClass(...)`) |
+| **Inheritance** | Automatically inherited by all subclasses | Not inherited unless marked `@Inherited` |
+| **Metadata** | None (binary present/absent tag only) | Rich parameters (`author()`, `priority()`) |
+| **Type Checking** | Compile-time type membership + `instanceof` | Compile-time (APT) or Runtime Reflection |
+| **Target Scope** | Classes/interfaces only | Types, methods, fields, parameters (`@Target`) |
+| **Tooling** | Limited explicit runtime checks | Rich framework, APT, and doc tooling support |
+
+```mermaid
+flowchart LR
+    subgraph Marker["Legacy: Marker Interface (Empty Interface)"]
+        M1["class Person implements Serializable"] --> M2["Subclass Child auto-inherits marker"]
+        M2 --> M3["Checked via obj instanceof Serializable"]
+        M3 --> M4["Compile-time type membership; ZERO metadata"]
+    end
+
+    subgraph Ann["Modern: Annotation (@Retention + @Target)"]
+        A1["@TestClass(author='John', priority=1)"] --> A2["Not inherited unless @Inherited"]
+        A2 --> A3["Processed at compile-time (APT) or Runtime Reflection"]
+        A3 --> A4["isAnnotationPresent() + getAnnotation(): Rich Metadata"]
+    end
+
+    Marker -->|"Evolved in Java 5+"| Ann
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class M1,M2,M3 blue
+    class M4 amber
+    class A1,A2,A3 purple
+    class A4 green
+```
 
 ```java
-public class Choosing {
-    // Use marker interface if:
-    // 1. Need compile-time type checking
-    // 2. Want to extend a type hierarchy
-    // 3. Need instanceof checks to be meaningful
+// Marker Interface: subclass automatically inherits it (even when unwanted)
+public interface Serializable {}
+public class Person implements Serializable {}
+public class Child extends Person {} // Automatically Serializable!
+if (obj instanceof Serializable) { /* perform serialization */ }
 
-    public interface Drawable {
-        // This type is drawable
-    }
+// Annotation: targeted, configurable retention, carries metadata
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+public @interface TestClass {
+    String author() default "unknown";
+    int priority() default 0;
+}
 
-    // Use annotation if:
-    // 1. No type hierarchy needed
-    // 2. Want tool/framework processing
-    // 3. Need metadata values
-    // 4. Want selective inheritance
+@TestClass(author = "John", priority = 1)
+public class TestExample {}
 
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.TYPE)
-    public @interface TestClass {
-        String author() default "unknown";
-        int priority() default 0;
-    }
-
-    @TestClass(author = "John", priority = 1)
-    public class TestExample {
-        // Annotations can be processed by test frameworks
-    }
+// Runtime reflection processing
+Class<?> cls = TestExample.class;
+if (cls.isAnnotationPresent(TestClass.class)) {
+    TestClass meta = cls.getAnnotation(TestClass.class);
+    System.out.println(meta.author() + " P" + meta.priority());
 }
 ```
 
-**Key Takeaway:** Modern Java prefers annotations over marker interfaces. Annotations are more flexible and integrate better with frameworks.
+### When to Use Which
+- **Use a Marker Interface** (`Drawable`, `Serializable`) when you want a **type hierarchy contract** verified at compile time via method signatures or `instanceof`.
+- **Use an Annotation** (`@TestClass`, `@Entity`) when you need **metadata values**, element-level targeting (methods/fields/params), selective inheritance, or framework/APT processing.
+
+> [!TIP]
+> **30-Second Revision:** Modern Java strongly favors **annotations** over marker interfaces because annotations decouple metadata from inheritance hierarchies, support arbitrary parameters, and target methods/fields/parameters—not just classes.
 
 ---
 
 ## Cloning
 
-### Shallow vs Deep Copy
+### Shallow Copy vs Deep Copy
+
+- **Shallow Copy (`super.clone()`):** Performs a bit-for-bit field copy. Primitives and immutable fields (`String`) are independent, but **mutable object references (`Address`) are shared** between original and clone.
+- **Deep Copy:** Allocates fresh copies of all mutable nested objects so modifying the clone never mutates the original.
+
+```mermaid
+flowchart LR
+    subgraph Shallow["Shallow Copy: super.clone()"]
+        OrigS["original (Person): name='John'"] --> AddrS["Shared Address#1: city='NYC' mutated to 'LA'"]
+        CloneS["cloned (Person): name='Jane'"] --> AddrS
+    end
+
+    subgraph Deep["Deep Copy: Independent Object Graph"]
+        OrigD["original (Person): name='John'"] --> AddrD1["Address#1: city='NYC' (Unchanged)"]
+        CloneD["cloned (Person): name='Jane'"] --> AddrD2["Address#2: city='LA' (Independent)"]
+    end
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class OrigS,CloneS,OrigD,CloneD blue
+    class AddrS red
+    class AddrD1,AddrD2 green
+```
 
 ```java
-public class ShallowVsDeepCopy {
-    public class Person implements Cloneable {
-        public String name;
-        public Address address; // Mutable object
+public class Address { public String city, country; }
 
-        // Shallow copy: default clone() from Object
-        @Override
-        public Person clone() throws CloneNotSupportedException {
-            return (Person) super.clone(); // BitBlast copy
+public class Person implements Cloneable {
+    public String name;
+    public Address address;
+
+    // Shallow copy: cloned.address == original.address (true -> mutating one mutates both!)
+    public Person shallowClone() throws CloneNotSupportedException {
+        return (Person) super.clone();
+    }
+
+    // Deep copy: manually clone mutable fields
+    @Override
+    public Person clone() throws CloneNotSupportedException {
+        Person cloned = (Person) super.clone();
+        if (this.address != null) {
+            cloned.address = new Address();
+            cloned.address.city = this.address.city;
+            cloned.address.country = this.address.country;
         }
-    }
-
-    public class Address {
-        public String city;
-        public String country;
-    }
-
-    public void demonstrateShallowCopy() throws CloneNotSupportedException {
-        Person original = new Person();
-        original.name = "John";
-        original.address = new Address();
-        original.address.city = "NYC";
-
-        Person cloned = original.clone(); // Shallow copy
-
-        // Primitives and immutable objects are safe
-        cloned.name = "Jane"; // Doesn't affect original
-        System.out.println(original.name); // Still "John"
-
-        // Mutable objects are shared!
-        cloned.address.city = "LA";
-        System.out.println(original.address.city); // Also "LA" - SHARED!
-
-        System.out.println(original.address == cloned.address); // true - SAME object
-    }
-
-    // Deep copy: manually clone all mutable fields
-    public class PersonDeepCopy implements Cloneable {
-        private String name;
-        private Address address;
-
-        @Override
-        public PersonDeepCopy clone() throws CloneNotSupportedException {
-            PersonDeepCopy cloned = (PersonDeepCopy) super.clone();
-
-            // Deep copy mutable fields
-            if (this.address != null) {
-                cloned.address = new Address();
-                cloned.address.city = this.address.city;
-                cloned.address.country = this.address.country;
-            }
-
-            return cloned;
-        }
-    }
-
-    public void demonstrateDeepCopy() throws CloneNotSupportedException {
-        PersonDeepCopy original = new PersonDeepCopy();
-        original.address = new Address();
-        original.address.city = "NYC";
-
-        PersonDeepCopy cloned = original.clone(); // Deep copy
-
-        cloned.address.city = "LA";
-        System.out.println(original.address.city); // Still "NYC" - independent
-        System.out.println(original.address == cloned.address); // false - different objects
+        return cloned; // original.address == cloned.address is false
     }
 }
 ```
 
-### Cloneable Pitfalls
+### `Cloneable` Pitfalls & Better Alternatives
+
+1. **Misleading Empty Interface:** Implementing `Cloneable` does *not* declare or expose a `public clone()` method (`Object.clone()` is `protected`).
+2. **Checked Exception Boilerplate:** `super.clone()` throws checked `CloneNotSupportedException`.
+3. **Collection Shallow Trap:** `ArrayList.clone()` clones the list array but keeps the *same* mutable element references.
+4. **Bypasses Constructors & Invariants:** `super.clone()` creates an object without invoking constructors, skipping validation checks!
 
 ```java
-public class CloneablePitfalls {
-    // Pitfall 1: Cloneable interface is empty - misleading
-    // Implementing Cloneable doesn't override clone()
-    public class WrongClone implements Cloneable {
-        public String data;
+// BETTER 1: Copy Constructor (enforces constructor validation!)
+public class BetterPerson {
+    private final String name;
+    private final int age;
 
-        // Must override clone() explicitly
-        // Implementing Cloneable alone does nothing
+    public BetterPerson(String name, int age) {
+        if (name == null || name.isEmpty()) throw new IllegalArgumentException("Invalid name");
+        this.name = name;
+        this.age = age;
     }
 
-    // Pitfall 2: clone() throws checked exception
-    public void pitfall2() throws CloneNotSupportedException {
-        WrongClone obj = new WrongClone();
-        // obj.clone(); // ERROR - CloneNotSupportedException possible
+    public BetterPerson(BetterPerson other) {
+        this(other.name, other.age); // Reuses main constructor validation
     }
+}
 
-    // Pitfall 3: Not all objects support cloning
-    // ArrayList is Cloneable
-    // But ArrayList<MutableObject> shallow clones the objects
-
-    // Pitfall 4: Cloning bypasses constructor
-    public class Person implements Cloneable {
-        private String name;
-        private int age;
-
-        public Person(String name, int age) {
-            if (name == null || name.isEmpty()) {
-                throw new IllegalArgumentException("Invalid name");
-            }
-            this.name = name;
-            this.age = age;
-        }
-
-        @Override
-        public Person clone() {
-            try {
-                return (Person) super.clone(); // Bypasses constructor validation!
-            } catch (CloneNotSupportedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
-    // Better alternative: Copy constructor
-    public class BetterPerson {
-        private String name;
-        private int age;
-
-        public BetterPerson(String name, int age) {
-            if (name == null || name.isEmpty()) {
-                throw new IllegalArgumentException("Invalid name");
-            }
-            this.name = name;
-            this.age = age;
-        }
-
-        // Copy constructor - goes through validation
-        public BetterPerson(BetterPerson other) {
-            this(other.name, other.age); // Calls main constructor
-        }
-    }
-
-    // Even better: Immutable objects
-    public final class ImmutablePerson {
-        private final String name;
-        private final int age;
-
-        public ImmutablePerson(String name, int age) {
-            this.name = name;
-            this.age = age;
-        }
-
-        // No cloning needed - object can't be modified anyway
-    }
+// BETTER 2: Immutable Objects (no defensive copying needed!)
+public final class ImmutablePerson {
+    private final String name;
+    private final int age;
+    public ImmutablePerson(String name, int age) { this.name = name; this.age = age; }
 }
 ```
 
-**Key Takeaway:** Avoid Cloneable. Use copy constructors or immutability instead. If you must clone, implement deep copy for mutable fields.
+> [!IMPORTANT]
+> **30-Second Revision:** Avoid `Cloneable` in modern Java (`Effective Java` Item 13). `Object.clone()` creates shallow copies by default and **bypasses constructor validation**. Use **copy constructors**, static factory methods (`copyOf`), or **immutable objects** instead.
 
 ---
 
 ## Serialization
 
-### Serializable and serialVersionUID
+### `ObjectOutputStream` / `ObjectInputStream` Lifecycle
+
+- **`Serializable`:** Marker interface enabling JVM binary serialization.
+- **`serialVersionUID`:** Explicit version identifier controlling compatibility across class evolutions.
+- **`transient`:** Excludes sensitive (`password`) or non-serializable fields from the byte stream; restored to default (`null`, `0`, `false`) on deserialization.
+- **Custom Hooks:** `writeObject` / `readObject` customize stream read/write (`defaultWriteObject()` / `defaultReadObject()`); `writeReplace()` swaps the object before writing; `readResolve()` replaces the deserialized object (critical for preserving **Singletons**!).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Caller
+    participant OOS as ObjectOutputStream
+    participant Obj as Serializable Object
+    participant OIS as ObjectInputStream
+
+    Note over Caller,OOS: Serialization Path
+    Caller->>OOS: writeObject(obj)
+    OOS->>Obj: writeReplace() (optional proxy replacement)
+    OOS->>OOS: Write class metadata + serialVersionUID
+    OOS->>Obj: writeObject(oos) / defaultWriteObject() (skips transient)
+    OOS-->>Caller: byte[] stream
+
+    Note over Caller,OIS: Deserialization Path
+    Caller->>OIS: readObject()
+    OIS->>OIS: Compare stream vs local serialVersionUID
+    alt serialVersionUID Mismatch
+        OIS-->>Caller: Throws InvalidClassException
+    else serialVersionUID Match
+        OIS->>Obj: Allocate instance (Bypasses constructor!)
+        OIS->>Obj: readObject(ois) / defaultReadObject() (transient = null/0)
+        OIS->>Obj: readResolve() (e.g. returns Singleton INSTANCE)
+        OIS-->>Caller: Restored Object Reference
+    end
+```
+
+### Versioning & Compatibility Matrix
+
+```mermaid
+flowchart TD
+    Stream["Serialized Stream (V1: serialVersionUID = 1L)"] --> Check{"Does local serialVersionUID match?"}
+    Check -->|"No (e.g. changed to 2L)"| Fail["Throws InvalidClassException"]
+    Check -->|"Yes (1L)"| Change{"What changed in Class?"}
+    Change -->|"Added new field (V2)"| Safe["Compatible: new field defaults to null/0 (backfill in readObject)"]
+    Change -->|"Marked field transient"| Skip["Excluded from stream; restored as null/0"]
+    Change -->|"Removed/reordered incompatible field (V3)"| Risk["Deserialization breaks or drops field data"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class Stream blue
+    class Check,Change amber
+    class Safe,Skip green
+    class Fail,Risk red
+```
 
 ```java
-public class SerializationFundamentals {
-    // Serializable: marker interface for ObjectInputStream/ObjectOutputStream
-    public class Person implements Serializable {
-        // serialVersionUID: version ID for class evolution
-        private static final long serialVersionUID = 1L;
+// Custom serialization + transient + versioning fallback
+public class Person implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private String name;
+    private int age;
+    private transient String password; // Restored as null after deserialization
+    private String author;             // Added in V2: null when reading V1 streams
+    private List<String> hobbies;
 
-        private String name;
-        private int age;
-
-        // Non-serializable field must be marked transient
-        private transient byte[] encryptedData;
+    private void writeObject(ObjectOutputStream oos) throws IOException {
+        oos.defaultWriteObject();
+        oos.writeInt(hobbies.size());
+        for (String h : hobbies) oos.writeUTF(h);
     }
 
-    public void serializeObject() throws IOException {
-        Person person = new Person();
-        person.name = "John";
-        person.age = 30;
-
-        // Serialize
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(baos);
-        oos.writeObject(person);
-        byte[] serialized = baos.toByteArray();
-
-        // Deserialize
-        ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
-        ObjectInputStream ois = new ObjectInputStream(bais);
-        Person deserialized = (Person) ois.readObject();
+    private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
+        ois.defaultReadObject();
+        if (author == null) author = "Unknown"; // Safe default when deserializing V1
+        int size = ois.readInt();
+        hobbies = new ArrayList<>();
+        for (int i = 0; i < size; i++) hobbies.add(ois.readUTF());
     }
 
-    // serialVersionUID: controls compatibility across versions
-    public class PersonV1 implements Serializable {
-        private static final long serialVersionUID = 1L;
+    private Object writeReplace() throws ObjectStreamException { return this; }
+}
 
-        private String name;
-        private int age;
-        // version 1
-    }
+// Singleton Serialization Pitfall & Fix
+public class Singleton implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private static final Singleton INSTANCE = new Singleton();
+    private Singleton() {}
+    public static Singleton getInstance() { return INSTANCE; }
 
-    public class PersonV2 implements Serializable {
-        private static final long serialVersionUID = 1L; // Same ID = compatible
-
-        private String name;
-        private int age;
-        private String email; // New field - adds null during deserialization
-    }
-
-    // If you change serialVersionUID, old serialized objects can't be deserialized
-    public class PersonV3 implements Serializable {
-        private static final long serialVersionUID = 2L; // Different ID = incompatible
-
-        private String name;
-        private int age;
+    // Without readResolve(), ois.readObject() creates a 2nd instance (s1 == s2 is false!)
+    private Object readResolve() throws ObjectStreamException {
+        return INSTANCE; // Guarantees singleton identity after deserialization
     }
 }
 ```
 
-### transient Keyword
-
-```java
-public class TransientKeyword {
-    public class SecureData implements Serializable {
-        private String username;
-        private transient String password; // NOT serialized
-        private int balance;
-
-        // When deserialized, password will be null (or default for type)
-    }
-
-    public void demonstrateTransient() throws IOException, ClassNotFoundException {
-        SecureData data = new SecureData();
-        data.username = "john";
-        data.password = "secret123"; // Won't be serialized
-        data.balance = 1000;
-
-        // Serialize
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(baos);
-        oos.writeObject(data);
-
-        // Deserialize
-        ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
-        ObjectInputStream ois = new ObjectInputStream(bais);
-        SecureData restored = (SecureData) ois.readObject();
-
-        System.out.println("username: " + restored.username); // "john"
-        System.out.println("password: " + restored.password); // null
-        System.out.println("balance: " + restored.balance); // 1000
-    }
-}
-```
-
-### Custom Serialization
-
-```java
-public class CustomSerialization {
-    public class Person implements Serializable {
-        private String name;
-        private int age;
-        private List<String> hobbies;
-
-        // Custom serialization logic
-        private void writeObject(ObjectOutputStream oos) throws IOException {
-            // writeObject() called during serialization
-            oos.defaultWriteObject(); // Write default fields
-
-            // Custom serialization for hobbies (encrypt if needed)
-            oos.writeInt(hobbies.size());
-            for (String hobby : hobbies) {
-                oos.writeUTF(hobby);
-            }
-        }
-
-        private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
-            // readObject() called during deserialization
-            ois.defaultReadObject(); // Read default fields
-
-            // Custom deserialization for hobbies
-            int size = ois.readInt();
-            hobbies = new ArrayList<>();
-            for (int i = 0; i < size; i++) {
-                hobbies.add(ois.readUTF());
-            }
-        }
-
-        private Object writeReplace() throws ObjectStreamException {
-            // Serialize as different class if needed
-            return this; // or return new SerializationProxy(this)
-        }
-
-        private void readResolve() throws ObjectStreamException {
-            // Called after deserialization - can return different object
-            // Useful for ensuring singletons survive serialization
-        }
-    }
-}
-```
-
-### Serialization Versioning
-
-```java
-public class SerializationVersioning {
-    // Version 1
-    public class ConfigV1 implements Serializable {
-        private static final long serialVersionUID = 1L;
-
-        private String appName;
-        private String version;
-    }
-
-    // Version 2: Added field
-    public class ConfigV2 implements Serializable {
-        private static final long serialVersionUID = 1L; // Keep same for compatibility
-
-        private String appName;
-        private String version;
-        private String author; // New field
-
-        private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
-            ois.defaultReadObject();
-            // author will be null if deserializing from V1
-            if (author == null) {
-                author = "Unknown"; // Default value
-            }
-        }
-    }
-
-    // Version 3: Removed field, reordered
-    public class ConfigV3 implements Serializable {
-        private static final long serialVersionUID = 1L; // Keep same
-
-        private String appName;
-        private String author; // Moved here
-        // version removed
-
-        private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
-            ois.defaultReadObject();
-            // Will fail because serialized object still has 'version' field
-            // This is why versioning is important!
-        }
-    }
-}
-```
-
-### Serialization Pitfalls
-
-```java
-public class SerializationPitfalls {
-    // Pitfall 1: Singleton not preserved during serialization
-    public class Singleton implements Serializable {
-        private static final long serialVersionUID = 1L;
-        private static final Singleton INSTANCE = new Singleton();
-
-        private Singleton() {}
-
-        public static Singleton getInstance() {
-            return INSTANCE;
-        }
-
-        public static void main(String[] args) throws Exception {
-            Singleton s1 = Singleton.getInstance();
-
-            // Serialize
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ObjectOutputStream oos = new ObjectOutputStream(baos);
-            oos.writeObject(s1);
-
-            // Deserialize
-            ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
-            ObjectInputStream ois = new ObjectInputStream(bais);
-            Singleton s2 = (Singleton) ois.readObject();
-
-            System.out.println(s1 == s2); // false! - different instance
-            // BROKEN SINGLETON!
-        }
-
-        // Fix: implement readResolve()
-        private Object readResolve() throws ObjectStreamException {
-            return INSTANCE; // Return singleton instead of new instance
-        }
-    }
-}
-```
-
-**Key Takeaway:** Serialization is complex and fragile. Prefer JSON/protobuf for data exchange. Use serialVersionUID carefully. Implement readResolve() for singletons.
+> [!CAUTION]
+> **Security & Singleton Gotcha:** Java deserialization allocates objects **without calling constructors**, breaking Singletons unless `readResolve()` is implemented (or an `enum` singleton is used) and creating severe RCE/gadget risks on untrusted byte streams. Always prefer **JSON or Protobuf** for service communication and define an explicit `serialVersionUID` whenever `Serializable` is unavoidable.
 
 ---
 
 ## Interview Questions
 
-### Q1: What's the difference between `==` and `.equals()` for Strings?
+### Quick-Revision Q&A Matrix
 
-**Answer:**
-```java
-String s1 = "hello"; // Literal - in string pool
-String s2 = "hello"; // Literal - same pool reference
-String s3 = new String("hello"); // Different object
+| Question / Scenario | Root Mechanism / Trap | Crisp Interview Answer |
+|---------------------|-----------------------|------------------------|
+| **`==` vs `.equals()` on `String`** | String Pool vs Heap allocation | `==` compares object references; `.equals()` compares character contents. |
+| **Wrapper caching (`-128` to `127`)** | `IntegerCache` via `valueOf()` | Cached values share references (`==` true); `>= 128` allocates new objects (`==` false). Always use `.equals()`. |
+| **`equals()` & `hashCode()` contract** | Hash bucket lookup (`hash & (n-1)`) | Equal objects *must* have identical `hashCode()`; unequal objects *may* collide. |
+| **Override `equals()` without `hashCode()`** | Different buckets in `HashMap`/`HashSet` | `map.get(equalKey)` returns `null`; `HashSet` stores duplicates. |
+| **Why is `String` immutable?** | `final` class + `final byte[]` | Thread-safe sharing, immutable `HashMap` key hashes, String Pool deduplication, security. |
+| **PECS in Generics** | Type Erasure + variance safety | Producer (`read` `T`) uses `? extends T`; Consumer (`write` `T`) uses `? super T`. |
+| **Static method overriding?** | Compile-time static binding | Static methods are **hidden**, not overridden—bound to declared reference type. |
+| **`finally` with early `return`** | `finally` executes before return finishes | Runs after `try` return expression; a `return` inside `finally` overrides `try`'s return. |
+| **Singleton + `Serializable`** | Deserialization bypasses constructors | `readObject()` creates a second instance; fix with `readResolve()` returning `INSTANCE`. |
 
-System.out.println(s1 == s2); // true - same reference
-System.out.println(s1 == s3); // false - different objects
-System.out.println(s1.equals(s3)); // true - same content
+### Diagnostic Decision Tree
 
-// For Strings, always use .equals() unless checking if same object
-// For other objects, must override equals() and hashCode() for semantic equality
+```mermaid
+flowchart TD
+    Q{"Core Java Bug or Design Question?"}
+    Q -->|"Equality / Map lookup bug"| E["Check == vs .equals(), equals/hashCode contract, IntegerCache (-128..127)"]
+    Q -->|"String / Memory / Perf bug"| S["Check StringBuilder in loops, String.intern() OOM risk, int[] vs List&lt;Integer&gt;"]
+    Q -->|"API / Generics signature"| G["Apply PECS: Producer (? extends T), Consumer (? super T); watch Type Erasure"]
+    Q -->|"Lifecycle / Inheritance bug"| L["Check try-finally return override, static hiding, Cloneable shallow ref"]
+    Q -->|"Persistence / Security"| P["Check serialVersionUID, transient, readResolve() for Singleton; prefer JSON"]
+
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class Q amber
+    class E,S blue
+    class G purple
+    class L,P green
 ```
 
-### Q2: Why are wrapper types cached only between -128 and 127?
+### Structured High-Yield Q&A
 
-**Answer:** This is a performance optimization. These values are commonly used, so Java caches them to reduce object creation. For values outside this range, each autoboxing creates a new object. Always use `.equals()` for wrapper comparison, not `==`.
+#### Q1: What's the difference between `==` and `.equals()` for Strings?
+```java
+String s1 = "hello";             // Pooled literal
+String s2 = "hello";             // Same pooled reference
+String s3 = new String("hello"); // Separate Heap object
 
-### Q3: Explain the relationship between `equals()` and `hashCode()`
+System.out.println(s1 == s2);      // true  (same reference)
+System.out.println(s1 == s3);      // false (different objects)
+System.out.println(s1.equals(s3)); // true  (same content)
+```
+- Use `.equals()` for logical/content equality across Strings and custom objects (with properly overridden `equals()` and `hashCode()`); reserve `==` for primitives or intentional reference-identity checks.
 
-**Answer:** If two objects are equal (per `equals()`), they must have the same hash code. This contract ensures HashMap/HashSet correctness. Breaking it causes data loss - you can put an object in a HashMap but not retrieve it with an equal object.
+#### Q2: Why are wrapper types cached only between `-128` and `127`?
+- Caching small, frequently used values (`-128..127` via `IntegerCache`) avoids repeated object allocations for common loop counters and small constants. Outside this range, autoboxing creates distinct objects on the heap. Always compare wrapper instances with `.equals()`, not `==`.
 
-### Q4: What happens if you don't implement `hashCode()` when you override `equals()`?
+#### Q3: Explain the relationship between `equals()` and `hashCode()`
+- If `a.equals(b)` is `true`, then `a.hashCode() == b.hashCode()` **must** hold. Hash-based collections (`HashMap`, `HashSet`) locate a bucket via `hashCode()` first and only check `equals()` inside that bucket. Reverse equality is not required: two unequal objects may legitimately collide on the same hash code.
 
-**Answer:** Objects will work correctly in reference-based comparisons, but fail catastrophically in hash-based collections (HashMap, HashSet) because they might be placed in the wrong bucket during insertion but looked up in wrong bucket during retrieval.
+#### Q4: What happens if you don't implement `hashCode()` when you override `equals()`?
+- Direct `a.equals(b)` calls succeed, but `HashMap` and `HashSet` fail catastrophically: `p1` is placed into one bucket using `Object.hashCode()`, while an equal `p2` hashes to a different bucket during `get(p2)` or `contains(p2)`—causing `null` lookups and duplicate set entries.
 
-### Q5: Why is String immutable?
-
-**Answer:**
-- Thread-safety without synchronization
-- Safe use as HashMap keys (hash code never changes)
-- String pooling efficiency (deduplication)
-- Security (prevents malicious modification of strings like passwords or URLs)
+#### Q5: Why is `String` immutable?
+- **Thread safety** without locking across shared instances.
+- **Safe `HashMap` keys** because cached hash codes never change.
+- **String Pool efficiency** enabling safe deduplication of identical literals.
+- **Security** preventing tampering with sensitive strings (passwords, URLs, class names) after validation.
 
 ---
 
-**Key Takeaway Summary:**
+### Key Takeaway Summary
 
-1. **OOP:** Abstraction hides complexity, encapsulation hides data. Use composition over inheritance.
-2. **equals()/hashCode():** Non-negotiable contract. Breaking it causes HashMap/HashSet failures.
-3. **Strings:** Immutable for thread-safety and security. Use StringBuilder in loops.
-4. **Generics:** Type erasure means generics are compile-time only. Use PECS for wildcards.
-5. **Autoboxing:** Automatic but has performance cost. Use arrays for large collections of primitives.
-6. **final/finally/finalize:** Different purposes - final prevents modification, finally guarantees execution, finalize is deprecated.
-7. **static:** Shared across instances, creates coupling. Use sparingly.
-8. **Cloning:** Problematic - use copy constructors or immutability instead.
-9. **Serialization:** Complex and fragile - prefer JSON. Use serialVersionUID for versioning.
+1. **OOP:** Abstraction hides complexity; encapsulation hides state. Prefer composition over inheritance.
+2. **`equals()`/`hashCode()`:** Non-negotiable contract—breaking it breaks `HashMap`/`HashSet`.
+3. **Strings:** Immutable for thread safety, security, and pooling (Compact Strings `byte[]` + `coder` in Java 9+). Use `StringBuilder` outside loops; avoid `intern()` on untrusted input.
+4. **Generics:** Type erasure makes generics compile-time only (plus bridge methods). Apply **PECS** (`? extends T` / `? super T`).
+5. **Autoboxing:** Convenient but costly (`10–20x` slower than primitive arrays) and exposes `IntegerCache` (`-128..127`) & `null`-unboxing NPE traps.
+6. **`final`/`finally`/`finalize()`:** `final` prevents mutation/override; `finally` guarantees cleanup (`try-with-resources` preferred); `finalize()` is deprecated.
+7. **`static`:** Shared class state creates coupling; static methods hide rather than override; non-static inner classes hold `Outer.this`.
+8. **Marker Interfaces vs Annotations:** Modern Java favors annotations for metadata, `@Target` granularity, and framework processing over marker interfaces.
+9. **Cloning:** `Cloneable` is shallow and bypasses constructors—use copy constructors or immutable objects instead.
+10. **Serialization:** Fragile and security-sensitive—prefer JSON/Protobuf; use `serialVersionUID`, `transient`, and `readResolve()` (for Singletons) when required.
 
+> [!TIP]
+> **60-Second Pre-Interview Checklist:** Verify every `equals()` override has a matching `hashCode()`; switch wrapper `==` checks to `.equals()`; replace loop `String` concatenation with `StringBuilder`; double-check `Collections.copy(super, extends)` direction for PECS; remember `Parent p = new Child(); p.staticMethod()` calls `Parent`; and mention `try-with-resources` + copy constructors + JSON/Protobuf over `finalize()`, `Cloneable`, and Java serialization.
