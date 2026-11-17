@@ -272,6 +272,8 @@ A `Stream` is a lazy, single-use data processing pipeline over a source (`Collec
 
 ### Lazy Pipeline Evaluation & Short-Circuiting
 
+![Stream API Lazy Vertical Pipeline Animation](./assets/05-stream-lazy-pipeline.svg)
+
 ```mermaid
 flowchart LR
     Src["Source: Collection.stream()"] --> I1["filter() (Stateless)"]
@@ -716,6 +718,8 @@ String describe(Shape shape) {
 ### Java 21 Virtual Threads (Project Loom)
 
 Traditional platform threads wrap OS threads 1:1 (~1 MB stack each, practical limit ~10,000 per JVM). Virtual threads are **JVM-managed lightweight continuations** stored on the heap, allowing millions of concurrent blocking tasks via **M:N scheduling** onto `ForkJoinPool` carrier threads.
+
+![Java 21 Virtual Threads M:N Scheduling Animation](./assets/05-virtual-threads-loom.svg)
 
 ```mermaid
 flowchart LR

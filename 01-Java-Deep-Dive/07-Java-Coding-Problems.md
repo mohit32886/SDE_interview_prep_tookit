@@ -17,6 +17,8 @@ A visual, pattern-driven Java coding interview guide covering strings, arrays, h
 
 ### Visual Pattern Mechanics
 
+![Sliding Window & Two-Pointer Animation](./assets/07-sliding-window-two-pointer.svg)
+
 ```mermaid
 flowchart LR
     S["Input: 'babad', i = 1 ('a')"] --> O["Odd Center: expand(s, 1, 1)"]
@@ -455,6 +457,8 @@ public class ContainerWithMostWater {
 ## HashMap-Based Problems
 
 ### Visual Architecture: LRU Cache & Frequency/Bucket Flows
+
+![LRU Cache HashMap + Doubly Linked List Animation](./assets/07-lru-cache-anim.svg)
 
 ```mermaid
 flowchart LR

@@ -132,6 +132,8 @@ flowchart TD
 > [!WARNING]
 > **Interview Gotcha:** JVM Stack frames are **never garbage collected**—they are deterministically pushed on call and popped on return. Object **references** live in Stack frames while the actual **objects** live on the Heap (unless eliminated by Escape Analysis). Exceeding stack depth throws `StackOverflowError`, whereas spawning too many threads multiplies `-Xss` native usage and can exhaust OS memory.
 
+![JMM CPU Cache & volatile Visibility Animation](./assets/04-jmm-cpu-cache-volatile.svg)
+
 ---
 
 ## Garbage Collection Algorithms
@@ -159,6 +161,8 @@ flowchart LR
     class OLD purple;
     class DEAD green;
 ```
+
+![Generational GC Eden Survivor Promotion Animation](./assets/04-jvm-gc-generational.svg)
 
 ### Collector Architecture & Selection Flow
 

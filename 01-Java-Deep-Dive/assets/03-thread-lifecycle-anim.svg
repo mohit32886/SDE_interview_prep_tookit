@@ -1,0 +1,344 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 580" width="960" height="580" role="img" aria-labelledby="tl-title tl-desc">
+  <title id="tl-title">Java Thread Lifecycle (6 JVM States)</title>
+  <desc id="tl-desc">Animated diagram of Java Thread.State lifecycle transitions across NEW, RUNNABLE, BLOCKED, WAITING, TIMED_WAITING, and TERMINATED.</desc>
+
+  <defs>
+    <style>
+      .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .flow-fwd {
+        stroke-dasharray: 6 8;
+        animation: dashFwd 1.4s linear infinite;
+      }
+      .flow-slow {
+        stroke-dasharray: 5 9;
+        animation: dashFwd 2.2s linear infinite;
+      }
+      .live-dot {
+        animation: livePulse 1.8s ease-in-out infinite;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      .ring-pulse {
+        animation: ringBreath 2.4s ease-in-out infinite;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      @keyframes dashFwd {
+        from { stroke-dashoffset: 28; }
+        to   { stroke-dashoffset: 0; }
+      }
+      @keyframes livePulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%      { opacity: 0.45; transform: scale(1.35); }
+      }
+      @keyframes ringBreath {
+        0%, 100% { opacity: 0.45; transform: scale(0.95); }
+        50%      { opacity: 0.95; transform: scale(1.12); }
+      }
+    </style>
+
+    <pattern id="bg-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="0.9" fill="#1e293b"/>
+    </pattern>
+
+    <linearGradient id="card-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0b1222"/>
+    </linearGradient>
+
+    <linearGradient id="header-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <filter id="glow-soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <marker id="arr-sky" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arr-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#f97316"/>
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#a855f7"/>
+    </marker>
+    <marker id="arr-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="1" y="1" width="958" height="578" rx="16" fill="url(#card-grad)" stroke="#334155" stroke-width="1.5"/>
+  <rect x="2" y="72" width="956" height="426" fill="url(#bg-grid)" opacity="0.9"/>
+
+  <!-- Header Bar -->
+  <path d="M 17 1 H 943 A 15 15 0 0 1 958 16 V 72 H 2 V 16 A 15 15 0 0 1 17 1 Z" fill="url(#header-grad)"/>
+  <line x1="2" y1="72" x2="958" y2="72" stroke="#334155" stroke-width="1"/>
+
+  <rect x="24" y="14" width="166" height="20" rx="10" fill="#0c4a6e" stroke="#38bdf8" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="107" y="28" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#38bdf8" letter-spacing="0.6">JAVA.LANG.THREAD.STATE</text>
+
+  <text x="202" y="29" class="sans" font-size="19" font-weight="700" fill="#f8fafc">Java Thread Lifecycle (6 JVM States)</text>
+  <text x="24" y="54" class="sans" font-size="12" fill="#94a3b8">OS Ready &amp; Running merge into RUNNABLE; notify()/notifyAll() moves threads WAITING → BLOCKED before re-acquiring the monitor</text>
+
+  <!-- Top-Right Live Badge -->
+  <rect x="774" y="18" width="162" height="28" rx="14" fill="#052e16" stroke="#22c55e" stroke-opacity="0.55" stroke-width="1"/>
+  <circle cx="792" cy="32" r="4.5" fill="#22c55e" class="live-dot"/>
+  <text x="804" y="36" class="mono" font-size="11" font-weight="600" fill="#86efac">LIVE STATE TRACE</text>
+
+  <!-- ==================== TRANSITION CONNECTORS ==================== -->
+
+  <!-- 1. NEW -> RUNNABLE -->
+  <path d="M 202 174 L 357 174" fill="none" stroke="#38bdf8" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 202 174 L 357 174" fill="none" stroke="#38bdf8" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-sky)"/>
+  <rect x="246" y="143" width="76" height="22" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="284" y="158" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#7dd3fc">start()</text>
+
+  <!-- 2. RUNNABLE -> TERMINATED -->
+  <path d="M 595 174 L 750 174" fill="none" stroke="#f43f5e" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 595 174 L 750 174" fill="none" stroke="#f43f5e" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-rose)"/>
+  <rect x="614" y="143" width="126" height="22" rx="6" fill="#0f172a" stroke="#f43f5e" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="677" y="158" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#fda4af">run() exits / error</text>
+
+  <!-- 3. RUNNABLE -> BLOCKED -->
+  <path d="M 378 226 C 315 245, 220 265, 169 340" fill="none" stroke="#f97316" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 378 226 C 315 245, 220 265, 169 340" fill="none" stroke="#f97316" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-orange)"/>
+  <rect x="132" y="238" width="166" height="22" rx="6" fill="#0f172a" stroke="#f97316" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="215" y="253" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#fdba74">synchronized (lock held)</text>
+
+  <!-- 4. BLOCKED -> RUNNABLE -->
+  <path d="M 220 350 C 270 315, 340 285, 396 233" fill="none" stroke="#22c55e" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 220 350 C 270 315, 340 285, 396 233" fill="none" stroke="#22c55e" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-green)"/>
+  <rect x="256" y="313" width="114" height="22" rx="6" fill="#0f172a" stroke="#22c55e" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="313" y="328" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#86efac">lock acquired</text>
+
+  <!-- 5. RUNNABLE -> WAITING -->
+  <path d="M 456 226 L 456 342" fill="none" stroke="#f59e0b" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 456 226 L 456 342" fill="none" stroke="#f59e0b" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-amber)"/>
+  <rect x="362" y="272" width="86" height="33" rx="6" fill="#0f172a" stroke="#f59e0b" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="405" y="286" text-anchor="middle" class="mono" font-size="10" font-weight="600" fill="#fcd34d">wait() /</text>
+  <text x="405" y="299" text-anchor="middle" class="mono" font-size="10" font-weight="600" fill="#fcd34d">join() / park()</text>
+
+  <!-- 6. WAITING -> RUNNABLE -->
+  <path d="M 504 350 L 504 234" fill="none" stroke="#22c55e" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 504 350 L 504 234" fill="none" stroke="#22c55e" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-green)"/>
+  <rect x="512" y="272" width="84" height="33" rx="6" fill="#0f172a" stroke="#22c55e" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="554" y="286" text-anchor="middle" class="mono" font-size="10" font-weight="600" fill="#86efac">unpark() /</text>
+  <text x="554" y="299" text-anchor="middle" class="mono" font-size="10" font-weight="600" fill="#86efac">join ends</text>
+
+  <!-- 7. WAITING -> BLOCKED (CRITICAL GOTCHA EDGE) -->
+  <path d="M 382 396 L 286 396" fill="none" stroke="#f97316" stroke-opacity="0.3" stroke-width="2.8"/>
+  <path d="M 382 396 L 286 396" fill="none" stroke="#f97316" stroke-width="2.4" class="flow-fwd" marker-end="url(#arr-orange)"/>
+  <rect x="288" y="362" width="84" height="24" rx="6" fill="#0f172a" stroke="#f97316" stroke-opacity="0.55" stroke-width="1"/>
+  <text x="330" y="378" text-anchor="middle" class="mono" font-size="10" font-weight="700" fill="#fb923c">notifyAll()</text>
+  <text x="330" y="416" text-anchor="middle" class="sans" font-size="10" font-weight="600" fill="#cbd5e1">re-enter lock</text>
+
+  <!-- 8. RUNNABLE -> TIMED_WAITING -->
+  <path d="M 582 226 C 645 245, 740 265, 791 340" fill="none" stroke="#a855f7" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 582 226 C 645 245, 740 265, 791 340" fill="none" stroke="#a855f7" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-purple)"/>
+  <rect x="668" y="238" width="154" height="22" rx="6" fill="#0f172a" stroke="#a855f7" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="745" y="253" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#d8b4fe">sleep(ms) / wait(ms)</text>
+
+  <!-- 9. TIMED_WAITING -> RUNNABLE -->
+  <path d="M 740 350 C 690 315, 620 285, 564 233" fill="none" stroke="#22c55e" stroke-opacity="0.25" stroke-width="2.5"/>
+  <path d="M 740 350 C 690 315, 620 285, 564 233" fill="none" stroke="#22c55e" stroke-width="2.2" class="flow-fwd" marker-end="url(#arr-green)"/>
+  <rect x="582" y="313" width="126" height="22" rx="6" fill="#0f172a" stroke="#22c55e" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="645" y="328" text-anchor="middle" class="mono" font-size="10.5" font-weight="600" fill="#86efac">timeout / unpark()</text>
+
+  <!-- 10. TIMED_WAITING -> BLOCKED (wait(ms) monitor re-entry arc) -->
+  <path d="M 780 442 C 740 484, 220 484, 182 448" fill="none" stroke="#f97316" stroke-opacity="0.22" stroke-width="2"/>
+  <path d="M 780 442 C 740 484, 220 484, 182 448" fill="none" stroke="#f97316" stroke-opacity="0.85" stroke-width="1.8" class="flow-slow" marker-end="url(#arr-orange)"/>
+  <rect x="336" y="462" width="288" height="22" rx="11" fill="#0f172a" stroke="#f97316" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="480" y="477" text-anchor="middle" class="mono" font-size="10" fill="#fdba74">wait(ms) elapsed / notify() → monitor re-entry</text>
+
+
+  <!-- ==================== 6 THREAD STATE NODES ==================== -->
+
+  <!-- Node 1: NEW -->
+  <g>
+    <rect x="42" y="130" width="160" height="88" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8"/>
+    <rect x="39" y="127" width="166" height="94" rx="14" fill="none" stroke="#38bdf8" stroke-width="2.5" opacity="0">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="linear"
+               keyTimes="0;0.04;0.08;1" values="0.9;0.9;0;0"/>
+    </rect>
+    <rect x="56" y="131" width="132" height="3.5" rx="1.75" fill="#38bdf8" opacity="0.9"/>
+    <text x="122" y="158" text-anchor="middle" class="mono" font-size="14" font-weight="700" fill="#f8fafc">NEW</text>
+    <text x="122" y="177" text-anchor="middle" class="mono" font-size="10.5" fill="#94a3b8">new Thread(task)</text>
+    <circle cx="122" cy="200" r="9" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.45" stroke-dasharray="3 2" stroke-width="1.2"/>
+  </g>
+
+  <!-- Node 2: RUNNABLE (Center Hero) -->
+  <g>
+    <rect x="365" y="122" width="230" height="104" rx="14" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+    <rect x="361" y="118" width="238" height="112" rx="16" fill="none" stroke="#22c55e" stroke-width="2.8" opacity="0">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="linear"
+               keyTimes="0;0.09;0.11;0.16;0.18;0.32;0.34;0.39;0.41;0.65;0.67;0.72;0.74;0.87;0.89;0.94;0.96;1"
+               values="0;0;0.95;0.95;0;0;0.95;0.95;0;0;0.95;0.95;0;0;0.95;0.95;0;0"/>
+    </rect>
+    <rect x="381" y="123" width="198" height="3.5" rx="1.75" fill="#22c55e" opacity="0.9"/>
+    <text x="480" y="148" text-anchor="middle" class="mono" font-size="15" font-weight="700" fill="#f8fafc">RUNNABLE</text>
+    <!-- OS Ready <-> Running sub-pills -->
+    <rect x="387" y="159" width="76" height="22" rx="6" fill="#052e16" stroke="#22c55e" stroke-opacity="0.45" stroke-width="1"/>
+    <text x="425" y="174" text-anchor="middle" class="mono" font-size="10.5" fill="#86efac">OS Ready</text>
+    <text x="480" y="174" text-anchor="middle" class="sans" font-size="12" font-weight="700" fill="#4ade80">⇄</text>
+    <rect x="497" y="159" width="76" height="22" rx="6" fill="#052e16" stroke="#22c55e" stroke-opacity="0.45" stroke-width="1"/>
+    <text x="535" y="174" text-anchor="middle" class="mono" font-size="10.5" fill="#86efac">Running</text>
+    <circle cx="480" cy="204" r="9.5" fill="#0f172a" stroke="#22c55e" stroke-opacity="0.5" stroke-dasharray="3 2" stroke-width="1.2"/>
+  </g>
+
+  <!-- Node 3: TERMINATED -->
+  <g>
+    <rect x="758" y="130" width="160" height="88" rx="12" fill="#1e293b" stroke="#f43f5e" stroke-width="1.8"/>
+    <rect x="755" y="127" width="166" height="94" rx="14" fill="none" stroke="#f43f5e" stroke-width="2.5" opacity="0">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="linear"
+               keyTimes="0;0.95;0.97;1" values="0;0;0.9;0.9"/>
+    </rect>
+    <rect x="772" y="131" width="132" height="3.5" rx="1.75" fill="#f43f5e" opacity="0.9"/>
+    <text x="838" y="158" text-anchor="middle" class="mono" font-size="14" font-weight="700" fill="#f8fafc">TERMINATED</text>
+    <text x="838" y="177" text-anchor="middle" class="sans" font-size="11" fill="#94a3b8">Cannot restart</text>
+    <circle cx="838" cy="200" r="9" fill="#0f172a" stroke="#f43f5e" stroke-opacity="0.45" stroke-dasharray="3 2" stroke-width="1.2"/>
+  </g>
+
+  <!-- Node 4: BLOCKED -->
+  <g>
+    <rect x="82" y="350" width="196" height="92" rx="12" fill="#1e293b" stroke="#f97316" stroke-width="1.8"/>
+    <rect x="79" y="347" width="202" height="98" rx="14" fill="none" stroke="#f97316" stroke-width="2.6" opacity="0">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="linear"
+               keyTimes="0;0.20;0.22;0.27;0.29;0.54;0.56;0.60;0.62;1"
+               values="0;0;0.95;0.95;0;0;0.95;0.95;0;0"/>
+    </rect>
+    <rect x="96" y="351" width="168" height="3.5" rx="1.75" fill="#f97316" opacity="0.9"/>
+    <text x="180" y="378" text-anchor="middle" class="mono" font-size="14" font-weight="700" fill="#f8fafc">BLOCKED</text>
+    <text x="180" y="397" text-anchor="middle" class="sans" font-size="11" fill="#94a3b8">Monitor Entry Set (lock wait)</text>
+    <circle cx="180" cy="422" r="9" fill="#0f172a" stroke="#f97316" stroke-opacity="0.45" stroke-dasharray="3 2" stroke-width="1.2"/>
+  </g>
+
+  <!-- Node 5: WAITING -->
+  <g>
+    <rect x="382" y="350" width="196" height="92" rx="12" fill="#1e293b" stroke="#f59e0b" stroke-width="1.8"/>
+    <rect x="379" y="347" width="202" height="98" rx="14" fill="none" stroke="#f59e0b" stroke-width="2.6" opacity="0">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="linear"
+               keyTimes="0;0.42;0.44;0.50;0.52;1"
+               values="0;0;0.95;0.95;0;0"/>
+    </rect>
+    <rect x="396" y="351" width="168" height="3.5" rx="1.75" fill="#f59e0b" opacity="0.9"/>
+    <text x="480" y="378" text-anchor="middle" class="mono" font-size="14" font-weight="700" fill="#f8fafc">WAITING</text>
+    <text x="480" y="397" text-anchor="middle" class="sans" font-size="11" fill="#94a3b8">Monitor Wait Set / Parked</text>
+    <circle cx="480" cy="422" r="9" fill="#0f172a" stroke="#f59e0b" stroke-opacity="0.45" stroke-dasharray="3 2" stroke-width="1.2"/>
+  </g>
+
+  <!-- Node 6: TIMED_WAITING -->
+  <g>
+    <rect x="682" y="350" width="196" height="92" rx="12" fill="#1e293b" stroke="#a855f7" stroke-width="1.8"/>
+    <rect x="679" y="347" width="202" height="98" rx="14" fill="none" stroke="#a855f7" stroke-width="2.6" opacity="0">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="linear"
+               keyTimes="0;0.76;0.78;0.84;0.86;1"
+               values="0;0;0.95;0.95;0;0"/>
+    </rect>
+    <rect x="696" y="351" width="168" height="3.5" rx="1.75" fill="#a855f7" opacity="0.9"/>
+    <text x="780" y="378" text-anchor="middle" class="mono" font-size="14" font-weight="700" fill="#f8fafc">TIMED_WAITING</text>
+    <text x="780" y="397" text-anchor="middle" class="sans" font-size="11" fill="#94a3b8">Bounded deadline timer</text>
+    <circle cx="780" cy="422" r="9" fill="#0f172a" stroke="#a855f7" stroke-opacity="0.45" stroke-dasharray="3 2" stroke-width="1.2"/>
+  </g>
+
+
+  <!-- ==================== ANIMATED THREAD TOKEN T1 ==================== -->
+  <g filter="url(#glow-soft)">
+    <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="linear"
+             keyTimes="0;0.015;0.975;0.995;1" values="0;1;1;0;0"/>
+
+    <!-- Outer Halo -->
+    <circle cx="0" cy="0" r="15" fill="none" stroke="#38bdf8" stroke-width="2" class="ring-pulse">
+      <animate attributeName="stroke" dur="15s" repeatCount="indefinite" calcMode="discrete"
+               keyTimes="0;0.10;0.21;0.33;0.43;0.55;0.66;0.77;0.88;0.97"
+               values="#38bdf8;#22c55e;#f97316;#22c55e;#f59e0b;#f97316;#22c55e;#a855f7;#22c55e;#f43f5e"/>
+    </circle>
+
+    <!-- Core Glowing Orb -->
+    <circle cx="0" cy="0" r="9.5" fill="#38bdf8" stroke="#f8fafc" stroke-width="1.5">
+      <animate attributeName="fill" dur="15s" repeatCount="indefinite" calcMode="discrete"
+               keyTimes="0;0.10;0.21;0.33;0.43;0.55;0.66;0.77;0.88;0.97"
+               values="#38bdf8;#22c55e;#f97316;#22c55e;#f59e0b;#f97316;#22c55e;#a855f7;#22c55e;#f43f5e"/>
+    </circle>
+
+    <text x="0" y="3" text-anchor="middle" class="mono" font-size="8.5" font-weight="800" fill="#0f172a">T1</text>
+
+    <!-- Exact 15s Continuous Lifecycle Path -->
+    <animateMotion dur="15s" repeatCount="indefinite" calcMode="linear"
+      path="M 122 200 L 202 174 L 365 174 L 480 204 L 378 226 C 315 245, 220 265, 165 344 L 180 422 L 220 350 C 270 315, 340 285, 400 232 L 480 204 L 456 226 L 456 350 L 480 422 L 382 396 L 278 396 L 180 422 L 220 350 C 270 315, 340 285, 400 232 L 480 204 L 582 226 C 645 245, 740 265, 795 344 L 780 422 L 740 350 C 690 315, 620 285, 560 232 L 480 204 L 595 174 L 758 174 L 838 200"
+      keyTimes="0;0.04;0.11;0.15;0.22;0.27;0.34;0.38;0.44;0.50;0.56;0.60;0.67;0.71;0.78;0.84;0.90;0.93;0.98;1"
+      keyPoints="0;0;0.11142;0.11142;0.24316;0.24316;0.35966;0.35966;0.43043;0.43043;0.52383;0.52383;0.64034;0.64034;0.77208;0.77208;0.88858;0.88858;1;1"/>
+  </g>
+
+
+  <!-- ==================== ANIMATED STEP LEGEND BAR ==================== -->
+  <rect x="24" y="502" width="912" height="60" rx="12" fill="#1e293b" fill-opacity="0.72" stroke="#334155" stroke-width="1"/>
+
+  <!-- Step 1 -->
+  <g>
+    <rect x="34" y="510" width="166" height="44" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" opacity="0.4">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="discrete"
+               keyTimes="0;0.14;1" values="1;0.35;0.35"/>
+    </rect>
+    <circle cx="48" cy="524" r="4" fill="#38bdf8"/>
+    <text x="58" y="528" class="sans" font-size="11" font-weight="700" fill="#f8fafc">1. Start Thread</text>
+    <text x="44" y="544" class="mono" font-size="9.5" fill="#7dd3fc">NEW → RUNNABLE</text>
+  </g>
+
+  <!-- Step 2 -->
+  <g>
+    <rect x="208" y="510" width="174" height="44" rx="8" fill="#0f172a" stroke="#f97316" stroke-width="1.2" opacity="0.35">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="discrete"
+               keyTimes="0;0.14;0.36;1" values="0.35;1;0.35;0.35"/>
+    </rect>
+    <circle cx="222" cy="524" r="4" fill="#f97316"/>
+    <text x="232" y="528" class="sans" font-size="11" font-weight="700" fill="#f8fafc">2. Monitor Contend</text>
+    <text x="218" y="544" class="mono" font-size="9.5" fill="#fdba74">RUNNABLE ⇄ BLOCKED</text>
+  </g>
+
+  <!-- Step 3 -->
+  <g>
+    <rect x="390" y="510" width="194" height="44" rx="8" fill="#0f172a" stroke="#f59e0b" stroke-width="1.2" opacity="0.35">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="discrete"
+               keyTimes="0;0.36;0.68;1" values="0.35;1;0.35;0.35"/>
+    </rect>
+    <circle cx="404" cy="524" r="4" fill="#f59e0b"/>
+    <text x="414" y="528" class="sans" font-size="11" font-weight="700" fill="#f8fafc">3. wait() + notifyAll()</text>
+    <text x="400" y="544" class="mono" font-size="9.5" fill="#fcd34d">WAITING → BLOCKED → RUN</text>
+  </g>
+
+  <!-- Step 4 -->
+  <g>
+    <rect x="592" y="510" width="174" height="44" rx="8" fill="#0f172a" stroke="#a855f7" stroke-width="1.2" opacity="0.35">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="discrete"
+               keyTimes="0;0.68;0.91;1" values="0.35;1;0.35;0.35"/>
+    </rect>
+    <circle cx="606" cy="524" r="4" fill="#a855f7"/>
+    <text x="616" y="528" class="sans" font-size="11" font-weight="700" fill="#f8fafc">4. sleep(ms) Timer</text>
+    <text x="602" y="544" class="mono" font-size="9.5" fill="#d8b4fe">RUNNABLE ⇄ TIMED_WAIT</text>
+  </g>
+
+  <!-- Step 5 -->
+  <g>
+    <rect x="774" y="510" width="152" height="44" rx="8" fill="#0f172a" stroke="#f43f5e" stroke-width="1.2" opacity="0.35">
+      <animate attributeName="opacity" dur="15s" repeatCount="indefinite" calcMode="discrete"
+               keyTimes="0;0.91;1" values="0.35;1;1"/>
+    </rect>
+    <circle cx="788" cy="524" r="4" fill="#f43f5e"/>
+    <text x="798" y="528" class="sans" font-size="11" font-weight="700" fill="#f8fafc">5. Complete</text>
+    <text x="784" y="544" class="mono" font-size="9.5" fill="#fda4af">→ TERMINATED</text>
+  </g>
+</svg>

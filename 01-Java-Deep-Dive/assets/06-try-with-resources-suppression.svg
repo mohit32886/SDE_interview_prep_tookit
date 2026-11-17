@@ -1,0 +1,377 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 480" width="920" height="480" role="img" aria-label="try-with-resources deterministic lifecycle, reverse close order, and exception suppression animation">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111c33"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#172033"/>
+    </linearGradient>
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowIndigo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowRose" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fb7185" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowAmber" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowEmerald" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arrowCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowIndigo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#818cf8"/>
+    </marker>
+    <marker id="arrowRose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#fb7185"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrowEmerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <style>
+    .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -24; }
+    }
+    @keyframes dashFlowRev {
+      to { stroke-dashoffset: 24; }
+    }
+    @keyframes ringActive {
+      0%, 17% { opacity: 1; }
+      22%, 96% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    @keyframes pillActive {
+      0%, 17% { opacity: 1; }
+      22%, 96% { opacity: 0.42; }
+      100% { opacity: 1; }
+    }
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
+    }
+    @keyframes codeRowFlash {
+      0%, 17% { opacity: 0.85; }
+      22%, 96% { opacity: 0; }
+      100% { opacity: 0.85; }
+    }
+
+    .flow-line {
+      stroke-dasharray: 6 6;
+      animation: dashFlow 1.2s linear infinite;
+    }
+    .flow-line-slow {
+      stroke-dasharray: 6 6;
+      animation: dashFlow 1.6s linear infinite;
+    }
+    .header-dot {
+      animation: dotPulse 2s ease-in-out infinite;
+    }
+
+    .ring-s1 { opacity: 1; animation: ringActive 10s ease-in-out 0s infinite; }
+    .ring-s2 { opacity: 0; animation: ringActive 10s ease-in-out 2s infinite; }
+    .ring-s3 { opacity: 0; animation: ringActive 10s ease-in-out 4s infinite; }
+    .ring-s4 { opacity: 0; animation: ringActive 10s ease-in-out 6s infinite; }
+    .ring-s5 { opacity: 0; animation: ringActive 10s ease-in-out 8s infinite; }
+
+    .pill-s1 { opacity: 1; animation: pillActive 10s ease-in-out 0s infinite; }
+    .pill-s2 { opacity: 0.42; animation: pillActive 10s ease-in-out 2s infinite; }
+    .pill-s3 { opacity: 0.42; animation: pillActive 10s ease-in-out 4s infinite; }
+    .pill-s4 { opacity: 0.42; animation: pillActive 10s ease-in-out 6s infinite; }
+    .pill-s5 { opacity: 0.42; animation: pillActive 10s ease-in-out 8s infinite; }
+
+    .code-hl-1 { opacity: 0.85; animation: codeRowFlash 10s ease-in-out 0s infinite; }
+    .code-hl-2 { opacity: 0; animation: codeRowFlash 10s ease-in-out 2s infinite; }
+    .code-hl-3 { opacity: 0; animation: codeRowFlash 10s ease-in-out 4s infinite; }
+  </style>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="6" y="6" width="908" height="468" rx="16" fill="url(#bgGrad)" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <circle cx="28" cy="30" r="5" fill="#38bdf8" class="header-dot"/>
+  <text x="44" y="35" class="sans" font-size="17" font-weight="700" fill="#f8fafc">try-with-resources: Reverse Close &amp; Exception Suppression</text>
+  <text x="44" y="54" class="sans" font-size="11.5" fill="#94a3b8">Deterministic LIFO AutoCloseable cleanup preserves primary exception &amp; attaches close() failures via addSuppressed()</text>
+
+  <rect x="716" y="18" width="180" height="28" rx="14" fill="#0c2438" stroke="#1e4b6e" stroke-width="1"/>
+  <text x="806" y="36" text-anchor="middle" class="sans" font-size="10" font-weight="700" letter-spacing="0.6" fill="#38bdf8">LIFO CLEANUP · ZERO MASKING</text>
+  <line x1="20" y1="69" x2="900" y2="69" stroke="#334155" stroke-width="1"/>
+
+  <!-- LEFT ZONE: Java Source & Execution Sequence -->
+  <rect x="20" y="84" width="218" height="308" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="20" y="84" width="218" height="28" rx="12" fill="#162033"/>
+  <rect x="20" y="100" width="218" height="12" fill="#162033"/>
+  <line x1="20" y1="112" x2="238" y2="112" stroke="#334155" stroke-width="1"/>
+  <text x="34" y="102" class="sans" font-size="10" font-weight="700" letter-spacing="0.7" fill="#94a3b8">JAVA SOURCE (TRY BLOCK)</text>
+
+  <!-- Active Code Line Highlights -->
+  <rect x="26" y="136" width="206" height="18" rx="4" fill="#0c4a6e" class="code-hl-1"/>
+  <rect x="26" y="155" width="206" height="33" rx="4" fill="#312e81" class="code-hl-2"/>
+  <rect x="26" y="207" width="206" height="18" rx="4" fill="#4c0519" class="code-hl-3"/>
+
+  <text x="32" y="131" class="mono" font-size="10.2" fill="#cbd5e1">try (</text>
+  <text x="32" y="149" class="mono" font-size="10.2" fill="#7dd3fc">  Connection c = open();</text>
+  <rect x="202" y="137" width="26" height="16" rx="5" fill="#0c4a6e" stroke="#38bdf8" stroke-width="0.8"/>
+  <text x="215" y="148.5" text-anchor="middle" class="mono" font-size="9.5" font-weight="700" fill="#7dd3fc">#1</text>
+
+  <text x="32" y="167" class="mono" font-size="10.2" fill="#c7d2fe">  PreparedStatement ps =</text>
+  <text x="32" y="183" class="mono" font-size="10.2" fill="#c7d2fe">    c.prepare(sql);</text>
+  <rect x="202" y="167" width="26" height="16" rx="5" fill="#312e81" stroke="#818cf8" stroke-width="0.8"/>
+  <text x="215" y="178.5" text-anchor="middle" class="mono" font-size="9.5" font-weight="700" fill="#c7d2fe">#2</text>
+
+  <text x="32" y="201" class="mono" font-size="10.2" fill="#cbd5e1">) {</text>
+  <text x="32" y="219" class="mono" font-size="10.2" fill="#fda4af">  ps.executeQuery();</text>
+  <rect x="196" y="207" width="32" height="16" rx="5" fill="#881337" stroke="#fb7185" stroke-width="0.8"/>
+  <text x="212" y="218.5" text-anchor="middle" class="mono" font-size="9" font-weight="700" fill="#fecdd3">Ex1</text>
+  <text x="32" y="237" class="mono" font-size="10.2" fill="#64748b">} // closes #2 then #1</text>
+
+  <line x1="30" y1="252" x2="228" y2="252" stroke="#334155" stroke-width="1"/>
+  <text x="34" y="270" class="sans" font-size="10" font-weight="700" letter-spacing="0.7" fill="#94a3b8">DETERMINISTIC SEQUENCE</text>
+
+  <circle cx="40" cy="290" r="3.5" fill="#38bdf8"/>
+  <text x="50" y="293.5" class="sans" font-size="10.5" fill="#e2e8f0">1. Open #1 (Connection)</text>
+
+  <circle cx="40" cy="312" r="3.5" fill="#818cf8"/>
+  <text x="50" y="315.5" class="sans" font-size="10.5" fill="#e2e8f0">2. Open #2 (Statement)</text>
+
+  <circle cx="40" cy="334" r="3.5" fill="#fb7185"/>
+  <text x="50" y="337.5" class="sans" font-size="10.5" fill="#fecdd3">3. try() throws Primary Ex1</text>
+
+  <circle cx="40" cy="356" r="3.5" fill="#fbbf24"/>
+  <text x="50" y="359.5" class="sans" font-size="10.5" fill="#fde68a">4. ps.close() -&gt; addSuppressed</text>
+
+  <circle cx="40" cy="378" r="3.5" fill="#34d399"/>
+  <text x="50" y="381.5" class="sans" font-size="10.5" fill="#a7f3d0">5. conn.close() OK &amp; propagate</text>
+
+  <!-- LEFT -> CENTER CONNECTORS -->
+  <path d="M 238,332 L 264,332" fill="none" stroke="#1e293b" stroke-width="5"/>
+  <path d="M 238,332 L 264,332" fill="none" stroke="#38bdf8" stroke-width="2" class="flow-line" marker-end="url(#arrowCyan)"/>
+
+  <path d="M 238,175 L 264,175" fill="none" stroke="#1e293b" stroke-width="5"/>
+  <path d="M 238,175 L 264,175" fill="none" stroke="#818cf8" stroke-width="2" class="flow-line" marker-end="url(#arrowIndigo)"/>
+
+  <!-- CENTER ZONE: Resource #2 (PreparedStatement) -->
+  <rect x="266" y="84" width="296" height="128" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="266" y="84" width="296" height="128" rx="12" fill="none" stroke="#818cf8" stroke-width="2.4" class="ring-s2"/>
+  <rect x="266" y="84" width="296" height="128" rx="12" fill="none" stroke="#fb7185" stroke-width="2.4" class="ring-s3"/>
+  <rect x="266" y="84" width="296" height="128" rx="12" fill="none" stroke="#fbbf24" stroke-width="2.4" class="ring-s4"/>
+
+  <rect x="278" y="95" width="28" height="20" rx="6" fill="#312e81" stroke="#818cf8" stroke-width="1"/>
+  <text x="292" y="109" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#c7d2fe">#2</text>
+  <text x="313" y="109" class="sans" font-size="12" font-weight="700" fill="#f8fafc">PreparedStatement ps</text>
+  <rect x="466" y="95" width="84" height="20" rx="10" fill="#1e1b4b" stroke="#6366f1" stroke-width="1"/>
+  <text x="508" y="108.5" text-anchor="middle" class="sans" font-size="8.6" font-weight="700" fill="#c7d2fe">OPEN 2 · CLOSE 1</text>
+
+  <!-- Sub-row 1: try() execution -->
+  <rect x="278" y="124" width="272" height="36" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <rect x="278" y="124" width="272" height="36" rx="8" fill="none" stroke="#fb7185" stroke-width="1.8" class="ring-s3"/>
+  <text x="290" y="146" class="mono" font-size="10.5" fill="#e2e8f0">try: ps.executeQuery()</text>
+  <rect x="462" y="132" width="78" height="20" rx="6" fill="#4c0519" stroke="#f43f5e" stroke-width="1"/>
+  <text x="501" y="145.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#fecdd3">THROWS Ex1</text>
+
+  <!-- Sub-row 2: ps.close() -->
+  <rect x="278" y="166" width="272" height="36" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <rect x="278" y="166" width="272" height="36" rx="8" fill="none" stroke="#fbbf24" stroke-width="1.8" class="ring-s4"/>
+  <text x="290" y="188" class="mono" font-size="10.5" fill="#e2e8f0">close: ps.close() [1st]</text>
+  <rect x="462" y="174" width="78" height="20" rx="6" fill="#451a03" stroke="#f59e0b" stroke-width="1"/>
+  <text x="501" y="187.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#fde68a">THROWS Ex2</text>
+
+  <!-- MIDDLE GAP: Bidirectional Open (#1->#2) and Reverse Close (#2->#1) -->
+  <!-- Upward Open Order -->
+  <path d="M 294,268 L 294,216" fill="none" stroke="#38bdf8" stroke-width="2" stroke-opacity="0.25"/>
+  <path d="M 294,268 L 294,216" fill="none" stroke="#38bdf8" stroke-width="2" class="flow-line" marker-end="url(#arrowCyan)"/>
+  <rect x="306" y="230" width="98" height="20" rx="10" fill="#0c2438" stroke="#0284c7" stroke-width="1"/>
+  <text x="355" y="243.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#7dd3fc">OPEN #1 -&gt; #2</text>
+
+  <!-- Downward Reverse Close -->
+  <path d="M 534,212 L 534,264" fill="none" stroke="#fbbf24" stroke-width="2" stroke-opacity="0.25"/>
+  <path d="M 534,212 L 534,264" fill="none" stroke="#34d399" stroke-width="2" class="flow-line" marker-end="url(#arrowEmerald)"/>
+  <rect x="416" y="230" width="106" height="20" rx="10" fill="#052e26" stroke="#10b981" stroke-width="1"/>
+  <text x="469" y="243.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#6ee7b7">CLOSE #2 -&gt; #1</text>
+
+  <!-- CENTER ZONE: Resource #1 (Connection) -->
+  <rect x="266" y="268" width="296" height="124" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="266" y="268" width="296" height="124" rx="12" fill="none" stroke="#38bdf8" stroke-width="2.4" class="ring-s1"/>
+  <rect x="266" y="268" width="296" height="124" rx="12" fill="none" stroke="#34d399" stroke-width="2.4" class="ring-s5"/>
+
+  <rect x="278" y="279" width="28" height="20" rx="6" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1"/>
+  <text x="292" y="293" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#7dd3fc">#1</text>
+  <text x="314" y="293.5" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Connection conn</text>
+  <rect x="462" y="279" width="88" height="20" rx="10" fill="#0c2438" stroke="#0ea5e9" stroke-width="1"/>
+  <text x="506" y="292.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#7dd3fc">OPEN 1 · CLOSE 2</text>
+
+  <rect x="278" y="308" width="272" height="34" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <rect x="278" y="308" width="272" height="34" rx="8" fill="none" stroke="#38bdf8" stroke-width="1.8" class="ring-s1"/>
+  <text x="290" y="328.5" class="mono" font-size="9.6" fill="#cbd5e1">open: DriverManager.getConnection()</text>
+
+  <rect x="278" y="348" width="272" height="34" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <rect x="278" y="348" width="272" height="34" rx="8" fill="none" stroke="#34d399" stroke-width="1.8" class="ring-s5"/>
+  <text x="290" y="368.5" class="mono" font-size="10.5" fill="#e2e8f0">close: conn.close()</text>
+  <rect x="462" y="355" width="78" height="20" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+  <text x="501" y="368.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#6ee7b7">CLOSED OK</text>
+
+  <!-- CENTER -> RIGHT CONNECTORS (Primary + addSuppressed) -->
+  <!-- Primary Path -->
+  <path d="M 562,142 C 594,142 616,156 650,156" fill="none" stroke="#f43f5e" stroke-width="5" stroke-opacity="0.14"/>
+  <path d="M 562,142 C 594,142 616,156 650,156" fill="none" stroke="#fb7185" stroke-width="2" class="flow-line" marker-end="url(#arrowRose)"/>
+  <rect x="568" y="114" width="68" height="18" rx="9" fill="#4c0519" stroke="#f43f5e" stroke-width="0.9"/>
+  <text x="602" y="126.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#fecdd3">Primary Ex1</text>
+
+  <!-- Suppressed Path -->
+  <path d="M 562,184 C 606,184 606,298 650,298" fill="none" stroke="#f59e0b" stroke-width="5" stroke-opacity="0.14"/>
+  <path d="M 562,184 C 606,184 606,298 650,298" fill="none" stroke="#fbbf24" stroke-width="2" class="flow-line-slow" marker-end="url(#arrowAmber)"/>
+  <rect x="562" y="232" width="80" height="18" rx="9" fill="#451a03" stroke="#f59e0b" stroke-width="0.9"/>
+  <text x="602" y="244" text-anchor="middle" class="mono" font-size="8.4" font-weight="700" fill="#fde68a">addSuppressed</text>
+
+  <!-- RIGHT ZONE: Propagated Exception Object -->
+  <rect x="640" y="84" width="260" height="308" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="640" y="84" width="260" height="308" rx="12" fill="none" stroke="#34d399" stroke-width="2.4" class="ring-s5"/>
+
+  <rect x="640" y="84" width="260" height="28" rx="12" fill="#162033"/>
+  <rect x="640" y="100" width="260" height="12" fill="#162033"/>
+  <line x1="640" y1="112" x2="900" y2="112" stroke="#334155" stroke-width="1"/>
+  <text x="654" y="102" class="sans" font-size="10" font-weight="700" letter-spacing="0.6" fill="#e2e8f0">PROPAGATED TO CATCH (Exception e)</text>
+
+  <!-- Primary Exception Box -->
+  <rect x="654" y="122" width="232" height="72" rx="10" fill="#1f1021" stroke="#f43f5e" stroke-width="1.5"/>
+  <rect x="654" y="122" width="232" height="72" rx="10" fill="none" stroke="#fda4af" stroke-width="2.4" class="ring-s3"/>
+  <rect x="666" y="130" width="118" height="17" rx="8.5" fill="#881337"/>
+  <text x="725" y="141.5" text-anchor="middle" class="sans" font-size="8.8" font-weight="700" fill="#fecdd3">PRIMARY EXCEPTION</text>
+  <text x="666" y="164" class="mono" font-size="10.8" font-weight="700" fill="#ffe4e6">SQLException: Query failed</text>
+  <text x="666" y="182" class="sans" font-size="10" fill="#fda4af">Thrown in try body — preserved!</text>
+
+  <!-- Attachment Connector -->
+  <line x1="770" y1="194" x2="770" y2="253" stroke="#fbbf24" stroke-width="1.8" class="flow-line" marker-end="url(#arrowAmber)"/>
+  <rect x="692" y="213" width="156" height="22" rx="11" fill="#451a03" stroke="#f59e0b" stroke-width="1"/>
+  <text x="770" y="227.5" text-anchor="middle" class="mono" font-size="10" font-weight="700" fill="#fde68a">e.addSuppressed(Ex2)</text>
+
+  <!-- Suppressed Box -->
+  <rect x="654" y="257" width="232" height="79" rx="10" fill="#1c1917" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <rect x="654" y="257" width="232" height="79" rx="10" fill="none" stroke="#fde68a" stroke-width="2.4" class="ring-s4"/>
+  <rect x="666" y="266" width="118" height="17" rx="8.5" fill="#78350f"/>
+  <text x="725" y="278" text-anchor="middle" class="mono" font-size="9.3" font-weight="700" fill="#fef3c7">getSuppressed()[0]</text>
+  <text x="666" y="301" class="mono" font-size="10.8" font-weight="700" fill="#fef3c7">IOException: ps.close()</text>
+  <text x="666" y="320" class="sans" font-size="10" fill="#fcd34d">Attached safely — zero masking</text>
+
+  <!-- Bottom Guarantee Pill -->
+  <rect x="654" y="346" width="232" height="32" rx="8" fill="#052e26" stroke="#10b981" stroke-width="1.1"/>
+  <text x="770" y="366" text-anchor="middle" class="sans" font-size="10" font-weight="700" fill="#6ee7b7">✓ Ex1 &amp; Ex2 intact (vs try-finally loss)</text>
+
+  <!-- ANIMATED MOVING PACKET DOTS (Synchronized 10s SMIL Timeline) -->
+  <!-- Step 1 (0s-2s): Open #1 Connection -->
+  <g>
+    <circle r="9" fill="url(#glowCyan)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 238,332 L 266,332" keyTimes="0;0.03;0.18;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;1;1;0;0" keyTimes="0;0.03;0.17;0.20;1"/>
+    </circle>
+    <circle r="4" fill="#e0f2fe">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 238,332 L 266,332" keyTimes="0;0.03;0.18;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;1;1;0;0" keyTimes="0;0.03;0.17;0.20;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 2 (2s-4s): Open #2 PreparedStatement (from #1 up to #2) -->
+  <g>
+    <circle r="9" fill="url(#glowIndigo)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 294,268 L 294,212" keyTimes="0;0.21;0.38;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.20;0.23;0.36;0.40;1"/>
+    </circle>
+    <circle r="4" fill="#e0e7ff">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 294,268 L 294,212" keyTimes="0;0.21;0.38;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.20;0.23;0.36;0.40;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 3 (4s-6s): Primary Exception thrown to Right Primary Box -->
+  <g>
+    <circle r="10" fill="url(#glowRose)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 562,142 C 594,142 616,156 654,156" keyTimes="0;0.41;0.58;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.40;0.43;0.56;0.60;1"/>
+    </circle>
+    <circle r="4.2" fill="#ffe4e6">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 562,142 C 594,142 616,156 654,156" keyTimes="0;0.41;0.58;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.40;0.43;0.56;0.60;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 4 (6s-8s): ps.close() throws Ex2 -> addSuppressed() path -->
+  <g>
+    <circle r="10" fill="url(#glowAmber)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 562,184 C 606,184 606,298 654,298" keyTimes="0;0.61;0.78;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.60;0.63;0.76;0.80;1"/>
+    </circle>
+    <circle r="4.2" fill="#fef3c7">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 562,184 C 606,184 606,298 654,298" keyTimes="0;0.61;0.78;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.60;0.63;0.76;0.80;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 5 (8s-10s): Reverse close down #2 -> #1 (conn.close() OK) -->
+  <g>
+    <circle r="10" fill="url(#glowEmerald)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 534,212 L 534,268" keyTimes="0;0.81;0.96;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.80;0.83;0.96;1"/>
+    </circle>
+    <circle r="4.2" fill="#d1fae5">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 534,212 L 534,268" keyTimes="0;0.81;0.96;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.80;0.83;0.96;1"/>
+    </circle>
+  </g>
+
+  <!-- BOTTOM ANIMATED STEP LEGEND BAR -->
+  <line x1="20" y1="406" x2="900" y2="406" stroke="#1e293b" stroke-width="1"/>
+
+  <g class="pill-s1">
+    <rect x="20" y="416" width="168" height="42" rx="10" fill="#0c2438" stroke="#38bdf8" stroke-width="1.4"/>
+    <circle cx="36" cy="437" r="4" fill="#38bdf8"/>
+    <text x="48" y="433.5" class="sans" font-size="10.5" font-weight="700" fill="#f8fafc">1 · Open #1 Conn</text>
+    <text x="48" y="448" class="sans" font-size="9.5" fill="#7dd3fc">Declared first in try()</text>
+  </g>
+
+  <g class="pill-s2">
+    <rect x="198" y="416" width="168" height="42" rx="10" fill="#1e1b4b" stroke="#818cf8" stroke-width="1.4"/>
+    <circle cx="214" cy="437" r="4" fill="#818cf8"/>
+    <text x="226" y="433.5" class="sans" font-size="10.5" font-weight="700" fill="#f8fafc">2 · Open #2 Stmt</text>
+    <text x="226" y="448" class="sans" font-size="9.5" fill="#c7d2fe">Declared second in try()</text>
+  </g>
+
+  <g class="pill-s3">
+    <rect x="376" y="416" width="168" height="42" rx="10" fill="#4c0519" stroke="#fb7185" stroke-width="1.4"/>
+    <circle cx="392" cy="437" r="4" fill="#fb7185"/>
+    <text x="404" y="433.5" class="sans" font-size="10.5" font-weight="700" fill="#f8fafc">3 · try() Throws Ex1</text>
+    <text x="404" y="448" class="sans" font-size="9.5" fill="#fecdd3">Primary exception wins</text>
+  </g>
+
+  <g class="pill-s4">
+    <rect x="554" y="416" width="168" height="42" rx="10" fill="#451a03" stroke="#fbbf24" stroke-width="1.4"/>
+    <circle cx="570" cy="437" r="4" fill="#fbbf24"/>
+    <text x="582" y="433.5" class="sans" font-size="10.5" font-weight="700" fill="#f8fafc">4 · ps.close() -&gt; Supp</text>
+    <text x="582" y="448" class="sans" font-size="9.5" fill="#fde68a">Ex2 via addSuppressed()</text>
+  </g>
+
+  <g class="pill-s5">
+    <rect x="732" y="416" width="168" height="42" rx="10" fill="#052e26" stroke="#34d399" stroke-width="1.4"/>
+    <circle cx="748" cy="437" r="4" fill="#34d399"/>
+    <text x="760" y="433.5" class="sans" font-size="10.5" font-weight="700" fill="#f8fafc">5 · conn.close() OK</text>
+    <text x="760" y="448" class="sans" font-size="9.5" fill="#6ee7b7">Reverse close &amp; throw</text>
+  </g>
+</svg>

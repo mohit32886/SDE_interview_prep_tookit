@@ -1,0 +1,609 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" width="920" height="500" role="img" aria-labelledby="sw-title sw-desc">
+  <title id="sw-title">Sliding Window and Two-Pointer O(n) Trace</title>
+  <desc id="sw-desc">Animated trace of left and right pointers scanning array [a, b, c, a, b, c, b, b], expanding and contracting the active window bracket, resolving duplicates, and updating maxLen in O(n) time.</desc>
+
+  <defs>
+    <linearGradient id="bg-card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0b1120"/>
+    </linearGradient>
+    <linearGradient id="panel-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.98"/>
+    </linearGradient>
+    <linearGradient id="win-fill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.18"/>
+      <stop offset="50%" stop-color="#3b82f6" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="progress-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="glow-cyan" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow-soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="dot-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#334155" fill-opacity="0.35"/>
+    </pattern>
+  </defs>
+
+  <style>
+    .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .title { font-size: 18px; font-weight: 700; fill: #f8fafc; letter-spacing: -0.2px; }
+    .subtitle { font-size: 12px; fill: #94a3b8; }
+    .card-hdr { font-size: 10.5px; font-weight: 700; fill: #94a3b8; letter-spacing: 0.9px; }
+    .cell-char { font-size: 22px; font-weight: 700; fill: #e2e8f0; text-anchor: middle; }
+    .cell-idx { font-size: 11px; font-weight: 600; fill: #64748b; text-anchor: middle; }
+    .ptr-text { font-size: 11.5px; font-weight: 700; fill: #f8fafc; text-anchor: middle; }
+    .val-lg { font-size: 19px; font-weight: 700; fill: #f8fafc; }
+    .val-md { font-size: 13px; font-weight: 600; fill: #e2e8f0; }
+    .val-sm { font-size: 11.5px; fill: #94a3b8; }
+    .pill-txt { font-size: 11px; font-weight: 700; text-anchor: middle; }
+
+    .flow-cyan {
+      stroke-dasharray: 7 5;
+      animation: dashFlow 1.2s linear infinite;
+    }
+    .flow-emerald {
+      stroke-dasharray: 6 5;
+      animation: dashFlow 1.4s linear infinite;
+    }
+    .flow-violet {
+      stroke-dasharray: 5 5;
+      animation: dashFlowRev 1.5s linear infinite;
+    }
+    .pulse-active {
+      animation: pulseOpacity 1.8s ease-in-out infinite;
+    }
+    .pulse-ring {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: pulseRing 1.8s ease-in-out infinite;
+    }
+
+    @keyframes dashFlow {
+      from { stroke-dashoffset: 24; }
+      to { stroke-dashoffset: 0; }
+    }
+    @keyframes dashFlowRev {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: 20; }
+    }
+    @keyframes pulseOpacity {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+    @keyframes pulseRing {
+      0%, 100% { transform: scale(1); opacity: 0.85; }
+      50% { transform: scale(1.22); opacity: 0.3; }
+    }
+  </style>
+
+  <!-- Outer Dark Slate Card -->
+  <rect x="10" y="10" width="900" height="480" rx="16" fill="url(#bg-card)" stroke="#334155" stroke-width="1.5"/>
+  <rect x="10" y="10" width="900" height="480" rx="16" fill="url(#dot-grid)" opacity="0.55"/>
+
+  <!-- Header -->
+  <g>
+    <rect x="32" y="25" width="38" height="38" rx="10" fill="#083344" stroke="#22d3ee" stroke-width="1.4"/>
+    <path d="M41 44 H61 M46 39 L41 44 L46 49 M56 39 L61 44 L56 49" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="82" y="40" class="sans title">Sliding Window &amp; Two-Pointer Trace</text>
+    <text x="82" y="58" class="mono" font-size="11.5" fill="#94a3b8">s = [a, b, c, a, b, c, b, b]  |  Each index visited &lt;= 2x</text>
+
+    <!-- Complexity Badges -->
+    <rect x="640" y="28" width="106" height="28" rx="14" fill="#083344" stroke="#22d3ee" stroke-width="1.2"/>
+    <circle cx="654" cy="42" r="4" fill="#22d3ee" class="pulse-active"/>
+    <text x="701" y="46" class="mono pill-txt" fill="#67e8f9">Time: O(n)</text>
+
+    <rect x="754" y="28" width="134" height="28" rx="14" fill="#1e1b4b" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="821" y="46" class="mono" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c7d2fe">Space: O(min(n,k))</text>
+
+    <line x1="32" y1="75" x2="888" y2="75" stroke="#1e293b" stroke-width="1.5"/>
+  </g>
+
+  <!-- Glowing Connectors: Array Track -> Telemetry Cards & Between Cards -->
+  <g fill="none" stroke-width="1.8">
+    <!-- Left array flank down to Card 1 -->
+    <path id="path-track-c1" d="M 80 173 L 80 302" stroke="#22d3ee" stroke-opacity="0.55" class="flow-cyan"/>
+    <!-- Bracket center down to Card 2 -->
+    <path id="path-track-c2" d="M 460 238 L 460 302" stroke="#34d399" stroke-opacity="0.55" class="flow-emerald"/>
+    <!-- Right array flank down to Card 3 -->
+    <path id="path-track-c3" d="M 840 173 L 840 302" stroke="#818cf8" stroke-opacity="0.55" class="flow-violet"/>
+    <!-- Card 1 -> Card 2 -->
+    <path id="path-c1-c2" d="M 304 352 L 326 352" stroke="#22d3ee" stroke-opacity="0.7" class="flow-cyan"/>
+    <!-- Card 2 -> Card 3 -->
+    <path id="path-c2-c3" d="M 594 352 L 616 352" stroke="#818cf8" stroke-opacity="0.7" class="flow-violet"/>
+  </g>
+
+  <!-- Moving Packet Dots along Connector Paths -->
+  <circle r="3.5" fill="#22d3ee" filter="url(#glow-soft)">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M 80 173 L 80 302"/>
+  </circle>
+  <circle r="3.5" fill="#34d399" filter="url(#glow-soft)">
+    <animateMotion dur="1.5s" repeatCount="indefinite" path="M 460 238 L 460 302"/>
+  </circle>
+  <circle r="3.5" fill="#818cf8" filter="url(#glow-soft)">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 840 173 L 840 302"/>
+  </circle>
+  <circle r="3.5" fill="#38bdf8" filter="url(#glow-cyan)">
+    <animateMotion dur="1.1s" repeatCount="indefinite" path="M 304 352 L 326 352"/>
+  </circle>
+  <circle r="3.5" fill="#a78bfa" filter="url(#glow-cyan)">
+    <animateMotion dur="1.1s" repeatCount="indefinite" path="M 594 352 L 616 352"/>
+  </circle>
+
+  <!-- Active Window Highlight Box (Behind/Around Cells) -->
+  <rect x="108" y="137" width="88" height="72" rx="12" fill="url(#win-fill)" stroke="#22d3ee" stroke-width="2" filter="url(#glow-soft)">
+    <animate attributeName="x" dur="20s" repeatCount="indefinite"
+      keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+      values="108;108;108;108;108;108;108;108;196;196;284;284;372;372;372;372;548;548;724;724;108"/>
+    <animate attributeName="width" dur="20s" repeatCount="indefinite"
+      keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+      values="88;88;176;176;264;264;352;352;264;264;264;264;264;264;352;352;176;176;88;88;88"/>
+    <animate attributeName="stroke" dur="20s" repeatCount="indefinite"
+      keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+      values="#34d399;#34d399;#34d399;#34d399;#34d399;#34d399;#fb7185;#fb7185;#22d3ee;#22d3ee;#22d3ee;#22d3ee;#22d3ee;#22d3ee;#fb7185;#fb7185;#22d3ee;#22d3ee;#38bdf8;#38bdf8;#34d399"/>
+  </rect>
+
+  <!-- 8 Array Cells: [a, b, c, a, b, c, b, b] -->
+  <g id="array-cells">
+    <!-- Base dark cells -->
+    <g>
+      <rect x="114" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect x="202" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect x="290" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect x="378" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect x="466" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect x="554" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect x="642" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect x="730" y="143" width="76" height="60" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    </g>
+
+    <!-- Active Window Cell Borders (Cyan/Emerald when in [L..R]) -->
+    <g fill="#0f766e" fill-opacity="0.22" stroke="#22d3ee" stroke-width="1.8">
+      <!-- Cell 0: active S1..S4 -->
+      <rect x="114" y="143" width="76" height="60" rx="10" opacity="1">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.385;0.4;0.985;1" values="1;1;0;0;1"/>
+      </rect>
+      <!-- Cell 1: active S2..S5 -->
+      <rect x="202" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.485;0.5;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <!-- Cell 2: active S3..S6 -->
+      <rect x="290" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.185;0.2;0.585;0.6;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <!-- Cell 3: active S4..S8 -->
+      <rect x="378" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.785;0.8;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <!-- Cell 4: active S6..S8 -->
+      <rect x="466" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.485;0.5;0.785;0.8;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <!-- Cell 5: active S7..S9 -->
+      <rect x="554" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.585;0.6;0.885;0.9;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <!-- Cell 6: active S8..S9 -->
+      <rect x="642" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.685;0.7;0.885;0.9;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <!-- Cell 7: active S10 -->
+      <rect x="730" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.885;0.9;0.985;1" values="0;0;1;1;0"/>
+      </rect>
+    </g>
+
+    <!-- Duplicate Collision Highlights: S4 (cells 0 & 3) and S8 (cells 4 & 6) -->
+    <g fill="#881337" fill-opacity="0.45" stroke="#fb7185" stroke-width="2.2">
+      <!-- S4 collision on idx 0 and idx 3 -->
+      <rect x="114" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.385;0.4;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <rect x="378" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.385;0.4;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <!-- S8 collision on idx 4 and idx 6 -->
+      <rect x="466" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.685;0.7;0.785;0.8;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <rect x="642" y="143" width="76" height="60" rx="10" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.685;0.7;0.785;0.8;1" values="0;0;1;1;0;0"/>
+      </rect>
+    </g>
+
+    <!-- Cell Characters & Indices -->
+    <text x="152" y="181" class="mono cell-char">a</text>
+    <text x="240" y="181" class="mono cell-char">b</text>
+    <text x="328" y="181" class="mono cell-char">c</text>
+    <text x="416" y="181" class="mono cell-char">a</text>
+    <text x="504" y="181" class="mono cell-char">b</text>
+    <text x="592" y="181" class="mono cell-char">c</text>
+    <text x="680" y="181" class="mono cell-char">b</text>
+    <text x="768" y="181" class="mono cell-char">b</text>
+
+    <text x="152" y="222" class="mono cell-idx">[0]</text>
+    <text x="240" y="222" class="mono cell-idx">[1]</text>
+    <text x="328" y="222" class="mono cell-idx">[2]</text>
+    <text x="416" y="222" class="mono cell-idx">[3]</text>
+    <text x="504" y="222" class="mono cell-idx">[4]</text>
+    <text x="592" y="222" class="mono cell-idx">[5]</text>
+    <text x="680" y="222" class="mono cell-idx">[6]</text>
+    <text x="768" y="222" class="mono cell-idx">[7]</text>
+  </g>
+
+  <!-- Collision Alert Arcs (S4: 0<->3 'a', S8: 4<->6 'b') -->
+  <g opacity="0">
+    <path d="M 152 143 Q 284 114 416 143" fill="none" stroke="#fb7185" stroke-width="2" stroke-dasharray="4 3"/>
+    <rect x="242" y="114" width="84" height="19" rx="9.5" fill="#881337" stroke="#fb7185" stroke-width="1.2"/>
+    <text x="284" y="127" class="mono pill-txt" fill="#fecdd3">DUP 'a'!</text>
+    <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.385;0.4;1" values="0;0;1;1;0;0"/>
+  </g>
+  <g opacity="0">
+    <path d="M 504 143 Q 592 114 680 143" fill="none" stroke="#fb7185" stroke-width="2" stroke-dasharray="4 3"/>
+    <rect x="550" y="114" width="84" height="19" rx="9.5" fill="#881337" stroke="#fb7185" stroke-width="1.2"/>
+    <text x="592" y="127" class="mono pill-txt" fill="#fecdd3">DUP 'b'!</text>
+    <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.685;0.7;0.785;0.8;1" values="0;0;1;1;0;0"/>
+  </g>
+
+  <!-- Animated Expanding/Contracting Window Bracket -->
+  <g stroke-width="2.5" stroke-linecap="round">
+    <!-- Horizontal span line (no filter on 0-height line to avoid bbox clipping) -->
+    <line x1="108" y1="238" x2="196" y2="238" stroke="#34d399">
+      <animate attributeName="x1" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="108;108;108;108;108;108;108;108;196;196;284;284;372;372;372;372;548;548;724;724;108"/>
+      <animate attributeName="x2" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="196;196;284;284;372;372;460;460;460;460;548;548;636;636;724;724;724;724;812;812;196"/>
+      <animate attributeName="stroke" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.285;0.3;0.385;0.4;0.685;0.7;0.785;0.8;1"
+        values="#34d399;#34d399;#fb7185;#fb7185;#22d3ee;#22d3ee;#fb7185;#fb7185;#22d3ee;#34d399"/>
+    </line>
+    <!-- Left end-cap -->
+    <line x1="108" y1="229" x2="108" y2="238" stroke="#34d399">
+      <animate attributeName="x1" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="108;108;108;108;108;108;108;108;196;196;284;284;372;372;372;372;548;548;724;724;108"/>
+      <animate attributeName="x2" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="108;108;108;108;108;108;108;108;196;196;284;284;372;372;372;372;548;548;724;724;108"/>
+      <animate attributeName="stroke" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.285;0.3;0.385;0.4;0.685;0.7;0.785;0.8;1"
+        values="#34d399;#34d399;#fb7185;#fb7185;#22d3ee;#22d3ee;#fb7185;#fb7185;#22d3ee;#34d399"/>
+    </line>
+    <!-- Right end-cap -->
+    <line x1="196" y1="229" x2="196" y2="238" stroke="#34d399">
+      <animate attributeName="x1" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="196;196;284;284;372;372;460;460;460;460;548;548;636;636;724;724;724;724;812;812;196"/>
+      <animate attributeName="x2" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="196;196;284;284;372;372;460;460;460;460;548;548;636;636;724;724;724;724;812;812;196"/>
+      <animate attributeName="stroke" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.285;0.3;0.385;0.4;0.685;0.7;0.785;0.8;1"
+        values="#34d399;#34d399;#fb7185;#fb7185;#22d3ee;#22d3ee;#fb7185;#fb7185;#22d3ee;#34d399"/>
+    </line>
+  </g>
+
+  <!-- RIGHT Pointer (Above Array, pointing DOWN) -->
+  <g transform="translate(152, 0)">
+    <animateTransform attributeName="transform" type="translate" dur="20s" repeatCount="indefinite"
+      keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+      values="152 0;152 0;240 0;240 0;328 0;328 0;416 0;416 0;416 0;416 0;504 0;504 0;592 0;592 0;680 0;680 0;680 0;680 0;768 0;768 0;152 0"/>
+    <rect x="-36" y="84" width="72" height="24" rx="12" fill="#064e3b" stroke="#34d399" stroke-width="1.5" filter="url(#glow-soft)"/>
+    <text x="0" y="100" class="mono ptr-text" fill="#a7f3d0">right</text>
+    <line x1="0" y1="108" x2="0" y2="128" stroke="#34d399" stroke-width="2"/>
+    <polygon points="-5,124 5,124 0,134" fill="#34d399"/>
+    <circle cx="0" cy="134" r="3.5" fill="#6ee7b7" class="pulse-ring"/>
+  </g>
+
+  <!-- LEFT Pointer (Below Bracket, pointing UP) -->
+  <g transform="translate(152, 0)">
+    <animateTransform attributeName="transform" type="translate" dur="20s" repeatCount="indefinite"
+      keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+      values="152 0;152 0;152 0;152 0;152 0;152 0;152 0;152 0;240 0;240 0;328 0;328 0;416 0;416 0;416 0;416 0;592 0;592 0;768 0;768 0;152 0"/>
+    <circle cx="0" cy="245" r="3.5" fill="#67e8f9" class="pulse-ring"/>
+    <polygon points="-5,255 5,255 0,245" fill="#22d3ee"/>
+    <line x1="0" y1="255" x2="0" y2="266" stroke="#22d3ee" stroke-width="2"/>
+    <rect x="-34" y="266" width="68" height="24" rx="12" fill="#083344" stroke="#22d3ee" stroke-width="1.5" filter="url(#glow-soft)"/>
+    <text x="0" y="282" class="mono ptr-text" fill="#cffafe">left</text>
+  </g>
+
+  <!-- Telemetry Dashboard Cards (y=302..402) -->
+  <!-- CARD 1: Active Window & Set State -->
+  <g>
+    <rect x="36" y="302" width="268" height="100" rx="12" fill="url(#panel-grad)" stroke="#334155" stroke-width="1.4"/>
+    <text x="52" y="323" class="sans card-hdr">ACTIVE WINDOW &amp; SET</text>
+
+    <!-- Dynamic per-step content in Card 1 -->
+    <!-- S1 -->
+    <g opacity="1">
+      <text x="52" y="349" class="mono val-lg" fill="#6ee7b7">"[a]"  (len=1)</text>
+      <text x="52" y="370" class="mono val-sm">set = { a }</text>
+      <rect x="52" y="379" width="142" height="16" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
+      <text x="123" y="391" class="mono" font-size="10" font-weight="700" fill="#a7f3d0" text-anchor="middle">VALID: EXPAND R</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.985;1" values="1;1;0;0;1"/>
+    </g>
+    <!-- S2 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#6ee7b7">"[a,b]" (len=2)</text>
+      <text x="52" y="370" class="mono val-sm">set = { a, b }</text>
+      <rect x="52" y="379" width="142" height="16" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
+      <text x="123" y="391" class="mono" font-size="10" font-weight="700" fill="#a7f3d0" text-anchor="middle">VALID: EXPAND R</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.185;0.2;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S3 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#6ee7b7">"[a,b,c]" (len=3)</text>
+      <text x="52" y="370" class="mono val-sm">set = { a, b, c }</text>
+      <rect x="52" y="379" width="142" height="16" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
+      <text x="123" y="391" class="mono" font-size="10" font-weight="700" fill="#a7f3d0" text-anchor="middle">VALID: EXPAND R</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.185;0.2;0.285;0.3;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S4 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#fda4af">"[a,b,c,a]" DUP!</text>
+      <text x="52" y="370" class="mono val-sm">dup 'a' at idx 0 &amp; 3</text>
+      <rect x="52" y="379" width="166" height="16" rx="8" fill="#881337" stroke="#fb7185" stroke-width="1"/>
+      <text x="135" y="391" class="mono" font-size="10" font-weight="700" fill="#fecdd3" text-anchor="middle">CONFLICT: SHRINK L</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.385;0.4;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S5 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#67e8f9">"[b,c,a]" (len=3)</text>
+      <text x="52" y="370" class="mono val-sm">evict s[0]='a' -&gt; {b,c,a}</text>
+      <rect x="52" y="379" width="150" height="16" rx="8" fill="#083344" stroke="#22d3ee" stroke-width="1"/>
+      <text x="127" y="391" class="mono" font-size="10" font-weight="700" fill="#a5f3fc" text-anchor="middle">VALID: L=1, R=3</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.385;0.4;0.485;0.5;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S6 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#67e8f9">"[c,a,b]" (len=3)</text>
+      <text x="52" y="370" class="mono val-sm">R=4 'b', L-&gt;2 -&gt; {c,a,b}</text>
+      <rect x="52" y="379" width="150" height="16" rx="8" fill="#083344" stroke="#22d3ee" stroke-width="1"/>
+      <text x="127" y="391" class="mono" font-size="10" font-weight="700" fill="#a5f3fc" text-anchor="middle">SLIDE: L=2, R=4</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.485;0.5;0.585;0.6;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S7 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#67e8f9">"[a,b,c]" (len=3)</text>
+      <text x="52" y="370" class="mono val-sm">R=5 'c', L-&gt;3 -&gt; {a,b,c}</text>
+      <rect x="52" y="379" width="150" height="16" rx="8" fill="#083344" stroke="#22d3ee" stroke-width="1"/>
+      <text x="127" y="391" class="mono" font-size="10" font-weight="700" fill="#a5f3fc" text-anchor="middle">SLIDE: L=3, R=5</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.585;0.6;0.685;0.7;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S8 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#fda4af">"[a,b,c,b]" DUP!</text>
+      <text x="52" y="370" class="mono val-sm">dup 'b' at idx 4 &amp; 6</text>
+      <rect x="52" y="379" width="166" height="16" rx="8" fill="#881337" stroke="#fb7185" stroke-width="1"/>
+      <text x="135" y="391" class="mono" font-size="10" font-weight="700" fill="#fecdd3" text-anchor="middle">CONFLICT: JUMP L</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.685;0.7;0.785;0.8;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S9 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#67e8f9">"[c,b]" (len=2)</text>
+      <text x="52" y="370" class="mono val-sm">evict 'a','b' -&gt; L=5</text>
+      <rect x="52" y="379" width="150" height="16" rx="8" fill="#083344" stroke="#22d3ee" stroke-width="1"/>
+      <text x="127" y="391" class="mono" font-size="10" font-weight="700" fill="#a5f3fc" text-anchor="middle">VALID: L=5, R=6</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.785;0.8;0.885;0.9;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S10 -->
+    <g opacity="0">
+      <text x="52" y="349" class="mono val-lg" fill="#38bdf8">"[b]" (len=1)</text>
+      <text x="52" y="370" class="mono val-sm">R=7 'b' -&gt; L jumps to 7</text>
+      <rect x="52" y="379" width="150" height="16" rx="8" fill="#172554" stroke="#60a5fa" stroke-width="1"/>
+      <text x="127" y="391" class="mono" font-size="10" font-weight="700" fill="#bfdbfe" text-anchor="middle">SCAN COMPLETE</text>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.885;0.9;0.985;1" values="0;0;1;1;0"/>
+    </g>
+  </g>
+
+  <!-- CARD 2: Max Window Tracker -->
+  <g>
+    <rect x="326" y="302" width="268" height="100" rx="12" fill="url(#panel-grad)" stroke="#334155" stroke-width="1.4"/>
+    <!-- Golden highlight border on S1..S3 when maxLen updates -->
+    <rect x="326" y="302" width="268" height="100" rx="12" fill="none" stroke="#34d399" stroke-width="2" opacity="1">
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.985;1" values="1;1;0;0;1"/>
+    </rect>
+    <text x="342" y="323" class="sans card-hdr">MAX WINDOW TRACKER</text>
+
+    <!-- S1: max=1 -->
+    <g opacity="1">
+      <text x="342" y="352" class="mono val-lg" fill="#34d399">maxLen = 1</text>
+      <text x="342" y="373" class="mono val-sm">cur = 1  |  best: "a"</text>
+      <rect x="492" y="311" width="88" height="18" rx="9" fill="#065f46" stroke="#34d399" stroke-width="1"/>
+      <text x="536" y="324" class="mono" font-size="10" font-weight="700" fill="#a7f3d0" text-anchor="middle">NEW MAX ★</text>
+      <rect x="342" y="382" width="76" height="8" rx="4" fill="#34d399"/>
+      <rect x="418" y="382" width="160" height="8" rx="4" fill="#1e293b"/>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.985;1" values="1;1;0;0;1"/>
+    </g>
+    <!-- S2: max=2 -->
+    <g opacity="0">
+      <text x="342" y="352" class="mono val-lg" fill="#34d399">maxLen = 2</text>
+      <text x="342" y="373" class="mono val-sm">cur = 2  |  best: "ab"</text>
+      <rect x="492" y="311" width="88" height="18" rx="9" fill="#065f46" stroke="#34d399" stroke-width="1"/>
+      <text x="536" y="324" class="mono" font-size="10" font-weight="700" fill="#a7f3d0" text-anchor="middle">NEW MAX ★</text>
+      <rect x="342" y="382" width="152" height="8" rx="4" fill="#34d399"/>
+      <rect x="494" y="382" width="84" height="8" rx="4" fill="#1e293b"/>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.185;0.2;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S3: max=3 -->
+    <g opacity="0">
+      <text x="342" y="352" class="mono val-lg" fill="#34d399">maxLen = 3</text>
+      <text x="342" y="373" class="mono val-sm">cur = 3  |  best: "abc"</text>
+      <rect x="492" y="311" width="88" height="18" rx="9" fill="#065f46" stroke="#34d399" stroke-width="1"/>
+      <text x="536" y="324" class="mono" font-size="10" font-weight="700" fill="#a7f3d0" text-anchor="middle">NEW MAX ★</text>
+      <rect x="342" y="382" width="236" height="8" rx="4" fill="#34d399"/>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.185;0.2;0.285;0.3;1" values="0;0;1;1;0;0"/>
+    </g>
+    <!-- S4..S10: max stays 3 -->
+    <g opacity="0">
+      <text x="342" y="352" class="mono val-lg" fill="#e2e8f0">maxLen = 3</text>
+      <text x="342" y="373" class="mono val-sm">best locked: "abc" [0..2]</text>
+      <rect x="492" y="311" width="88" height="18" rx="9" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+      <text x="536" y="324" class="mono" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="middle">PEAK = 3</text>
+      <rect x="342" y="382" width="236" height="8" rx="4" fill="#22d3ee" fill-opacity="0.8"/>
+      <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.985;1" values="0;0;1;1;0"/>
+    </g>
+  </g>
+
+  <!-- CARD 3: O(n) Amortized Work -->
+  <g>
+    <rect x="616" y="302" width="268" height="100" rx="12" fill="url(#panel-grad)" stroke="#334155" stroke-width="1.4"/>
+    <text x="632" y="323" class="sans card-hdr">AMORTIZED O(n) WORK</text>
+
+    <text x="632" y="346" class="mono val-sm" fill="#a7f3d0">right (expand): 0 -&gt; 7</text>
+    <rect x="632" y="352" width="236" height="7" rx="3.5" fill="#1e293b"/>
+    <rect x="632" y="352" width="29.5" height="7" rx="3.5" fill="#34d399">
+      <animate attributeName="width" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="29.5;29.5;59;59;88.5;88.5;118;118;118;118;147.5;147.5;177;177;206.5;206.5;206.5;206.5;236;236;29.5"/>
+    </rect>
+
+    <text x="632" y="375" class="mono val-sm" fill="#a5f3fc">left (shrink):  0 -&gt; 7</text>
+    <rect x="632" y="381" width="236" height="7" rx="3.5" fill="#1e293b"/>
+    <rect x="632" y="381" width="29.5" height="7" rx="3.5" fill="#22d3ee">
+      <animate attributeName="width" dur="20s" repeatCount="indefinite"
+        keyTimes="0;0.085;0.1;0.185;0.2;0.285;0.3;0.385;0.4;0.485;0.5;0.585;0.6;0.685;0.7;0.785;0.8;0.885;0.9;0.985;1"
+        values="29.5;29.5;29.5;29.5;29.5;29.5;29.5;29.5;59;59;88.5;88.5;118;118;118;118;177;177;236;236;29.5"/>
+    </rect>
+    <text x="795" y="323" class="mono" font-size="10.5" font-weight="700" fill="#c7d2fe">ops &lt;= 2n</text>
+  </g>
+
+  <!-- Bottom Animated Step Legend Bar (y=418..468) -->
+  <g>
+    <rect x="36" y="418" width="848" height="48" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1.3"/>
+
+    <!-- 10 Step Pills (x=50..320) -->
+    <g class="mono" font-size="10.5" font-weight="700" text-anchor="middle">
+      <!-- Pill 1 -->
+      <rect x="48" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="48" y="429" width="22" height="20" rx="5" fill="#059669" stroke="#34d399" opacity="1">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.985;1" values="1;1;0;0;1"/>
+      </rect>
+      <text x="59" y="443" fill="#f8fafc">1</text>
+
+      <!-- Pill 2 -->
+      <rect x="74" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="74" y="429" width="22" height="20" rx="5" fill="#059669" stroke="#34d399" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.185;0.2;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="85" y="443" fill="#f8fafc">2</text>
+
+      <!-- Pill 3 -->
+      <rect x="100" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="100" y="429" width="22" height="20" rx="5" fill="#059669" stroke="#34d399" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.185;0.2;0.285;0.3;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="111" y="443" fill="#f8fafc">3</text>
+
+      <!-- Pill 4 (conflict) -->
+      <rect x="126" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="126" y="429" width="22" height="20" rx="5" fill="#be123c" stroke="#fb7185" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.385;0.4;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="137" y="443" fill="#f8fafc">4</text>
+
+      <!-- Pill 5 -->
+      <rect x="152" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="152" y="429" width="22" height="20" rx="5" fill="#0891b2" stroke="#22d3ee" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.385;0.4;0.485;0.5;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="163" y="443" fill="#f8fafc">5</text>
+
+      <!-- Pill 6 -->
+      <rect x="178" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="178" y="429" width="22" height="20" rx="5" fill="#0891b2" stroke="#22d3ee" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.485;0.5;0.585;0.6;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="189" y="443" fill="#f8fafc">6</text>
+
+      <!-- Pill 7 -->
+      <rect x="204" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="204" y="429" width="22" height="20" rx="5" fill="#0891b2" stroke="#22d3ee" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.585;0.6;0.685;0.7;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="215" y="443" fill="#f8fafc">7</text>
+
+      <!-- Pill 8 (conflict) -->
+      <rect x="230" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="230" y="429" width="22" height="20" rx="5" fill="#be123c" stroke="#fb7185" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.685;0.7;0.785;0.8;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="241" y="443" fill="#f8fafc">8</text>
+
+      <!-- Pill 9 -->
+      <rect x="256" y="429" width="22" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="256" y="429" width="22" height="20" rx="5" fill="#0891b2" stroke="#22d3ee" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.785;0.8;0.885;0.9;1" values="0;0;1;1;0;0"/>
+      </rect>
+      <text x="267" y="443" fill="#f8fafc">9</text>
+
+      <!-- Pill 10 -->
+      <rect x="282" y="429" width="26" height="20" rx="5" fill="#0f172a" stroke="#475569"/>
+      <rect x="282" y="429" width="26" height="20" rx="5" fill="#2563eb" stroke="#60a5fa" opacity="0">
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.885;0.9;0.985;1" values="0;0;1;1;0"/>
+      </rect>
+      <text x="295" y="443" fill="#f8fafc">10</text>
+    </g>
+
+    <line x1="320" y1="426" x2="320" y2="454" stroke="#334155" stroke-width="1.2"/>
+
+    <!-- Live Step Narration (x=334) -->
+    <g class="sans val-md">
+      <text x="334" y="443" fill="#a7f3d0" opacity="1">Step 1: L=0, R=0 -&gt; Add 'a', window "[a]" valid, maxLen = 1 ★
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.985;1" values="1;1;0;0;1"/>
+      </text>
+      <text x="334" y="443" fill="#a7f3d0" opacity="0">Step 2: Expand R=1 ('b') -&gt; window "[a,b]" valid, maxLen = 2 ★
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.085;0.1;0.185;0.2;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#a7f3d0" opacity="0">Step 3: Expand R=2 ('c') -&gt; window "[a,b,c]" valid, maxLen = 3 ★
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.185;0.2;0.285;0.3;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#fecdd3" opacity="0">Step 4: Expand R=3 ('a') -&gt; Duplicate 'a' at [0]! Must contract L
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.285;0.3;0.385;0.4;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#a5f3fc" opacity="0">Step 5: Shrink L=0-&gt;1 (evict 'a') -&gt; valid "[b,c,a]", len = 3
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.385;0.4;0.485;0.5;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#a5f3fc" opacity="0">Step 6: Expand R=4 ('b') dup -&gt; L=1-&gt;2, valid "[c,a,b]", len = 3
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.485;0.5;0.585;0.6;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#a5f3fc" opacity="0">Step 7: Expand R=5 ('c') dup -&gt; L=2-&gt;3, valid "[a,b,c]", len = 3
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.585;0.6;0.685;0.7;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#fecdd3" opacity="0">Step 8: Expand R=6 ('b') -&gt; Duplicate 'b' at [4]! Skip 'a' &amp; 'b'
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.685;0.7;0.785;0.8;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#a5f3fc" opacity="0">Step 9: Shrink L=3-&gt;5 past [4] -&gt; valid "[c,b]", len = 2
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.785;0.8;0.885;0.9;1" values="0;0;1;1;0;0"/>
+      </text>
+      <text x="334" y="443" fill="#bfdbfe" opacity="0">Step 10: R=7 ('b') dup -&gt; L=7, "[b]" len=1. Done: maxLen = 3 in O(n)!
+        <animate attributeName="opacity" dur="20s" repeatCount="indefinite" keyTimes="0;0.885;0.9;0.985;1" values="0;0;1;1;0"/>
+      </text>
+    </g>
+
+    <!-- Bottom Cycle Progress Bar -->
+    <rect x="46" y="458" width="828" height="3.5" rx="1.75" fill="#0f172a"/>
+    <rect x="46" y="458" width="0" height="3.5" rx="1.75" fill="url(#progress-grad)">
+      <animate attributeName="width" dur="20s" repeatCount="indefinite" from="0" to="828"/>
+    </rect>
+  </g>
+</svg>

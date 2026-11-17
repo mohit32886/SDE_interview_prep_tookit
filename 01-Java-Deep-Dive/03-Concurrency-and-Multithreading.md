@@ -22,6 +22,8 @@
 
 Java threads transition through 6 enum states defined in `Thread.State`. The JVM merges OS *Ready* and *Running* into a single `RUNNABLE` state because thread scheduling is controlled by the OS preemptive scheduler.
 
+![Java Thread Lifecycle Animation](./assets/03-thread-lifecycle-anim.svg)
+
 ```mermaid
 stateDiagram-v2
     [*] --> NEW : new Thread(task)
@@ -498,6 +500,8 @@ String summary = f1.thenCombine(f2, Integer::sum)                   // 23
 ## Thread Pools
 
 `ThreadPoolExecutor` controls concurrency with 7 configuration parameters. Understanding the exact **core -> queue -> max -> reject** routing order prevents catastrophic memory leaks and unexpected task rejections.
+
+![ThreadPoolExecutor Task Routing Animation](./assets/03-threadpool-executor-flow.svg)
 
 ```mermaid
 flowchart TD

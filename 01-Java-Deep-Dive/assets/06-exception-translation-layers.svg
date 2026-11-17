@@ -1,0 +1,334 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 480" width="920" height="480" role="img" aria-label="Layered exception translation pipeline from Repository SQLException to Service domain exception to RestControllerAdvice sanitized ProblemDetail and single boundary log">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111c33"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#172033"/>
+    </linearGradient>
+    <radialGradient id="glowRose" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fb7185" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowAmber" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowPurple" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#c084fc" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowSky" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowEmerald" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#c084fc"/>
+    </marker>
+    <marker id="arrowSky" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowEmerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 1 2 L 8 5 L 1 8 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <style>
+    .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -24; }
+    }
+    @keyframes ringActive {
+      0%, 17% { opacity: 1; }
+      22%, 96% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    @keyframes pillActive {
+      0%, 17% { opacity: 1; }
+      22%, 96% { opacity: 0.42; }
+      100% { opacity: 1; }
+    }
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
+    }
+
+    .flow-line {
+      stroke-dasharray: 6 6;
+      animation: dashFlow 1.2s linear infinite;
+    }
+    .header-dot {
+      animation: dotPulse 2s ease-in-out infinite;
+    }
+
+    .ring-s1 { opacity: 1; animation: ringActive 10s ease-in-out 0s infinite; }
+    .ring-s2 { opacity: 0; animation: ringActive 10s ease-in-out 2s infinite; }
+    .ring-s3 { opacity: 0; animation: ringActive 10s ease-in-out 4s infinite; }
+    .ring-s4 { opacity: 0; animation: ringActive 10s ease-in-out 6s infinite; }
+    .ring-s5 { opacity: 0; animation: ringActive 10s ease-in-out 8s infinite; }
+
+    .pill-s1 { opacity: 1; animation: pillActive 10s ease-in-out 0s infinite; }
+    .pill-s2 { opacity: 0.42; animation: pillActive 10s ease-in-out 2s infinite; }
+    .pill-s3 { opacity: 0.42; animation: pillActive 10s ease-in-out 4s infinite; }
+    .pill-s4 { opacity: 0.42; animation: pillActive 10s ease-in-out 6s infinite; }
+    .pill-s5 { opacity: 0.42; animation: pillActive 10s ease-in-out 8s infinite; }
+  </style>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="6" y="6" width="908" height="468" rx="16" fill="url(#bgGrad)" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <circle cx="28" cy="30" r="5" fill="#c084fc" class="header-dot"/>
+  <text x="44" y="35" class="sans" font-size="17" font-weight="700" fill="#f8fafc">Layered Exception Translation &amp; API Boundary Sanitization</text>
+  <text x="44" y="54" class="sans" font-size="11.5" fill="#94a3b8">Catch low-level SQLException → wrap in domain OrderPersistenceException → return ProblemDetail JSON &amp; log once</text>
+
+  <rect x="734" y="18" width="164" height="28" rx="14" fill="#2e1065" stroke="#7e22ce" stroke-width="1"/>
+  <text x="816" y="36" text-anchor="middle" class="sans" font-size="10" font-weight="700" letter-spacing="0.6" fill="#d8b4fe">WRAP CAUSE · LOG ONCE</text>
+  <line x1="20" y1="69" x2="900" y2="69" stroke="#334155" stroke-width="1"/>
+
+  <!-- STAGE 1: Repository Layer -->
+  <rect x="20" y="88" width="174" height="302" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="20" y="88" width="174" height="302" rx="12" fill="none" stroke="#fb7185" stroke-width="2.4" class="ring-s1"/>
+
+  <rect x="32" y="102" width="112" height="20" rx="10" fill="#4c0519" stroke="#f43f5e" stroke-width="0.9"/>
+  <text x="88" y="115.5" text-anchor="middle" class="sans" font-size="9.5" font-weight="700" fill="#fda4af">1 · REPOSITORY</text>
+
+  <text x="32" y="144" class="sans" font-size="13.5" font-weight="700" fill="#f8fafc">OrderRepository</text>
+  <text x="32" y="161" class="sans" font-size="10.5" fill="#94a3b8">JDBC / Data Access Layer</text>
+
+  <!-- SQL Failure Box -->
+  <rect x="32" y="176" width="150" height="126" rx="10" fill="#1c0d16" stroke="#f43f5e" stroke-width="1.3"/>
+  <rect x="32" y="176" width="150" height="126" rx="10" fill="none" stroke="#fda4af" stroke-width="2" class="ring-s1"/>
+  <!-- Minimal DB cylinder icon -->
+  <ellipse cx="49" cy="197" rx="8" ry="3.5" fill="none" stroke="#fb7185" stroke-width="1.3"/>
+  <path d="M 41,197 L 41,208 C 41,210 57,210 57,208 L 57,197" fill="none" stroke="#fb7185" stroke-width="1.3"/>
+  <text x="64" y="205" class="sans" font-size="10.5" font-weight="700" fill="#fecdd3">Database Error</text>
+
+  <text x="42" y="232" class="mono" font-size="11.5" font-weight="700" fill="#fb7185">SQLException</text>
+  <text x="42" y="252" class="mono" font-size="9.8" fill="#fda4af">SQLState: 08001</text>
+  <text x="42" y="270" class="mono" font-size="9.8" fill="#cbd5e1">Connection refused</text>
+  <text x="42" y="288" class="mono" font-size="9.2" fill="#94a3b8">tbl: orders_prod</text>
+
+  <rect x="32" y="314" width="150" height="62" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="107" y="334" text-anchor="middle" class="sans" font-size="10" font-weight="700" fill="#fda4af">Catches low-level SQL</text>
+  <text x="107" y="350" text-anchor="middle" class="sans" font-size="9.5" fill="#94a3b8">Never leaks vendor codes</text>
+  <text x="107" y="365" text-anchor="middle" class="sans" font-size="9.5" fill="#64748b">above repository boundary</text>
+
+  <!-- CONNECTOR 1 -> 2 -->
+  <path d="M 194,238 L 233,238" fill="none" stroke="#f59e0b" stroke-width="5" stroke-opacity="0.14"/>
+  <path d="M 194,238 L 233,238" fill="none" stroke="#fbbf24" stroke-width="2" class="flow-line" marker-end="url(#arrowAmber)"/>
+  <rect x="198" y="211" width="34" height="18" rx="9" fill="#451a03" stroke="#f59e0b" stroke-width="0.9"/>
+  <text x="215" y="223" text-anchor="middle" class="mono" font-size="9" font-weight="700" fill="#fde68a">wrap</text>
+
+  <!-- STAGE 2: Service Layer -->
+  <rect x="236" y="88" width="202" height="302" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="236" y="88" width="202" height="302" rx="12" fill="none" stroke="#fbbf24" stroke-width="2.4" class="ring-s2"/>
+
+  <rect x="248" y="102" width="122" height="20" rx="10" fill="#451a03" stroke="#f59e0b" stroke-width="0.9"/>
+  <text x="309" y="115.5" text-anchor="middle" class="sans" font-size="9.5" font-weight="700" fill="#fcd34d">2 · SERVICE LAYER</text>
+
+  <text x="248" y="144" class="sans" font-size="13.5" font-weight="700" fill="#f8fafc">OrderService</text>
+  <text x="248" y="161" class="sans" font-size="10.5" fill="#94a3b8">Domain Exception Translation</text>
+
+  <!-- Domain Exception Card -->
+  <rect x="248" y="176" width="178" height="132" rx="10" fill="#1f160a" stroke="#f59e0b" stroke-width="1.3"/>
+  <rect x="248" y="176" width="178" height="132" rx="10" fill="none" stroke="#fde68a" stroke-width="2" class="ring-s2"/>
+  <text x="257" y="198" class="mono" font-size="9.4" font-weight="700" fill="#fde68a">OrderPersistenceException</text>
+  <text x="257" y="216" class="mono" font-size="9.6" fill="#e2e8f0">orderId = &quot;ORD-4821&quot;</text>
+
+  <!-- Nested Cause Box -->
+  <rect x="258" y="230" width="158" height="66" rx="8" fill="#1c0d16" stroke="#f43f5e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="268" y="250" class="mono" font-size="9.8" font-weight="700" fill="#fda4af">cause: SQLException</text>
+  <text x="268" y="268" class="sans" font-size="9.5" fill="#fecdd3">getCause() chain intact</text>
+  <text x="268" y="284" class="sans" font-size="9" fill="#94a3b8">Preserves original stack</text>
+
+  <rect x="248" y="320" width="178" height="56" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="337" y="341" text-anchor="middle" class="sans" font-size="10" font-weight="700" fill="#fbbf24">✗ Do NOT log here</text>
+  <text x="337" y="358" text-anchor="middle" class="sans" font-size="9.5" fill="#94a3b8">Prevents log-and-rethrow bloat</text>
+
+  <!-- CONNECTOR 2 -> 3 -->
+  <path d="M 438,238 L 475,238" fill="none" stroke="#a855f7" stroke-width="5" stroke-opacity="0.14"/>
+  <path d="M 438,238 L 475,238" fill="none" stroke="#c084fc" stroke-width="2" class="flow-line" marker-end="url(#arrowPurple)"/>
+  <rect x="441" y="211" width="34" height="18" rx="9" fill="#3b0764" stroke="#a855f7" stroke-width="0.9"/>
+  <text x="458" y="223" text-anchor="middle" class="mono" font-size="8.6" font-weight="700" fill="#e9d5ff">throw</text>
+
+  <!-- STAGE 3: API Boundary (@RestControllerAdvice) -->
+  <rect x="478" y="98" width="162" height="282" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="478" y="98" width="162" height="282" rx="12" fill="none" stroke="#c084fc" stroke-width="2.4" class="ring-s3"/>
+
+  <rect x="490" y="112" width="118" height="20" rx="10" fill="#3b0764" stroke="#a855f7" stroke-width="0.9"/>
+  <text x="549" y="125.5" text-anchor="middle" class="sans" font-size="9.5" font-weight="700" fill="#e9d5ff">3 · API BOUNDARY</text>
+
+  <text x="490" y="154" class="mono" font-size="9.6" font-weight="700" fill="#f8fafc">@RestControllerAdvice</text>
+  <text x="490" y="171" class="sans" font-size="10" fill="#94a3b8">Global Exception Handler</text>
+
+  <rect x="490" y="186" width="138" height="50" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="500" y="206" class="sans" font-size="10" font-weight="700" fill="#e9d5ff">1. Map Domain -&gt; HTTP</text>
+  <text x="500" y="223" class="mono" font-size="9.2" fill="#7dd3fc">503 (DB) / 422 (Rule)</text>
+
+  <rect x="490" y="246" width="138" height="50" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="500" y="266" class="sans" font-size="10" font-weight="700" fill="#bae6fd">2. Sanitize Payload</text>
+  <text x="500" y="283" class="sans" font-size="9.2" fill="#94a3b8">Strip SQL &amp; stack traces</text>
+
+  <rect x="490" y="306" width="138" height="50" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="500" y="326" class="sans" font-size="10" font-weight="700" fill="#6ee7b7">3. Log Once at Edge</text>
+  <text x="500" y="343" class="sans" font-size="9.2" fill="#94a3b8">Emit shared traceId</text>
+
+  <!-- FORK CONNECTORS 3 -> 4A & 4B -->
+  <!-- Upper fork to Client JSON -->
+  <path d="M 640,210 C 662,210 660,158 681,158" fill="none" stroke="#0ea5e9" stroke-width="5" stroke-opacity="0.14"/>
+  <path d="M 640,210 C 662,210 660,158 681,158" fill="none" stroke="#38bdf8" stroke-width="2" class="flow-line" marker-end="url(#arrowSky)"/>
+  <rect x="643" y="132" width="38" height="17" rx="8.5" fill="#0c4a6e" stroke="#38bdf8" stroke-width="0.9"/>
+  <text x="662" y="143.5" text-anchor="middle" class="mono" font-size="8.8" font-weight="700" fill="#bae6fd">JSON</text>
+
+  <!-- Lower fork to Server Log -->
+  <path d="M 640,270 C 662,270 660,318 681,318" fill="none" stroke="#10b981" stroke-width="5" stroke-opacity="0.14"/>
+  <path d="M 640,270 C 662,270 660,318 681,318" fill="none" stroke="#34d399" stroke-width="2" class="flow-line" marker-end="url(#arrowEmerald)"/>
+  <rect x="644" y="330" width="36" height="17" rx="8.5" fill="#064e3b" stroke="#10b981" stroke-width="0.9"/>
+  <text x="662" y="341.5" text-anchor="middle" class="mono" font-size="8.8" font-weight="700" fill="#a7f3d0">LOG</text>
+
+  <!-- STAGE 4A (Top Right): Sanitized HTTP ProblemDetail -->
+  <rect x="684" y="84" width="216" height="150" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="684" y="84" width="216" height="150" rx="12" fill="none" stroke="#38bdf8" stroke-width="2.4" class="ring-s4"/>
+
+  <rect x="694" y="95" width="114" height="18" rx="9" fill="#0c4a6e" stroke="#0ea5e9" stroke-width="0.9"/>
+  <text x="751" y="107" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#7dd3fc">4 · HTTP 503 / 422</text>
+  <text x="815" y="107.5" class="sans" font-size="10.5" font-weight="700" fill="#e0f2fe">ProblemDetail</text>
+
+  <rect x="694" y="120" width="196" height="82" rx="8" fill="#090f1d" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="703" y="133" class="mono" font-size="9" fill="#94a3b8">{</text>
+  <text x="703" y="145" class="mono" font-size="9" fill="#7dd3fc">  &quot;status&quot;: 503, // or 422</text>
+  <text x="703" y="157" class="mono" font-size="9" fill="#bae6fd">  &quot;title&quot;: &quot;Order Unavailable&quot;,</text>
+  <text x="703" y="169" class="mono" font-size="9" fill="#cbd5e1">  &quot;detail&quot;: &quot;Try again later&quot;,</text>
+  <text x="703" y="181" class="mono" font-size="9" fill="#34d399">  &quot;traceId&quot;: &quot;9f3a-c10b&quot;</text>
+  <text x="703" y="193" class="mono" font-size="9" fill="#94a3b8">}</text>
+
+  <rect x="694" y="208" width="196" height="19" rx="9.5" fill="#082f49" stroke="#0284c7" stroke-width="0.8"/>
+  <text x="792" y="220.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#7dd3fc">✓ Sanitized JSON · Zero SQL leaked</text>
+
+  <!-- STAGE 4B (Bottom Right): Single Boundary Log -->
+  <rect x="684" y="244" width="216" height="150" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="684" y="244" width="216" height="150" rx="12" fill="none" stroke="#34d399" stroke-width="2.4" class="ring-s5"/>
+
+  <rect x="694" y="255" width="112" height="18" rx="9" fill="#064e3b" stroke="#10b981" stroke-width="0.9"/>
+  <text x="750" y="267" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#6ee7b7">5 · LOGGED ONCE</text>
+  <text x="814" y="267.5" class="sans" font-size="10.5" font-weight="700" fill="#d1fae5">Server Log</text>
+
+  <rect x="694" y="280" width="196" height="82" rx="8" fill="#090f1d" stroke="#14532d" stroke-width="1"/>
+  <text x="703" y="295" class="mono" font-size="9" font-weight="700" fill="#34d399">ERROR [traceId=9f3a-c10b]</text>
+  <text x="703" y="310" class="mono" font-size="9" fill="#fde68a">OrderPersistenceException</text>
+  <text x="703" y="325" class="mono" font-size="9" fill="#fda4af">Caused by: SQLException</text>
+  <text x="703" y="340" class="mono" font-size="9" fill="#94a3b8">  at OrderRepo.save(:42)</text>
+  <text x="703" y="354" class="mono" font-size="8.8" fill="#64748b">  Suppressed: 0 close errors</text>
+
+  <rect x="694" y="368" width="196" height="19" rx="9.5" fill="#052e26" stroke="#10b981" stroke-width="0.8"/>
+  <text x="792" y="380.5" text-anchor="middle" class="sans" font-size="9" font-weight="700" fill="#6ee7b7">✓ Full stack trace logged once</text>
+
+  <!-- ANIMATED MOVING PACKET DOTS (Synchronized 10s SMIL Timeline) -->
+  <!-- Step 1 (0s-2s): Pulse indicator inside Repository SQL failure -->
+  <g>
+    <circle cx="168" cy="198" r="8" fill="url(#glowRose)">
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0.8;1;0.4;1;0;0" keyTimes="0;0.04;0.10;0.16;0.20;1"/>
+    </circle>
+    <circle cx="168" cy="198" r="3.5" fill="#ffe4e6">
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0.8;1;0.5;1;0;0" keyTimes="0;0.04;0.10;0.16;0.20;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 2 (2s-4s): Wrap SQLException -> OrderPersistenceException -->
+  <g>
+    <circle r="9" fill="url(#glowAmber)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 194,238 L 236,238" keyTimes="0;0.21;0.38;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.20;0.23;0.36;0.40;1"/>
+    </circle>
+    <circle r="4" fill="#fef3c7">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 194,238 L 236,238" keyTimes="0;0.21;0.38;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.20;0.23;0.36;0.40;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 3 (4s-6s): Propagate to @RestControllerAdvice -->
+  <g>
+    <circle r="9" fill="url(#glowPurple)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 438,238 L 478,238" keyTimes="0;0.41;0.58;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.40;0.43;0.56;0.60;1"/>
+    </circle>
+    <circle r="4" fill="#f3e8ff">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 438,238 L 478,238" keyTimes="0;0.41;0.58;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.40;0.43;0.56;0.60;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 4 (6s-8s): Emit Sanitized ProblemDetail JSON (503 / 422) -->
+  <g>
+    <circle r="9" fill="url(#glowSky)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 640,210 C 662,210 660,158 684,158" keyTimes="0;0.61;0.78;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.60;0.63;0.76;0.80;1"/>
+    </circle>
+    <circle r="4" fill="#e0f2fe">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 640,210 C 662,210 660,158 684,158" keyTimes="0;0.61;0.78;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.60;0.63;0.76;0.80;1"/>
+    </circle>
+  </g>
+
+  <!-- Step 5 (8s-10s): Log Full Stack Trace Once at Boundary -->
+  <g>
+    <circle r="9" fill="url(#glowEmerald)">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 640,270 C 662,270 660,318 684,318" keyTimes="0;0.81;0.96;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.80;0.83;0.96;1"/>
+    </circle>
+    <circle r="4" fill="#d1fae5">
+      <animateMotion dur="10s" repeatCount="indefinite" path="M 640,270 C 662,270 660,318 684,318" keyTimes="0;0.81;0.96;1" keyPoints="0;0;1;1" calcMode="linear"/>
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.80;0.83;0.96;1"/>
+    </circle>
+  </g>
+
+  <!-- BOTTOM ANIMATED STEP LEGEND BAR -->
+  <line x1="20" y1="406" x2="900" y2="406" stroke="#1e293b" stroke-width="1"/>
+
+  <g class="pill-s1">
+    <rect x="20" y="416" width="168" height="42" rx="10" fill="#4c0519" stroke="#fb7185" stroke-width="1.4"/>
+    <circle cx="35" cy="437" r="4" fill="#fb7185"/>
+    <text x="46" y="433.5" class="sans" font-size="10.2" font-weight="700" fill="#f8fafc">1 · Catch SQLException</text>
+    <text x="46" y="448" class="sans" font-size="9.3" fill="#fecdd3">Repository intercepts DB</text>
+  </g>
+
+  <g class="pill-s2">
+    <rect x="198" y="416" width="168" height="42" rx="10" fill="#451a03" stroke="#fbbf24" stroke-width="1.4"/>
+    <circle cx="213" cy="437" r="4" fill="#fbbf24"/>
+    <text x="224" y="433.5" class="sans" font-size="10.2" font-weight="700" fill="#f8fafc">2 · Wrap Domain Cause</text>
+    <text x="224" y="448" class="sans" font-size="9.3" fill="#fde68a">OrderPersistenceException</text>
+  </g>
+
+  <g class="pill-s3">
+    <rect x="376" y="416" width="168" height="42" rx="10" fill="#2e1065" stroke="#c084fc" stroke-width="1.4"/>
+    <circle cx="391" cy="437" r="4" fill="#c084fc"/>
+    <text x="402" y="433.5" class="sans" font-size="10.2" font-weight="700" fill="#f8fafc">3 · RestControllerAdvice</text>
+    <text x="402" y="448" class="sans" font-size="9.3" fill="#e9d5ff">Single edge translation</text>
+  </g>
+
+  <g class="pill-s4">
+    <rect x="554" y="416" width="168" height="42" rx="10" fill="#0c2438" stroke="#38bdf8" stroke-width="1.4"/>
+    <circle cx="569" cy="437" r="4" fill="#38bdf8"/>
+    <text x="580" y="433.5" class="sans" font-size="10.2" font-weight="700" fill="#f8fafc">4 · ProblemDetail 503/422</text>
+    <text x="580" y="448" class="sans" font-size="9.3" fill="#7dd3fc">Sanitized client JSON</text>
+  </g>
+
+  <g class="pill-s5">
+    <rect x="732" y="416" width="168" height="42" rx="10" fill="#052e26" stroke="#34d399" stroke-width="1.4"/>
+    <circle cx="747" cy="437" r="4" fill="#34d399"/>
+    <text x="758" y="433.5" class="sans" font-size="10.2" font-weight="700" fill="#f8fafc">5 · Log Stack Trace Once</text>
+    <text x="758" y="448" class="sans" font-size="9.3" fill="#6ee7b7">Full Caused by chain</text>
+  </g>
+</svg>

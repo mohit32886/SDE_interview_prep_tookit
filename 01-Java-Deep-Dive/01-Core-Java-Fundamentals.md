@@ -110,6 +110,8 @@ processor.processPayment(100.0);
 
 ### Polymorphism: Compile-Time vs Runtime
 
+![Runtime Polymorphism & v-table Dispatch Animation](./assets/01-vtable-polymorphism.svg)
+
 ```mermaid
 flowchart LR
     subgraph Design["Design Pillars"]
@@ -325,6 +327,8 @@ public class CorrectPerson {
 - **`new String("hello")`** always allocates a distinct `String` object on the Heap (outside the pool). Calling **`.intern()`** returns the pooled canonical reference (or inserts it into the pool if absent).
 - **Compile-time vs Runtime Concatenation:** `"hello" + " " + "world"` folds into one pooled literal during compilation; `prefix + " world"` allocates a new `String` at runtime.
 - **Java 9+ Compact Strings:** Replaced `char[]` (2 bytes/char) with `byte[] value` + `byte coder` (`LATIN1 = 0` for 1 byte/char, `UTF16 = 1` for 2 bytes/char), reducing String heap memory up to ~50% for ASCII/Latin-1 workloads.
+
+![JVM Heap vs String Pool & intern() Animation](./assets/01-string-pool-intern.svg)
 
 ```mermaid
 flowchart LR

@@ -302,6 +302,8 @@ public class OrderException extends RuntimeException {
 
 Introduced in Java 7, `try-with-resources` manages any object implementing `java.lang.AutoCloseable` (and its sub-interface `Closeable`), guaranteeing deterministic cleanup without `try-finally` boilerplate or exception masking.
 
+![Try-With-Resources Reverse Close & Suppression Animation](./assets/06-try-with-resources-suppression.svg)
+
 ```mermaid
 sequenceDiagram
     participant C as Caller
@@ -447,6 +449,8 @@ public void withdraw(double amount) throws InsufficientFundsException {
 ## Exception Chaining
 
 Exception chaining wraps low-level failures inside higher-level domain exceptions without losing the original stack trace, while multi-catch and suppression keep recovery blocks DRY.
+
+![Layered Exception Translation Animation](./assets/06-exception-translation-layers.svg)
 
 ```mermaid
 flowchart LR

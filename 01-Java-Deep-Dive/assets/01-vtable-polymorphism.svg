@@ -1,0 +1,307 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" width="920" height="520" role="img" aria-labelledby="vtable-title vtable-desc">
+  <title id="vtable-title">Polymorphism Dispatch: Runtime v-table vs Compile-Time Overloading</title>
+  <desc id="vtable-desc">Animated diagram showing Runtime Polymorphism via invokevirtual, Heap Dog object Klass pointer, and Dog v-table lookup contrasted with Compile-Time Overload Resolution via invokestatic and invokespecial.</desc>
+
+  <defs>
+    <pattern id="bg-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#1e293b" stroke-width="0.8"/>
+    </pattern>
+
+    <linearGradient id="card-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0b1120"/>
+    </linearGradient>
+
+    <linearGradient id="panel-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#131c2e" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <style>
+    .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    .flow-line {
+      stroke-dasharray: 6 6;
+      animation: dashFlow 1.2s linear infinite;
+    }
+    .flow-line-slow {
+      stroke-dasharray: 5 5;
+      animation: dashFlow 1.6s linear infinite;
+    }
+
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -24; }
+    }
+
+    /* 8s synchronized highlight cycle:
+       Step 1: 0% - 25% (Stack ref -> Heap)
+       Step 2: 25% - 50% (Object Header Klass* -> v-table)
+       Step 3: 50% - 75% (v-table slot -> Dog.makeSound())
+       Step 4: 75% - 100% (Compile-time overload contrast)
+    */
+    .hl-s1 { animation: pulseS1 8s ease-in-out infinite; }
+    .hl-s2 { animation: pulseS2 8s ease-in-out infinite; }
+    .hl-s3 { animation: pulseS3 8s ease-in-out infinite; }
+    .hl-s4 { animation: pulseS4 8s ease-in-out infinite; }
+
+    .pill-s1 { animation: pillS1 8s ease-in-out infinite; }
+    .pill-s2 { animation: pillS2 8s ease-in-out infinite; }
+    .pill-s3 { animation: pillS3 8s ease-in-out infinite; }
+    .pill-s4 { animation: pillS4 8s ease-in-out infinite; }
+
+    @keyframes pulseS1 {
+      0%, 24% { stroke-opacity: 1; fill-opacity: 0.22; }
+      28%, 96% { stroke-opacity: 0.22; fill-opacity: 0.04; }
+      100% { stroke-opacity: 1; fill-opacity: 0.22; }
+    }
+    @keyframes pulseS2 {
+      0%, 22% { stroke-opacity: 0.22; fill-opacity: 0.04; }
+      26%, 49% { stroke-opacity: 1; fill-opacity: 0.22; }
+      53%, 100% { stroke-opacity: 0.22; fill-opacity: 0.04; }
+    }
+    @keyframes pulseS3 {
+      0%, 47% { stroke-opacity: 0.22; fill-opacity: 0.04; }
+      51%, 74% { stroke-opacity: 1; fill-opacity: 0.24; }
+      78%, 100% { stroke-opacity: 0.22; fill-opacity: 0.04; }
+    }
+    @keyframes pulseS4 {
+      0%, 72% { stroke-opacity: 0.22; fill-opacity: 0.04; }
+      76%, 98% { stroke-opacity: 1; fill-opacity: 0.22; }
+      100% { stroke-opacity: 0.22; fill-opacity: 0.04; }
+    }
+
+    @keyframes pillS1 {
+      0%, 24% { stroke-opacity: 1; fill-opacity: 0.28; }
+      28%, 96% { stroke-opacity: 0.25; fill-opacity: 0.06; }
+      100% { stroke-opacity: 1; fill-opacity: 0.28; }
+    }
+    @keyframes pillS2 {
+      0%, 22% { stroke-opacity: 0.25; fill-opacity: 0.06; }
+      26%, 49% { stroke-opacity: 1; fill-opacity: 0.28; }
+      53%, 100% { stroke-opacity: 0.25; fill-opacity: 0.06; }
+    }
+    @keyframes pillS3 {
+      0%, 47% { stroke-opacity: 0.25; fill-opacity: 0.06; }
+      51%, 74% { stroke-opacity: 1; fill-opacity: 0.28; }
+      78%, 100% { stroke-opacity: 0.25; fill-opacity: 0.06; }
+    }
+    @keyframes pillS4 {
+      0%, 72% { stroke-opacity: 0.25; fill-opacity: 0.06; }
+      76%, 98% { stroke-opacity: 1; fill-opacity: 0.28; }
+      100% { stroke-opacity: 0.25; fill-opacity: 0.06; }
+    }
+  </style>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="1" y="1" width="918" height="518" rx="16" fill="url(#card-grad)" stroke="#334155" stroke-width="1.5"/>
+  <rect x="2" y="2" width="916" height="516" rx="15" fill="url(#bg-grid)" opacity="0.5"/>
+
+  <!-- Header -->
+  <text x="26" y="32" class="sans" font-size="16.5" font-weight="700" fill="#f8fafc">Polymorphism Dispatch: Runtime v-table vs Compile-Time Overloading</text>
+  <text x="26" y="52" class="sans" font-size="12" fill="#94a3b8">HotSpot JVM: invokevirtual dynamic Klass* lookup vs javac static overload binding</text>
+
+  <!-- Header Mode Pills -->
+  <rect x="614" y="18" width="136" height="28" rx="14" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-opacity="0.5" stroke-width="1"/>
+  <circle cx="628" cy="32" r="4" fill="#fbbf24"/>
+  <text x="638" y="36" class="mono" font-size="10" font-weight="600" fill="#fde68a">RUNTIME: v-table</text>
+
+  <rect x="758" y="18" width="138" height="28" rx="14" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.5" stroke-width="1"/>
+  <circle cx="772" cy="32" r="4" fill="#34d399"/>
+  <text x="782" y="36" class="mono" font-size="10" font-weight="600" fill="#a7f3d0">COMPILE: static</text>
+
+  <line x1="24" y1="68" x2="896" y2="68" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- ==================== COLUMN 1: JVM STACK ==================== -->
+  <rect x="24" y="82" width="244" height="242" rx="12" fill="url(#panel-grad)" stroke="#334155" stroke-width="1.2"/>
+  <path d="M 24 94 Q 24 82 36 82 L 256 82 Q 268 82 268 94 L 268 112 L 24 112 Z" fill="#0c4a6e" fill-opacity="0.55"/>
+  <line x1="24" y1="112" x2="268" y2="112" stroke="#38bdf8" stroke-opacity="0.35" stroke-width="1"/>
+  <text x="38" y="101" class="sans" font-size="11.5" font-weight="700" letter-spacing="0.6" fill="#38bdf8">JVM STACK (THREAD FRAME)</text>
+
+  <!-- Source snippet box -->
+  <rect x="36" y="122" width="220" height="52" rx="8" fill="#0b1220" stroke="#334155" stroke-width="1"/>
+  <text x="46" y="143" class="mono" font-size="11.5" fill="#e2e8f0">Animal ref = <tspan fill="#fbbf24" font-weight="600">new Dog()</tspan>;</text>
+  <text x="46" y="162" class="mono" font-size="11.5" fill="#38bdf8" font-weight="600">ref.makeSound();</text>
+
+  <!-- Local var slot -->
+  <rect x="36" y="184" width="220" height="62" rx="8" fill="#0b1220" stroke="#38bdf8" stroke-opacity="0.4" stroke-width="1"/>
+  <rect x="36" y="184" width="220" height="62" rx="8" fill="#38bdf8" stroke="#38bdf8" stroke-width="1.8" class="hl-s1"/>
+  <text x="46" y="201" class="sans" font-size="10.5" font-weight="700" fill="#94a3b8">LOCAL VARIABLE SLOT [1]</text>
+  <rect x="46" y="209" width="200" height="27" rx="5" fill="#1e293b" stroke="#38bdf8" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="55" y="227" class="mono" font-size="11" fill="#f8fafc">ref <tspan fill="#38bdf8">→ 0x7f08a10</tspan> <tspan fill="#94a3b8">(Animal)</tspan></text>
+
+  <!-- Bytecode instruction -->
+  <rect x="36" y="256" width="220" height="56" rx="8" fill="#0b1220" stroke="#334155" stroke-width="1"/>
+  <text x="46" y="276" class="mono" font-size="11" font-weight="700" fill="#fbbf24">invokevirtual #makeSound</text>
+  <text x="46" y="295" class="sans" font-size="11" fill="#94a3b8">Dynamic dispatch via object header</text>
+
+  <!-- ==================== COLUMN 2: JVM HEAP ==================== -->
+  <rect x="320" y="82" width="256" height="242" rx="12" fill="url(#panel-grad)" stroke="#334155" stroke-width="1.2"/>
+  <path d="M 320 94 Q 320 82 332 82 L 564 82 Q 576 82 576 94 L 576 112 L 320 112 Z" fill="#78350f" fill-opacity="0.45"/>
+  <line x1="320" y1="112" x2="576" y2="112" stroke="#fbbf24" stroke-opacity="0.35" stroke-width="1"/>
+  <text x="334" y="101" class="sans" font-size="11.5" font-weight="700" letter-spacing="0.6" fill="#fbbf24">JVM HEAP (Dog @ 0x7f08a10)</text>
+
+  <!-- Object Header -->
+  <rect x="332" y="122" width="232" height="118" rx="8" fill="#0b1220" stroke="#475569" stroke-width="1"/>
+  <text x="342" y="139" class="sans" font-size="10.5" font-weight="700" fill="#cbd5e1">OBJECT HEADER (12–16 B)</text>
+
+  <!-- Mark Word -->
+  <rect x="342" y="147" width="212" height="36" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="352" y="169" class="mono" font-size="11" font-weight="600" fill="#e2e8f0">Mark Word</text>
+  <text x="544" y="169" text-anchor="end" class="mono" font-size="10" fill="#94a3b8">hash | age | lock</text>
+
+  <!-- Klass* Pointer -->
+  <rect x="342" y="191" width="212" height="40" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-opacity="0.5" stroke-width="1"/>
+  <rect x="342" y="191" width="212" height="40" rx="6" fill="#a78bfa" stroke="#a78bfa" stroke-width="1.8" class="hl-s2"/>
+  <text x="352" y="209" class="mono" font-size="11.5" font-weight="700" fill="#ddd6fe">Klass* Ptr → Dog.class</text>
+  <text x="352" y="224" class="sans" font-size="10" fill="#a78bfa">Runtime type metadata pointer</text>
+
+  <!-- Instance Data -->
+  <rect x="332" y="248" width="232" height="64" rx="8" fill="#0b1220" stroke="#334155" stroke-width="1"/>
+  <text x="342" y="266" class="sans" font-size="10.5" font-weight="700" fill="#94a3b8">INSTANCE DATA</text>
+  <text x="342" y="284" class="mono" font-size="10.5" fill="#cbd5e1">Animal + Dog fields</text>
+  <text x="342" y="301" class="sans" font-size="10.5" fill="#94a3b8">Declared: <tspan fill="#38bdf8" class="mono">Animal</tspan> | Actual: <tspan fill="#fbbf24" class="mono">Dog</tspan></text>
+
+  <!-- ==================== COLUMN 3: METASPACE v-table ==================== -->
+  <rect x="628" y="82" width="268" height="242" rx="12" fill="url(#panel-grad)" stroke="#334155" stroke-width="1.2"/>
+  <path d="M 628 94 Q 628 82 640 82 L 884 82 Q 896 82 896 94 L 896 112 L 628 112 Z" fill="#4c1d95" fill-opacity="0.45"/>
+  <line x1="628" y1="112" x2="896" y2="112" stroke="#a78bfa" stroke-opacity="0.35" stroke-width="1"/>
+  <text x="642" y="101" class="sans" font-size="11.5" font-weight="700" letter-spacing="0.6" fill="#c4b5fd">METASPACE (Dog v-table)</text>
+
+  <!-- v-table Slots Container -->
+  <rect x="640" y="122" width="244" height="134" rx="8" fill="#0b1220" stroke="#334155" stroke-width="1"/>
+
+  <!-- Slot 0 -->
+  <rect x="648" y="130" width="228" height="31" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="658" y="150" class="mono" font-size="10.5" fill="#94a3b8">[0] toString() → Object</text>
+
+  <!-- Slot 1 -->
+  <rect x="648" y="167" width="228" height="31" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="658" y="187" class="mono" font-size="10.5" fill="#94a3b8">[1] sleep() → Animal (final)</text>
+
+  <!-- Slot 2 (Active Target Slot) -->
+  <rect x="648" y="204" width="228" height="44" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-opacity="0.55" stroke-width="1.2"/>
+  <rect x="648" y="204" width="228" height="44" rx="6" fill="#fbbf24" stroke="#fbbf24" stroke-width="2" class="hl-s3"/>
+  <text x="658" y="222" class="mono" font-size="11" font-weight="700" fill="#fef3c7">[2] makeSound()</text>
+  <text x="674" y="239" class="mono" font-size="11" font-weight="700" fill="#34d399">→ Dog.makeSound()</text>
+
+  <!-- Dispatch Target Box -->
+  <rect x="640" y="264" width="244" height="48" rx="8" fill="#0b1220" stroke="#34d399" stroke-opacity="0.4" stroke-width="1"/>
+  <rect x="640" y="264" width="244" height="48" rx="8" fill="#34d399" stroke="#34d399" stroke-width="1.8" class="hl-s3"/>
+  <text x="652" y="282" class="sans" font-size="10" font-weight="700" fill="#6ee7b7">DYNAMIC TARGET EXECUTED</text>
+  <text x="652" y="301" class="mono" font-size="11.5" font-weight="700" fill="#ecfdf5">Dog.makeSound() → "Woof!"</text>
+
+  <!-- ==================== CONNECTORS & PACKETS (TOP) ==================== -->
+  <!-- Connector 1: Stack ref -> Heap Dog -->
+  <path d="M 256 222 L 328 222" fill="none" stroke="#38bdf8" stroke-width="2.2" class="flow-line" marker-end="url(#arrow-cyan)"/>
+  <rect x="275" y="198" width="38" height="17" rx="4" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="294" y="210" text-anchor="middle" class="mono" font-size="10" font-weight="600" fill="#7dd3fc">ref</text>
+
+  <!-- Connector 2: Heap Klass* -> Dog v-table Slot 2 -->
+  <path d="M 554 211 C 594 211, 598 226, 644 226" fill="none" stroke="#a78bfa" stroke-width="2.2" class="flow-line" marker-end="url(#arrow-violet)"/>
+  <rect x="577" y="191" width="48" height="17" rx="4" fill="#0f172a" stroke="#a78bfa" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="601" y="203" text-anchor="middle" class="mono" font-size="10" font-weight="600" fill="#ddd6fe">Klass*</text>
+
+  <!-- Connector 3: v-table Slot 2 -> Target Execution -->
+  <path d="M 762 248 L 762 260" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+
+  <!-- Animated Dispatch Packet traveling along full runtime lookup path -->
+  <circle r="5.5" fill="#fbbf24" opacity="0" filter="url(#glow)">
+    <animateMotion
+      dur="8s"
+      repeatCount="indefinite"
+      calcMode="linear"
+      keyPoints="0;0.16;0.48;0.74;0.90;1;1"
+      keyTimes="0;0.16;0.40;0.62;0.74;0.78;1"
+      path="M 256,222 L 332,222 L 554,211 C 594,211 598,226 648,226 L 762,226 L 762,264"/>
+    <animate attributeName="fill" values="#38bdf8;#38bdf8;#a78bfa;#fbbf24;#34d399;#34d399;#34d399" keyTimes="0;0.20;0.40;0.58;0.72;0.85;1" dur="8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;1;1;1;1;0;0" keyTimes="0;0.04;0.64;0.72;0.76;0.80;1" dur="8s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- ==================== BOTTOM SECTION: COMPILE-TIME OVERLOAD ==================== -->
+  <rect x="24" y="338" width="872" height="108" rx="12" fill="url(#panel-grad)" stroke="#334155" stroke-width="1.2"/>
+  <rect x="24" y="338" width="872" height="108" rx="12" fill="#34d399" stroke="#34d399" stroke-width="1.6" class="hl-s4"/>
+  <path d="M 24 350 Q 24 338 36 338 L 884 338 Q 896 338 896 350 L 896 366 L 24 366 Z" fill="#064e3b" fill-opacity="0.5"/>
+  <line x1="24" y1="366" x2="896" y2="366" stroke="#34d399" stroke-opacity="0.35" stroke-width="1"/>
+  <text x="38" y="356" class="sans" font-size="11.5" font-weight="700" letter-spacing="0.6" fill="#34d399">COMPILE-TIME OVERLOADING (STATIC BINDING — NO v-table LOOKUP)</text>
+  <text x="882" y="356" text-anchor="end" class="sans" font-size="11" fill="#a7f3d0">Resolved completely by javac from parameter types</text>
+
+  <!-- Sub-box 1: Source Call -->
+  <rect x="38" y="375" width="218" height="60" rx="8" fill="#0b1220" stroke="#334155" stroke-width="1"/>
+  <text x="48" y="392" class="sans" font-size="10" font-weight="700" fill="#94a3b8">SOURCE CALL SITE</text>
+  <text x="48" y="410" class="mono" font-size="11.5" font-weight="600" fill="#f8fafc">Calculator.add(3, 5);</text>
+  <text x="48" y="426" class="mono" font-size="10" fill="#34d399">Args: (int, int)</text>
+
+  <!-- Arrow A -->
+  <path d="M 256 405 L 302 405" fill="none" stroke="#34d399" stroke-width="2" class="flow-line-slow" marker-end="url(#arrow-emerald)"/>
+  <text x="279" y="397" text-anchor="middle" class="mono" font-size="9.5" fill="#6ee7b7">javac</text>
+
+  <!-- Sub-box 2: Overload Candidate Selection -->
+  <rect x="306" y="375" width="302" height="60" rx="8" fill="#0b1220" stroke="#34d399" stroke-opacity="0.45" stroke-width="1"/>
+  <rect x="314" y="382" width="286" height="23" rx="4" fill="#065f46" fill-opacity="0.45" stroke="#34d399" stroke-opacity="0.6" stroke-width="1"/>
+  <text x="322" y="397" class="mono" font-size="10.5" font-weight="700" fill="#a7f3d0">✓ add(int, int) → Descriptor (II)I</text>
+  <text x="334" y="423" class="mono" font-size="10" fill="#64748b">add(double, double) | add(int, int, int)</text>
+
+  <!-- Arrow B -->
+  <path d="M 608 405 L 654 405" fill="none" stroke="#34d399" stroke-width="2" class="flow-line-slow" marker-end="url(#arrow-emerald)"/>
+  <text x="631" y="397" text-anchor="middle" class="mono" font-size="9.5" fill="#6ee7b7">emits</text>
+
+  <!-- Sub-box 3: Static Bytecode -->
+  <rect x="658" y="375" width="224" height="60" rx="8" fill="#0b1220" stroke="#334155" stroke-width="1"/>
+  <text x="668" y="392" class="sans" font-size="10" font-weight="700" fill="#94a3b8">STATIC BYTECODE BINDING</text>
+  <text x="668" y="410" class="mono" font-size="11" font-weight="700" fill="#34d399">invokestatic / invokespecial</text>
+  <text x="668" y="426" class="sans" font-size="10" fill="#cbd5e1">Zero runtime dispatch overhead</text>
+
+  <!-- Animated packet on Compile-Time Strip (Step 4: 75% - 100%) -->
+  <circle r="4.5" fill="#34d399" opacity="0" filter="url(#glow)">
+    <animateMotion
+      dur="8s"
+      repeatCount="indefinite"
+      calcMode="linear"
+      keyPoints="0;0;0.50;1;1"
+      keyTimes="0;0.74;0.86;0.97;1"
+      path="M 256,405 L 456,405 L 658,405"/>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.73;0.76;0.95;0.98;1" dur="8s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- ==================== STEP LEGEND BAR ==================== -->
+  <rect x="24" y="460" width="872" height="44" rx="10" fill="#0b1220" stroke="#334155" stroke-width="1.2"/>
+
+  <!-- Step 1 Pill -->
+  <rect x="34" y="467" width="204" height="30" rx="7" fill="#38bdf8" stroke="#38bdf8" stroke-width="1.3" class="pill-s1"/>
+  <text x="136" y="486" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#e0f2fe">1. Stack ref → Heap Dog</text>
+
+  <!-- Step 2 Pill -->
+  <rect x="250" y="467" width="204" height="30" rx="7" fill="#a78bfa" stroke="#a78bfa" stroke-width="1.3" class="pill-s2"/>
+  <text x="352" y="486" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#ede9fe">2. Read Header Klass*</text>
+
+  <!-- Step 3 Pill -->
+  <rect x="466" y="467" width="204" height="30" rx="7" fill="#fbbf24" stroke="#fbbf24" stroke-width="1.3" class="pill-s3"/>
+  <text x="568" y="486" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#fef3c7">3. v-table → Dog.makeSound()</text>
+
+  <!-- Step 4 Pill -->
+  <rect x="682" y="467" width="204" height="30" rx="7" fill="#34d399" stroke="#34d399" stroke-width="1.3" class="pill-s4"/>
+  <text x="784" y="486" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#d1fae5">4. Static Overload Contrast</text>
+</svg>

@@ -1,5 +1,7 @@
 # Java Interview Preparation - Complete Deep Dive
 
+![Java Interview Prep Module 01 Animated Roadmap Banner](./assets/00-java-deep-dive-banner.svg)
+
 **Target Audience:** Mid-level Java engineers (5+ years experience) preparing for senior FAANG roles  
 **Total Content:** 7,524 lines across 7 deep-dive modules (~384 KB total) | **Java 5–21** (Focus: **Java 8–17**, Latest: **Java 21**)
 

@@ -1,0 +1,326 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" width="920" height="500" role="img" aria-labelledby="chm-title chm-desc">
+  <title id="chm-title">ConcurrentHashMap (Java 8+) CAS, Bin-Level Locking and Volatile Reads</title>
+  <desc id="chm-desc">Animated diagram showing Thread A inserting into empty Bucket[1] via lock-free CAS, Thread B and Thread C contending only on fine-grained synchronized(head) of Bucket[3], and Thread D reading Bucket[5] concurrently via volatile get().</desc>
+  <defs>
+    <style>
+      .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+      .flow-fast {
+        stroke-dasharray: 6 5;
+        animation: chm-dash 0.9s linear infinite;
+      }
+      .flow-med {
+        stroke-dasharray: 6 5;
+        animation: chm-dash 1.2s linear infinite;
+      }
+      .flow-wait {
+        stroke-dasharray: 4 6;
+        animation: chm-wait-pulse 10s ease-in-out infinite;
+      }
+      @keyframes chm-dash {
+        to { stroke-dashoffset: -22; }
+      }
+      @keyframes chm-wait-pulse {
+        0%, 44% { stroke: #fb7185; stroke-opacity: 0.45; }
+        46%, 84% { stroke: #f59e0b; stroke-opacity: 0.95; }
+        88%, 100% { stroke: #64748b; stroke-opacity: 0.35; }
+      }
+
+      .thread-b-box {
+        animation: tb-glow 10s ease-in-out infinite;
+      }
+      @keyframes tb-glow {
+        0%, 4% { stroke: #475569; }
+        8%, 43% { stroke: #f59e0b; }
+        47%, 100% { stroke: #475569; }
+      }
+
+      .thread-c-box {
+        animation: tc-glow 10s ease-in-out infinite;
+      }
+      @keyframes tc-glow {
+        0%, 6% { stroke: #475569; }
+        10%, 44% { stroke: #fb7185; }
+        46%, 84% { stroke: #f59e0b; }
+        88%, 100% { stroke: #475569; }
+      }
+
+      .bin3-lock {
+        animation: bin3-pulse 10s ease-in-out infinite;
+      }
+      @keyframes bin3-pulse {
+        0%, 4% { stroke: #475569; }
+        8%, 84% { stroke: #f59e0b; }
+        88%, 100% { stroke: #475569; }
+      }
+    </style>
+
+    <linearGradient id="chm-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0b1120"/>
+    </linearGradient>
+    <linearGradient id="chm-prog" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="45%" stop-color="#f59e0b"/>
+      <stop offset="80%" stop-color="#fb7185"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+
+    <marker id="m-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#10b981"/>
+    </marker>
+    <marker id="m-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="m-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#fb7185"/>
+    </marker>
+    <marker id="m-sky" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="m-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="2" y="2" width="916" height="496" rx="14" fill="url(#chm-bg)" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header Bar -->
+  <path d="M 2 16 Q 2 2 16 2 L 904 2 Q 918 2 918 16 L 918 56 L 2 56 Z" fill="#1e293b"/>
+  <line x1="2" y1="56" x2="918" y2="56" stroke="#334155" stroke-width="1"/>
+  <circle cx="26" cy="29" r="6" fill="#10b981"/>
+  <circle cx="26" cy="29" r="10" fill="#10b981" fill-opacity="0.18"/>
+  <text x="44" y="34" fill="#f8fafc" font-size="15" font-weight="700" class="sans">ConcurrentHashMap (Java 8+) — CAS, Bin Lock &amp; Volatile Reads</text>
+
+  <rect x="614" y="16" width="286" height="26" rx="13" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="757" y="33" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600" class="mono">No Segments • Per-Bucket Locking</text>
+
+  <!-- COLUMN 1: CONCURRENT THREADS -->
+  <!-- Thread A: CAS Insert -->
+  <rect x="22" y="74" width="222" height="74" rx="9" fill="#1e293b" stroke="#10b981" stroke-width="1.6"/>
+  <text x="34" y="95" fill="#6ee7b7" font-size="12" font-weight="700" class="sans">Thread A</text>
+  <rect x="172" y="81" width="60" height="19" rx="9" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+  <text x="202" y="94" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="700" class="mono">CAS</text>
+  <text x="34" y="116" fill="#e2e8f0" font-size="11.5" font-weight="600" class="mono">put("k1", 10) -&gt; Bin[1]</text>
+  <text x="34" y="136" fill="#94a3b8" font-size="10.5" class="mono">Attempting CAS...<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.20;0.23;0.94;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="34" y="136" fill="#34d399" font-size="10.5" font-weight="700" class="mono" opacity="0">CAS OK ✔ (Lock-Free!)<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.20;0.24;0.93;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <!-- Thread B: Synchronized Head (Active Owner) -->
+  <rect x="22" y="162" width="222" height="74" rx="9" fill="#1e293b" stroke="#475569" stroke-width="1.6" class="thread-b-box"/>
+  <text x="34" y="183" fill="#fcd34d" font-size="12" font-weight="700" class="sans">Thread B</text>
+  <rect x="172" y="169" width="60" height="19" rx="9" fill="#451a03" stroke="#f59e0b" stroke-width="1"/>
+  <text x="202" y="182" text-anchor="middle" fill="#fde68a" font-size="10" font-weight="700" class="mono">SYNC</text>
+  <text x="34" y="204" fill="#e2e8f0" font-size="11.5" font-weight="600" class="mono">put("k3", 20) -&gt; Bin[3]</text>
+  <text x="34" y="224" fill="#fbbf24" font-size="10.5" font-weight="700" class="mono">Holds Bin[3] lock ✔<animate attributeName="opacity" values="0.3;1;1;0.15;0.15" keyTimes="0;0.08;0.43;0.47;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="34" y="224" fill="#94a3b8" font-size="10.5" class="mono" opacity="0">Lock released ✔<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.44;0.48;0.95;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <!-- Thread C: Contending on same Bucket[3] -->
+  <rect x="22" y="250" width="222" height="74" rx="9" fill="#1e293b" stroke="#475569" stroke-width="1.6" class="thread-c-box"/>
+  <text x="34" y="271" fill="#fda4af" font-size="12" font-weight="700" class="sans">Thread C</text>
+  <rect x="172" y="257" width="60" height="19" rx="9" fill="#4c0519" stroke="#fb7185" stroke-width="1">
+    <animate attributeName="fill" values="#4c0519;#4c0519;#451a03;#451a03;#4c0519" keyTimes="0;0.44;0.47;0.86;1" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="stroke" values="#fb7185;#fb7185;#f59e0b;#f59e0b;#fb7185" keyTimes="0;0.44;0.47;0.86;1" dur="10s" repeatCount="indefinite"/>
+  </rect>
+  <text x="202" y="270" text-anchor="middle" fill="#fecdd3" font-size="10" font-weight="700" class="mono">WAIT<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.44;0.46;0.87;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="202" y="270" text-anchor="middle" fill="#fde68a" font-size="10" font-weight="700" class="mono" opacity="0">SYNC<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.44;0.47;0.86;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <text x="34" y="292" fill="#e2e8f0" font-size="11.5" font-weight="600" class="mono">put("k4", 30) -&gt; Bin[3]</text>
+  <text x="34" y="312" fill="#fb7185" font-size="10.5" font-weight="600" class="mono">Blocked on head(Bin[3])<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.44;0.46;0.90;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="34" y="312" fill="#fbbf24" font-size="10.5" font-weight="700" class="mono" opacity="0">Acquired lock -&gt; Append ✔<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.45;0.48;0.92;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <!-- Thread D: Lock-Free Volatile Read -->
+  <rect x="22" y="338" width="222" height="74" rx="9" fill="#1e293b" stroke="#38bdf8" stroke-width="1.6"/>
+  <text x="34" y="359" fill="#7dd3fc" font-size="12" font-weight="700" class="sans">Thread D</text>
+  <rect x="172" y="345" width="60" height="19" rx="9" fill="#0c2d48" stroke="#38bdf8" stroke-width="1"/>
+  <text x="202" y="358" text-anchor="middle" fill="#bae6fd" font-size="10" font-weight="700" class="mono">READ</text>
+  <text x="34" y="380" fill="#e2e8f0" font-size="11.5" font-weight="600" class="mono">get("k5") -&gt; Bin[5]</text>
+  <text x="34" y="400" fill="#38bdf8" font-size="10.5" font-weight="700" class="mono">volatile get() • 0 Locks ✔</text>
+
+  <!-- CONNECTORS: THREADS -> TABLE[] (NON-CROSSING LANES) -->
+  <!-- Thread A -> Bucket[1] -->
+  <path d="M 244 111 C 282 111, 282 166, 318 166" fill="none" stroke="#10b981" stroke-opacity="0.22" stroke-width="6"/>
+  <path d="M 244 111 C 282 111, 282 166, 316 166" fill="none" stroke="#10b981" stroke-width="2" class="flow-fast" marker-end="url(#m-green)"/>
+  <circle r="4.5" fill="#34d399">
+    <animateMotion path="M 244 111 C 282 111, 282 166, 318 166" dur="10s" keyPoints="0;0;1;1" keyTimes="0;0.04;0.20;1" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.05;0.19;0.22;1" dur="10s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Thread B -> Bucket[3] upper -->
+  <path d="M 244 199 C 282 199, 282 248, 318 248" fill="none" stroke="#f59e0b" stroke-opacity="0.22" stroke-width="6"/>
+  <path d="M 244 199 C 282 199, 282 248, 316 248" fill="none" stroke="#f59e0b" stroke-width="2" class="flow-med" marker-end="url(#m-amber)"/>
+  <circle r="4.5" fill="#fbbf24">
+    <animateMotion path="M 244 199 C 282 199, 282 248, 318 248" dur="10s" keyPoints="0;0;1;1" keyTimes="0;0.06;0.22;1" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.07;0.21;0.24;1" dur="10s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Thread C -> Bucket[3] lower -->
+  <path d="M 244 287 C 282 287, 282 262, 318 262" fill="none" stroke="#fb7185" stroke-width="2" class="flow-wait" marker-end="url(#m-rose)"/>
+  <!-- Wait Pause Symbol on Thread C line -->
+  <g opacity="1">
+    <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.08;0.44;0.47;1" dur="10s" repeatCount="indefinite"/>
+    <rect x="271" y="264" width="16" height="16" rx="4" fill="#4c0519" stroke="#fb7185" stroke-width="1"/>
+    <line x1="276.5" y1="268" x2="276.5" y2="276" stroke="#fecdd3" stroke-width="2"/>
+    <line x1="281.5" y1="268" x2="281.5" y2="276" stroke="#fecdd3" stroke-width="2"/>
+  </g>
+  <circle r="4.5" fill="#fbbf24">
+    <animateMotion path="M 244 287 C 282 287, 282 262, 318 262" dur="10s" keyPoints="0;0;1;1" keyTimes="0;0.47;0.62;1" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.46;0.48;0.61;0.64;1" dur="10s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Thread D -> Bucket[5] -->
+  <path d="M 244 375 C 282 375, 282 342, 318 342" fill="none" stroke="#38bdf8" stroke-opacity="0.22" stroke-width="6"/>
+  <path d="M 244 375 C 282 375, 282 342, 316 342" fill="none" stroke="#38bdf8" stroke-width="2" class="flow-fast" marker-end="url(#m-sky)"/>
+  <circle r="4.5" fill="#7dd3fc">
+    <animateMotion path="M 244 375 C 282 375, 282 342, 318 342" dur="3.33s" keyPoints="0;1" keyTimes="0;1" calcMode="linear" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- COLUMN 2: SHARED table[] ARRAY -->
+  <rect x="310" y="72" width="178" height="344" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="399" y="94" text-anchor="middle" fill="#cbd5e1" font-size="11.5" font-weight="700" class="mono">volatile table[]</text>
+
+  <!-- Bucket[0] -->
+  <rect x="320" y="106" width="158" height="34" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="399" y="127" text-anchor="middle" fill="#64748b" font-size="11" class="mono">[0] null</text>
+
+  <!-- Bucket[1] CAS Target -->
+  <rect x="320" y="148" width="158" height="36" rx="6" fill="#0f172a" stroke="#10b981" stroke-width="1.6">
+    <animate attributeName="fill" values="#0f172a;#0f172a;#064e3b;#064e3b;#0f172a" keyTimes="0;0.20;0.24;0.92;1" dur="10s" repeatCount="indefinite"/>
+  </rect>
+  <text x="399" y="170" text-anchor="middle" fill="#94a3b8" font-size="11" class="mono">[1] null (CAS)<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.20;0.23;0.93;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="399" y="170" text-anchor="middle" fill="#6ee7b7" font-size="11" font-weight="700" class="mono" opacity="0">[1] Node(k1, 10)<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.20;0.24;0.92;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <!-- Bucket[2] -->
+  <rect x="320" y="192" width="158" height="34" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="399" y="213" text-anchor="middle" fill="#64748b" font-size="11" class="mono">[2] Node(a, 1)</text>
+
+  <!-- Bucket[3] Per-Bin Locked Head -->
+  <rect x="320" y="236" width="158" height="38" rx="6" fill="#2a1d11" stroke="#475569" stroke-width="1.8" class="bin3-lock"/>
+  <!-- Padlock icon inside Bucket[3] -->
+  <path d="M 332 254 L 332 250 A 4 4 0 0 1 340 250 L 340 254" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+  <rect x="330" y="254" width="12" height="9" rx="2" fill="#f59e0b"/>
+  <text x="408" y="259" text-anchor="middle" fill="#fde68a" font-size="11" font-weight="700" class="mono">[3] sync(head)</text>
+
+  <!-- Bucket[4] -->
+  <rect x="320" y="282" width="158" height="34" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="399" y="303" text-anchor="middle" fill="#64748b" font-size="11" class="mono">[4] null</text>
+
+  <!-- Bucket[5] Volatile Read Target -->
+  <rect x="320" y="324" width="158" height="36" rx="6" fill="#0c2d48" stroke="#38bdf8" stroke-width="1.6"/>
+  <text x="399" y="346" text-anchor="middle" fill="#bae6fd" font-size="11" font-weight="700" class="mono">[5] Node(k5, 50)</text>
+
+  <!-- Bucket[6] -->
+  <rect x="320" y="368" width="158" height="34" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="399" y="389" text-anchor="middle" fill="#64748b" font-size="11" class="mono">[6] Node(z, 9)</text>
+
+  <!-- CONNECTORS: TABLE[] -> RIGHT MECHANICS PANELS -->
+  <!-- Bucket[1] -> Panel 1 -->
+  <path d="M 478 166 C 516 166, 516 122, 552 122" fill="none" stroke="#10b981" stroke-opacity="0.22" stroke-width="6"/>
+  <path d="M 478 166 C 516 166, 516 122, 550 122" fill="none" stroke="#10b981" stroke-width="2" class="flow-fast" marker-end="url(#m-green)"/>
+  <circle r="4" fill="#34d399">
+    <animateMotion path="M 478 166 C 516 166, 516 122, 552 122" dur="10s" keyPoints="0;0;1;1" keyTimes="0;0.20;0.29;1" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.19;0.21;0.28;0.30;1" dur="10s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Bucket[3] -> Panel 2 -->
+  <path d="M 478 255 L 552 255" fill="none" stroke="#f59e0b" stroke-opacity="0.22" stroke-width="6"/>
+  <path d="M 478 255 L 550 255" fill="none" stroke="#f59e0b" stroke-width="2" class="flow-med" marker-end="url(#m-amber)"/>
+
+  <!-- Bucket[5] -> Panel 3 -->
+  <path d="M 478 342 C 516 342, 516 374, 552 374" fill="none" stroke="#38bdf8" stroke-opacity="0.22" stroke-width="6"/>
+  <path d="M 478 342 C 516 342, 516 374, 550 374" fill="none" stroke="#38bdf8" stroke-width="2" class="flow-fast" marker-end="url(#m-sky)"/>
+  <circle r="4" fill="#7dd3fc">
+    <animateMotion path="M 478 342 C 516 342, 516 374, 552 374" dur="3.33s" keyPoints="0;1" keyTimes="0;1" calcMode="linear" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- COLUMN 3: BIN MECHANICS PANELS -->
+  <!-- PANEL 1: Bucket[1] CAS -->
+  <rect x="554" y="74" width="344" height="96" rx="10" fill="#1e293b" stroke="#10b981" stroke-opacity="0.65" stroke-width="1.5"/>
+  <text x="568" y="96" fill="#6ee7b7" font-size="11.5" font-weight="700" class="sans">BUCKET[1]: LOCK-FREE CAS INSERT</text>
+  <rect x="816" y="81" width="70" height="20" rx="10" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+  <text x="851" y="95" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="700" class="mono">0 Locks</text>
+
+  <rect x="568" y="109" width="316" height="48" rx="7" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="726" y="129" text-anchor="middle" fill="#cbd5e1" font-size="10.5" class="mono">casTabAt(tab, 1, null, new Node(k1, 10))</text>
+  <text x="726" y="147" text-anchor="middle" fill="#94a3b8" font-size="10.5" class="mono">tab[1] == null -&gt; swapping atomically...<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.21;0.24;0.94;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="726" y="147" text-anchor="middle" fill="#34d399" font-size="10.5" font-weight="700" class="mono" opacity="0">tab[1] = Node(k1, 10) • CPU cmpxchg ✔<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.21;0.25;0.93;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <!-- PANEL 2: Bucket[3] Fine-Grained Synchronized(head) -->
+  <rect x="554" y="184" width="344" height="136" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-opacity="0.7" stroke-width="1.5"/>
+  <text x="568" y="206" fill="#fcd34d" font-size="11.5" font-weight="700" class="sans">BUCKET[3]: synchronized (head)</text>
+
+  <!-- Lock Owner Badge -->
+  <rect x="760" y="191" width="126" height="20" rx="10" fill="#451a03" stroke="#f59e0b" stroke-width="1"/>
+  <text x="823" y="205" text-anchor="middle" fill="#fde68a" font-size="10" font-weight="700" class="mono">OWNER: Thread B<animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.43;0.46;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="823" y="205" text-anchor="middle" fill="#fde68a" font-size="10" font-weight="700" class="mono" opacity="0">OWNER: Thread C<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.45;0.48;0.86;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="823" y="205" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="700" class="mono" opacity="0">UNLOCKED<animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.85;0.88;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <!-- Monitor Box around Head Node -->
+  <rect x="564" y="220" width="76" height="52" rx="7" fill="#2a1d11" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4 3">
+    <animate attributeName="stroke-opacity" values="1;1;0.3;1" keyTimes="0;0.84;0.88;1" dur="10s" repeatCount="indefinite"/>
+  </rect>
+  <text x="602" y="232" text-anchor="middle" fill="#fbbf24" font-size="8.5" font-weight="700" class="mono">LOCK HEAD</text>
+  <rect x="570" y="236" width="64" height="30" rx="5" fill="#0f172a" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="602" y="255" text-anchor="middle" fill="#f8fafc" font-size="10.5" font-weight="700" class="mono">Node(x)</text>
+
+  <line x1="640" y1="251" x2="652" y2="251" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#m-slate)"/>
+
+  <rect x="655" y="236" width="58" height="30" rx="5" fill="#0f172a" stroke="#64748b" stroke-width="1.2"/>
+  <text x="684" y="255" text-anchor="middle" fill="#e2e8f0" font-size="10.5" font-weight="600" class="mono">Node(y)</text>
+
+  <!-- Node(k3) appended by Thread B -->
+  <g opacity="0.15">
+    <animate attributeName="opacity" values="0.15;0.15;1;1;0.15" keyTimes="0;0.22;0.27;0.94;1" dur="10s" repeatCount="indefinite"/>
+    <line x1="713" y1="251" x2="727" y2="251" stroke="#f59e0b" stroke-width="1.8" marker-end="url(#m-amber)"/>
+    <rect x="730" y="236" width="68" height="30" rx="5" fill="#451a03" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="764" y="255" text-anchor="middle" fill="#fef3c7" font-size="10.5" font-weight="700" class="mono">+k3:20</text>
+  </g>
+
+  <!-- Node(k4) appended by Thread C -->
+  <g opacity="0.15">
+    <animate attributeName="opacity" values="0.15;0.15;1;1;0.15" keyTimes="0;0.62;0.68;0.94;1" dur="10s" repeatCount="indefinite"/>
+    <line x1="798" y1="251" x2="812" y2="251" stroke="#fb7185" stroke-width="1.8" marker-end="url(#m-rose)"/>
+    <rect x="815" y="236" width="69" height="30" rx="5" fill="#4c0519" stroke="#fb7185" stroke-width="1.5"/>
+    <text x="849" y="255" text-anchor="middle" fill="#ffe4e6" font-size="10.5" font-weight="700" class="mono">+k4:30</text>
+  </g>
+
+  <!-- Live Panel 2 Narration Strip -->
+  <rect x="568" y="282" width="316" height="26" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="726" y="299" text-anchor="middle" fill="#fde68a" font-size="10" class="mono">B mutates Bin[3]; C waits (Bins 1, 5 FREE)<animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.43;0.46;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="726" y="299" text-anchor="middle" fill="#fda4af" font-size="10" font-weight="600" class="mono" opacity="0">B released -&gt; C wakes &amp; appends k4 ✔<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.45;0.48;0.86;1" dur="10s" repeatCount="indefinite"/></text>
+  <text x="726" y="299" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="600" class="mono" opacity="0">Lock released • Contention isolated ✔<animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.85;0.88;1" dur="10s" repeatCount="indefinite"/></text>
+
+  <!-- PANEL 3: Bucket[5] Concurrent Volatile Read -->
+  <rect x="554" y="332" width="344" height="84" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-opacity="0.65" stroke-width="1.5"/>
+  <text x="568" y="354" fill="#7dd3fc" font-size="11.5" font-weight="700" class="sans">BUCKET[5]: VOLATILE get("k5")</text>
+  <rect x="802" y="339" width="84" height="20" rx="10" fill="#0c2d48" stroke="#38bdf8" stroke-width="1"/>
+  <text x="844" y="353" text-anchor="middle" fill="#bae6fd" font-size="10" font-weight="700" class="mono">Lock-Free</text>
+
+  <rect x="568" y="366" width="316" height="38" rx="7" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="726" y="382" text-anchor="middle" fill="#cbd5e1" font-size="10.5" class="mono">Node.val &amp; Node.next are volatile</text>
+  <text x="726" y="397" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="700" class="mono">Returns 50 concurrently (Bin[3] lock ignored)</text>
+
+  <!-- BOTTOM LEGEND BAR -->
+  <rect x="22" y="432" width="210" height="36" rx="7" fill="#064e3b" fill-opacity="0.45" stroke="#10b981" stroke-opacity="0.65" stroke-width="1.2"/>
+  <circle cx="38" cy="450" r="4.5" fill="#10b981"/>
+  <text x="50" y="454" fill="#d1fae5" font-size="11" font-weight="600" class="sans">Thread A: CAS Empty Bin[1]</text>
+
+  <rect x="244" y="432" width="210" height="36" rx="7" fill="#451a03" fill-opacity="0.45" stroke="#f59e0b" stroke-opacity="0.65" stroke-width="1.2"/>
+  <circle cx="260" cy="450" r="4.5" fill="#f59e0b"/>
+  <text x="272" y="454" fill="#fef3c7" font-size="11" font-weight="600" class="sans">Thread B: sync(head) Bin[3]</text>
+
+  <rect x="466" y="432" width="210" height="36" rx="7" fill="#4c0519" fill-opacity="0.45" stroke="#fb7185" stroke-opacity="0.65" stroke-width="1.2"/>
+  <circle cx="482" cy="450" r="4.5" fill="#fb7185"/>
+  <text x="494" y="454" fill="#ffe4e6" font-size="11" font-weight="600" class="sans">Thread C: Wait -&gt; Lock Bin[3]</text>
+
+  <rect x="688" y="432" width="210" height="36" rx="7" fill="#0c2d48" fill-opacity="0.55" stroke="#38bdf8" stroke-opacity="0.65" stroke-width="1.2"/>
+  <circle cx="704" cy="450" r="4.5" fill="#38bdf8"/>
+  <text x="716" y="454" fill="#e0f2fe" font-size="11" font-weight="600" class="sans">Thread D: volatile get() [5]</text>
+
+  <!-- Cycle Progress Bar -->
+  <rect x="22" y="477" width="876" height="5" rx="2.5" fill="#1e293b"/>
+  <rect x="22" y="477" width="0" height="5" rx="2.5" fill="url(#chm-prog)">
+    <animate attributeName="width" from="0" to="876" dur="10s" repeatCount="indefinite"/>
+  </rect>
+</svg>

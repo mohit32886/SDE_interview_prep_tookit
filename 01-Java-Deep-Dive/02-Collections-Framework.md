@@ -18,6 +18,8 @@
 
 ## HashMap Internals
 
+![HashMap put() & Treeification Animation](./assets/02-hashmap-put-treeify.svg)
+
 ### `put(K, V)` Execution Pipeline
 
 ```mermaid
@@ -501,6 +503,8 @@ names.lastKey();          // "david"
 ---
 
 ## ConcurrentHashMap
+
+![ConcurrentHashMap CAS & Bin-Level Locking Animation](./assets/02-concurrenthashmap-cas.svg)
 
 ### Java 7 Segment Locking vs Java 8+ `CAS` + Bin-Level Synchronization
 
