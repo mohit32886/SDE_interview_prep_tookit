@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="auto" role="img" aria-label="2D DP Grid Transitions for Edit Distance and 0/1 Knapsack">
+  <style>
+    .title { font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+    .panel-title { font: 700 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #e2e8f0; }
+    .mono { font: 600 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #f8fafc; }
+    .mono-sm { font: 500 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; }
+    .hdr { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #38bdf8; }
+    .legend { font: 500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+
+    @keyframes waveA {
+      0%, 10% { fill: #0f172a; stroke: #334155; }
+      20%, 88% { fill: #164e63; stroke: #38bdf8; }
+      100% { fill: #0f172a; stroke: #334155; }
+    }
+    @keyframes waveB {
+      0%, 28% { fill: #0f172a; stroke: #334155; }
+      38%, 88% { fill: #164e63; stroke: #38bdf8; }
+      100% { fill: #0f172a; stroke: #334155; }
+    }
+    @keyframes waveC {
+      0%, 46% { fill: #0f172a; stroke: #334155; }
+      56%, 88% { fill: #164e63; stroke: #38bdf8; }
+      100% { fill: #0f172a; stroke: #334155; }
+    }
+    @keyframes waveFinal {
+      0%, 62% { fill: #0f172a; stroke: #334155; }
+      72%, 90% { fill: #064e3b; stroke: #34d399; }
+      100% { fill: #0f172a; stroke: #334155; }
+    }
+    @keyframes fadeA { 0%, 12% { opacity: 0; } 22%, 88% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes fadeB { 0%, 30% { opacity: 0; } 40%, 88% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes fadeC { 0%, 48% { opacity: 0; } 58%, 88% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes fadeF { 0%, 64% { opacity: 0; } 74%, 90% { opacity: 1; } 100% { opacity: 0; } }
+
+    @keyframes arrowPulse {
+      0%, 100% { stroke-dashoffset: 24; opacity: 0.45; }
+      50% { stroke-dashoffset: 0; opacity: 1; }
+    }
+    @keyframes reverseScan {
+      0%, 10% { transform: translateX(0px); }
+      30% { transform: translateX(-58px); }
+      50% { transform: translateX(-116px); }
+      70% { transform: translateX(-174px); }
+      90%, 100% { transform: translateX(0px); }
+    }
+
+    .wa { animation: waveA 8s infinite; }
+    .wb { animation: waveB 8s infinite; }
+    .wc { animation: waveC 8s infinite; }
+    .wf { animation: waveFinal 8s infinite; }
+    .fa { animation: fadeA 8s infinite; }
+    .fb { animation: fadeB 8s infinite; }
+    .fc { animation: fadeC 8s infinite; }
+    .ff { animation: fadeF 8s infinite; }
+    .dep-arrow { stroke-dasharray: 6 4; animation: arrowPulse 2.4s infinite linear; }
+    .rev-cursor { animation: reverseScan 6s infinite ease-in-out; }
+  </style>
+
+  <defs>
+    <marker id="arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24" />
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399" />
+    </marker>
+  </defs>
+
+  <!-- Outer Dark Slate Background -->
+  <rect width="960" height="540" rx="14" fill="#0f172a" />
+
+  <!-- Header -->
+  <text x="28" y="34" class="title">2D Dynamic Programming: Grid Transitions &amp; Space Compression</text>
+  <text x="28" y="54" class="subtitle">Cell dp[i][j] depends on Top dp[i-1][j], Left dp[i][j-1], and Diagonal dp[i-1][j-1]</text>
+
+  <!-- LEFT PANEL: 2D Edit Distance Grid -->
+  <rect x="24" y="72" width="440" height="444" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+  <text x="44" y="100" class="panel-title">1. 2D Grid Fill: Edit Distance ("horse" → "ros")</text>
+  <text x="44" y="118" class="mono-sm">Row-by-row left → right  |  Answer = dp[5][3] = 3</text>
+
+  <!-- Column Headers -->
+  <text x="150" y="146" text-anchor="middle" class="hdr">""</text>
+  <text x="216" y="146" text-anchor="middle" class="hdr">'r'</text>
+  <text x="282" y="146" text-anchor="middle" class="hdr">'o'</text>
+  <text x="348" y="146" text-anchor="middle" class="hdr">'s'</text>
+
+  <!-- Row Headers -->
+  <text x="92" y="182" text-anchor="middle" class="hdr">""</text>
+  <text x="92" y="230" text-anchor="middle" class="hdr">'h'</text>
+  <text x="92" y="278" text-anchor="middle" class="hdr">'o'</text>
+  <text x="92" y="326" text-anchor="middle" class="hdr">'r'</text>
+  <text x="92" y="374" text-anchor="middle" class="hdr">'s'</text>
+  <text x="92" y="422" text-anchor="middle" class="hdr">'e'</text>
+
+  <!-- Row 0 (Base Case) -->
+  <rect x="120" y="156" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="150" y="182" text-anchor="middle" class="mono">0</text>
+  <rect x="186" y="156" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="216" y="182" text-anchor="middle" class="mono">1</text>
+  <rect x="252" y="156" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="282" y="182" text-anchor="middle" class="mono">2</text>
+  <rect x="318" y="156" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="348" y="182" text-anchor="middle" class="mono">3</text>
+
+  <!-- Row 1 ('h') -->
+  <rect x="120" y="204" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="150" y="230" text-anchor="middle" class="mono">1</text>
+  <rect x="186" y="204" width="60" height="42" rx="6" class="wa" stroke-width="1.5" />
+  <text x="216" y="230" text-anchor="middle" class="mono fa">1</text>
+  <rect x="252" y="204" width="60" height="42" rx="6" class="wa" stroke-width="1.5" />
+  <text x="282" y="230" text-anchor="middle" class="mono fa">2</text>
+  <rect x="318" y="204" width="60" height="42" rx="6" class="wa" stroke-width="1.5" />
+  <text x="348" y="230" text-anchor="middle" class="mono fa">3</text>
+
+  <!-- Row 2 ('o') -->
+  <rect x="120" y="252" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="150" y="278" text-anchor="middle" class="mono">2</text>
+  <rect x="186" y="252" width="60" height="42" rx="6" class="wb" stroke-width="1.5" />
+  <text x="216" y="278" text-anchor="middle" class="mono fb">2</text>
+  <rect x="252" y="252" width="60" height="42" rx="6" class="wb" stroke-width="1.5" />
+  <text x="282" y="278" text-anchor="middle" class="mono fb">1</text>
+  <rect x="318" y="252" width="60" height="42" rx="6" class="wb" stroke-width="1.5" />
+  <text x="348" y="278" text-anchor="middle" class="mono fb">2</text>
+
+  <!-- Row 3 ('r') -->
+  <rect x="120" y="300" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="150" y="326" text-anchor="middle" class="mono">3</text>
+  <rect x="186" y="300" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="216" y="326" text-anchor="middle" class="mono fc">2</text>
+  <rect x="252" y="300" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="282" y="326" text-anchor="middle" class="mono fc">2</text>
+  <rect x="318" y="300" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="348" y="326" text-anchor="middle" class="mono fc">2</text>
+
+  <!-- Row 4 ('s') -->
+  <rect x="120" y="348" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="150" y="374" text-anchor="middle" class="mono">4</text>
+  <rect x="186" y="348" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="216" y="374" text-anchor="middle" class="mono fc">3</text>
+  <rect x="252" y="348" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="282" y="374" text-anchor="middle" class="mono fc">3</text>
+  <rect x="318" y="348" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="348" y="374" text-anchor="middle" class="mono fc">2</text>
+
+  <!-- Row 5 ('e') -->
+  <rect x="120" y="396" width="60" height="42" rx="6" fill="#0f172a" stroke="#64748b" />
+  <text x="150" y="422" text-anchor="middle" class="mono">5</text>
+  <rect x="186" y="396" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="216" y="422" text-anchor="middle" class="mono fc">4</text>
+  <rect x="252" y="396" width="60" height="42" rx="6" class="wc" stroke-width="1.5" />
+  <text x="282" y="422" text-anchor="middle" class="mono fc">4</text>
+  <rect x="318" y="396" width="60" height="42" rx="6" class="wf" stroke-width="2" />
+  <text x="348" y="422" text-anchor="middle" class="mono ff">3</text>
+
+  <!-- Dependency arrows into dp[5][3] -->
+  <line x1="298" y1="380" x2="328" y2="404" stroke="#34d399" stroke-width="2" class="dep-arrow" marker-end="url(#arr-green)" />
+  <line x1="348" y1="388" x2="348" y2="396" stroke="#38bdf8" stroke-width="2" class="dep-arrow" marker-end="url(#arr-cyan)" />
+  <line x1="312" y1="417" x2="318" y2="417" stroke="#fbbf24" stroke-width="2" class="dep-arrow" marker-end="url(#arr-amber)" />
+
+  <rect x="44" y="454" width="400" height="46" rx="8" fill="#0f172a" stroke="#334155" />
+  <text x="60" y="481" class="legend">Time: O(m * n)  |  Space: O(m * n) → O(min(m, n)) with 2 rows</text>
+
+  <!-- RIGHT PANEL: 3-Way Stencil + 0/1 Knapsack Reverse Loop -->
+  <rect x="488" y="72" width="448" height="444" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+  <text x="508" y="100" class="panel-title">2. Cell Dependency Stencil (Edit Distance / LCS)</text>
+
+  <!-- 2x2 Stencil Diagram -->
+  <rect x="528" y="124" width="136" height="58" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.8" />
+  <text x="596" y="148" text-anchor="middle" class="mono" fill="#34d399">dp[i-1][j-1]</text>
+  <text x="596" y="168" text-anchor="middle" class="mono-sm">Match / Replace</text>
+
+  <rect x="744" y="124" width="136" height="58" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8" />
+  <text x="812" y="148" text-anchor="middle" class="mono" fill="#38bdf8">dp[i-1][j]</text>
+  <text x="812" y="168" text-anchor="middle" class="mono-sm">Delete / Skip</text>
+
+  <rect x="528" y="228" width="136" height="58" rx="8" fill="#0f172a" stroke="#fbbf24" stroke-width="1.8" />
+  <text x="596" y="252" text-anchor="middle" class="mono" fill="#fbbf24">dp[i][j-1]</text>
+  <text x="596" y="272" text-anchor="middle" class="mono-sm">Insert</text>
+
+  <rect x="744" y="228" width="136" height="58" rx="8" fill="#064e3b" stroke="#34d399" stroke-width="2.2" />
+  <text x="812" y="254" text-anchor="middle" class="mono">dp[i][j]</text>
+  <text x="812" y="272" text-anchor="middle" class="mono-sm" fill="#a7f3d0">Current Cell</text>
+
+  <!-- Stencil Arrows -->
+  <line x1="664" y1="182" x2="744" y2="232" stroke="#34d399" stroke-width="2.2" class="dep-arrow" marker-end="url(#arr-green)" />
+  <line x1="812" y1="182" x2="812" y2="226" stroke="#38bdf8" stroke-width="2.2" class="dep-arrow" marker-end="url(#arr-cyan)" />
+  <line x1="664" y1="257" x2="742" y2="257" stroke="#fbbf24" stroke-width="2.2" class="dep-arrow" marker-end="url(#arr-amber)" />
+
+  <!-- Divider -->
+  <line x1="508" y1="312" x2="916" y2="312" stroke="#334155" stroke-width="1" />
+
+  <!-- 0/1 Knapsack 1D Reverse Iteration -->
+  <text x="508" y="338" class="panel-title">3. 0/1 Knapsack: 1D Backward Loop (W → w_i)</text>
+  <text x="508" y="356" class="mono-sm">for (w = W; w &gt;= weight[i]; w--) dp[w] = max(dp[w], dp[w-wt] + val);</text>
+
+  <!-- 1D Knapsack Capacity Cells -->
+  <text x="546" y="384" text-anchor="middle" class="mono-sm">w=0</text>
+  <text x="604" y="384" text-anchor="middle" class="mono-sm">w=1</text>
+  <text x="662" y="384" text-anchor="middle" class="mono-sm">w=2</text>
+  <text x="720" y="384" text-anchor="middle" class="mono-sm">w=3</text>
+  <text x="778" y="384" text-anchor="middle" class="mono-sm">w=4</text>
+  <text x="836" y="384" text-anchor="middle" class="mono-sm">w=5</text>
+
+  <rect x="520" y="392" width="52" height="38" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="546" y="416" text-anchor="middle" class="mono">0</text>
+  <rect x="578" y="392" width="52" height="38" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="604" y="416" text-anchor="middle" class="mono">10</text>
+  <rect x="636" y="392" width="52" height="38" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="662" y="416" text-anchor="middle" class="mono">15</text>
+  <rect x="694" y="392" width="52" height="38" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="720" y="416" text-anchor="middle" class="mono">25</text>
+  <rect x="752" y="392" width="52" height="38" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="778" y="416" text-anchor="middle" class="mono">30</text>
+  <rect x="810" y="392" width="52" height="38" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="836" y="416" text-anchor="middle" class="mono">40</text>
+
+  <!-- Animated Reverse Cursor -->
+  <g class="rev-cursor">
+    <rect x="807" y="389" width="58" height="44" rx="8" fill="none" stroke="#fbbf24" stroke-width="2.2" />
+    <text x="836" y="448" text-anchor="middle" class="mono-sm" fill="#fbbf24">← w</text>
+  </g>
+
+  <rect x="508" y="454" width="408" height="46" rx="8" fill="#0f172a" stroke="#334155" />
+  <text x="524" y="481" class="legend">Backward pass reads un-updated row i-1 values (prevents item reuse)</text>
+</svg>

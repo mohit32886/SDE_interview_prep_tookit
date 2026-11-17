@@ -1,0 +1,248 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" width="920" height="520" role="img" aria-labelledby="title desc">
+  <title id="title">Backtracking Decision Tree and Call Stack</title>
+  <desc id="desc">Animated visualization of Choose, Explore, and Unchoose across a subset decision tree for [1, 2, 3] with synchronized call-stack frames.</desc>
+  <defs>
+    <style>
+      .sans { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .card { fill: #0f172a; stroke: #334155; stroke-width: 1.5; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.2; }
+      .edge { stroke: #475569; stroke-width: 2; fill: none; }
+      .edge-back { stroke: #f43f5e; stroke-width: 2; stroke-dasharray: 5 4; fill: none; opacity: 0.45; }
+      .node-bg { fill: #0f172a; stroke: #475569; stroke-width: 2; }
+      .node-text { fill: #e2e8f0; font-size: 13px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+      .edge-lbl { fill: #94a3b8; font-size: 11px; font-weight: 600; text-anchor: middle; }
+      .label-muted { fill: #94a3b8; font-size: 12px; }
+      .title-txt { fill: #f8fafc; font-size: 18px; font-weight: 700; }
+      .sub-txt { fill: #94a3b8; font-size: 12.5px; }
+
+      /* 12-second cycle synced across tree walker, stack frames, and action pills */
+      @keyframes pulseNode1 {
+        0%, 10% { stroke: #475569; fill: #0f172a; }
+        12%, 22% { stroke: #10b981; fill: #064e3b; }
+        58%, 68% { stroke: #f43f5e; fill: #4c0519; }
+        72%, 100% { stroke: #475569; fill: #0f172a; }
+      }
+      @keyframes pulseNode12 {
+        0%, 22% { stroke: #475569; fill: #0f172a; }
+        25%, 34% { stroke: #10b981; fill: #064e3b; }
+        46%, 54% { stroke: #f43f5e; fill: #4c0519; }
+        58%, 100% { stroke: #475569; fill: #0f172a; }
+      }
+      @keyframes pulseNode123 {
+        0%, 34% { stroke: #475569; fill: #0f172a; }
+        36%, 45% { stroke: #f59e0b; fill: #451a03; }
+        48%, 100% { stroke: #475569; fill: #0f172a; }
+      }
+      @keyframes pulseNode13 {
+        0%, 62% { stroke: #475569; fill: #0f172a; }
+        64%, 72% { stroke: #f59e0b; fill: #451a03; }
+        75%, 100% { stroke: #475569; fill: #0f172a; }
+      }
+      @keyframes pulseNode2 {
+        0%, 78% { stroke: #475569; fill: #0f172a; }
+        80%, 88% { stroke: #10b981; fill: #064e3b; }
+        91%, 100% { stroke: #475569; fill: #0f172a; }
+      }
+
+      @keyframes frame1Anim {
+        0%, 9% { opacity: 0.15; transform: translateY(8px); }
+        12%, 72% { opacity: 1; transform: translateY(0px); }
+        76%, 100% { opacity: 0.15; transform: translateY(8px); }
+      }
+      @keyframes frame2Anim {
+        0%, 22% { opacity: 0.15; transform: translateY(8px); }
+        25%, 52% { opacity: 1; transform: translateY(0px); }
+        56%, 100% { opacity: 0.15; transform: translateY(8px); }
+      }
+      @keyframes frame3Anim {
+        0%, 34% { opacity: 0.15; transform: translateY(8px); }
+        36%, 44% { opacity: 1; transform: translateY(0px); }
+        47%, 100% { opacity: 0.15; transform: translateY(8px); }
+      }
+
+      @keyframes chooseBadge {
+        0%, 10% { opacity: 0.35; }
+        12%, 40% { opacity: 1; }
+        43%, 62% { opacity: 0.35; }
+        64%, 70% { opacity: 1; }
+        74%, 100% { opacity: 0.35; }
+      }
+      @keyframes unchooseBadge {
+        0%, 44% { opacity: 0.35; }
+        46%, 60% { opacity: 1; }
+        63%, 72% { opacity: 0.35; }
+        74%, 78% { opacity: 1; }
+        82%, 100% { opacity: 0.35; }
+      }
+
+      @keyframes walkerMove {
+        0%, 8%   { transform: translate(290px, 128px); }
+        14%, 21% { transform: translate(145px, 224px); }
+        26%, 33% { transform: translate(85px, 326px); }
+        37%, 44% { transform: translate(85px, 428px); }
+        48%, 54% { transform: translate(85px, 326px); }
+        57%, 61% { transform: translate(145px, 224px); }
+        64%, 71% { transform: translate(210px, 326px); }
+        75%, 78% { transform: translate(290px, 128px); }
+        81%, 88% { transform: translate(310px, 224px); }
+        91%, 96% { transform: translate(310px, 326px); }
+        100%     { transform: translate(290px, 128px); }
+      }
+
+      .n1 { animation: pulseNode1 12s infinite; }
+      .n12 { animation: pulseNode12 12s infinite; }
+      .n123 { animation: pulseNode123 12s infinite; }
+      .n13 { animation: pulseNode13 12s infinite; }
+      .n2 { animation: pulseNode2 12s infinite; }
+      .f1 { animation: frame1Anim 12s infinite; }
+      .f2 { animation: frame2Anim 12s infinite; }
+      .f3 { animation: frame3Anim 12s infinite; }
+      .b-choose { animation: chooseBadge 12s infinite; }
+      .b-unchoose { animation: unchooseBadge 12s infinite; }
+      .walker { animation: walkerMove 12s ease-in-out infinite; }
+    </style>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="2" y="2" width="916" height="516" rx="16" class="card"/>
+
+  <!-- Header -->
+  <text x="28" y="34" class="sans title-txt">Backtracking: Choose → Explore → Unchoose</text>
+  <text x="28" y="54" class="sans sub-txt">Subsets of nums = [1, 2, 3] — DFS decision tree synced with live call-stack frames</text>
+
+  <!-- Legend Pills -->
+  <g transform="translate(555, 20)">
+    <rect x="0" y="0" width="106" height="26" rx="13" fill="#064e3b" stroke="#10b981" stroke-width="1.2" class="b-choose"/>
+    <text x="53" y="17" class="sans" font-size="11.5" font-weight="600" fill="#6ee7b7" text-anchor="middle">1. Choose</text>
+
+    <rect x="114" y="0" width="106" height="26" rx="13" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.2"/>
+    <text x="167" y="17" class="sans" font-size="11.5" font-weight="600" fill="#7dd3fc" text-anchor="middle">2. Explore</text>
+
+    <rect x="228" y="0" width="112" height="26" rx="13" fill="#4c0519" stroke="#f43f5e" stroke-width="1.2" class="b-unchoose"/>
+    <text x="284" y="17" class="sans" font-size="11.5" font-weight="600" fill="#fda4af" text-anchor="middle">3. Unchoose</text>
+  </g>
+
+  <!-- Left Panel: Decision Tree -->
+  <rect x="24" y="72" width="536" height="422" rx="12" class="panel"/>
+  <text x="42" y="96" class="sans" font-size="13" font-weight="700" fill="#cbd5e1">DECISION TREE (start index → remaining choices)</text>
+
+  <!-- Tree Edges -->
+  <line x1="290" y1="146" x2="145" y2="206" class="edge"/>
+  <line x1="290" y1="146" x2="310" y2="206" class="edge"/>
+  <line x1="290" y1="146" x2="465" y2="206" class="edge"/>
+
+  <line x1="145" y1="242" x2="85" y2="308" class="edge"/>
+  <line x1="145" y1="242" x2="210" y2="308" class="edge"/>
+  <line x1="310" y1="242" x2="310" y2="308" class="edge"/>
+
+  <line x1="85" y1="344" x2="85" y2="410" class="edge"/>
+
+  <!-- Backtrack dashed indicators -->
+  <path d="M 108 410 Q 126 377 108 344" class="edge-back"/>
+  <path d="M 105 308 Q 130 278 158 242" class="edge-back"/>
+
+  <!-- Edge Labels -->
+  <text x="205" y="174" class="mono edge-lbl">+1</text>
+  <text x="313" y="178" class="mono edge-lbl">+2</text>
+  <text x="392" y="174" class="mono edge-lbl">+3</text>
+  <text x="102" y="276" class="mono edge-lbl">+2</text>
+  <text x="190" y="276" class="mono edge-lbl">+3</text>
+  <text x="326" y="278" class="mono edge-lbl">+3</text>
+  <text x="70" y="380" class="mono edge-lbl">+3</text>
+
+  <!-- Tree Nodes -->
+  <!-- Root [] -->
+  <g transform="translate(290, 128)">
+    <rect x="-32" y="-18" width="64" height="36" rx="18" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+    <text x="0" y="0" class="mono node-text">[]</text>
+  </g>
+
+  <!-- Level 1 -->
+  <g transform="translate(145, 224)">
+    <rect x="-34" y="-18" width="68" height="36" rx="18" class="node-bg n1"/>
+    <text x="0" y="0" class="mono node-text">[1]</text>
+  </g>
+  <g transform="translate(310, 224)">
+    <rect x="-34" y="-18" width="68" height="36" rx="18" class="node-bg n2"/>
+    <text x="0" y="0" class="mono node-text">[2]</text>
+  </g>
+  <g transform="translate(465, 224)">
+    <rect x="-34" y="-18" width="68" height="36" rx="18" class="node-bg"/>
+    <text x="0" y="0" class="mono node-text">[3]</text>
+  </g>
+
+  <!-- Level 2 -->
+  <g transform="translate(85, 326)">
+    <rect x="-38" y="-18" width="76" height="36" rx="18" class="node-bg n12"/>
+    <text x="0" y="0" class="mono node-text">[1,2]</text>
+  </g>
+  <g transform="translate(210, 326)">
+    <rect x="-38" y="-18" width="76" height="36" rx="18" class="node-bg n13"/>
+    <text x="0" y="0" class="mono node-text">[1,3]</text>
+  </g>
+  <g transform="translate(310, 326)">
+    <rect x="-38" y="-18" width="76" height="36" rx="18" class="node-bg"/>
+    <text x="0" y="0" class="mono node-text">[2,3]</text>
+  </g>
+
+  <!-- Level 3 -->
+  <g transform="translate(85, 428)">
+    <rect x="-44" y="-18" width="88" height="36" rx="18" class="node-bg n123"/>
+    <text x="0" y="0" class="mono node-text">[1,2,3]</text>
+  </g>
+
+  <!-- Animated DFS Walker Ring -->
+  <g class="walker">
+    <circle cx="0" cy="0" r="24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="6 4">
+      <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="4s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- Result Tray inside left panel bottom-right -->
+  <rect x="240" y="394" width="302" height="84" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="254" y="414" class="sans" font-size="11.5" font-weight="700" fill="#f59e0b">result.add(new ArrayList&lt;&gt;(current))</text>
+  <text x="254" y="438" class="mono" font-size="12" fill="#e2e8f0">[], [1], [1,2], [1,2,3],</text>
+  <text x="254" y="458" class="mono" font-size="12" fill="#94a3b8">[1,3], [2], [2,3], [3]  (8 subsets)</text>
+
+  <!-- Right Panel: Call Stack -->
+  <rect x="578" y="72" width="318" height="422" rx="12" class="panel"/>
+  <text x="596" y="96" class="sans" font-size="13" font-weight="700" fill="#cbd5e1">LIVE CALL STACK (O(n) depth)</text>
+
+  <!-- Stack Frame 3 (top) -->
+  <g class="f3" transform="translate(596, 120)">
+    <rect x="0" y="0" width="282" height="68" rx="8" fill="#451a03" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="12" y="22" class="mono" font-size="12" font-weight="700" fill="#fcd34d">backtrack(start=3, [1,2,3])</text>
+    <text x="12" y="40" class="sans" font-size="11.5" fill="#fde68a">Leaf: loop ends → pop &amp; unchoose 3</text>
+    <text x="12" y="57" class="mono" font-size="11" fill="#fda4af">current.remove(last)</text>
+  </g>
+
+  <!-- Stack Frame 2 -->
+  <g class="f2" transform="translate(596, 198)">
+    <rect x="0" y="0" width="282" height="68" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+    <text x="12" y="22" class="mono" font-size="12" font-weight="700" fill="#6ee7b7">backtrack(start=2, [1,2])</text>
+    <text x="12" y="40" class="sans" font-size="11.5" fill="#a7f3d0">Choose 3 → recurse(3)</text>
+    <text x="12" y="57" class="mono" font-size="11" fill="#7dd3fc">current.add(3)</text>
+  </g>
+
+  <!-- Stack Frame 1 -->
+  <g class="f1" transform="translate(596, 276)">
+    <rect x="0" y="0" width="282" height="68" rx="8" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="12" y="22" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">backtrack(start=1, [1])</text>
+    <text x="12" y="40" class="sans" font-size="11.5" fill="#bae6fd">i=1 (+2), then i=2 (+3)</text>
+    <text x="12" y="57" class="mono" font-size="11" fill="#6ee7b7">current.add(nums[i])</text>
+  </g>
+
+  <!-- Stack Frame 0 (base, always active) -->
+  <g transform="translate(596, 354)">
+    <rect x="0" y="0" width="282" height="68" rx="8" fill="#0f172a" stroke="#64748b" stroke-width="1.5"/>
+    <text x="12" y="22" class="mono" font-size="12" font-weight="700" fill="#e2e8f0">backtrack(start=0, [])</text>
+    <text x="12" y="40" class="sans" font-size="11.5" fill="#94a3b8">Root frame: iterates i = 0, 1, 2</text>
+    <text x="12" y="57" class="mono" font-size="11" fill="#38bdf8">result.add([])</text>
+  </g>
+
+  <!-- Key Rule Footer -->
+  <rect x="596" y="434" width="282" height="44" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="608" y="453" class="sans" font-size="11.5" font-weight="600" fill="#f8fafc">Invariant: Always restore state</text>
+  <text x="608" y="469" class="mono" font-size="11" fill="#94a3b8">add(x) → recurse → remove(last)</text>
+</svg>

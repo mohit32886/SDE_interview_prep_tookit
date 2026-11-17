@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" width="880" height="420" role="img" aria-label="Floyd's Tortoise and Hare Cycle Detection Animation">
+  <style>
+    .bg { fill: #0f172a; }
+    .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .title { font: 700 18px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f8fafc; }
+    .subtitle { font: 500 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #94a3b8; }
+    .node-circle { fill: #0f172a; stroke: #475569; stroke-width: 2.5; }
+    .node-entry { fill: #0f172a; stroke: #10b981; stroke-width: 3; }
+    .node-val { font: 700 16px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #f8fafc; text-anchor: middle; dominant-baseline: central; }
+    .node-idx { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #64748b; text-anchor: middle; }
+    .edge { fill: none; stroke: #64748b; stroke-width: 2.2; marker-end: url(#arrow); }
+    .edge-cycle { fill: none; stroke: #818cf8; stroke-width: 2.2; marker-end: url(#arrow-cycle); }
+    .badge-slow { fill: #0284c7; stroke: #38bdf8; stroke-width: 2; }
+    .badge-fast { fill: #d97706; stroke: #fbbf24; stroke-width: 2; }
+    .badge-text { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #ffffff; text-anchor: middle; dominant-baseline: central; }
+    .legend-text { font: 600 12px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #cbd5e1; }
+    .phase-box { fill: #0f172a; stroke: #334155; stroke-width: 1.2; rx: 8; }
+    .phase-title { font: 700 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .phase-desc { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; }
+
+    @keyframes pulseRing {
+      0%, 66% { opacity: 0; transform: scale(0.9); }
+      72%, 94% { opacity: 1; transform: scale(1.12); }
+      100% { opacity: 0; transform: scale(0.9); }
+    }
+    @keyframes meetRing {
+      0%, 29% { opacity: 0; transform: scale(0.9); }
+      33%, 47% { opacity: 1; transform: scale(1.12); }
+      52%, 100% { opacity: 0; transform: scale(0.9); }
+    }
+    @keyframes phase1Active {
+      0%, 48% { opacity: 1; }
+      50%, 96% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+    @keyframes phase2Active {
+      0%, 48% { opacity: 0.3; }
+      50%, 96% { opacity: 1; }
+      100% { opacity: 0.3; }
+    }
+    .entry-ring {
+      fill: none; stroke: #10b981; stroke-width: 3; stroke-dasharray: 5 4;
+      transform-origin: 340px 185px;
+      animation: pulseRing 16s infinite;
+    }
+    .meet-ring {
+      fill: none; stroke: #f59e0b; stroke-width: 3; stroke-dasharray: 5 4;
+      transform-origin: 590px 185px;
+      animation: meetRing 16s infinite;
+    }
+    .p1-group { animation: phase1Active 16s infinite; }
+    .p2-group { animation: phase2Active 16s infinite; }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+    <marker id="arrow-cycle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#818cf8" />
+    </marker>
+  </defs>
+
+  <!-- Card Background -->
+  <rect class="bg" width="880" height="420" rx="14" />
+  <rect class="panel" x="16" y="16" width="848" height="388" rx="12" />
+
+  <!-- Header -->
+  <text class="title" x="36" y="48">Floyd's Tortoise &amp; Hare: Cycle Detection &amp; Entry Node</text>
+  <text class="subtitle" x="36" y="70">Phase 1: fast (2x) laps slow (1x) inside cycle  |  Phase 2: reset slow to head, advance both 1x to meet at entry</text>
+
+  <!-- Legend -->
+  <circle class="badge-slow" cx="655" cy="44" r="10" />
+  <text class="badge-text" x="655" y="44">S</text>
+  <text class="legend-text" x="672" y="48">slow (1x)</text>
+
+  <circle class="badge-fast" cx="755" cy="44" r="10" />
+  <text class="badge-text" x="755" y="44">F</text>
+  <text class="legend-text" x="772" y="48">fast (2x / 1x)</text>
+
+  <!-- Edges -->
+  <line class="edge" x1="116" y1="185" x2="178" y2="185" />
+  <line class="edge" x1="236" y1="185" x2="308" y2="185" />
+  <!-- Cycle Edges -->
+  <path class="edge-cycle" d="M 362 169 L 434 121" />
+  <path class="edge-cycle" d="M 484 121 L 562 169" />
+  <path class="edge-cycle" d="M 566 202 L 486 250" />
+  <path class="edge-cycle" d="M 436 250 L 364 202" />
+
+  <!-- Highlight Rings -->
+  <circle class="entry-ring" cx="340" cy="185" r="34" />
+  <circle class="meet-ring" cx="590" cy="185" r="34" />
+
+  <!-- Nodes -->
+  <!-- Node 0: head -->
+  <circle class="node-circle" cx="90" cy="185" r="24" />
+  <text class="node-val" x="90" y="185">3</text>
+  <text class="node-idx" x="90" y="224">head (0)</text>
+
+  <!-- Node 1 -->
+  <circle class="node-circle" cx="210" cy="185" r="24" />
+  <text class="node-val" x="210" y="185">2</text>
+  <text class="node-idx" x="210" y="224">node 1</text>
+
+  <!-- Node 2: Cycle Entry -->
+  <circle class="node-entry" cx="340" cy="185" r="24" />
+  <text class="node-val" x="340" y="185">0</text>
+  <text class="node-idx" x="340" y="224" style="fill:#10b981;">entry (a=2)</text>
+
+  <!-- Node 3 -->
+  <circle class="node-circle" cx="460" cy="105" r="24" />
+  <text class="node-val" x="460" y="105">-4</text>
+  <text class="node-idx" x="460" y="69">node 3</text>
+
+  <!-- Node 4: Meeting Point -->
+  <circle class="node-circle" cx="590" cy="185" r="24" />
+  <text class="node-val" x="590" y="185">7</text>
+  <text class="node-idx" x="638" y="189">meet (b=2)</text>
+
+  <!-- Node 5 -->
+  <circle class="node-circle" cx="460" cy="265" r="24" />
+  <text class="node-val" x="460" y="265">5</text>
+  <text class="node-idx" x="460" y="303">node 5</text>
+
+  <!-- Animated Slow Pointer (S) -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" dur="16s" repeatCount="indefinite"
+      values="90,143; 210,143; 340,143; 460,63; 590,143; 590,143; 90,143; 210,143; 340,143; 340,143; 90,143"
+      keyTimes="0; 0.08; 0.16; 0.24; 0.32; 0.48; 0.52; 0.62; 0.72; 0.96; 1" />
+    <circle class="badge-slow" cx="0" cy="0" r="13" />
+    <text class="badge-text" x="0" y="0">S</text>
+  </g>
+
+  <!-- Animated Fast Pointer (F) -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" dur="16s" repeatCount="indefinite"
+      values="90,248; 340,248; 590,227; 340,248; 590,227; 590,227; 590,227; 460,318; 340,248; 340,248; 90,248"
+      keyTimes="0; 0.08; 0.16; 0.24; 0.32; 0.48; 0.52; 0.62; 0.72; 0.96; 1" />
+    <circle class="badge-fast" cx="0" cy="0" r="13" />
+    <text class="badge-text" x="0" y="0">F</text>
+  </g>
+
+  <!-- Phase Cards at Bottom -->
+  <g class="p1-group">
+    <rect class="phase-box" x="36" y="328" width="390" height="58" rx="8" />
+    <text class="phase-title" x="52" y="350" fill="#38bdf8">Phase 1: Detect Cycle (S=1x, F=2x)</text>
+    <text class="phase-desc" x="52" y="370">Meet at node 7: 2(a + b) = a + b + kc  -&gt;  a + b = kc</text>
+  </g>
+
+  <g class="p2-group">
+    <rect class="phase-box" x="454" y="328" width="390" height="58" rx="8" />
+    <text class="phase-title" x="470" y="350" fill="#10b981">Phase 2: Find Entry (Reset S=head, both 1x)</text>
+    <text class="phase-desc" x="470" y="370">S &amp; F travel a=2 steps -&gt; collide at Cycle Entry (0)</text>
+  </g>
+</svg>

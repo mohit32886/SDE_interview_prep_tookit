@@ -7,10 +7,49 @@
 4. [Priority Queue and Heap](#priority-queue-and-heap)
 5. [Min-Heap vs Max-Heap](#min-heap-vs-max-heap)
 6. [TreeMap/TreeSet Usage](#treemaptreeset-usage)
+7. [Complex Comparator Patterns in Java](#complex-comparator-patterns-in-java)
+8. [Summary & Patterns Cheat Sheet](#summary--patterns-cheat-sheet)
+9. [Practice Summary](#practice-summary)
 
 ---
 
 ## HashMap/HashSet Patterns
+
+Hash-based structures trade `O(n)` space to eliminate nested `O(n²)` scans, turning complement lookup, grouping, sequence start detection, and prefix-sum matching into `O(1)` average-time probes.
+
+```mermaid
+flowchart LR
+    A["Input Array or Strings"] --> B{"Lookup Need?"}
+    B -->|"Complement or Index"| C["HashMap&lt;Value, Index&gt;"]
+    B -->|"Canonical Signature"| D["HashMap&lt;Key, List&gt;"]
+    B -->|"Membership Only"| E["HashSet&lt;Value&gt;"]
+    B -->|"Prefix Sum Count"| F["HashMap&lt;Sum, Freq&gt;"]
+    C --> G["Two Sum: O(n)"]
+    D --> H["Group Anagrams: O(n * k log k)"]
+    E --> I["Longest Consecutive: O(n)"]
+    F --> J["Subarray Sum = K: O(n)"]
+
+    classDef input fill:#0f172a,stroke:#64748b,color:#f8fafc
+    classDef decision fill:#1e293b,stroke:#fbbf24,color:#fef3c7
+    classDef map fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe
+    classDef out fill:#064e3b,stroke:#34d399,color:#d1fae5
+
+    class A input
+    class B decision
+    class C,D,E,F map
+    class G,H,I,J out
+```
+
+> [!TIP]
+> Whenever an `O(n²)` brute-force loop searches for "does a matching past element exist?", reach for a `HashMap` (need index/count) or `HashSet` (need presence only).
+
+| Pattern | Classic Problem | Key Invariant | Time | Space |
+|---------|----------------|---------------|------|-------|
+| Complement Lookup | Two Sum | Check `target - nums[i]` before inserting `nums[i]` | `O(n)` | `O(n)` |
+| Canonical Key | Group Anagrams | Sorted string or `#count` encoding maps anagrams to one bucket | `O(n * k log k)` / `O(n * k)` | `O(n * k)` |
+| Sequence Start Guard | Longest Consecutive Sequence | Expand only when `!set.contains(num - 1)` | `O(n)` | `O(n)` |
+| Prefix Sum Frequency | Subarray Sum Equals K | Seed `{0: 1}` and query `currentSum - k` | `O(n)` | `O(n)` |
+| Freq + Heap / Buckets | Top K Frequent Elements | Size-`k` Min-Heap or frequency-indexed buckets | `O(n log k)` / `O(n)` | `O(n)` |
 
 ### Problem 1: Two Sum
 
@@ -330,9 +369,39 @@ public int[] topKFrequent(int[] nums, int k) {
 
 **This is optimal since we can't do better than O(n) (must read all elements).**
 
+> [!IMPORTANT]
+> For Top K Frequent Elements, mention both `O(n log k)` Min-Heap (better when `k` is small or streaming) and `O(n)` Bucket Sort (optimal when frequencies are bounded by `nums.length`).
+
 ---
 
 ## HashMap Internals in Java
+
+Understanding how `HashMap` hashes keys, resolves collisions, and resizes buckets is a staple Java/FAANG systems-coding interview topic.
+
+```mermaid
+flowchart TD
+    K["Key: key.hashCode()"] --> S["Spread Bits &amp; Mask: hash &amp; (capacity - 1)"]
+    S --> B["Bucket Array Table (default capacity = 16)"]
+    B --> C{"Bucket Collision?"}
+    C -->|"Empty"| D["Insert Node directly: O(1)"]
+    C -->|"Occupied"| E{"Chain Length &gt; 8?"}
+    E -->|"No"| F["Append to Linked List: O(k)"]
+    E -->|"Yes (Java 8+)"| G["Treeify to Red-Black Tree: O(log n)"]
+    D --> H{"size &gt; capacity * 0.75?"}
+    F --> H
+    G --> H
+    H -->|"Yes"| I["Resize 2x &amp; Rehash Entries"]
+
+    classDef step fill:#1e293b,stroke:#38bdf8,color:#e0f2fe
+    classDef check fill:#1e293b,stroke:#fbbf24,color:#fef3c7
+    classDef fast fill:#064e3b,stroke:#34d399,color:#d1fae5
+    classDef tree fill:#4c1d95,stroke:#a78bfa,color:#ede9fe
+
+    class K,S,B,I step
+    class C,E,H check
+    class D,F fast
+    class G tree
+```
 
 ### Key Concepts
 
@@ -354,6 +423,16 @@ hash(key) = key.hashCode() & (capacity - 1)
 **Collision Handling**
 - Java uses separate chaining (linked list in each bucket)
 - Java 8+: If chain length > 8, converts to red-black tree (O(log n) access)
+
+| Operation | Best Case | Average Case | Worst Case (Pre-Java 8) | Worst Case (Java 8+) |
+|-----------|-----------|--------------|-------------------------|----------------------|
+| `get(key)` | `O(1)` | `O(1)` | `O(n)` | `O(log n)` |
+| `put(key, val)` | `O(1)` | `O(1)` | `O(n)` | `O(log n)` |
+| `remove(key)` | `O(1)` | `O(1)` | `O(n)` | `O(log n)` |
+| `resize()` | `O(n)` | `O(n)` amortized `O(1)` per insert | `O(n)` | `O(n)` |
+
+> [!WARNING]
+> Always override **both** `hashCode()` and `equals()` when using custom objects as `HashMap` keys or `HashSet` elements. Equal objects must produce identical hash codes, or lookups will silently miss the bucket.
 
 ### Interview Questions on HashMap Internals
 
@@ -394,6 +473,37 @@ private void resize(int newCapacity) {
 ---
 
 ## Frequency Counting Patterns
+
+Frequency counting transforms raw streams into compact `(element → count)` histograms, enabling `O(1)` lookups, bucketed grouping, and greedy heap scheduling.
+
+![Top-K Frequent Elements Min-Heap Animation](./assets/02-top-k-min-heap.svg)
+
+```mermaid
+flowchart LR
+    A["Input Elements"] --> B["Build Frequency Map (O(n))"]
+    B --> C{"Next Step?"}
+    C -->|"Find Max / Filter"| D["Single Scan over Map"]
+    C -->|"Group by Count"| E["Map&lt;Freq, List&lt;T&gt;&gt;"]
+    C -->|"Top K Frequent"| F["Size-K Min-Heap: O(n log k)"]
+    C -->|"Greedy Alternating"| G["Max-Heap by Freq: Reorganize String"]
+
+    classDef base fill:#0f172a,stroke:#64748b,color:#f8fafc
+    classDef map fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe
+    classDef branch fill:#1e293b,stroke:#fbbf24,color:#fef3c7
+    classDef out fill:#064e3b,stroke:#34d399,color:#d1fae5
+
+    class A base
+    class B map
+    class C branch
+    class D,E,F,G out
+```
+
+| Variant | Data Structures | Key Condition | Time | Space |
+|---------|----------------|---------------|------|-------|
+| Max / Threshold Filter | `HashMap<T, Integer>` | `freq.getOrDefault(x, 0) >= threshold` | `O(n)` | `O(u)` unique |
+| Group by Frequency | `HashMap<Integer, List<T>>` | Invert `key → count` to `count → keys` | `O(n)` | `O(n)` |
+| Top-K Frequent | `HashMap` + Size-`K` Min-Heap | Evict `minHeap.poll()` when `size > k` | `O(n log k)` | `O(n)` |
+| Reorganize String | `int[26]` + Max-Heap | Impossible if `maxFreq > (n + 1) / 2` | `O(n)` | `O(1)` |
 
 ### General Template
 
@@ -499,9 +609,41 @@ public String reorganizeString(String s) {
 - Time: O(n + 26 log 26) = O(n)
 - Space: O(1) for alphabet
 
+> [!TIP]
+> When the domain is fixed-size (lowercase English letters `'a'..'z'`), prefer `int[26]` over `HashMap<Character, Integer>` to avoid boxing overhead and get `O(1)` space.
+
 ---
 
 ## Priority Queue and Heap
+
+A heap maintains partial order in a complete binary tree: `O(1)` access to the extremum (`peek`), `O(log n)` insertion (`offer`), and `O(log n)` removal (`poll`).
+
+![Two-Heaps Median Finder Stream Animation](./assets/02-two-heaps-median-stream.svg)
+
+```mermaid
+flowchart TD
+    A["Heap / PriorityQueue Pattern"] --> B["Size-K Min-Heap (Kth Largest)"]
+    A --> C["K-Way Merge Min-Heap (Merge K Lists)"]
+    A --> D["Two Heaps: Max-Heap + Min-Heap (Median Stream)"]
+    B --> B1["Evict root when size &gt; k → O(n log k)"]
+    C --> C1["Poll smallest head, offer head.next → O(n log k)"]
+    D --> D1["Keep |maxH - minH| &lt;= 1 → O(log n) add, O(1) median"]
+
+    classDef root fill:#0f172a,stroke:#64748b,color:#f8fafc
+    classDef pattern fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe
+    classDef detail fill:#064e3b,stroke:#34d399,color:#d1fae5
+
+    class A root
+    class B,C,D pattern
+    class B1,C1,D1 detail
+```
+
+| Problem | Heap Strategy | Time | Space |
+|---------|--------------|------|-------|
+| Kth Largest Element (Heap) | Min-Heap of size `k` | `O(n log k)` | `O(k)` |
+| Kth Largest Element (QuickSelect) | Randomized partition | `O(n)` avg / `O(n²)` worst | `O(1)` |
+| Merge K Sorted Lists | Min-Heap of `k` list heads | `O(n log k)` | `O(k)` |
+| Find Median from Data Stream | Max-Heap (lower) + Min-Heap (upper) | `O(log n)` add, `O(1)` median | `O(n)` |
 
 ### Core Concepts
 
@@ -521,6 +663,9 @@ PriorityQueue<Person> pq = new PriorityQueue<>(
     (p1, p2) -> p1.age - p2.age  // Min-heap by age
 );
 ```
+
+> [!WARNING]
+> Avoid `(a, b) -> b - a` when values can be near `Integer.MIN_VALUE` or `Integer.MAX_VALUE` — subtraction can overflow! Use `Integer.compare(b, a)` or `Comparator.reverseOrder()`.
 
 ---
 
@@ -749,6 +894,29 @@ Median = (2 + 3) / 2 = 2.5
 
 ## Min-Heap vs Max-Heap
 
+Choosing the opposite heap from the problem's phrasing ("Kth **largest**" → **Min-Heap** of size `k`) is the most common interview trick.
+
+```mermaid
+flowchart LR
+    Q{"What do you need?"} -->|"K Largest Elements"| M1["Min-Heap of Size K (evict smallest)"]
+    Q -->|"K Smallest Elements"| M2["Max-Heap of Size K (evict largest)"]
+    Q -->|"Running Median"| M3["Max-Heap (Lower) + Min-Heap (Upper)"]
+    Q -->|"Next Earliest Event"| M4["Min-Heap by Key / End Time"]
+
+    classDef ask fill:#1e293b,stroke:#fbbf24,color:#fef3c7
+    classDef min fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe
+    classDef max fill:#4c1d95,stroke:#a78bfa,color:#ede9fe
+    classDef both fill:#064e3b,stroke:#34d399,color:#d1fae5
+
+    class Q ask
+    class M1,M4 min
+    class M2 max
+    class M3 both
+```
+
+- **Eviction rule:** Keep the element you might need to *discard* at the root (`peek()`) so eviction is `O(log k)`.
+- **Java default:** `new PriorityQueue<>()` is always a **Min-Heap**; pass `Comparator.reverseOrder()` for a **Max-Heap**.
+
 | Use Case | Heap Type | Example |
 |----------|-----------|---------|
 | K smallest | Min-heap | Find k largest: maintain min-heap of k largest |
@@ -758,9 +926,48 @@ Median = (2 + 3) / 2 = 2.5
 | Median | Both | MedianFinder |
 | Pairwise operations | Min-heap | Merge K lists |
 
+> [!TIP]
+> Remember the **inversion rule**: to keep the top `k` largest items, the gatekeeper at the heap root must be the *weakest* of the top `k` (a **Min-Heap**).
+
 ---
 
 ## TreeMap/TreeSet Usage
+
+`TreeMap` and `TreeSet` are backed by Red-Black Trees, keeping keys sorted at all times and exposing `O(log n)` neighbor queries (`floorEntry`, `ceilingEntry`, `lowerKey`, `higherKey`).
+
+```mermaid
+flowchart TD
+    A["book(start, end)"] --> B["floorEntry(start): largest key &lt;= start"]
+    A --> C["ceilingEntry(start): smallest key &gt;= start"]
+    B --> D{"floor.end &gt; start?"}
+    C --> E{"ceiling.start &lt; end?"}
+    D -->|"Yes"| F["Conflict → return false"]
+    E -->|"Yes"| F
+    D -->|"No"| G["No left overlap"]
+    E -->|"No"| H["No right overlap"]
+    G --> I["calendar.put(start, end) → return true"]
+    H --> I
+
+    classDef op fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe
+    classDef cond fill:#1e293b,stroke:#fbbf24,color:#fef3c7
+    classDef fail fill:#7f1d1d,stroke:#f87171,color:#fecaca
+    classDef ok fill:#064e3b,stroke:#34d399,color:#d1fae5
+
+    class A,B,C op
+    class D,E cond
+    class F fail
+    class G,H,I ok
+```
+
+| Method | Meaning | Time | Use Case |
+|--------|---------|------|----------|
+| `floorEntry(k)` / `floor(k)` | Greatest entry `<= k` | `O(log n)` | Check previous interval overlap |
+| `ceilingEntry(k)` / `ceiling(k)` | Least entry `>= k` | `O(log n)` | Check next interval overlap |
+| `lowerKey(k)` / `higherKey(k)` | Strictly `< k` or `> k` | `O(log n)` | Strict predecessor / successor |
+| `subMap(from, to)` | Range view `[from, to)` | `O(log n)` | Range queries & sweeping |
+
+> [!NOTE]
+> Use `HashMap` (`O(1)`) when you only need exact key lookups; switch to `TreeMap` (`O(log n)`) only when you need sorted iteration, range queries, or `floor`/`ceiling` neighbor checks.
 
 ### Problem: Meeting Rooms II
 
@@ -871,6 +1078,38 @@ class MyCalendar {
 
 ## Complex Comparator Patterns in Java
 
+Multi-key tie-breaking in `PriorityQueue`, `TreeMap`, and `Arrays.sort` is cleaner and overflow-safe when expressed with `Comparator.comparingInt(...).thenComparing(...)`.
+
+```mermaid
+classDiagram
+    class Comparator {
+        &lt;&lt;interface&gt;&gt;
+        +compare(T o1, T o2) int
+        +comparingInt(ToIntFunction) Comparator
+        +thenComparing(Function) Comparator
+        +reverseOrder() Comparator
+    }
+    class PriorityQueue {
+        -Comparator comparator
+        +offer(E e) boolean
+        +poll() E
+        +peek() E
+    }
+    class TreeMap {
+        -Comparator comparator
+        +floorEntry(K key) Entry
+        +ceilingEntry(K key) Entry
+    }
+    PriorityQueue --> Comparator : orders heap by
+    TreeMap --> Comparator : orders RB-tree by
+```
+
+- **Overflow safety:** Prefer `Integer.compare(a, b)` or `Comparator.comparingInt(...)` over `a - b`.
+- **Consistent with `equals`:** In `TreeSet`/`TreeMap`, two elements where `compare(a, b) == 0` are treated as the **same key**, so always include a tie-breaker if duplicates must be preserved.
+
+> [!WARNING]
+> In a `TreeSet`, if `compare(a, b) == 0` for two distinct objects (e.g., two tasks with the same priority), `TreeSet.add(b)` will silently drop `b`. Add a unique ID tie-breaker like `.thenComparingInt(t -> t.id)`.
+
 ### Pattern 1: Multiple Criteria
 ```java
 PriorityQueue<Person> pq = new PriorityQueue<>(
@@ -902,6 +1141,28 @@ PriorityQueue<Integer> maxHeap = new PriorityQueue<>(
 
 ## Summary & Patterns Cheat Sheet
 
+Use this decision flow to pick the right data structure in the first 30 seconds of an interview:
+
+```mermaid
+flowchart TD
+    S["Problem Requirement"] --> Q1{"Need O(1) Lookup or Counting?"}
+    Q1 -->|"Key → Value / Freq / Index"| H1["HashMap"]
+    Q1 -->|"Membership / Deduplication"| H2["HashSet"]
+    Q1 -->|"No"| Q2{"Need Extremum (Min/Max/Top-K)?"}
+    Q2 -->|"Single or Top-K Stream"| P1["PriorityQueue (Heap)"]
+    Q2 -->|"No"| Q3{"Need Sorted Order / Range?"}
+    Q3 -->|"Key → Value + floor/ceiling"| T1["TreeMap"]
+    Q3 -->|"Unique Sorted Elements"| T2["TreeSet"]
+
+    classDef start fill:#0f172a,stroke:#64748b,color:#f8fafc
+    classDef q fill:#1e293b,stroke:#fbbf24,color:#fef3c7
+    classDef ds fill:#064e3b,stroke:#34d399,color:#d1fae5
+
+    class S start
+    class Q1,Q2,Q3 q
+    class H1,H2,P1,T1,T2 ds
+```
+
 ### When to Use HashMap
 - Frequency counting
 - Two sum, group anagrams
@@ -925,9 +1186,30 @@ PriorityQueue<Integer> maxHeap = new PriorityQueue<>(
 - Interval overlap checking
 - Lexicographically sorted
 
+> [!TIP]
+> If you find yourself sorting repeatedly inside a loop (`O(n² log n)`), replace the re-sort with a `PriorityQueue` (`O(n log n)`) or `TreeMap` (`O(n log n)`).
+
 ---
 
 ## Practice Summary
+
+Map each canonical interview problem directly to its core insight, data structure, and target complexity:
+
+```mermaid
+flowchart LR
+    P1["Two Sum"] --> D1["HashMap: O(n)"]
+    P2["Top K Frequent"] --> D2["Size-K Min-Heap: O(n log k)"]
+    P3["Reorganize String"] --> D3["Max-Heap by Freq: O(n)"]
+    P4["Kth Largest"] --> D4["Size-K Min-Heap: O(n log k)"]
+    P5["Merge K Lists"] --> D5["Min-Heap of Heads: O(n log k)"]
+    P6["Meeting Rooms II"] --> D6["Sort + Two Pointers: O(n log n)"]
+
+    classDef prob fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe
+    classDef sol fill:#064e3b,stroke:#34d399,color:#d1fae5
+
+    class P1,P2,P3,P4,P5,P6 prob
+    class D1,D2,D3,D4,D5,D6 sol
+```
 
 | Problem | Key Insight | Data Structure | Time |
 |---------|------------|-----------------|------|
@@ -938,3 +1220,5 @@ PriorityQueue<Integer> maxHeap = new PriorityQueue<>(
 | Merge K Lists | All list heads in heap | Heap | O(n log k) |
 | Meeting Rooms | Sort + two pointers | Sorting | O(n log n) |
 
+> [!IMPORTANT]
+> Before coding any heap or hash solution, state the invariant out loud (e.g., *"I'll maintain a Min-Heap of size `k` so the smallest of the `k` largest sits at the root"*). Interviewers score clarity of the invariant as highly as the code itself.

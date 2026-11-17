@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 440" width="860" height="440" role="img" aria-labelledby="title desc">
+  <title id="title">Kadane's Algorithm — Maximum Subarray Animation</title>
+  <desc id="desc">Animates currentSum = max(num, currentSum + num) resetting on negative prefix vs extending positive subarray across [-2, 1, -3, 4, -1, 2, 1, -5, 4].</desc>
+  <style>
+    .bg { fill: #0f172a; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+    .title { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+    .subtitle { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .hud-label { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #94a3b8; }
+    .hud-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 16px; font-weight: 700; }
+    .cell { fill: #0f172a; stroke: #334155; stroke-width: 1.5; }
+    .cell-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 16px; font-weight: 700; fill: #f8fafc; text-anchor: middle; }
+    .cell-idx { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #64748b; text-anchor: middle; }
+    .trace-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+    .trace-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 700; text-anchor: middle; }
+
+    /* 10 steps over 15s (10% each) */
+    @keyframes moveCursor {
+      0%, 9.9%    { transform: translateX(0px); opacity: 1; }
+      10%, 19.9%  { transform: translateX(76px); opacity: 1; }
+      20%, 29.9%  { transform: translateX(152px); opacity: 1; }
+      30%, 39.9%  { transform: translateX(228px); opacity: 1; }
+      40%, 49.9%  { transform: translateX(304px); opacity: 1; }
+      50%, 59.9%  { transform: translateX(380px); opacity: 1; }
+      60%, 69.9%  { transform: translateX(456px); opacity: 1; }
+      70%, 79.9%  { transform: translateX(532px); opacity: 1; }
+      80%, 89.9%  { transform: translateX(608px); opacity: 1; }
+      90%, 100%   { transform: translateX(608px); opacity: 0; }
+    }
+    .cursor { animation: moveCursor 15s steps(1, end) infinite; }
+
+    /* Active subarray highlight bar: x and width per step */
+    @keyframes winMove {
+      0%, 9.9%    { x: 96px;  width: 64px;  stroke: #ef4444; fill: #ef4444; }
+      10%, 19.9%  { x: 172px; width: 64px;  stroke: #f59e0b; fill: #f59e0b; }
+      20%, 29.9%  { x: 172px; width: 140px; stroke: #38bdf8; fill: #38bdf8; }
+      30%, 39.9%  { x: 324px; width: 64px;  stroke: #f59e0b; fill: #f59e0b; }
+      40%, 49.9%  { x: 324px; width: 140px; stroke: #38bdf8; fill: #38bdf8; }
+      50%, 59.9%  { x: 324px; width: 216px; stroke: #22c55e; fill: #22c55e; }
+      60%, 69.9%  { x: 324px; width: 292px; stroke: #22c55e; fill: #22c55e; }
+      70%, 79.9%  { x: 324px; width: 368px; stroke: #38bdf8; fill: #38bdf8; }
+      80%, 89.9%  { x: 324px; width: 444px; stroke: #38bdf8; fill: #38bdf8; }
+      90%, 100%   { x: 324px; width: 292px; stroke: #22c55e; fill: #22c55e; }
+    }
+    .win-bar { fill-opacity: 0.16; stroke-width: 2; animation: winMove 15s steps(1, end) infinite; }
+
+    /* Step visibility classes */
+    @keyframes k0 { 0%, 9.9%   { opacity: 1; } 10%, 100%  { opacity: 0; } }
+    @keyframes k1 { 0%, 9.9%   { opacity: 0; } 10%, 19.9% { opacity: 1; } 20%, 100% { opacity: 0; } }
+    @keyframes k2 { 0%, 19.9%  { opacity: 0; } 20%, 29.9% { opacity: 1; } 30%, 100% { opacity: 0; } }
+    @keyframes k3 { 0%, 29.9%  { opacity: 0; } 30%, 39.9% { opacity: 1; } 40%, 100% { opacity: 0; } }
+    @keyframes k4 { 0%, 39.9%  { opacity: 0; } 40%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    @keyframes k5 { 0%, 49.9%  { opacity: 0; } 50%, 59.9% { opacity: 1; } 60%, 100% { opacity: 0; } }
+    @keyframes k6 { 0%, 59.9%  { opacity: 0; } 60%, 69.9% { opacity: 1; } 70%, 100% { opacity: 0; } }
+    @keyframes k7 { 0%, 69.9%  { opacity: 0; } 70%, 79.9% { opacity: 1; } 80%, 100% { opacity: 0; } }
+    @keyframes k8 { 0%, 79.9%  { opacity: 0; } 80%, 89.9% { opacity: 1; } 90%, 100% { opacity: 0; } }
+    @keyframes k9 { 0%, 89.9%  { opacity: 0; } 90%, 100%  { opacity: 1; } }
+
+    .s0 { animation: k0 15s steps(1, end) infinite; }
+    .s1 { animation: k1 15s steps(1, end) infinite; }
+    .s2 { animation: k2 15s steps(1, end) infinite; }
+    .s3 { animation: k3 15s steps(1, end) infinite; }
+    .s4 { animation: k4 15s steps(1, end) infinite; }
+    .s5 { animation: k5 15s steps(1, end) infinite; }
+    .s6 { animation: k6 15s steps(1, end) infinite; }
+    .s7 { animation: k7 15s steps(1, end) infinite; }
+    .s8 { animation: k8 15s steps(1, end) infinite; }
+    .s9 { animation: k9 15s steps(1, end) infinite; }
+
+    /* Progressive reveal of trace numbers */
+    @keyframes r1 { 0%, 9.9%  { opacity: 0.2; } 10%, 100% { opacity: 1; } }
+    @keyframes r2 { 0%, 19.9% { opacity: 0.2; } 20%, 100% { opacity: 1; } }
+    @keyframes r3 { 0%, 29.9% { opacity: 0.2; } 30%, 100% { opacity: 1; } }
+    @keyframes r4 { 0%, 39.9% { opacity: 0.2; } 40%, 100% { opacity: 1; } }
+    @keyframes r5 { 0%, 49.9% { opacity: 0.2; } 50%, 100% { opacity: 1; } }
+    @keyframes r6 { 0%, 59.9% { opacity: 0.2; } 60%, 100% { opacity: 1; } }
+    @keyframes r7 { 0%, 69.9% { opacity: 0.2; } 70%, 100% { opacity: 1; } }
+    @keyframes r8 { 0%, 79.9% { opacity: 0.2; } 80%, 100% { opacity: 1; } }
+    .rev1 { animation: r1 15s steps(1, end) infinite; }
+    .rev2 { animation: r2 15s steps(1, end) infinite; }
+    .rev3 { animation: r3 15s steps(1, end) infinite; }
+    .rev4 { animation: r4 15s steps(1, end) infinite; }
+    .rev5 { animation: r5 15s steps(1, end) infinite; }
+    .rev6 { animation: r6 15s steps(1, end) infinite; }
+    .rev7 { animation: r7 15s steps(1, end) infinite; }
+    .rev8 { animation: r8 15s steps(1, end) infinite; }
+  </style>
+
+  <!-- Background -->
+  <rect class="bg" width="860" height="440" rx="14"/>
+  <rect class="card" x="20" y="20" width="820" height="400" rx="12"/>
+
+  <!-- Header -->
+  <text class="title" x="44" y="54">Kadane's Algorithm — Maximum Subarray</text>
+  <text class="subtitle" x="44" y="74">currentSum = max(num, currentSum + num)  |  Drop negative prefix vs extend  |  O(n) Time, O(1) Space</text>
+
+  <!-- Legend -->
+  <rect x="575" y="40" width="12" height="12" rx="2" fill="#f59e0b"/>
+  <text class="subtitle" x="593" y="50">Reset</text>
+  <rect x="645" y="40" width="12" height="12" rx="2" fill="#38bdf8"/>
+  <text class="subtitle" x="663" y="50">Extend</text>
+  <rect x="720" y="40" width="12" height="12" rx="2" fill="#22c55e"/>
+  <text class="subtitle" x="738" y="50">New Best / Final</text>
+
+  <!-- HUD Cards -->
+  <rect x="44" y="92" width="150" height="54" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="hud-label" x="58" y="111">currentSum</text>
+  <text class="hud-val s0" x="58" y="134" fill="#ef4444">-2</text>
+  <text class="hud-val s1" x="58" y="134" fill="#f59e0b">1</text>
+  <text class="hud-val s2" x="58" y="134" fill="#38bdf8">-2</text>
+  <text class="hud-val s3" x="58" y="134" fill="#f59e0b">4</text>
+  <text class="hud-val s4" x="58" y="134" fill="#38bdf8">3</text>
+  <text class="hud-val s5" x="58" y="134" fill="#22c55e">5</text>
+  <text class="hud-val s6" x="58" y="134" fill="#22c55e">6</text>
+  <text class="hud-val s7" x="58" y="134" fill="#38bdf8">1</text>
+  <text class="hud-val s8" x="58" y="134" fill="#38bdf8">5</text>
+  <text class="hud-val s9" x="58" y="134" fill="#22c55e">6 (Best)</text>
+
+  <rect x="208" y="92" width="150" height="54" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="hud-label" x="222" y="111">maxSum</text>
+  <text class="hud-val s0" x="222" y="134" fill="#e2e8f0">-2</text>
+  <text class="hud-val s1" x="222" y="134" fill="#22c55e">1</text>
+  <text class="hud-val s2" x="222" y="134" fill="#e2e8f0">1</text>
+  <text class="hud-val s3" x="222" y="134" fill="#22c55e">4</text>
+  <text class="hud-val s4" x="222" y="134" fill="#e2e8f0">4</text>
+  <text class="hud-val s5" x="222" y="134" fill="#22c55e">5</text>
+  <text class="hud-val s6" x="222" y="134" fill="#22c55e">6</text>
+  <text class="hud-val s7" x="222" y="134" fill="#e2e8f0">6</text>
+  <text class="hud-val s8" x="222" y="134" fill="#e2e8f0">6</text>
+  <text class="hud-val s9" x="222" y="134" fill="#22c55e">6</text>
+
+  <rect x="372" y="92" width="444" height="54" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="hud-label" x="386" y="111">Step Decision: max(nums[i], currentSum + nums[i])</text>
+  <text class="mono s0" x="386" y="133" font-size="12" fill="#e2e8f0">i=0: Init currentSum = -2, maxSum = -2</text>
+  <text class="mono s1" x="386" y="133" font-size="12" fill="#fbbf24">i=1: RESET  max(1, -2+1) = 1  (drop negative prefix)</text>
+  <text class="mono s2" x="386" y="133" font-size="12" fill="#38bdf8">i=2: EXTEND max(-3, 1-3) = -2 (keep positive prefix)</text>
+  <text class="mono s3" x="386" y="133" font-size="12" fill="#fbbf24">i=3: RESET  max(4, -2+4) = 4  (drop negative prefix)</text>
+  <text class="mono s4" x="386" y="133" font-size="12" fill="#38bdf8">i=4: EXTEND max(-1, 4-1) = 3  (positive prefix +4)</text>
+  <text class="mono s5" x="386" y="133" font-size="12" fill="#4ade80">i=5: EXTEND max(2, 3+2)  = 5  (new maxSum = 5)</text>
+  <text class="mono s6" x="386" y="133" font-size="12" fill="#4ade80">i=6: EXTEND max(1, 5+1)  = 6  (new maxSum = 6!)</text>
+  <text class="mono s7" x="386" y="133" font-size="12" fill="#38bdf8">i=7: EXTEND max(-5, 6-5) = 1  (still positive)</text>
+  <text class="mono s8" x="386" y="133" font-size="12" fill="#38bdf8">i=8: EXTEND max(4, 1+4)  = 5  (maxSum stays 6)</text>
+  <text class="mono s9" x="386" y="133" font-size="12" fill="#4ade80">Done! Optimal subarray [4, -1, 2, 1] at [3..6] = 6</text>
+
+  <!-- Active Subarray Highlight Bar behind cells -->
+  <rect class="win-bar" x="96" y="182" width="64" height="72" rx="10"/>
+
+  <!-- Array Cells: start x=96, pitch=76, width=64 -->
+  <rect class="cell" x="96"  y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="172" y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="248" y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="324" y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="400" y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="476" y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="552" y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="628" y="190" width="64" height="56" rx="8"/>
+  <rect class="cell" x="704" y="190" width="64" height="56" rx="8"/>
+
+  <!-- Cell Values -->
+  <text class="cell-val" x="128" y="224">-2</text>
+  <text class="cell-val" x="204" y="224">1</text>
+  <text class="cell-val" x="280" y="224">-3</text>
+  <text class="cell-val" x="356" y="224">4</text>
+  <text class="cell-val" x="432" y="224">-1</text>
+  <text class="cell-val" x="508" y="224">2</text>
+  <text class="cell-val" x="584" y="224">1</text>
+  <text class="cell-val" x="660" y="224">-5</text>
+  <text class="cell-val" x="736" y="224">4</text>
+
+  <!-- Cell Indices -->
+  <text class="cell-idx" x="128" y="266">[0]</text>
+  <text class="cell-idx" x="204" y="266">[1]</text>
+  <text class="cell-idx" x="280" y="266">[2]</text>
+  <text class="cell-idx" x="356" y="266">[3]</text>
+  <text class="cell-idx" x="432" y="266">[4]</text>
+  <text class="cell-idx" x="508" y="266">[5]</text>
+  <text class="cell-idx" x="584" y="266">[6]</text>
+  <text class="cell-idx" x="660" y="266">[7]</text>
+  <text class="cell-idx" x="736" y="266">[8]</text>
+
+  <!-- Scan Cursor -->
+  <g class="cursor">
+    <polygon points="128,178 121,166 135,166" fill="#38bdf8"/>
+    <text class="mono" x="128" y="162" font-size="11" font-weight="700" fill="#38bdf8" text-anchor="middle">i</text>
+  </g>
+
+  <!-- Running Trace Table -->
+  <rect x="44" y="286" width="772" height="114" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="trace-label" x="56" y="314">curr:</text>
+  <text class="trace-label" x="56" y="348">max:</text>
+  <text class="trace-label" x="56" y="382">act:</text>
+
+  <!-- curr row -->
+  <text class="trace-val" x="128" y="314" fill="#ef4444">-2</text>
+  <text class="trace-val rev1" x="204" y="314" fill="#fbbf24">1</text>
+  <text class="trace-val rev2" x="280" y="314" fill="#38bdf8">-2</text>
+  <text class="trace-val rev3" x="356" y="314" fill="#fbbf24">4</text>
+  <text class="trace-val rev4" x="432" y="314" fill="#38bdf8">3</text>
+  <text class="trace-val rev5" x="508" y="314" fill="#4ade80">5</text>
+  <text class="trace-val rev6" x="584" y="314" fill="#4ade80">6</text>
+  <text class="trace-val rev7" x="660" y="314" fill="#38bdf8">1</text>
+  <text class="trace-val rev8" x="736" y="314" fill="#38bdf8">5</text>
+
+  <!-- max row -->
+  <text class="trace-val" x="128" y="348" fill="#94a3b8">-2</text>
+  <text class="trace-val rev1" x="204" y="348" fill="#4ade80">1</text>
+  <text class="trace-val rev2" x="280" y="348" fill="#94a3b8">1</text>
+  <text class="trace-val rev3" x="356" y="348" fill="#4ade80">4</text>
+  <text class="trace-val rev4" x="432" y="348" fill="#94a3b8">4</text>
+  <text class="trace-val rev5" x="508" y="348" fill="#4ade80">5</text>
+  <text class="trace-val rev6" x="584" y="348" fill="#4ade80">6</text>
+  <text class="trace-val rev7" x="660" y="348" fill="#94a3b8">6</text>
+  <text class="trace-val rev8" x="736" y="348" fill="#94a3b8">6</text>
+
+  <!-- act row -->
+  <text class="trace-val" x="128" y="382" fill="#94a3b8" font-size="10">INIT</text>
+  <text class="trace-val rev1" x="204" y="382" fill="#fbbf24" font-size="10">RESET</text>
+  <text class="trace-val rev2" x="280" y="382" fill="#38bdf8" font-size="10">EXTEND</text>
+  <text class="trace-val rev3" x="356" y="382" fill="#fbbf24" font-size="10">RESET</text>
+  <text class="trace-val rev4" x="432" y="382" fill="#38bdf8" font-size="10">EXTEND</text>
+  <text class="trace-val rev5" x="508" y="382" fill="#4ade80" font-size="10">BEST</text>
+  <text class="trace-val rev6" x="584" y="382" fill="#4ade80" font-size="10">BEST</text>
+  <text class="trace-val rev7" x="660" y="382" fill="#38bdf8" font-size="10">EXTEND</text>
+  <text class="trace-val rev8" x="736" y="382" fill="#38bdf8" font-size="10">EXTEND</text>
+</svg>

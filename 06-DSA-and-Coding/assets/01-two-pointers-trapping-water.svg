@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 440" width="860" height="440" role="img" aria-labelledby="title desc">
+  <title id="title">Trapping Rain Water — Two Pointers Animation</title>
+  <desc id="desc">Step-by-step animation of converging left and right pointers with leftMax and rightMax trapping water units in O(n) time and O(1) space.</desc>
+  <style>
+    .bg { fill: #0f172a; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+    .title { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+    .subtitle { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #94a3b8; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .bar { fill: #475569; stroke: #64748b; stroke-width: 1; }
+    .axis { stroke: #475569; stroke-width: 2; }
+    .idx-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; text-anchor: middle; }
+    .val-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; fill: #e2e8f0; text-anchor: middle; }
+    .hud-label { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #94a3b8; }
+    .hud-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 16px; font-weight: 700; }
+
+    /* Pointer movement: 8 steps over 12s (12.5% per step) */
+    @keyframes moveLeft {
+      0%, 12.4%   { transform: translateX(0px); }
+      12.5%, 24.9% { transform: translateX(0px); }
+      25%, 37.4%  { transform: translateX(64px); }
+      37.5%, 100% { transform: translateX(128px); }
+    }
+    @keyframes moveRight {
+      0%, 12.4%   { transform: translateX(512px); }
+      12.5%, 37.4% { transform: translateX(448px); }
+      37.5%, 49.9% { transform: translateX(448px); }
+      50%, 62.4%  { transform: translateX(384px); }
+      62.5%, 74.9% { transform: translateX(320px); }
+      75%, 87.4%  { transform: translateX(256px); }
+      87.5%, 99.9% { transform: translateX(192px); }
+      100%        { transform: translateX(128px); }
+    }
+    .ptr-left { animation: moveLeft 12s steps(1, end) infinite; }
+    .ptr-right { animation: moveRight 12s steps(1, end) infinite; }
+
+    /* Water units appearing at each step */
+    @keyframes showW1 { 0%, 24.9% { opacity: 0; } 25%, 100% { opacity: 0.85; } }
+    @keyframes showW6 { 0%, 49.9% { opacity: 0; } 50%, 100% { opacity: 0.85; } }
+    @keyframes showW5 { 0%, 62.4% { opacity: 0; } 62.5%, 100% { opacity: 0.85; } }
+    @keyframes showW4 { 0%, 74.9% { opacity: 0; } 75%, 100% { opacity: 0.85; } }
+    @keyframes showW3 { 0%, 87.4% { opacity: 0; } 87.5%, 100% { opacity: 0.85; } }
+
+    .w1 { fill: #0ea5e9; animation: showW1 12s steps(1, end) infinite; }
+    .w6 { fill: #0ea5e9; animation: showW6 12s steps(1, end) infinite; }
+    .w5 { fill: #0ea5e9; animation: showW5 12s steps(1, end) infinite; }
+    .w4 { fill: #0ea5e9; animation: showW4 12s steps(1, end) infinite; }
+    .w3 { fill: #0ea5e9; animation: showW3 12s steps(1, end) infinite; }
+
+    /* Step text visibility */
+    @keyframes s1 { 0%, 12.4% { opacity: 1; } 12.5%, 100% { opacity: 0; } }
+    @keyframes s2 { 0%, 12.4% { opacity: 0; } 12.5%, 24.9% { opacity: 1; } 25%, 100% { opacity: 0; } }
+    @keyframes s3 { 0%, 24.9% { opacity: 0; } 25%, 37.4% { opacity: 1; } 37.5%, 100% { opacity: 0; } }
+    @keyframes s4 { 0%, 37.4% { opacity: 0; } 37.5%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    @keyframes s5 { 0%, 49.9% { opacity: 0; } 50%, 62.4% { opacity: 1; } 62.5%, 100% { opacity: 0; } }
+    @keyframes s6 { 0%, 62.4% { opacity: 0; } 62.5%, 74.9% { opacity: 1; } 75%, 100% { opacity: 0; } }
+    @keyframes s7 { 0%, 74.9% { opacity: 0; } 75%, 87.4% { opacity: 1; } 87.5%, 100% { opacity: 0; } }
+    @keyframes s8 { 0%, 87.4% { opacity: 0; } 87.5%, 100% { opacity: 1; } }
+
+    .st1 { animation: s1 12s steps(1, end) infinite; }
+    .st2 { animation: s2 12s steps(1, end) infinite; }
+    .st3 { animation: s3 12s steps(1, end) infinite; }
+    .st4 { animation: s4 12s steps(1, end) infinite; }
+    .st5 { animation: s5 12s steps(1, end) infinite; }
+    .st6 { animation: s6 12s steps(1, end) infinite; }
+    .st7 { animation: s7 12s steps(1, end) infinite; }
+    .st8 { animation: s8 12s steps(1, end) infinite; }
+  </style>
+
+  <!-- Background -->
+  <rect class="bg" width="860" height="440" rx="14"/>
+  <rect class="card" x="20" y="20" width="820" height="400" rx="12"/>
+
+  <!-- Header -->
+  <text class="title" x="44" y="54">Trapping Rain Water — Two Pointers</text>
+  <text class="subtitle" x="44" y="74">Converging L &amp; R pointers track leftMax / rightMax on the fly  |  O(n) Time, O(1) Space</text>
+
+  <!-- Legend -->
+  <rect x="595" y="40" width="12" height="12" rx="2" fill="#475569" stroke="#64748b"/>
+  <text class="subtitle" x="613" y="50">Wall</text>
+  <rect x="655" y="40" width="12" height="12" rx="2" fill="#0ea5e9"/>
+  <text class="subtitle" x="673" y="50">Trapped Water</text>
+  <circle cx="770" cy="46" r="5" fill="#22c55e"/>
+  <text class="subtitle" x="780" y="50">L</text>
+  <circle cx="802" cy="46" r="5" fill="#f59e0b"/>
+  <text class="subtitle" x="812" y="50">R</text>
+
+  <!-- HUD Cards -->
+  <rect x="44" y="92" width="160" height="54" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="hud-label" x="58" y="111">leftMax</text>
+  <text class="hud-val st1" x="58" y="134" fill="#22c55e">0</text>
+  <text class="hud-val st2" x="58" y="134" fill="#22c55e">2</text>
+  <text class="hud-val st3" x="58" y="134" fill="#22c55e">2</text>
+  <text class="hud-val st4" x="58" y="134" fill="#22c55e">3</text>
+  <text class="hud-val st5" x="58" y="134" fill="#22c55e">3</text>
+  <text class="hud-val st6" x="58" y="134" fill="#22c55e">3</text>
+  <text class="hud-val st7" x="58" y="134" fill="#22c55e">3</text>
+  <text class="hud-val st8" x="58" y="134" fill="#22c55e">3</text>
+
+  <rect x="218" y="92" width="160" height="54" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="hud-label" x="232" y="111">rightMax</text>
+  <text class="hud-val st1" x="232" y="134" fill="#f59e0b">1</text>
+  <text class="hud-val st2" x="232" y="134" fill="#f59e0b">1</text>
+  <text class="hud-val st3" x="232" y="134" fill="#f59e0b">1</text>
+  <text class="hud-val st4" x="232" y="134" fill="#f59e0b">3</text>
+  <text class="hud-val st5" x="232" y="134" fill="#f59e0b">3</text>
+  <text class="hud-val st6" x="232" y="134" fill="#f59e0b">3</text>
+  <text class="hud-val st7" x="232" y="134" fill="#f59e0b">3</text>
+  <text class="hud-val st8" x="232" y="134" fill="#f59e0b">3</text>
+
+  <rect x="392" y="92" width="160" height="54" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="hud-label" x="406" y="111">Total Water</text>
+  <text class="hud-val st1" x="406" y="134" fill="#38bdf8">0 units</text>
+  <text class="hud-val st2" x="406" y="134" fill="#38bdf8">0 units</text>
+  <text class="hud-val st3" x="406" y="134" fill="#38bdf8">2 units</text>
+  <text class="hud-val st4" x="406" y="134" fill="#38bdf8">2 units</text>
+  <text class="hud-val st5" x="406" y="134" fill="#38bdf8">4 units</text>
+  <text class="hud-val st6" x="406" y="134" fill="#38bdf8">5 units</text>
+  <text class="hud-val st7" x="406" y="134" fill="#38bdf8">8 units</text>
+  <text class="hud-val st8" x="406" y="134" fill="#38bdf8">10 units</text>
+
+  <rect x="566" y="92" width="250" height="54" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text class="hud-label" x="580" y="111">Active Decision</text>
+  <text class="mono st1" x="580" y="133" font-size="12" fill="#e2e8f0">h[L]=2 &gt;= h[R]=1 : rMax=1, R--</text>
+  <text class="mono st2" x="580" y="133" font-size="12" fill="#e2e8f0">h[L]=2 &lt;  h[R]=3 : lMax=2, L++</text>
+  <text class="mono st3" x="580" y="133" font-size="12" fill="#38bdf8">h[L]=0 &lt;  h[R]=3 : +2 water, L++</text>
+  <text class="mono st4" x="580" y="133" font-size="12" fill="#e2e8f0">h[L]=3 &gt;= h[R]=3 : rMax=3, R--</text>
+  <text class="mono st5" x="580" y="133" font-size="12" fill="#38bdf8">h[L]=3 &gt;= h[R]=1 : +2 water, R--</text>
+  <text class="mono st6" x="580" y="133" font-size="12" fill="#38bdf8">h[L]=3 &gt;= h[R]=2 : +1 water, R--</text>
+  <text class="mono st7" x="580" y="133" font-size="12" fill="#38bdf8">h[L]=3 &gt;= h[R]=0 : +3 water, R--</text>
+  <text class="mono st8" x="580" y="133" font-size="12" fill="#38bdf8">h[L]=3 &gt;= h[R]=1 : +2 water (10)</text>
+
+  <!-- Chart Area: x from 140, 9 bars, pitch=64px, width=48px, unit height=42px, baseline y=334 -->
+  <!-- height = [2, 0, 3, 1, 0, 2, 1, 3, 1] -->
+
+  <!-- Water fills (behind/above bars) -->
+  <!-- idx 1: 2 units (y=250, h=84) -->
+  <rect class="w1" x="204" y="250" width="48" height="84" rx="3"/>
+  <!-- idx 3: 2 units above h=1 (y=208, h=84) -->
+  <rect class="w3" x="332" y="208" width="48" height="84" rx="3"/>
+  <!-- idx 4: 3 units (y=208, h=126) -->
+  <rect class="w4" x="396" y="208" width="48" height="126" rx="3"/>
+  <!-- idx 5: 1 unit above h=2 (y=208, h=42) -->
+  <rect class="w5" x="460" y="208" width="48" height="42" rx="3"/>
+  <!-- idx 6: 2 units above h=1 (y=208, h=84) -->
+  <rect class="w6" x="524" y="208" width="48" height="84" rx="3"/>
+
+  <!-- Elevation Bars -->
+  <rect class="bar" x="140" y="250" width="48" height="84" rx="3"/>
+  <rect class="bar" x="204" y="332" width="48" height="2" rx="1"/>
+  <rect class="bar" x="268" y="208" width="48" height="126" rx="3"/>
+  <rect class="bar" x="332" y="292" width="48" height="42" rx="3"/>
+  <rect class="bar" x="396" y="332" width="48" height="2" rx="1"/>
+  <rect class="bar" x="460" y="250" width="48" height="84" rx="3"/>
+  <rect class="bar" x="524" y="292" width="48" height="42" rx="3"/>
+  <rect class="bar" x="588" y="208" width="48" height="126" rx="3"/>
+  <rect class="bar" x="652" y="292" width="48" height="42" rx="3"/>
+
+  <!-- Baseline -->
+  <line class="axis" x1="120" y1="334" x2="720" y2="334"/>
+
+  <!-- Bar Values and Indices -->
+  <text class="val-label" x="164" y="242">2</text>
+  <text class="val-label" x="228" y="324">0</text>
+  <text class="val-label" x="292" y="200">3</text>
+  <text class="val-label" x="356" y="284">1</text>
+  <text class="val-label" x="420" y="324">0</text>
+  <text class="val-label" x="484" y="242">2</text>
+  <text class="val-label" x="548" y="284">1</text>
+  <text class="val-label" x="612" y="200">3</text>
+  <text class="val-label" x="676" y="284">1</text>
+
+  <text class="idx-label" x="164" y="352">[0]</text>
+  <text class="idx-label" x="228" y="352">[1]</text>
+  <text class="idx-label" x="292" y="352">[2]</text>
+  <text class="idx-label" x="356" y="352">[3]</text>
+  <text class="idx-label" x="420" y="352">[4]</text>
+  <text class="idx-label" x="484" y="352">[5]</text>
+  <text class="idx-label" x="548" y="352">[6]</text>
+  <text class="idx-label" x="612" y="352">[7]</text>
+  <text class="idx-label" x="676" y="352">[8]</text>
+
+  <!-- Animated Left Pointer -->
+  <g class="ptr-left">
+    <polygon points="164,364 156,376 172,376" fill="#22c55e"/>
+    <rect x="148" y="376" width="32" height="22" rx="5" fill="#14532d" stroke="#22c55e" stroke-width="1.5"/>
+    <text class="mono" x="164" y="391" font-size="12" font-weight="700" fill="#4ade80" text-anchor="middle">L</text>
+  </g>
+
+  <!-- Animated Right Pointer -->
+  <g class="ptr-right">
+    <polygon points="164,364 156,376 172,376" fill="#f59e0b"/>
+    <rect x="148" y="376" width="32" height="22" rx="5" fill="#78350f" stroke="#f59e0b" stroke-width="1.5"/>
+    <text class="mono" x="164" y="391" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="middle">R</text>
+  </g>
+</svg>

@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 390" width="920" height="390" role="img" aria-labelledby="title desc">
+  <title id="title">DSA Input-to-Pattern Signal Matcher</title>
+  <desc>Animated signal matcher connecting five common coding interview problem cues to their optimal algorithmic patterns.</desc>
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <filter id="packetGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <style>
+    .font-sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    @keyframes rowGlow1 {
+      0%, 18% { opacity: 1; }
+      22%, 100% { opacity: 0.65; }
+    }
+    @keyframes rowGlow2 {
+      0%, 18% { opacity: 0.65; }
+      20%, 38% { opacity: 1; }
+      42%, 100% { opacity: 0.65; }
+    }
+    @keyframes rowGlow3 {
+      0%, 38% { opacity: 0.65; }
+      40%, 58% { opacity: 1; }
+      62%, 100% { opacity: 0.65; }
+    }
+    @keyframes rowGlow4 {
+      0%, 58% { opacity: 0.65; }
+      60%, 78% { opacity: 1; }
+      82%, 100% { opacity: 0.65; }
+    }
+    @keyframes rowGlow5 {
+      0%, 78% { opacity: 0.65; }
+      80%, 98% { opacity: 1; }
+      100% { opacity: 0.65; }
+    }
+
+    .row-1 { animation: rowGlow1 10s ease-in-out infinite; }
+    .row-2 { animation: rowGlow2 10s ease-in-out infinite; }
+    .row-3 { animation: rowGlow3 10s ease-in-out infinite; }
+    .row-4 { animation: rowGlow4 10s ease-in-out infinite; }
+    .row-5 { animation: rowGlow5 10s ease-in-out infinite; }
+  </style>
+
+  <!-- Card Background -->
+  <rect x="0" y="0" width="920" height="390" rx="16" fill="url(#bgGrad)" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="32" y="40" class="font-sans" font-size="19" font-weight="700" fill="#f8fafc">DSA Input-to-Pattern Signal Matcher</text>
+  <text x="32" y="61" class="font-sans" font-size="13" fill="#94a3b8">Spot the problem constraint cue on the left to route immediately to the target pattern</text>
+
+  <!-- Column Headers -->
+  <text x="36" y="92" class="font-mono" font-size="11" font-weight="700" fill="#64748b">INPUT SIGNAL / CUE</text>
+  <text x="415" y="92" class="font-mono" font-size="11" font-weight="700" fill="#64748b">SIGNAL ROUTER</text>
+  <text x="588" y="92" class="font-mono" font-size="11" font-weight="700" fill="#64748b">TARGET PATTERN</text>
+
+  <!-- Row 1: Sorted Array? -> Binary Search / Two Pointers -->
+  <g class="row-1">
+    <rect x="32" y="106" width="276" height="44" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+    <circle cx="52" cy="128" r="5" fill="#38bdf8"/>
+    <text x="68" y="133" class="font-sans" font-size="13.5" font-weight="600" fill="#f8fafc">Sorted Array?</text>
+
+    <path id="p1" d="M 308 128 C 410 128, 480 128, 584 128" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="5 5"/>
+    <circle r="4.5" fill="#38bdf8" filter="url(#packetGlow)">
+      <animateMotion dur="2s" repeatCount="indefinite" path="M 308 128 C 410 128, 480 128, 584 128"/>
+    </circle>
+
+    <rect x="584" y="106" width="304" height="44" rx="10" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="602" y="126" class="font-sans" font-size="13.5" font-weight="700" fill="#f8fafc">Binary Search / Two Pointers</text>
+    <text x="602" y="142" class="font-mono" font-size="10.5" fill="#bae6fd">O(log n) search or O(n) pair scan</text>
+  </g>
+
+  <!-- Row 2: Subarray / Substring? -> Sliding Window / Prefix Sum -->
+  <g class="row-2">
+    <rect x="32" y="162" width="276" height="44" rx="10" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+    <circle cx="52" cy="184" r="5" fill="#34d399"/>
+    <text x="68" y="189" class="font-sans" font-size="13.5" font-weight="600" fill="#f8fafc">Subarray / Substring?</text>
+
+    <path d="M 308 184 C 410 184, 480 184, 584 184" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="5 5"/>
+    <circle r="4.5" fill="#34d399" filter="url(#packetGlow)">
+      <animateMotion dur="2s" begin="0.4s" repeatCount="indefinite" path="M 308 184 C 410 184, 480 184, 584 184"/>
+    </circle>
+
+    <rect x="584" y="162" width="304" height="44" rx="10" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="602" y="182" class="font-sans" font-size="13.5" font-weight="700" fill="#f8fafc">Sliding Window / Prefix Sum</text>
+    <text x="602" y="198" class="font-mono" font-size="10.5" fill="#a7f3d0">Contiguous range in O(n) time</text>
+  </g>
+
+  <!-- Row 3: Optimal / Count Ways? -> DP -->
+  <g class="row-3">
+    <rect x="32" y="218" width="276" height="44" rx="10" fill="#0f172a" stroke="#818cf8" stroke-width="1.5"/>
+    <circle cx="52" cy="240" r="5" fill="#818cf8"/>
+    <text x="68" y="245" class="font-sans" font-size="13.5" font-weight="600" fill="#f8fafc">Optimal / Count Ways?</text>
+
+    <path d="M 308 240 C 410 240, 480 240, 584 240" fill="none" stroke="#818cf8" stroke-width="2" stroke-dasharray="5 5"/>
+    <circle r="4.5" fill="#818cf8" filter="url(#packetGlow)">
+      <animateMotion dur="2s" begin="0.8s" repeatCount="indefinite" path="M 308 240 C 410 240, 480 240, 584 240"/>
+    </circle>
+
+    <rect x="584" y="218" width="304" height="44" rx="10" fill="#312e81" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="602" y="238" class="font-sans" font-size="13.5" font-weight="700" fill="#f8fafc">Dynamic Programming (DP)</text>
+    <text x="602" y="254" class="font-mono" font-size="10.5" fill="#c7d2fe">Overlapping subproblems + state</text>
+  </g>
+
+  <!-- Row 4: All Combos? -> Backtracking -->
+  <g class="row-4">
+    <rect x="32" y="274" width="276" height="44" rx="10" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5"/>
+    <circle cx="52" cy="296" r="5" fill="#fbbf24"/>
+    <text x="68" y="301" class="font-sans" font-size="13.5" font-weight="600" fill="#f8fafc">All Combos / Permutations?</text>
+
+    <path d="M 308 296 C 410 296, 480 296, 584 296" fill="none" stroke="#fbbf24" stroke-width="2" stroke-dasharray="5 5"/>
+    <circle r="4.5" fill="#fbbf24" filter="url(#packetGlow)">
+      <animateMotion dur="2s" begin="1.2s" repeatCount="indefinite" path="M 308 296 C 410 296, 480 296, 584 296"/>
+    </circle>
+
+    <rect x="584" y="274" width="304" height="44" rx="10" fill="#78350f" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="602" y="294" class="font-sans" font-size="13.5" font-weight="700" fill="#f8fafc">Backtracking (DFS + Prune)</text>
+    <text x="602" y="310" class="font-mono" font-size="10.5" fill="#fde68a">Choose -&gt; Explore -&gt; Unchoose</text>
+  </g>
+
+  <!-- Row 5: Shortest Path? -> BFS / Dijkstra -->
+  <g class="row-5">
+    <rect x="32" y="330" width="276" height="44" rx="10" fill="#0f172a" stroke="#fb7185" stroke-width="1.5"/>
+    <circle cx="52" cy="352" r="5" fill="#fb7185"/>
+    <text x="68" y="357" class="font-sans" font-size="13.5" font-weight="600" fill="#f8fafc">Shortest Path?</text>
+
+    <path d="M 308 352 C 410 352, 480 352, 584 352" fill="none" stroke="#fb7185" stroke-width="2" stroke-dasharray="5 5"/>
+    <circle r="4.5" fill="#fb7185" filter="url(#packetGlow)">
+      <animateMotion dur="2s" begin="1.6s" repeatCount="indefinite" path="M 308 352 C 410 352, 480 352, 584 352"/>
+    </circle>
+
+    <rect x="584" y="330" width="304" height="44" rx="10" fill="#881337" stroke="#fb7185" stroke-width="1.5"/>
+    <text x="602" y="350" class="font-sans" font-size="13.5" font-weight="700" fill="#f8fafc">BFS / Dijkstra</text>
+    <text x="602" y="366" class="font-mono" font-size="10.5" fill="#fecdd3">Unweighted (BFS) vs Weighted (Heap)</text>
+  </g>
+</svg>

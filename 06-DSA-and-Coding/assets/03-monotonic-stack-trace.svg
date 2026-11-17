@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" width="880" height="440" role="img" aria-label="Monotonic Decreasing Stack Trace for Daily Temperatures">
+  <style>
+    .bg { fill: #0f172a; }
+    .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+    .subpanel { fill: #0f172a; stroke: #334155; stroke-width: 1.2; rx: 8; }
+    .title { font: 700 18px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f8fafc; }
+    .subtitle { font: 500 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #94a3b8; }
+    .label { font: 600 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; text-anchor: middle; }
+    .idx-label { font: 500 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #64748b; text-anchor: middle; }
+    .bar { fill: #334155; stroke: #475569; stroke-width: 1.5; rx: 4; }
+    .ans-box { fill: #0f172a; stroke: #334155; stroke-width: 1.5; rx: 6; }
+    .ans-val { font: 700 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #10b981; text-anchor: middle; dominant-baseline: central; }
+    .ans-zero { font: 600 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #64748b; text-anchor: middle; dominant-baseline: central; }
+    .stack-title { font: 700 14px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f8fafc; text-anchor: middle; }
+    .stack-slot { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.8; rx: 6; }
+    .stack-text { font: 700 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #f8fafc; text-anchor: middle; dominant-baseline: central; }
+    .status-text { font: 600 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #e2e8f0; }
+
+    /* 14s loop across 7 steps (each step ~14.28%) */
+    /* Bar scanner highlight */
+    @keyframes scanBar0 { 0%, 13% { stroke: #38bdf8; fill: #0369a1; } 14%, 100% { stroke: #475569; fill: #334155; } }
+    @keyframes scanBar1 { 0%, 13% { stroke: #475569; fill: #334155; } 14%, 27% { stroke: #f59e0b; fill: #b45309; } 28%, 100% { stroke: #475569; fill: #334155; } }
+    @keyframes scanBar2 { 0%, 27% { stroke: #475569; fill: #334155; } 28%, 41% { stroke: #f59e0b; fill: #b45309; } 42%, 100% { stroke: #475569; fill: #334155; } }
+    @keyframes scanBar3 { 0%, 41% { stroke: #475569; fill: #334155; } 42%, 55% { stroke: #38bdf8; fill: #0369a1; } 56%, 100% { stroke: #475569; fill: #334155; } }
+    @keyframes scanBar4 { 0%, 55% { stroke: #475569; fill: #334155; } 56%, 69% { stroke: #38bdf8; fill: #0369a1; } 70%, 100% { stroke: #475569; fill: #334155; } }
+    @keyframes scanBar5 { 0%, 69% { stroke: #475569; fill: #334155; } 70%, 83% { stroke: #f59e0b; fill: #b45309; } 84%, 100% { stroke: #475569; fill: #334155; } }
+    @keyframes scanBar6 { 0%, 83% { stroke: #475569; fill: #334155; } 84%, 98% { stroke: #10b981; fill: #047857; } 100% { stroke: #475569; fill: #334155; } }
+
+    .b0 { animation: scanBar0 14s infinite; }
+    .b1 { animation: scanBar1 14s infinite; }
+    .b2 { animation: scanBar2 14s infinite; }
+    .b3 { animation: scanBar3 14s infinite; }
+    .b4 { animation: scanBar4 14s infinite; }
+    .b5 { animation: scanBar5 14s infinite; }
+    .b6 { animation: scanBar6 14s infinite; }
+
+    /* Stack frames visibility */
+    @keyframes f0 { 0%, 13% { opacity: 1; } 14%, 100% { opacity: 0; } }
+    @keyframes f1 { 0%, 13% { opacity: 0; } 14%, 27% { opacity: 1; } 28%, 100% { opacity: 0; } }
+    @keyframes f2 { 0%, 27% { opacity: 0; } 28%, 83% { opacity: 1; } 84%, 100% { opacity: 0; } }
+    @keyframes f3 { 0%, 41% { opacity: 0; } 42%, 69% { opacity: 1; } 70%, 100% { opacity: 0; } }
+    @keyframes f4 { 0%, 55% { opacity: 0; } 56%, 69% { opacity: 1; } 70%, 100% { opacity: 0; } }
+    @keyframes f5 { 0%, 69% { opacity: 0; } 70%, 83% { opacity: 1; } 84%, 100% { opacity: 0; } }
+    @keyframes f6 { 0%, 83% { opacity: 0; } 84%, 98% { opacity: 1; } 100% { opacity: 0; } }
+
+    .sf0 { animation: f0 14s infinite; }
+    .sf1 { animation: f1 14s infinite; }
+    .sf2 { animation: f2 14s infinite; }
+    .sf3 { animation: f3 14s infinite; }
+    .sf4 { animation: f4 14s infinite; }
+    .sf5 { animation: f5 14s infinite; }
+    .sf6 { animation: f6 14s infinite; }
+
+    /* Answer pop-ins */
+    @keyframes a0 { 0%, 13% { opacity: 0; } 14%, 98% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes a1 { 0%, 27% { opacity: 0; } 28%, 98% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes a2 { 0%, 83% { opacity: 0; } 84%, 98% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes a34 { 0%, 69% { opacity: 0; } 70%, 98% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes a5 { 0%, 83% { opacity: 0; } 84%, 98% { opacity: 1; } 100% { opacity: 0; } }
+
+    .ans0 { animation: a0 14s infinite; }
+    .ans1 { animation: a1 14s infinite; }
+    .ans2 { animation: a2 14s infinite; }
+    .ans3 { animation: a34 14s infinite; }
+    .ans4 { animation: a34 14s infinite; }
+    .ans5 { animation: a5 14s infinite; }
+
+    /* Step log lines */
+    @keyframes s0 { 0%, 13% { opacity: 1; } 14%, 100% { opacity: 0; } }
+    @keyframes s1 { 0%, 13% { opacity: 0; } 14%, 27% { opacity: 1; } 28%, 100% { opacity: 0; } }
+    @keyframes s2 { 0%, 27% { opacity: 0; } 28%, 41% { opacity: 1; } 42%, 100% { opacity: 0; } }
+    @keyframes s3 { 0%, 41% { opacity: 0; } 42%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+    @keyframes s4 { 0%, 55% { opacity: 0; } 56%, 69% { opacity: 1; } 70%, 100% { opacity: 0; } }
+    @keyframes s5 { 0%, 69% { opacity: 0; } 70%, 83% { opacity: 1; } 84%, 100% { opacity: 0; } }
+    @keyframes s6 { 0%, 83% { opacity: 0; } 84%, 98% { opacity: 1; } 100% { opacity: 0; } }
+
+    .st0 { animation: s0 14s infinite; }
+    .st1 { animation: s1 14s infinite; }
+    .st2 { animation: s2 14s infinite; }
+    .st3 { animation: s3 14s infinite; }
+    .st4 { animation: s4 14s infinite; }
+    .st5 { animation: s5 14s infinite; }
+    .st6 { animation: s6 14s infinite; }
+  </style>
+
+  <rect class="bg" width="880" height="440" rx="14" />
+  <rect class="panel" x="16" y="16" width="848" height="408" rx="12" />
+
+  <text class="title" x="36" y="48">Monotonic Decreasing Stack: Daily Temperatures</text>
+  <text class="subtitle" x="36" y="70">temps = [73, 74, 75, 71, 69, 72, 76]  |  Pop colder indices when a warmer temperature arrives</text>
+
+  <!-- Left Chart Area -->
+  <rect class="subpanel" x="36" y="90" width="540" height="260" />
+
+  <!-- Bars (base y = 265) -->
+  <!-- i=0: 73 (h=105, y=160) -->
+  <text class="label" x="80" y="150">73</text>
+  <rect class="bar b0" x="58" y="160" width="44" height="105" />
+  <text class="idx-label" x="80" y="282">i=0</text>
+  <rect class="ans-box" x="62" y="294" width="36" height="28" />
+  <text class="ans-val ans0" x="80" y="308">1</text>
+
+  <!-- i=1: 74 (h=115, y=150) -->
+  <text class="label" x="150" y="140">74</text>
+  <rect class="bar b1" x="128" y="150" width="44" height="115" />
+  <text class="idx-label" x="150" y="282">i=1</text>
+  <rect class="ans-box" x="132" y="294" width="36" height="28" />
+  <text class="ans-val ans1" x="150" y="308">1</text>
+
+  <!-- i=2: 75 (h=125, y=140) -->
+  <text class="label" x="220" y="130">75</text>
+  <rect class="bar b2" x="198" y="140" width="44" height="125" />
+  <text class="idx-label" x="220" y="282">i=2</text>
+  <rect class="ans-box" x="202" y="294" width="36" height="28" />
+  <text class="ans-val ans2" x="220" y="308">4</text>
+
+  <!-- i=3: 71 (h=85, y=180) -->
+  <text class="label" x="290" y="170">71</text>
+  <rect class="bar b3" x="268" y="180" width="44" height="85" />
+  <text class="idx-label" x="290" y="282">i=3</text>
+  <rect class="ans-box" x="272" y="294" width="36" height="28" />
+  <text class="ans-val ans3" x="290" y="308">2</text>
+
+  <!-- i=4: 69 (h=65, y=200) -->
+  <text class="label" x="360" y="190">69</text>
+  <rect class="bar b4" x="338" y="200" width="44" height="65" />
+  <text class="idx-label" x="360" y="282">i=4</text>
+  <rect class="ans-box" x="342" y="294" width="36" height="28" />
+  <text class="ans-val ans4" x="360" y="308">1</text>
+
+  <!-- i=5: 72 (h=95, y=170) -->
+  <text class="label" x="430" y="160">72</text>
+  <rect class="bar b5" x="408" y="170" width="44" height="95" />
+  <text class="idx-label" x="430" y="282">i=5</text>
+  <rect class="ans-box" x="412" y="294" width="36" height="28" />
+  <text class="ans-val ans5" x="430" y="308">1</text>
+
+  <!-- i=6: 76 (h=138, y=127) -->
+  <text class="label" x="500" y="117">76</text>
+  <rect class="bar b6" x="478" y="127" width="44" height="138" />
+  <text class="idx-label" x="500" y="282">i=6</text>
+  <rect class="ans-box" x="482" y="294" width="36" height="28" />
+  <text class="ans-zero" x="500" y="308">0</text>
+
+  <text class="idx-label" x="80" y="338">ans[0..6]</text>
+
+  <!-- Right Stack Area -->
+  <rect class="subpanel" x="596" y="90" width="248" height="260" />
+  <text class="stack-title" x="720" y="116">Decreasing Stack (idx, temp)</text>
+
+  <!-- Stack Frame Slot 0 (Bottom, y=292) -->
+  <g class="sf0">
+    <rect class="stack-slot" x="626" y="292" width="188" height="38" />
+    <text class="stack-text" x="720" y="311">(idx=0, 73 deg)</text>
+  </g>
+  <g class="sf1">
+    <rect class="stack-slot" x="626" y="292" width="188" height="38" />
+    <text class="stack-text" x="720" y="311">(idx=1, 74 deg)</text>
+  </g>
+  <g class="sf2">
+    <rect class="stack-slot" x="626" y="292" width="188" height="38" />
+    <text class="stack-text" x="720" y="311">(idx=2, 75 deg)</text>
+  </g>
+  <g class="sf6">
+    <rect class="stack-slot" x="626" y="292" width="188" height="38" style="stroke:#10b981;" />
+    <text class="stack-text" x="720" y="311">(idx=6, 76 deg)</text>
+  </g>
+
+  <!-- Stack Frame Slot 1 (Middle, y=244) -->
+  <g class="sf3">
+    <rect class="stack-slot" x="626" y="244" width="188" height="38" />
+    <text class="stack-text" x="720" y="263">(idx=3, 71 deg)</text>
+  </g>
+  <g class="sf5">
+    <rect class="stack-slot" x="626" y="244" width="188" height="38" />
+    <text class="stack-text" x="720" y="263">(idx=5, 72 deg)</text>
+  </g>
+
+  <!-- Stack Frame Slot 2 (Top, y=196) -->
+  <g class="sf4">
+    <rect class="stack-slot" x="626" y="196" width="188" height="38" />
+    <text class="stack-text" x="720" y="215">(idx=4, 69 deg)</text>
+  </g>
+
+  <!-- Bottom Live Trace Status Bar -->
+  <rect class="subpanel" x="36" y="364" width="808" height="42" />
+  <text class="status-text st0" x="54" y="390">Step i=0 (73): Stack empty -&gt; push (0, 73)</text>
+  <text class="status-text st1" x="54" y="390">Step i=1 (74): 74 &gt; 73 -&gt; pop 0, ans[0]=1; push (1, 74)</text>
+  <text class="status-text st2" x="54" y="390">Step i=2 (75): 75 &gt; 74 -&gt; pop 1, ans[1]=1; push (2, 75)</text>
+  <text class="status-text st3" x="54" y="390">Step i=3 (71): 71 &lt; 75 -&gt; push (3, 71)</text>
+  <text class="status-text st4" x="54" y="390">Step i=4 (69): 69 &lt; 71 -&gt; push (4, 69)</text>
+  <text class="status-text st5" x="54" y="390">Step i=5 (72): 72 &gt; 69 &amp; 71 -&gt; pop 4 (ans[4]=1), pop 3 (ans[3]=2); push (5, 72)</text>
+  <text class="status-text st6" x="54" y="390">Step i=6 (76): 76 &gt; 72 &amp; 75 -&gt; pop 5 (ans[5]=1), pop 2 (ans[2]=4); push (6, 76)</text>
+</svg>

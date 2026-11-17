@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="auto" role="img" aria-label="Top-Down Memoization vs Bottom-Up Tabulation with O(1) Space Optimization">
+  <style>
+    .title { font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+    .panel-title { font: 700 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #e2e8f0; }
+    .mono { font: 600 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #f8fafc; }
+    .mono-sm { font: 500 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; }
+    .badge-txt { font: 700 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #0f172a; }
+    .legend { font: 500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+
+    @keyframes pulseNode {
+      0%, 15% { fill: #1e293b; stroke: #475569; }
+      25%, 55% { fill: #0c4a6e; stroke: #38bdf8; }
+      65%, 100% { fill: #1e293b; stroke: #38bdf8; }
+    }
+    @keyframes cacheHit {
+      0%, 35% { fill: #1e293b; stroke: #475569; opacity: 0.55; }
+      45%, 85% { fill: #064e3b; stroke: #34d399; opacity: 1; }
+      100% { fill: #1e293b; stroke: #475569; opacity: 0.55; }
+    }
+    @keyframes cacheBadge {
+      0%, 40% { opacity: 0; }
+      48%, 85% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    @keyframes fillCell2 {
+      0%, 18% { fill: #1e293b; stroke: #475569; }
+      24%, 90% { fill: #0c4a6e; stroke: #38bdf8; }
+      100% { fill: #1e293b; stroke: #475569; }
+    }
+    @keyframes fillCell3 {
+      0%, 34% { fill: #1e293b; stroke: #475569; }
+      40%, 90% { fill: #0c4a6e; stroke: #38bdf8; }
+      100% { fill: #1e293b; stroke: #475569; }
+    }
+    @keyframes fillCell4 {
+      0%, 50% { fill: #1e293b; stroke: #475569; }
+      56%, 90% { fill: #0c4a6e; stroke: #38bdf8; }
+      100% { fill: #1e293b; stroke: #475569; }
+    }
+    @keyframes fillCell5 {
+      0%, 66% { fill: #1e293b; stroke: #475569; }
+      72%, 90% { fill: #064e3b; stroke: #34d399; }
+      100% { fill: #1e293b; stroke: #475569; }
+    }
+    @keyframes showVal2 { 0%, 20% { opacity: 0; } 26%, 90% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes showVal3 { 0%, 36% { opacity: 0; } 42%, 90% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes showVal4 { 0%, 52% { opacity: 0; } 58%, 90% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes showVal5 { 0%, 68% { opacity: 0; } 74%, 90% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes slideWindow {
+      0%, 15% { transform: translateX(0px); }
+      32%, 45% { transform: translateX(64px); }
+      52%, 65% { transform: translateX(128px); }
+      72%, 90% { transform: translateX(192px); }
+      100% { transform: translateX(0px); }
+    }
+
+    .node-active { animation: pulseNode 8s infinite ease-in-out; }
+    .node-hit { animation: cacheHit 8s infinite ease-in-out; }
+    .hit-badge { animation: cacheBadge 8s infinite ease-in-out; }
+    .c2 { animation: fillCell2 8s infinite; }
+    .c3 { animation: fillCell3 8s infinite; }
+    .c4 { animation: fillCell4 8s infinite; }
+    .c5 { animation: fillCell5 8s infinite; }
+    .v2 { animation: showVal2 8s infinite; }
+    .v3 { animation: showVal3 8s infinite; }
+    .v4 { animation: showVal4 8s infinite; }
+    .v5 { animation: showVal5 8s infinite; }
+    .window-box { animation: slideWindow 8s infinite ease-in-out; }
+  </style>
+
+  <!-- Outer Dark Slate Background -->
+  <rect width="960" height="540" rx="14" fill="#0f172a" />
+
+  <!-- Header -->
+  <text x="28" y="34" class="title">Dynamic Programming: Memoization vs. Tabulation</text>
+  <text x="28" y="54" class="subtitle">Recurrence: dp[n] = dp[n-1] + dp[n-2]  |  Example: Climbing Stairs (n = 5)</text>
+
+  <!-- LEFT PANEL: Top-Down Memoization -->
+  <rect x="24" y="72" width="444" height="444" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+  <text x="44" y="100" class="panel-title">1. Top-Down Memoization (Recursion + Cache)</text>
+  <text x="44" y="118" class="mono-sm">if (memo[n] != 0) return memo[n]; // Prunes duplicate subtrees</text>
+
+  <!-- Edges in Recursion Tree -->
+  <g stroke="#475569" stroke-width="1.8" fill="none">
+    <!-- f(5) to f(4), f(3) -->
+    <line x1="246" y1="162" x2="152" y2="216" />
+    <line x1="246" y1="162" x2="340" y2="216" />
+    <!-- f(4) to f(3)L, f(2)L -->
+    <line x1="152" y1="242" x2="96" y2="298" />
+    <line x1="152" y1="242" x2="208" y2="298" />
+    <!-- f(3)R to f(2)R, f(1)R -->
+    <line x1="340" y1="242" x2="296" y2="298" />
+    <line x1="340" y1="242" x2="388" y2="298" />
+    <!-- f(3)L to f(2), f(1) -->
+    <line x1="96" y1="324" x2="66" y2="378" />
+    <line x1="96" y1="324" x2="126" y2="378" />
+    <!-- Pruned edges under cached f(2)L and f(2)R -->
+    <line x1="208" y1="324" x2="184" y2="374" stroke-dasharray="4 4" stroke="#64748b" opacity="0.5" />
+    <line x1="208" y1="324" x2="232" y2="374" stroke-dasharray="4 4" stroke="#64748b" opacity="0.5" />
+    <line x1="296" y1="324" x2="274" y2="374" stroke-dasharray="4 4" stroke="#64748b" opacity="0.5" />
+    <line x1="296" y1="324" x2="318" y2="374" stroke-dasharray="4 4" stroke="#64748b" opacity="0.5" />
+  </g>
+
+  <!-- Nodes in Recursion Tree -->
+  <!-- Level 0: f(5) -->
+  <rect x="216" y="138" width="60" height="28" rx="8" class="node-active" stroke-width="2" />
+  <text x="246" y="156" text-anchor="middle" class="mono">f(5)</text>
+
+  <!-- Level 1: f(4), f(3) -->
+  <rect x="122" y="216" width="60" height="28" rx="8" class="node-active" stroke-width="2" />
+  <text x="152" y="234" text-anchor="middle" class="mono">f(4)</text>
+
+  <rect x="310" y="216" width="60" height="28" rx="8" class="node-hit" stroke-width="2" />
+  <text x="340" y="234" text-anchor="middle" class="mono">f(3)</text>
+  <g class="hit-badge">
+    <rect x="352" y="204" width="52" height="16" rx="4" fill="#34d399" />
+    <text x="378" y="215" text-anchor="middle" class="badge-txt">CACHED</text>
+  </g>
+
+  <!-- Level 2: f(3), f(2), f(2), f(1) -->
+  <rect x="66" y="298" width="60" height="28" rx="8" class="node-active" stroke-width="2" />
+  <text x="96" y="316" text-anchor="middle" class="mono">f(3)</text>
+
+  <rect x="178" y="298" width="60" height="28" rx="8" class="node-hit" stroke-width="2" />
+  <text x="208" y="316" text-anchor="middle" class="mono">f(2)</text>
+  <g class="hit-badge">
+    <rect x="180" y="330" width="56" height="16" rx="4" fill="#34d399" />
+    <text x="208" y="341" text-anchor="middle" class="badge-txt">PRUNED</text>
+  </g>
+
+  <rect x="266" y="298" width="60" height="28" rx="8" class="node-hit" stroke-width="2" />
+  <text x="296" y="316" text-anchor="middle" class="mono">f(2)</text>
+  <g class="hit-badge">
+    <rect x="268" y="330" width="56" height="16" rx="4" fill="#34d399" />
+    <text x="296" y="341" text-anchor="middle" class="badge-txt">PRUNED</text>
+  </g>
+
+  <rect x="360" y="298" width="56" height="28" rx="8" fill="#0f172a" stroke="#64748b" stroke-width="1.5" />
+  <text x="388" y="316" text-anchor="middle" class="mono-sm">f(1)=1</text>
+
+  <!-- Level 3: Base cases under f(3)L -->
+  <rect x="38" y="378" width="56" height="26" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+  <text x="66" y="395" text-anchor="middle" class="mono-sm">f(2)=2</text>
+
+  <rect x="102" y="378" width="56" height="26" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+  <text x="130" y="395" text-anchor="middle" class="mono-sm">f(1)=1</text>
+
+  <!-- Memoization Summary Box -->
+  <rect x="44" y="434" width="404" height="64" rx="8" fill="#0f172a" stroke="#334155" />
+  <text x="60" y="456" class="mono" fill="#38bdf8">memo[] = [1, 1, 2, 3, 5, 8]</text>
+  <text x="60" y="476" class="legend">Time: O(n) instead of O(2^n)  |  Space: O(n) memo + O(n) call stack</text>
+
+  <!-- RIGHT PANEL: Bottom-Up Tabulation + O(1) Space -->
+  <rect x="492" y="72" width="444" height="444" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+  <text x="512" y="100" class="panel-title">2. Bottom-Up Tabulation &amp; O(1) Space</text>
+  <text x="512" y="118" class="mono-sm">for (i = 2; i &lt;= n; i++) dp[i] = dp[i-1] + dp[i-2];</text>
+
+  <!-- 1D DP Table -->
+  <text x="512" y="152" class="mono" fill="#94a3b8">1D DP Table (Left → Right):</text>
+  <!-- Indices -->
+  <text x="556" y="174" text-anchor="middle" class="mono-sm">i=0</text>
+  <text x="620" y="174" text-anchor="middle" class="mono-sm">i=1</text>
+  <text x="684" y="174" text-anchor="middle" class="mono-sm">i=2</text>
+  <text x="748" y="174" text-anchor="middle" class="mono-sm">i=3</text>
+  <text x="812" y="174" text-anchor="middle" class="mono-sm">i=4</text>
+  <text x="876" y="174" text-anchor="middle" class="mono-sm">i=5</text>
+
+  <!-- Cells -->
+  <rect x="528" y="182" width="56" height="44" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8" />
+  <text x="556" y="209" text-anchor="middle" class="mono">1</text>
+
+  <rect x="592" y="182" width="56" height="44" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8" />
+  <text x="620" y="209" text-anchor="middle" class="mono">1</text>
+
+  <rect x="656" y="182" width="56" height="44" rx="6" class="c2" stroke-width="1.8" />
+  <text x="684" y="209" text-anchor="middle" class="mono v2">2</text>
+
+  <rect x="720" y="182" width="56" height="44" rx="6" class="c3" stroke-width="1.8" />
+  <text x="748" y="209" text-anchor="middle" class="mono v3">3</text>
+
+  <rect x="784" y="182" width="56" height="44" rx="6" class="c4" stroke-width="1.8" />
+  <text x="812" y="209" text-anchor="middle" class="mono v4">5</text>
+
+  <rect x="848" y="182" width="56" height="44" rx="6" class="c5" stroke-width="2" />
+  <text x="876" y="209" text-anchor="middle" class="mono v5">8</text>
+
+  <!-- Dependency Arcs -->
+  <path d="M 556 226 Q 620 264 684 226" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 3" />
+  <path d="M 620 226 Q 652 248 684 226" fill="none" stroke="#38bdf8" stroke-width="1.5" />
+  <text x="620" y="266" text-anchor="middle" class="mono-sm" fill="#38bdf8">dp[i-2] + dp[i-1] → dp[i]</text>
+
+  <!-- Rolling O(1) Space Section -->
+  <line x1="512" y1="290" x2="916" y2="290" stroke="#334155" stroke-width="1" />
+  <text x="512" y="316" class="mono" fill="#34d399">Rolling O(1) Space Optimization:</text>
+  <text x="512" y="334" class="mono-sm">Only last 2 states needed: prev, curr → next = prev + curr</text>
+
+  <!-- Static Track of values -->
+  <rect x="528" y="352" width="56" height="38" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="556" y="376" text-anchor="middle" class="mono">1</text>
+  <rect x="592" y="352" width="56" height="38" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="620" y="376" text-anchor="middle" class="mono">1</text>
+  <rect x="656" y="352" width="56" height="38" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="684" y="376" text-anchor="middle" class="mono">2</text>
+  <rect x="720" y="352" width="56" height="38" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="748" y="376" text-anchor="middle" class="mono">3</text>
+  <rect x="784" y="352" width="56" height="38" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="812" y="376" text-anchor="middle" class="mono">5</text>
+  <rect x="848" y="352" width="56" height="38" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="876" y="376" text-anchor="middle" class="mono">8</text>
+
+  <!-- Sliding 3-slot window: prev, curr, next -->
+  <g class="window-box">
+    <rect x="524" y="348" width="192" height="46" rx="8" fill="none" stroke="#34d399" stroke-width="2.2" />
+    <text x="556" y="410" text-anchor="middle" class="mono-sm" fill="#94a3b8">prev</text>
+    <text x="620" y="410" text-anchor="middle" class="mono-sm" fill="#38bdf8">curr</text>
+    <text x="684" y="410" text-anchor="middle" class="mono-sm" fill="#34d399">next</text>
+  </g>
+
+  <!-- Tabulation Summary Box -->
+  <rect x="512" y="434" width="404" height="64" rx="8" fill="#0f172a" stroke="#334155" />
+  <text x="528" y="456" class="mono" fill="#34d399">No recursion stack! Predictable cache locality</text>
+  <text x="528" y="476" class="legend">Time: O(n)  |  Tabulation Space: O(n)  |  Rolling Space: O(1)</text>
+</svg>

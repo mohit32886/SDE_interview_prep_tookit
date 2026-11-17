@@ -1,19 +1,40 @@
 # Trees and Graphs - Comprehensive Guide for FAANG Interviews
 
 ## Table of Contents
-1. [Binary Tree Traversals](#binary-tree-traversals)
-2. [Binary Tree Problems](#binary-tree-problems)
-3. [Binary Search Trees](#binary-search-trees)
-4. [Graph Representations](#graph-representations)
-5. [BFS Patterns](#bfs-patterns)
-6. [DFS Patterns](#dfs-patterns)
-7. [Topological Sort](#topological-sort)
-8. [Union-Find](#union-find)
-9. [Advanced Algorithms](#advanced-algorithms)
+1. [Binary Tree Node Definition](#binary-tree-node-definition)
+2. [Binary Tree Traversals](#binary-tree-traversals)
+3. [Binary Tree Problems](#binary-tree-problems)
+4. [Binary Search Trees](#binary-search-trees)
+5. [Graph Representations](#graph-representations)
+6. [BFS Patterns](#bfs-patterns)
+7. [DFS Patterns](#dfs-patterns)
+8. [Topological Sort](#topological-sort)
+9. [Union-Find](#union-find)
+10. [Advanced Algorithms](#advanced-algorithms)
+11. [Summary Table](#summary-table)
 
 ---
 
 ## Binary Tree Node Definition
+
+A binary tree is a hierarchical data structure where each node has at most two children (`left` and `right`). Every recursive tree algorithm reduces a problem on `root` into independent subproblems on `root.left` and `root.right`.
+
+```mermaid
+flowchart TD
+    R["TreeNode root (val)"] --> L["root.left (TreeNode)"]
+    R --> RI["root.right (TreeNode)"]
+    L --> LL["null (Base Case)"]
+    L --> LR["null (Base Case)"]
+    RI --> RL["null (Base Case)"]
+    RI --> RR["null (Base Case)"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef child fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    classDef leaf fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#ecfdf5
+    class R root
+    class L,RI child
+    class LL,LR,RL,RR leaf
+```
 
 ```java
 public class TreeNode {
@@ -33,9 +54,42 @@ public class TreeNode {
 }
 ```
 
+- **Base Case:** Always guard `if (node == null)` first to terminate recursion cleanly.
+- **Memory Overhead:** Each node stores one value plus two object references (`left`, `right`).
+
+| Property | Value | Notes |
+|----------|-------|-------|
+| Max nodes at level `L` | `2^L` | Root is at level `0` |
+| Max nodes in height `h` | `2^h - 1` | Balanced tree has `h = O(log n)` |
+| Skewed tree height | `O(n)` | Degrades to a linked list |
+
+> [!TIP]
+> In interviews, clarify whether `TreeNode.val` can be negative, duplicate, or equal to `Integer.MIN_VALUE` / `Integer.MAX_VALUE` before choosing sentinel values.
+
 ---
 
 ## Binary Tree Traversals
+
+Tree traversals fall into two families: **Depth-First Search (DFS)** using recursion or an explicit stack (Inorder, Preorder, Postorder), and **Breadth-First Search (BFS)** using a FIFO queue (Level Order).
+
+![BFS vs DFS Traversal](./assets/04-bfs-vs-dfs-traversal.svg)
+
+```mermaid
+flowchart LR
+    T["Tree Traversal Strategy"] --> DFS["DFS: Stack or Recursion O(h) space"]
+    T --> BFS["BFS: FIFO Queue O(w) space"]
+    DFS --> PRE["Preorder: Root → Left → Right"]
+    DFS --> IN["Inorder: Left → Root → Right"]
+    DFS --> POST["Postorder: Left → Right → Root"]
+    BFS --> LVL["Level Order: Wave by Level"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef branch fill:#1e1b4b,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    classDef leaf fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#ecfdf5
+    class T root
+    class DFS,BFS branch
+    class PRE,IN,POST,LVL leaf
+```
 
 ### Problem 1: Inorder Traversal (Left-Root-Right)
 
@@ -136,7 +190,29 @@ public List<Integer> preorderTraversal(TreeNode root) {
 
 ---
 
-### Problem 3: Level Order Traversal (BFS)
+### Problem 3: Postorder Traversal (Left-Right-Root)
+
+Postorder processes both children before the parent, making it the natural pattern for bottom-up tree DP (height, diameter, subtree sums, and deleting trees).
+
+```java
+public List<Integer> postorderTraversal(TreeNode root) {
+    List<Integer> result = new ArrayList<>();
+    postorder(root, result);
+    return result;
+}
+
+private void postorder(TreeNode node, List<Integer> result) {
+    if (node == null) return;
+
+    postorder(node.left, result);
+    postorder(node.right, result);
+    result.add(node.val);
+}
+```
+
+---
+
+### Problem 4: Level Order Traversal (BFS)
 
 **Solution: Queue**
 ```java
@@ -176,9 +252,57 @@ public List<List<Integer>> levelOrder(TreeNode root) {
 - Ensures we only process nodes from current level
 - Nodes added in inner loop are for next level
 
+| Traversal | Order | Primary Use Case | Time | Space |
+|-----------|-------|------------------|------|-------|
+| Preorder | Root, Left, Right | Tree serialization, cloning | O(n) | O(h) |
+| Inorder | Left, Root, Right | Sorted order in BST | O(n) | O(h) |
+| Postorder | Left, Right, Root | Bottom-up height, diameter, deletion | O(n) | O(h) |
+| Level Order | Level by level | Shortest depth, right-side view | O(n) | O(w) |
+
+> [!IMPORTANT]
+> In iterative Preorder, push `node.right` onto the stack **before** `node.left` so that `node.left` is popped and processed first (LIFO).
+
 ---
 
 ## Binary Tree Problems
+
+Most binary tree interview problems combine **top-down state passing** (passing bounds or depth down) with **bottom-up aggregation** (returning subtree height, path sum, or found target up).
+
+```mermaid
+flowchart TD
+    Q["LCA(root, p, q)"] --> B{"root == null or p or q?"}
+    B -- Yes --> R1["Return root"]
+    B -- No --> S["Recurse leftLCA &amp; rightLCA"]
+    S --> C{"Both leftLCA &amp; rightLCA != null?"}
+    C -- Yes --> R2["Return root (LCA Split Point)"]
+    C -- No --> R3["Return non-null side"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e1b4b,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    classDef action fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    class Q root
+    class B,C decision
+    class S action
+    class R1,R2,R3 success
+```
+
+```mermaid
+flowchart LR
+    N["At Node u"] --> LH["leftGain = max(0, dfs(u.left))"]
+    N --> RH["rightGain = max(0, dfs(u.right))"]
+    LH --> G["Update Global Max: val + leftGain + rightGain"]
+    RH --> G
+    LH --> RET["Return to Parent: val + max(leftGain, rightGain)"]
+    RH --> RET
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef action fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    class N root
+    class LH,RH action
+    class G,RET success
+```
 
 ### Problem 1: Maximum Depth of Binary Tree
 
@@ -238,7 +362,7 @@ Given the root of a binary tree, determine if it is a valid binary search tree (
 
 **Solution: Range Based DFS**
 
-Key insight: Track valid range [min, max] for each node.
+Key insight: Track valid range `[min, max]` for each node.
 
 ```java
 public boolean isValidBST(TreeNode root) {
@@ -261,12 +385,15 @@ private boolean validate(TreeNode node, long min, long max) {
 ```
 
 **Why Long.MIN_VALUE and Long.MAX_VALUE**
-- TreeNode.val can be Integer.MIN_VALUE or Integer.MAX_VALUE
+- `TreeNode.val` can be `Integer.MIN_VALUE` or `Integer.MAX_VALUE`
 - Need wider range to compare
 
 **Complexity**
 - Time: O(n)
 - Space: O(h)
+
+> [!WARNING]
+> Checking only `node.left.val < node.val < node.right.val` is a classic bug—a node deep in the left-right subtree can still violate an ancestor's upper bound. Always pass `(min, max)` bounds down.
 
 ---
 
@@ -435,7 +562,66 @@ Diameter = 2 + 1 = 3 (path 4→2→1→3)
 
 ---
 
+### Problem 6: Binary Tree Maximum Path Sum
+
+**Problem Statement**
+A path in a binary tree is a sequence of nodes where each pair of adjacent nodes has an edge. Find the maximum sum of any non-empty path.
+
+```java
+class Solution {
+    private int maxSum = Integer.MIN_VALUE;
+
+    public int maxPathSum(TreeNode root) {
+        maxGain(root);
+        return maxSum;
+    }
+
+    private int maxGain(TreeNode node) {
+        if (node == null) return 0;
+
+        // Clamp negative gains to 0 (ignore negative subtrees)
+        int leftGain = Math.max(0, maxGain(node.left));
+        int rightGain = Math.max(0, maxGain(node.right));
+
+        // Path turning at current node
+        maxSum = Math.max(maxSum, node.val + leftGain + rightGain);
+
+        // Return single-branch gain to parent
+        return node.val + Math.max(leftGain, rightGain);
+    }
+}
+```
+
+| Problem | Return Value to Parent | Global State Updated | Time | Space |
+|---------|------------------------|----------------------|------|-------|
+| Max Depth | `max(left, right) + 1` | None | O(n) | O(h) |
+| Validate BST | `boolean` within `(min, max)` | None | O(n) | O(h) |
+| LCA | `TreeNode` (found `p`/`q`/LCA) | None | O(n) | O(h) |
+| Diameter | `max(leftH, rightH) + 1` | `maxDiameter` | O(n) | O(h) |
+| Max Path Sum | `val + max(leftGain, rightGain)` | `maxSum` | O(n) | O(h) |
+
+---
+
 ## Binary Search Trees
+
+A Binary Search Tree (BST) maintains the invariant that for every node, all values in `left` are strictly smaller and all values in `right` are strictly larger. Consequently, an **Inorder traversal** visits all nodes in ascending sorted order.
+
+```mermaid
+flowchart TD
+    R["Root (5)"] --> L["Left (3) &lt; 5"]
+    R --> RI["Right (7) &gt; 5"]
+    L --> LL["1"]
+    L --> LR["4"]
+    RI --> RL["6"]
+    RI --> RR["9"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef node fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    classDef leaf fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#ecfdf5
+    class R root
+    class L,RI node
+    class LL,LR,RL,RR leaf
+```
 
 ### Problem: Kth Smallest Element in BST
 
@@ -476,9 +662,38 @@ class Solution {
 - Time: O(k) average, O(n) worst
 - Space: O(h)
 
+| BST Operation | Balanced (AVL/RB) | Skewed Worst Case |
+|---------------|-------------------|-------------------|
+| Search / Insert / Delete | O(log n) | O(n) |
+| Kth Smallest (Inorder) | O(h + k) | O(n) |
+| Validate BST | O(n) | O(n) |
+
+> [!TIP]
+> If `kthSmallest` is called frequently alongside inserts/deletes, augment each `TreeNode` with a `leftSubtreeSize` count to achieve O(h) lookup without traversing `k` nodes.
+
 ---
 
 ## Graph Representations
+
+Choosing the right graph representation impacts both memory and edge-iteration speed. Sparse graphs (`E << V^2`, most interview problems) use **Adjacency Lists**, while dense graphs or O(1) edge-existence queries use **Adjacency Matrices**.
+
+```mermaid
+flowchart LR
+    G["Graph Input: V nodes, E edges"] --> D{"Sparse (E &lt;&lt; V^2)?"}
+    D -- Yes --> AL["Adjacency List: O(V + E) space"]
+    D -- No --> AM["Adjacency Matrix: O(V^2) space"]
+    AL --> ALN["Fast neighbor iteration"]
+    AM --> AMN["O(1) edge lookup matrix[u][v]"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e1b4b,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    classDef action fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    class G root
+    class D decision
+    class AL,AM success
+    class ALN,AMN action
+```
 
 ### Adjacency List (Most Common)
 ```java
@@ -498,9 +713,42 @@ int[][] graph = new int[numNodes][numNodes];
 graph[u][v] = 1;
 ```
 
+| Representation | Space | Check Edge `(u, v)` | Iterate Neighbors of `u` | Best For |
+|----------------|-------|---------------------|--------------------------|----------|
+| Adjacency List | O(V + E) | O(deg(u)) | O(deg(u)) | Sparse graphs, BFS/DFS, Dijkstra |
+| Adjacency Matrix | O(V^2) | O(1) | O(V) | Dense graphs, Floyd-Warshall |
+
+> [!IMPORTANT]
+> For undirected graphs, remember to add **both** `graph[u].add(v)` and `graph[v].add(u)` when building an adjacency list.
+
 ---
 
 ## BFS Patterns
+
+Breadth-First Search explores vertices in concentric distance waves from the source. Because every node at distance `d` is dequeued before any node at distance `d + 1`, the first time BFS reaches a target in an **unweighted** graph, it is guaranteed to be the shortest path.
+
+```mermaid
+flowchart LR
+    S["Start Node (dist = 0)"] --> Q["Enqueue &amp; Mark Visited"]
+    Q --> L{"Queue Empty?"}
+    L -- No --> P["Poll (u, dist)"]
+    P --> T{"u == target?"}
+    T -- Yes --> RET["Return dist (Shortest Path)"]
+    T -- No --> NB["For unvisited neighbor v: mark visited &amp; offer (v, dist + 1)"]
+    NB --> L
+    L -- Yes --> FAIL["Return -1 (Unreachable)"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e1b4b,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    classDef action fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    classDef warn fill:#451a03,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    class S root
+    class L,T decision
+    class Q,P,NB action
+    class RET success
+    class FAIL warn
+```
 
 ### Problem 1: Shortest Path in Unweighted Graph
 
@@ -660,9 +908,36 @@ private List<String> getNeighbors(String word, Set<String> wordSet) {
 - Time: O(n * l * 26) where n is words, l is word length
 - Space: O(n)
 
+| BFS Problem | State Representation | Visited Tracking | Time | Space |
+|-------------|----------------------|------------------|------|-------|
+| Shortest Path | `{node, distance}` | `boolean[] visited` | O(V + E) | O(V) |
+| Number of Islands | `{row, col}` | Mutate `'1'` to `'0'` | O(m * n) | O(m * n) |
+| Word Ladder | `String word` | Remove from `wordSet` | O(n * l * 26) | O(n) |
+
+> [!WARNING]
+> Always mark a node as **visited at enqueue time** (`queue.offer`), never at dequeue time (`queue.poll`). Marking at dequeue allows duplicate entries in the queue and causes exponential blowup on grids.
+
 ---
 
 ## DFS Patterns
+
+Depth-First Search explores a branch as deeply as possible before backtracking. For **directed cycle detection**, a simple `visited` boolean is insufficient—you must distinguish nodes currently on the active recursion stack (**Gray**) from nodes completely finished (**Black**).
+
+```mermaid
+flowchart LR
+    W["0: White (Unvisited)"] -- "Enter DFS" --> G["1: Gray (Visiting / On Stack)"]
+    G -- "See Neighbor == 1" --> CYC["Back Edge → Cycle Detected"]
+    G -- "All Neighbors Done" --> B["2: Black (Visited / Safe)"]
+
+    classDef white fill:#0f172a,stroke:#64748b,stroke-width:1.5px,color:#e2e8f0
+    classDef gray fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+    classDef black fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    classDef warn fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fee2e2
+    class W white
+    class G gray
+    class B black
+    class CYC warn
+```
 
 ### Problem 1: Clone Graph
 
@@ -786,9 +1061,45 @@ private boolean hasCycle(List<Integer>[] graph, int node, int[] state) {
 - Time: O(v + e)
 - Space: O(v)
 
+| DFS Pattern | Tracking Structure | Cycle / Revisit Rule | Time | Space |
+|-------------|--------------------|----------------------|------|-------|
+| Clone Graph | `Map<Node, Node>` | Put clone in map **before** recursing | O(V + E) | O(V) |
+| Directed Cycle | `int[] state` (0/1/2) | Neighbor with `state == 1` is a cycle | O(V + E) | O(V) |
+
+> [!IMPORTANT]
+> In `cloneGraph`, you **must** insert `visited.put(node, clonedNode)` before looping over `node.neighbors`, otherwise cycles in the graph will cause infinite recursion.
+
 ---
 
 ## Topological Sort
+
+Topological Sort orders vertices in a Directed Acyclic Graph (DAG) such that for every directed edge `u → v`, `u` appears before `v`. **Kahn's Algorithm** repeatedly peels off nodes with `inDegree == 0` using a BFS queue; if fewer than `V` nodes are processed, a cycle exists.
+
+```mermaid
+flowchart LR
+    I["Compute inDegree[] for all V nodes"] --> Q["Enqueue all nodes with inDegree == 0"]
+    Q --> W{"Queue Empty?"}
+    W -- No --> P["Poll u, append to order[]"]
+    P --> DEC["For each neighbor v: inDegree[v]--"]
+    DEC --> Z{"inDegree[v] == 0?"}
+    Z -- Yes --> ENQ["Offer v to Queue"]
+    ENQ --> W
+    Z -- No --> W
+    W -- Yes --> CHK{"idx == numCourses?"}
+    CHK -- Yes --> OK["Return valid order[]"]
+    CHK -- No --> CYC["Cycle exists → Return []"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e1b4b,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef action fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    classDef warn fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fee2e2
+    class I root
+    class W,Z,CHK decision
+    class Q,P,DEC,ENQ action
+    class OK success
+    class CYC warn
+```
 
 ### Problem: Course Schedule II
 
@@ -846,9 +1157,39 @@ public int[] findOrder(int numCourses, int[][] prerequisites) {
 - Time: O(v + e)
 - Space: O(v + e)
 
+| Approach | Mechanism | Cycle Detection | Time | Space |
+|----------|-----------|-----------------|------|-------|
+| Kahn's Algorithm (BFS) | `inDegree[]` + `Queue` | `processedCount != V` | O(V + E) | O(V + E) |
+| Postorder DFS | Reverse postorder + `state[]` | Back edge to Gray node | O(V + E) | O(V + E) |
+
+> [!TIP]
+> Kahn's Algorithm is also ideal for **lexicographically smallest** topological sort: simply replace `Queue<Integer>` with a `PriorityQueue<Integer>` (min-heap).
+
 ---
 
 ## Union-Find
+
+Union-Find (Disjoint Set Union / DSU) tracks dynamic connectivity across disjoint sets in nearly **O(1)** amortized time per operation (`O(α(n))`, where `α` is the inverse Ackermann function). Combining **Path Compression** in `find` with **Union by Rank** in `union` keeps trees flat.
+
+```mermaid
+flowchart TD
+    U["union(x, y)"] --> F["px = find(x), py = find(y)"]
+    F --> EQ{"px == py?"}
+    EQ -- Yes --> SAME["Return false (Already Connected / Cycle)"]
+    EQ -- No --> RK{"Compare rank[px] vs rank[py]"}
+    RK -- "rank[px] &lt; rank[py]" --> P1["parent[px] = py"]
+    RK -- "rank[px] &gt; rank[py]" --> P2["parent[py] = px"]
+    RK -- "rank[px] == rank[py]" --> P3["parent[py] = px &amp; rank[px]++"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e1b4b,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef action fill:#0f172a,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
+    classDef warn fill:#451a03,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    class U root
+    class EQ,RK decision
+    class F,P1,P2,P3 action
+    class SAME warn
+```
 
 ### Implementation
 ```java
@@ -918,9 +1259,39 @@ public int countComponents(int n, int[][] edges) {
 }
 ```
 
+| Optimization | Effect | Amortized Time |
+|--------------|--------|----------------|
+| Path Compression (`find`) | Points every visited node directly to root | O(log n) alone |
+| Union by Rank (`union`) | Attaches shorter tree under taller tree | O(log n) alone |
+| Both Combined | Near-constant tree depth | **O(α(n))** ≈ O(1) |
+
+> [!TIP]
+> You can count connected components in O(1) extra space without a `HashSet`: start with `components = n` and decrement `components--` every time `uf.union(u, v)` returns `true`.
+
 ---
 
 ## Advanced Algorithms
+
+For weighted graphs, **Dijkstra's Algorithm** uses a greedy min-heap for non-negative weights, while **Bellman-Ford** handles negative edge weights by relaxing all edges `V - 1` times. For string prefix queries, a **Trie** trades memory for O(m) lookup independent of dictionary size.
+
+![Dijkstra Edge Relaxation and Union-Find Path Compression](./assets/04-dijkstra-union-find.svg)
+
+```mermaid
+flowchart LR
+    W["Weighted Shortest Path"] --> NEG{"Negative Edge Weights?"}
+    NEG -- No --> DJ["Dijkstra: Min-Heap O((V+E) log V)"]
+    NEG -- Yes --> BF["Bellman-Ford: V-1 Relaxations O(V * E)"]
+    BF --> NC["V-th Pass Relaxes → Negative Cycle"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e1b4b,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    classDef warn fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fee2e2
+    class W root
+    class NEG decision
+    class DJ,BF success
+    class NC warn
+```
 
 ### Dijkstra's Algorithm (Shortest Path in Weighted Graph)
 
@@ -961,6 +1332,35 @@ public int[] dijkstra(int[][] graph, int start) {
 
 **Complexity**
 - Time: O((v + e) log v)
+- Space: O(v)
+
+---
+
+### Bellman-Ford Algorithm (Negative Edge Weights)
+
+```java
+public int[] bellmanFord(int n, int[][] edges, int start) {
+    int[] distance = new int[n];
+    Arrays.fill(distance, Integer.MAX_VALUE);
+    distance[start] = 0;
+
+    // Relax all edges V - 1 times
+    for (int i = 0; i < n - 1; i++) {
+        for (int[] edge : edges) {
+            int u = edge[0], v = edge[1], w = edge[2];
+            if (distance[u] != Integer.MAX_VALUE && distance[u] + w < distance[v]) {
+                distance[v] = distance[u] + w;
+            }
+        }
+    }
+
+    // Optional V-th pass: if any edge relaxes, a negative cycle exists
+    return distance;
+}
+```
+
+**Complexity**
+- Time: O(v * e)
 - Space: O(v)
 
 ---
@@ -1012,12 +1412,42 @@ class Trie {
 ```
 
 **Complexity**
-- insert/search/startsWith: O(m) where m is word length
+- `insert` / `search` / `startsWith`: O(m) where m is word length
 - Space: O(alphabetSize * n) where n is total chars
+
+| Algorithm | Edge Weights | Handles Cycles | Time | Space |
+|-----------|--------------|----------------|------|-------|
+| Dijkstra | Non-negative (`w >= 0`) | Yes (skip stale `d > dist[u]`) | O((V + E) log V) | O(V) |
+| Bellman-Ford | Any (including negative) | Detects negative cycles | O(V * E) | O(V) |
+| Trie | N/A (Strings) | N/A (Prefix DAG) | O(m) per op | O(alphabet * n) |
+
+> [!WARNING]
+> Never use Dijkstra's Algorithm when edges can have negative weights—once a node is popped from the min-heap, Dijkstra assumes its distance is final, which breaks with negative edges.
 
 ---
 
 ## Summary Table
+
+Use this decision flow to match an interview problem to its optimal graph or tree pattern in under 30 seconds:
+
+```mermaid
+flowchart TD
+    P["Tree or Graph Problem"] --> Q1{"Shortest Path?"}
+    Q1 -- "Unweighted" --> A1["BFS Queue: O(V + E)"]
+    Q1 -- "Weighted (w &gt;= 0)" --> A2["Dijkstra Min-Heap: O((V+E) log V)"]
+    Q1 -- "Negative Weights" --> A3["Bellman-Ford: O(V * E)"]
+    P --> Q2{"Dependencies / Ordering?"}
+    Q2 -- "DAG Ordering" --> A4["Topological Sort (Kahn's): O(V + E)"]
+    Q2 -- "Dynamic Connectivity" --> A5["Union-Find (DSU): O(α(n))"]
+    Q2 -- "Tree / Subtree DP" --> A6["DFS (Pre/In/Postorder): O(n)"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef decision fill:#1e1b4b,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5
+    class P root
+    class Q1,Q2 decision
+    class A1,A2,A3,A4,A5,A6 success
+```
 
 | Problem | Technique | Time | Space |
 |---------|-----------|------|-------|
@@ -1030,4 +1460,8 @@ class Trie {
 | Topological Sort | Kahn | O(v+e) | O(v) |
 | Union-Find | DSU | O(α(n)) | O(n) |
 | Dijkstra | Heap | O((v+e)logv) | O(v) |
+| Bellman-Ford | Edge Relaxation | O(v*e) | O(v) |
+| Trie | Prefix Tree | O(m) | O(alphabet*n) |
 
+> [!IMPORTANT]
+> Always state both time and space complexity explicitly in terms of `V` (vertices), `E` (edges), `h` (tree height), or `w` (max tree width)—never just `O(n)` without defining `n`.

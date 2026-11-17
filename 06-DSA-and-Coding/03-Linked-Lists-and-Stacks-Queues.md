@@ -6,10 +6,33 @@
 3. [Stack Patterns](#stack-patterns)
 4. [Queue and Deque](#queue-and-deque)
 5. [Design Problems](#design-problems)
+6. [Monotonic Stack Pattern Summary](#monotonic-stack-pattern-summary)
+7. [Summary Table](#summary-table)
 
 ---
 
 ## Linked List Fundamentals
+
+Linked lists trade `O(1)` random indexing for `O(1)` pointer splicing once you hold the predecessor node. Most interview bugs stem from losing the `next` reference before rewiring or failing to guard `head == null` / single-node edge cases.
+
+```mermaid
+flowchart LR
+    D["Dummy (0)"] --> H["Node 1"]
+    H --> N2["Node 2"]
+    N2 --> N3["Node 3"]
+    N3 --> NULL["null"]
+
+    classDef dummy fill:#1e293b,stroke:#f59e0b,color:#fef3c7,stroke-width:2px
+    classDef node fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef term fill:#1e293b,stroke:#64748b,color:#94a3b8,stroke-dasharray:4 4
+
+    class D dummy
+    class H,N2,N3 node
+    class NULL term
+```
+
+> [!TIP]
+> Always introduce a `dummy` sentinel node (`dummy.next = head`) whenever the head itself might be deleted, merged, or reordered—it eliminates special-case `head == null` branches.
 
 ### Node Definition
 ```java
@@ -36,6 +59,22 @@ public class ListNode {
 Given the head of a singly linked list, reverse the list, and return the reversed list.
 
 **Approach: Iterative Reversal**
+- Save `current.next` into `nextTemp` before mutating `current.next = prev`.
+- Advance `prev = current` and `current = nextTemp` until `current == null`.
+- Return `prev`, which lands on the new head.
+
+```mermaid
+flowchart LR
+    subgraph Step["Iterative Pointer Rewiring"]
+        P["prev"] -. "current.next = prev" .- C["current"]
+        C --> NT["nextTemp"]
+    end
+
+    classDef ptr fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef next fill:#1e293b,stroke:#10b981,color:#d1fae5,stroke-width:2px
+    class P,C ptr
+    class NT next
+```
 
 ```
 Original: 1 → 2 → 3 → null
@@ -66,10 +105,6 @@ public ListNode reverseList(ListNode head) {
 }
 ```
 
-**Complexity**
-- Time: O(n)
-- Space: O(1)
-
 **Recursive Approach**
 ```java
 public ListNode reverseListRecursive(ListNode head) {
@@ -89,9 +124,10 @@ public ListNode reverseListRecursive(ListNode head) {
 }
 ```
 
-**Complexity**
-- Time: O(n)
-- Space: O(n) for recursion stack
+| Variant | Time | Space | Notes |
+|---------|------|-------|-------|
+| Iterative | `O(n)` | `O(1)` | Preferred in interviews (no stack overflow) |
+| Recursive | `O(n)` | `O(n)` | Implicit call stack frames |
 
 ---
 
@@ -128,13 +164,9 @@ public boolean hasCycle(ListNode head) {
 ```
 
 **Why It Works**
-- In a cycle, fast pointer will eventually "lap" the slow pointer
-- If no cycle, fast reaches null first
-- The gap closes by 1 at each step
-
-**Complexity**
-- Time: O(n)
-- Space: O(1)
+- In a cycle, fast pointer will eventually "lap" the slow pointer.
+- If no cycle, fast reaches `null` first.
+- The gap closes by `1` at each step.
 
 **Problem 2b: Return Cycle Start Node**
 
@@ -177,14 +209,13 @@ public ListNode detectCycle(ListNode head) {
 ```
 
 **Why It Works**
-- If distance from head to cycle start = a
-- And cycle length = c
-- When slow and fast meet, slow has traveled a + b (b < c)
-- Fast has traveled a + b + kc for some k
-- Since fast travels 2x as fast: 2(a + b) = a + b + kc
-- Therefore: a + b = kc, which means a = kc - b
-- Moving one pointer from head and one from meeting point simultaneously,
-  they meet at cycle start
+- If distance from head to cycle start = `a`
+- And cycle length = `c`
+- When slow and fast meet, slow has traveled `a + b` (`b < c`)
+- Fast has traveled `a + b + kc` for some `k`
+- Since fast travels `2x` as fast: `2(a + b) = a + b + kc`
+- Therefore: `a + b = kc`, which means `a = kc - b`
+- Moving one pointer from head and one from meeting point simultaneously, they meet at cycle start.
 
 ---
 
@@ -218,9 +249,8 @@ public ListNode mergeTwoLists(ListNode list1, ListNode list2) {
 }
 ```
 
-**Complexity**
-- Time: O(n + m)
-- Space: O(1) - only rearranging pointers
+- **Time:** `O(n + m)`
+- **Space:** `O(1)` — only rearranging pointers
 
 ---
 
@@ -260,7 +290,7 @@ public ListNode removeNthFromEnd(ListNode head, int n) {
 }
 ```
 
-**Example**: Remove 2nd from end of [1,2,3,4,5]
+**Example**: Remove 2nd from end of `[1,2,3,4,5]`
 ```
 dummy → 1 → 2 → 3 → 4 → 5 → null
 first at 1 (0 steps from dummy)
@@ -277,21 +307,20 @@ second.next = second.next.next removes 4
 Result: 1 → 2 → 3 → 5 → null
 ```
 
-**Complexity**
-- Time: O(n)
-- Space: O(1)
+- **Time:** `O(n)`
+- **Space:** `O(1)`
 
 ---
 
 ### Problem 5: Reorder List
 
 **Problem Statement**
-You are given the head of a singly linked list with head labeled `head`. Reorder the list as if it were folded on itself. For example: For list [1,2,3,4,5], the reorder should be [1,5,2,4,3].
+You are given the head of a singly linked list with head labeled `head`. Reorder the list as if it were folded on itself. For example: For list `[1,2,3,4,5]`, the reorder should be `[1,5,2,4,3]`.
 
 **Algorithm**
-1. Find middle of list using slow/fast pointers
-2. Reverse the second half
-3. Merge first half and reversed second half
+1. Find middle of list using slow/fast pointers.
+2. Reverse the second half.
+3. Merge first half and reversed second half.
 
 ```java
 public void reorderList(ListNode head) {
@@ -342,7 +371,7 @@ private ListNode reverseList(ListNode head) {
 }
 ```
 
-**Example**: [1,2,3,4,5]
+**Example**: `[1,2,3,4,5]`
 ```
 Middle: node 3
 Reverse from 3: [3,4,5] → [5,4,3]
@@ -350,29 +379,87 @@ Merge:
   1 → 5 → 2 → 4 → 3
 ```
 
-**Complexity**
-- Time: O(n)
-- Space: O(1)
+| Problem | Pattern | Time | Space |
+|---------|---------|------|-------|
+| Reverse Linked List | Iterative / Recursive | `O(n)` | `O(1)` / `O(n)` |
+| Detect Cycle / Cycle Start | Fast & Slow Pointers | `O(n)` | `O(1)` |
+| Merge Two Sorted Lists | Dummy + Two Pointers | `O(n + m)` | `O(1)` |
+| Remove Nth From End | Dummy + `n+1` Gap | `O(n)` | `O(1)` |
+| Reorder List | Mid + Reverse + Merge | `O(n)` | `O(1)` |
 
 ---
 
 ## Fast and Slow Pointer Pattern
 
-### Pattern Template
-```
-Slow: 1 step per iteration
-Fast: 2 steps per iteration
+The Fast and Slow pointer technique solves cycle detection, midpoint discovery, and fixed-offset removal in a single `O(n)` pass with `O(1)` extra space.
 
-Common uses:
-- Find middle: slow at middle when fast reaches end
-- Detect cycle: if they meet, cycle exists
-- Find cycle start: reset one pointer, move both at 1 step
-- Remove nth from end: create n+1 gap, move together
+![Floyd's Tortoise and Hare Cycle Detection](./assets/03-fast-slow-cycle-detect.svg)
+
+```mermaid
+flowchart TD
+    S["Start: slow = head, fast = head"] --> L{"fast != null &amp;&amp; fast.next != null?"}
+    L -- No --> NC["Return null (No Cycle)"]
+    L -- Yes --> M["slow = slow.next, fast = fast.next.next"]
+    M --> EQ{"slow == fast?"}
+    EQ -- No --> L
+    EQ -- Yes --> P2["Phase 2: ptr1 = head, ptr2 = slow"]
+    P2 --> E{"ptr1 == ptr2?"}
+    E -- No --> A["ptr1 = ptr1.next, ptr2 = ptr2.next"]
+    A --> E
+    E -- Yes --> RET["Return ptr1 (Cycle Entry)"]
+
+    classDef start fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef dec fill:#1e293b,stroke:#f59e0b,color:#fef3c7,stroke-width:2px
+    classDef done fill:#064e3b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    classDef none fill:#1e293b,stroke:#64748b,color:#cbd5e1
+
+    class S,M,P2,A start
+    class L,EQ,E dec
+    class RET done
+    class NC none
 ```
+
+### Pattern Template & Applications
+- **Find middle:** `slow` lands at the middle when `fast` reaches the end (`fast == null || fast.next == null`).
+- **Detect cycle:** `fast` closes the gap by `1` node per iteration; if they meet, a cycle exists.
+- **Find cycle start:** Reset one pointer to `head`, advance both at `1x` speed; they collide at the cycle entry (`a = kc - b`).
+- **Remove nth from end:** Create an `n + 1` gap between `first` and `second`, then advance both at `1x`.
+
+> [!IMPORTANT]
+> For `detectCycle` (finding the entry node), both `slow` and `fast` MUST start at `head` so the `2(a + b) = a + b + kc` distance invariant holds. Starting `fast` at `head.next` works for `hasCycle` boolean checks, but shifts the Phase 2 meeting point by 1!
+
+| Operation | Slow Speed | Fast Speed | Time | Space |
+|-----------|------------|------------|------|-------|
+| Cycle Detection | `1` step | `2` steps | `O(n)` | `O(1)` |
+| Cycle Entry Node | `1` step (reset to `head`) | `1` step (from meet) | `O(n)` | `O(1)` |
+| Middle of List | `1` step | `2` steps | `O(n)` | `O(1)` |
+| Nth From End | `1` step (after `n+1` delay) | `1` step | `O(n)` | `O(1)` |
 
 ---
 
 ## Stack Patterns
+
+Stacks enforce Last-In, First-Out (LIFO) ordering—ideal for nested structure matching, expression evaluation, `O(1)` min tracking, and monotonic next-greater/smaller queries.
+
+![Monotonic Decreasing Stack Trace for Daily Temperatures](./assets/03-monotonic-stack-trace.svg)
+
+```mermaid
+flowchart TD
+    Q["Need LIFO / Neighbor Ordering?"] --> T1{"Nested Pairs / RPN?"}
+    T1 -- Yes --> S1["Standard Stack (Push/Pop Match)"]
+    T1 -- No --> T2{"Track Running Min/Max?"}
+    T2 -- Yes --> S2["Dual Stack (Value + MinStack)"]
+    T2 -- No --> T3{"Next Greater / Smaller?"}
+    T3 -- Yes --> S3["Monotonic Stack (Store Indices)"]
+
+    classDef root fill:#0f172a,stroke:#818cf8,color:#f8fafc,stroke-width:2px
+    classDef dec fill:#1e293b,stroke:#f59e0b,color:#fef3c7,stroke-width:2px
+    classDef leaf fill:#064e3b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+
+    class Q root
+    class T1,T2,T3 dec
+    class S1,S2,S3 leaf
+```
 
 ### Problem 1: Valid Parentheses
 
@@ -380,8 +467,8 @@ Common uses:
 Given a string `s` containing just the characters `'('`, `')'`, `'{'`, `'}'`, `'['` and `']'`, determine if the input string is valid.
 
 A string is valid if:
-1. Open brackets must be closed by the same type of closing brackets
-2. Every closing bracket has a corresponding opening bracket
+1. Open brackets must be closed by the same type of closing brackets.
+2. Every closing bracket has a corresponding opening bracket.
 
 **Solution: Stack**
 
@@ -410,9 +497,8 @@ public boolean isValid(String s) {
 }
 ```
 
-**Complexity**
-- Time: O(n)
-- Space: O(n)
+- **Time:** `O(n)`
+- **Space:** `O(n)`
 
 ---
 
@@ -464,12 +550,13 @@ class MinStack {
 ```
 
 **Why Use Two Stacks**
-- Single stack approach with pairs: harder to manage
-- Dual stack: clear separation of concerns
+- Single stack approach with pairs: harder to manage.
+- Dual stack: clear separation of concerns.
+- **Time:** All operations `O(1)`
+- **Space:** `O(n)`
 
-**Complexity**
-- All operations: O(1)
-- Space: O(n)
+> [!WARNING]
+> In `MinStack.push()`, use `val <= minStack.peek()` (not `<`). Duplicate minimum values must each be pushed onto `minStack` so popping one copy doesn't prematurely discard the active minimum!
 
 ---
 
@@ -521,7 +608,7 @@ public int[] dailyTemperatures(int[] temperatures) {
 }
 ```
 
-**Example**: [73, 74, 75, 71, 69, 72, 76, 73]
+**Example**: `[73, 74, 75, 71, 69, 72, 76, 73]`
 ```
 i=0 (73): stack=[0]
 i=1 (74): 74>73, pop 0, answer[0]=1, stack=[1]
@@ -529,15 +616,14 @@ i=2 (75): 75>74, pop 1, answer[1]=1, stack=[2]
 i=3 (71): 71<75, stack=[2,3]
 i=4 (69): 69<71, stack=[2,3,4]
 i=5 (72): 72>69, pop 4, answer[4]=1; 72>71, pop 3, answer[3]=2, stack=[2,5]
-i=6 (76): 76>72, pop 5, answer[5]=1; 76>75, pop 2, answer[2]=1, stack=[6]
+i=6 (76): 76>72, pop 5, answer[5]=1; 76>75, pop 2, answer[2]=4, stack=[6]
 i=7 (73): 73<76, stack=[6,7]
 
 Answer: [1,1,4,2,1,1,0,0]
 ```
 
-**Complexity**
-- Time: O(n) - each element pushed and popped once
-- Space: O(n)
+- **Time:** `O(n)` — each element pushed and popped at most once
+- **Space:** `O(n)`
 
 ---
 
@@ -577,14 +663,13 @@ public int largestRectangleArea(int[] heights) {
 }
 ```
 
-**Why Width Calculation**
-- Width = right boundary - left boundary - 1
-- Right boundary = current index (where we first see smaller height)
-- Left boundary = top of remaining stack (last index where height >= popped)
+**Why Width Calculation Works**
+- `Width = right boundary - left boundary - 1`
+- Right boundary = current index `i` (where we first see a smaller height)
+- Left boundary = top of remaining stack (last index where `height >= popped`)
 
-**Complexity**
-- Time: O(n)
-- Space: O(n)
+- **Time:** `O(n)`
+- **Space:** `O(n)`
 
 ---
 
@@ -593,7 +678,7 @@ public int largestRectangleArea(int[] heights) {
 **Problem Statement**
 Evaluate the value of an arithmetic expression in Reverse Polish Notation. In Reverse Polish Notation, operators follow their operands.
 
-Example: ["2","1","+","3","*"] = ((2+1)*3) = 9
+Example: `["2","1","+","3","*"] = ((2+1)*3) = 9`
 
 **Solution: Stack**
 
@@ -631,13 +716,33 @@ private int applyOperator(String op, int a, int b) {
 }
 ```
 
-**Complexity**
-- Time: O(n)
-- Space: O(n)
+| Problem | Stack Type | Time | Space |
+|---------|------------|------|-------|
+| Valid Parentheses | Character Stack | `O(n)` | `O(n)` |
+| Min Stack | Dual Stack | `O(1)` per op | `O(n)` |
+| Daily Temperatures | Monotonic Decreasing | `O(n)` | `O(n)` |
+| Largest Rectangle | Monotonic Increasing | `O(n)` | `O(n)` |
+| Evaluate RPN | Operand Stack | `O(n)` | `O(n)` |
 
 ---
 
 ## Queue and Deque
+
+Queues enforce First-In, First-Out (FIFO) ordering, while a **Deque** (Double-Ended Queue) lets you push and pop from both ends in `O(1)`—the key primitive behind `O(n)` Sliding Window Maximum.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant inStack as inStack (LIFO)
+    participant outStack as outStack (LIFO)
+
+    Client->>inStack: push(1), push(2), push(3)
+    Client->>outStack: pop() [outStack is empty]
+    inStack-->>outStack: transfer 3, 2, 1 (reverses order)
+    outStack-->>Client: return 1 (oldest element!)
+    Client->>outStack: pop() [outStack has 2, 3]
+    outStack-->>Client: return 2 (O(1) direct pop)
+```
 
 ### Problem 1: Implement Queue Using Stacks
 
@@ -687,25 +792,33 @@ class MyQueue {
 ```
 
 **Why It Works**
-- inStack: push elements
-- outStack: pop elements (reverse order)
-- Only reverse when outStack is empty
-
-**Complexity**
-- push: O(1)
-- pop/peek: O(1) amortized
-- empty: O(1)
+- `inStack`: receives pushed elements.
+- `outStack`: serves popped elements in reversed (FIFO) order.
+- Only transfer from `inStack` to `outStack` when `outStack` is empty—each element moves at most once, giving `O(1)` amortized `pop()`/`peek()`.
 
 ---
 
 ### Problem 2: Sliding Window Maximum
 
 **Problem Statement**
-You are given an array of integers `nums`, there is a sliding window of size `k` which is moving from the very left of the array to the very right. You can only see the k numbers in the window. Each time the sliding window moves right by one position, return an array of the maximum values in each window.
+You are given an array of integers `nums`, there is a sliding window of size `k` which is moving from the very left of the array to the very right. You can only see the `k` numbers in the window. Each time the sliding window moves right by one position, return an array of the maximum values in each window.
 
 **Solution: Monotonic Deque**
 
-Key insight: Maintain indices of decreasing values in deque.
+Key insight: Maintain indices of decreasing values in a deque.
+
+```mermaid
+flowchart LR
+    I["Index i arrives"] --> F["1. Evict front if idx &lt; i - k + 1"]
+    F --> B["2. Pop back while nums[back] &lt; nums[i]"]
+    B --> P["3. addLast(i)"]
+    P --> R["4. If i &gt;= k - 1, ans = nums[peekFirst]"]
+
+    classDef step fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef out fill:#064e3b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    class I,F,B,P step
+    class R out
+```
 
 ```java
 public int[] maxSlidingWindow(int[] nums, int k) {
@@ -737,7 +850,7 @@ public int[] maxSlidingWindow(int[] nums, int k) {
 }
 ```
 
-**Example**: nums = [1,3,-1,-3,5,3,6,7], k = 3
+**Example**: `nums = [1,3,-1,-3,5,3,6,7]`, `k = 3`
 ```
 i=0: deque=[0], nums[0]=1
 i=1: nums[1]=3>nums[0], remove 0; deque=[1], nums[1]=3
@@ -747,13 +860,60 @@ i=4: nums[4]=5>nums[3,2,1], deque=[4]; result[2]=5 (window [-1,-3,5])
 ...
 ```
 
-**Complexity**
-- Time: O(n)
-- Space: O(k)
+> [!TIP]
+> Always store **indices** (not raw values) in monotonic deques and stacks—indices let you check window expiration (`idx < i - k + 1`) AND look up `nums[idx]` in `O(1)`.
+
+| Problem | Structure | Push / Enqueue | Pop / Query | Space |
+|---------|-----------|----------------|-------------|-------|
+| Queue Using Stacks | Dual Stack | `O(1)` | `O(1)` amortized | `O(n)` |
+| Sliding Window Max | Monotonic Deque | `O(1)` amortized | `O(1)` | `O(k)` |
 
 ---
 
 ## Design Problems
+
+System-level data structure design problems test your ability to combine `HashMap` (`O(1)` lookup) with Doubly Linked Lists (`O(1)` arbitrary node eviction and promotion).
+
+```mermaid
+classDiagram
+    class LRUCache {
+        -int capacity
+        -Map~Integer, Node~ map
+        -Node head
+        -Node tail
+        +get(key) int
+        +put(key, value) void
+        -moveToHead(node) void
+        -removeNode(node) void
+    }
+    class Node {
+        +int key
+        +int value
+        +Node prev
+        +Node next
+    }
+    LRUCache *-- Node : dummy head/tail DLL
+```
+
+```mermaid
+flowchart LR
+    subgraph Map["HashMap (O(1) Lookup)"]
+        K1["key 1"] --> N1
+        K2["key 2"] --> N2
+    end
+    subgraph DLL["Doubly Linked List (MRU → LRU)"]
+        DH["head (Dummy)"] <--> N1["Node 1 (MRU)"]
+        N1 <--> N2["Node 2 (LRU)"]
+        N2 <--> DT["tail (Dummy)"]
+    end
+
+    classDef map fill:#1e293b,stroke:#f59e0b,color:#fef3c7,stroke-width:2px
+    classDef node fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef dummy fill:#1e293b,stroke:#64748b,color:#cbd5e1
+    class K1,K2 map
+    class N1,N2 node
+    class DH,DT dummy
+```
 
 ### Problem 1: LRU Cache
 
@@ -761,9 +921,9 @@ i=4: nums[4]=5>nums[3,2,1], deque=[4]; result[2]=5 (window [-1,-3,5])
 Design a data structure that follows the constraints of a Least Recently Used (LRU) cache.
 
 **Key Requirements**
-- `get(key)`: Return value if exists, else return -1 (mark as recently used)
-- `put(key, value)`: Update or insert value (mark as recently used)
-- Evict least recently used item when capacity is exceeded
+- `get(key)`: Return value if exists, else return `-1` (mark as recently used).
+- `put(key, value)`: Update or insert value (mark as recently used).
+- Evict least recently used item when capacity is exceeded.
 
 **Solution: HashMap + Doubly Linked List**
 
@@ -845,14 +1005,12 @@ class LRUCache {
 ```
 
 **Data Structure Design**
-- HashMap: O(1) access by key
-- Doubly Linked List: O(1) addition/removal
-- Head = Most Recent, Tail = Least Recent
+- HashMap: `O(1)` access by key.
+- Doubly Linked List: `O(1)` addition/removal.
+- `head` = Most Recent, `tail` = Least Recent.
 
-**Complexity**
-- get: O(1)
-- put: O(1)
-- Space: O(capacity)
+> [!IMPORTANT]
+> Always store `key` inside `Node` in addition to `value`—when evicting `tail.prev` from the Doubly Linked List, you need `lru.key` to remove the entry from `map` in `O(1)`.
 
 ---
 
@@ -960,21 +1118,38 @@ class LFUCache {
 }
 ```
 
-**Complexity**
-- get: O(1)
-- put: O(1)
-- Space: O(capacity)
+| Cache | `get(key)` | `put(key, val)` | Space | Eviction Policy |
+|-------|------------|-----------------|-------|-----------------|
+| LRU Cache | `O(1)` | `O(1)` | `O(capacity)` | Oldest accessed (`tail.prev`) |
+| LFU Cache | `O(1)` | `O(1)` | `O(capacity)` | Lowest `freq`, tie-break by LRU |
 
 ---
 
 ## Monotonic Stack Pattern Summary
 
-A monotonic stack is useful for problems where you need to find:
-- Next greater element
-- Previous greater element
-- Trapping water
-- Largest rectangle
-- Sliding window maximum
+A monotonic stack maintains elements in strictly increasing or decreasing order by popping violating elements as each new index arrives. It turns `O(n²)` nested neighbor searches into `O(n)` amortized scans because each index is pushed once and popped at most once.
+
+```mermaid
+flowchart LR
+    A["For each index i"] --> B{"Stack non-empty &amp;&amp; violates order?"}
+    B -- Yes --> C["Pop idx &amp; resolve answer[idx]"]
+    C --> B
+    B -- No --> D["Push i onto stack"]
+
+    classDef loop fill:#0f172a,stroke:#38bdf8,color:#f8fafc,stroke-width:2px
+    classDef dec fill:#1e293b,stroke:#f59e0b,color:#fef3c7,stroke-width:2px
+    classDef act fill:#064e3b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+    class A,D loop
+    class B dec
+    class C act
+```
+
+### Common Use Cases
+- **Next greater element** (Monotonic Decreasing stack)
+- **Previous greater element** (Monotonic Decreasing stack)
+- **Trapping rain water** (Monotonic Decreasing stack)
+- **Largest rectangle in histogram** (Monotonic Increasing stack)
+- **Sliding window maximum** (Monotonic Decreasing deque)
 
 ### Template
 ```java
@@ -989,17 +1164,48 @@ for (int i = 0; i < arr.length; i++) {
 }
 ```
 
+> [!TIP]
+> Decide stack order by asking what triggers resolution: if a **larger** incoming element resolves waiting elements (e.g., Daily Temperatures), maintain a **decreasing** stack; if a **smaller** incoming element resolves waiting elements (e.g., Largest Rectangle), maintain an **increasing** stack.
+
+| Stack Order | Pop Condition | Classic Problems | Time |
+|-------------|---------------|------------------|------|
+| Decreasing | `arr[i] > arr[peek]` | Daily Temperatures, Next Greater | `O(n)` |
+| Increasing | `arr[i] < arr[peek]` | Largest Rectangle, Next Smaller | `O(n)` |
+
 ---
 
 ## Summary Table
 
+Use this decision guide to select the right pointer, stack, deque, or cache pattern under interview time pressure.
+
+```mermaid
+flowchart TD
+    R["Linear Structure Problem"] --> L1{"Linked List?"}
+    L1 -- Yes --> L2["Fast/Slow, Dummy Node, or In-Place Reversal"]
+    L1 -- No --> L3{"Next Greater/Smaller or Histogram?"}
+    L3 -- Yes --> L4["Monotonic Stack (Indices)"]
+    L3 -- No --> L5{"Sliding Window Max/Min?"}
+    L5 -- Yes --> L6["Monotonic Deque"]
+    L5 -- No --> L7["HashMap + DLL (LRU / LFU)"]
+
+    classDef root fill:#0f172a,stroke:#818cf8,color:#f8fafc,stroke-width:2px
+    classDef dec fill:#1e293b,stroke:#f59e0b,color:#fef3c7,stroke-width:2px
+    classDef leaf fill:#064e3b,stroke:#10b981,color:#ecfdf5,stroke-width:2px
+
+    class R root
+    class L1,L3,L5 dec
+    class L2,L4,L6,L7 leaf
+```
+
 | Problem | Pattern | Time | Space |
 |---------|---------|------|-------|
-| Reverse LL | Iteration | O(n) | O(1) |
-| Detect Cycle | Two Pointers | O(n) | O(1) |
-| Min Stack | Dual Stack | O(1) | O(n) |
-| Valid Parentheses | Stack | O(n) | O(n) |
-| Largest Rectangle | Monotonic Stack | O(n) | O(n) |
-| Sliding Window Max | Deque | O(n) | O(k) |
-| LRU Cache | HashMap + DLL | O(1) | O(capacity) |
+| Reverse LL | Iteration | `O(n)` | `O(1)` |
+| Detect Cycle | Two Pointers | `O(n)` | `O(1)` |
+| Min Stack | Dual Stack | `O(1)` | `O(n)` |
+| Valid Parentheses | Stack | `O(n)` | `O(n)` |
+| Largest Rectangle | Monotonic Stack | `O(n)` | `O(n)` |
+| Sliding Window Max | Deque | `O(n)` | `O(k)` |
+| LRU Cache | HashMap + DLL | `O(1)` | `O(capacity)` |
 
+> [!NOTE]
+> Master the **Dummy Node**, **Fast & Slow Pointers**, **Monotonic Stack/Deque**, and **HashMap + DLL** primitives—almost every FAANG Linked List, Stack, Queue, or Cache question is a direct composition of these four building blocks.

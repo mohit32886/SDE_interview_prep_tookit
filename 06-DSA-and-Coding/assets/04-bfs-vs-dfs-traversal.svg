@@ -1,0 +1,258 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" role="img" aria-labelledby="title desc">
+  <title id="title">BFS vs DFS Traversal Comparison</title>
+  <desc id="desc">Side-by-side animation comparing Breadth-First Search (FIFO Queue level-by-level expansion) and Depth-First Search (Call Stack branch-first exploration) on the same binary tree.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 14; }
+      .header-title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .header-sub { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .panel-title-bfs { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .panel-title-dfs { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #a78bfa; }
+      .badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; }
+      .edge { stroke: #475569; stroke-width: 2.5; fill: none; stroke-linecap: round; }
+      .node-base { fill: #0f172a; stroke: #64748b; stroke-width: 2.5; }
+      .node-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; font-weight: 700; fill: #e2e8f0; text-anchor: middle; dominant-baseline: central; }
+      .box-bg { fill: #0f172a; stroke: #334155; stroke-width: 1.2; rx: 8; }
+      .box-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; fill: #94a3b8; }
+      .order-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600; fill: #e2e8f0; }
+
+      /* BFS Node Animations (8s loop) */
+      @keyframes bfs-n1 {
+        0%, 6% { fill: #0f172a; stroke: #64748b; }
+        10%, 88% { fill: #0284c7; stroke: #38bdf8; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes bfs-n23 {
+        0%, 22% { fill: #0f172a; stroke: #64748b; }
+        28%, 88% { fill: #0284c7; stroke: #38bdf8; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes bfs-n4567 {
+        0%, 44% { fill: #0f172a; stroke: #64748b; }
+        50%, 88% { fill: #0284c7; stroke: #38bdf8; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes bfs-wave1 {
+        0%, 8% { opacity: 0; transform: scale(0.8); }
+        14% { opacity: 0.75; transform: scale(1.1); }
+        26%, 100% { opacity: 0; transform: scale(1.25); }
+      }
+      @keyframes bfs-wave2 {
+        0%, 26% { opacity: 0; }
+        34% { opacity: 0.7; }
+        48%, 100% { opacity: 0; }
+      }
+      @keyframes bfs-wave3 {
+        0%, 48% { opacity: 0; }
+        56% { opacity: 0.7; }
+        74%, 100% { opacity: 0; }
+      }
+
+      .bfs-1 { animation: bfs-n1 8s ease-in-out infinite; }
+      .bfs-2, .bfs-3 { animation: bfs-n23 8s ease-in-out infinite; }
+      .bfs-4, .bfs-5, .bfs-6, .bfs-7 { animation: bfs-n4567 8s ease-in-out infinite; }
+
+      /* DFS Node Animations (8s loop: 1 -> 2 -> 4 -> 5 -> 3 -> 6 -> 7) */
+      @keyframes dfs-n1 {
+        0%, 4% { fill: #0f172a; stroke: #64748b; }
+        8%, 88% { fill: #7c3aed; stroke: #a78bfa; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes dfs-n2 {
+        0%, 14% { fill: #0f172a; stroke: #64748b; }
+        18%, 88% { fill: #7c3aed; stroke: #a78bfa; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes dfs-n4 {
+        0%, 24% { fill: #0f172a; stroke: #64748b; }
+        28%, 88% { fill: #7c3aed; stroke: #a78bfa; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes dfs-n5 {
+        0%, 36% { fill: #0f172a; stroke: #64748b; }
+        40%, 88% { fill: #7c3aed; stroke: #a78bfa; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes dfs-n3 {
+        0%, 48% { fill: #0f172a; stroke: #64748b; }
+        52%, 88% { fill: #7c3aed; stroke: #a78bfa; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes dfs-n6 {
+        0%, 60% { fill: #0f172a; stroke: #64748b; }
+        64%, 88% { fill: #7c3aed; stroke: #a78bfa; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+      @keyframes dfs-n7 {
+        0%, 72% { fill: #0f172a; stroke: #64748b; }
+        76%, 88% { fill: #7c3aed; stroke: #a78bfa; }
+        95%, 100% { fill: #0f172a; stroke: #64748b; }
+      }
+
+      .dfs-1 { animation: dfs-n1 8s ease-in-out infinite; }
+      .dfs-2 { animation: dfs-n2 8s ease-in-out infinite; }
+      .dfs-4 { animation: dfs-n4 8s ease-in-out infinite; }
+      .dfs-5 { animation: dfs-n5 8s ease-in-out infinite; }
+      .dfs-3 { animation: dfs-n3 8s ease-in-out infinite; }
+      .dfs-6 { animation: dfs-n6 8s ease-in-out infinite; }
+      .dfs-7 { animation: dfs-n7 8s ease-in-out infinite; }
+
+      /* Queue / Stack item highlights */
+      @keyframes q-lvl0 {
+        0%, 4% { opacity: 0.25; }
+        8%, 22% { opacity: 1; }
+        26%, 100% { opacity: 0.25; }
+      }
+      @keyframes q-lvl1 {
+        0%, 22% { opacity: 0.25; }
+        28%, 44% { opacity: 1; }
+        48%, 100% { opacity: 0.25; }
+      }
+      @keyframes q-lvl2 {
+        0%, 44% { opacity: 0.25; }
+        50%, 76% { opacity: 1; }
+        82%, 100% { opacity: 0.25; }
+      }
+      .q-0 { animation: q-lvl0 8s infinite; }
+      .q-1 { animation: q-lvl1 8s infinite; }
+      .q-2 { animation: q-lvl2 8s infinite; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="520" class="bg" />
+
+  <!-- Top Header -->
+  <text x="28" y="34" class="header-title">BFS vs DFS: Traversal Dynamics on the Same Binary Tree</text>
+  <text x="28" y="54" class="header-sub">Comparing FIFO Queue level-by-level wave expansion against LIFO Call Stack depth-first exploration</text>
+
+  <!-- LEFT PANEL: BFS -->
+  <rect x="24" y="72" width="444" height="424" class="panel" />
+  <text x="44" y="102" class="panel-title-bfs">BFS (Breadth-First Search)</text>
+  <rect x="330" y="84" width="120" height="24" rx="6" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1" />
+  <text x="390" y="100" text-anchor="middle" class="badge" fill="#7dd3fc">FIFO Queue</text>
+
+  <!-- BFS Level Bands -->
+  <line x1="44" y1="158" x2="448" y2="158" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="4 4" />
+  <line x1="44" y1="238" x2="448" y2="238" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="4 4" />
+  <line x1="44" y1="318" x2="448" y2="318" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="4 4" />
+  <text x="48" y="152" class="box-label" fill="#38bdf8">L0</text>
+  <text x="48" y="232" class="box-label" fill="#38bdf8">L1</text>
+  <text x="48" y="312" class="box-label" fill="#38bdf8">L2</text>
+
+  <!-- BFS Edges -->
+  <line x1="246" y1="158" x2="156" y2="238" class="edge" />
+  <line x1="246" y1="158" x2="336" y2="238" class="edge" />
+  <line x1="156" y1="238" x2="106" y2="318" class="edge" />
+  <line x1="156" y1="238" x2="206" y2="318" class="edge" />
+  <line x1="336" y1="238" x2="286" y2="318" class="edge" />
+  <line x1="336" y1="238" x2="386" y2="318" class="edge" />
+
+  <!-- BFS Nodes -->
+  <circle cx="246" cy="158" r="22" class="node-base bfs-1" />
+  <text x="246" y="158" class="node-text">1</text>
+
+  <circle cx="156" cy="238" r="22" class="node-base bfs-2" />
+  <text x="156" y="238" class="node-text">2</text>
+  <circle cx="336" cy="238" r="22" class="node-base bfs-3" />
+  <text x="336" y="238" class="node-text">3</text>
+
+  <circle cx="106" cy="318" r="22" class="node-base bfs-4" />
+  <text x="106" y="318" class="node-text">4</text>
+  <circle cx="206" cy="318" r="22" class="node-base bfs-5" />
+  <text x="206" y="318" class="node-text">5</text>
+  <circle cx="286" cy="318" r="22" class="node-base bfs-6" />
+  <text x="286" y="318" class="node-text">6</text>
+  <circle cx="386" cy="318" r="22" class="node-base bfs-7" />
+  <text x="386" y="318" class="node-text">7</text>
+
+  <!-- BFS Wave Indicator Dot -->
+  <circle r="6" fill="#38bdf8">
+    <animateMotion dur="8s" repeatCount="indefinite"
+      path="M 246 158 L 156 238 L 336 238 L 106 318 L 206 318 L 286 318 L 386 318" />
+    <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.1;0.5;0.85;1" dur="8s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- BFS Queue & Output Box -->
+  <rect x="44" y="366" width="404" height="112" class="box-bg" />
+  <text x="58" y="388" class="box-label">QUEUE STATE (FIFO):</text>
+
+  <g class="q-0">
+    <rect x="58" y="398" width="90" height="26" rx="5" fill="#0369a1" stroke="#38bdf8" stroke-width="1" />
+    <text x="103" y="415" text-anchor="middle" class="order-text">[ 1 ]</text>
+  </g>
+  <g class="q-1">
+    <rect x="158" y="398" width="110" height="26" rx="5" fill="#0369a1" stroke="#38bdf8" stroke-width="1" />
+    <text x="213" y="415" text-anchor="middle" class="order-text">[ 2, 3 ]</text>
+  </g>
+  <g class="q-2">
+    <rect x="278" y="398" width="154" height="26" rx="5" fill="#0369a1" stroke="#38bdf8" stroke-width="1" />
+    <text x="355" y="415" text-anchor="middle" class="order-text">[ 4, 5, 6, 7 ]</text>
+  </g>
+
+  <text x="58" y="452" class="box-label">VISIT ORDER:</text>
+  <text x="152" y="452" class="order-text" fill="#7dd3fc">1 → 2 → 3 → 4 → 5 → 6 → 7</text>
+  <text x="58" y="468" class="box-label">SPACE: O(w) max width | Shortest unweighted path</text>
+
+  <!-- RIGHT PANEL: DFS -->
+  <rect x="492" y="72" width="444" height="424" class="panel" />
+  <text x="512" y="102" class="panel-title-dfs">DFS (Depth-First Search)</text>
+  <rect x="786" y="84" width="130" height="24" rx="6" fill="#4c1d95" stroke="#a78bfa" stroke-width="1" />
+  <text x="851" y="100" text-anchor="middle" class="badge" fill="#ddd6fe">LIFO Call Stack</text>
+
+  <!-- DFS Edges -->
+  <line x1="714" y1="158" x2="624" y2="238" class="edge" />
+  <line x1="714" y1="158" x2="804" y2="238" class="edge" />
+  <line x1="624" y1="238" x2="574" y2="318" class="edge" />
+  <line x1="624" y1="238" x2="674" y2="318" class="edge" />
+  <line x1="804" y1="238" x2="754" y2="318" class="edge" />
+  <line x1="804" y1="238" x2="854" y2="318" class="edge" />
+
+  <!-- DFS Nodes -->
+  <circle cx="714" cy="158" r="22" class="node-base dfs-1" />
+  <text x="714" y="158" class="node-text">1</text>
+
+  <circle cx="624" cy="238" r="22" class="node-base dfs-2" />
+  <text x="624" y="238" class="node-text">2</text>
+  <circle cx="804" cy="238" r="22" class="node-base dfs-3" />
+  <text x="804" y="238" class="node-text">3</text>
+
+  <circle cx="574" cy="318" r="22" class="node-base dfs-4" />
+  <text x="574" y="318" class="node-text">4</text>
+  <circle cx="674" cy="318" r="22" class="node-base dfs-5" />
+  <text x="674" y="318" class="node-text">5</text>
+  <circle cx="754" cy="318" r="22" class="node-base dfs-6" />
+  <text x="754" y="318" class="node-text">6</text>
+  <circle cx="854" cy="318" r="22" class="node-base dfs-7" />
+  <text x="854" y="318" class="node-text">7</text>
+
+  <!-- DFS Explorer Dot following Preorder + Backtrack -->
+  <circle r="6" fill="#c4b5fd">
+    <animateMotion dur="8s" repeatCount="indefinite"
+      path="M 714 158 L 624 238 L 574 318 L 624 238 L 674 318 L 624 238 L 714 158 L 804 238 L 754 318 L 804 238 L 854 318" />
+    <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.08;0.5;0.85;1" dur="8s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- DFS Stack & Output Box -->
+  <rect x="512" y="366" width="404" height="112" class="box-bg" />
+  <text x="526" y="388" class="box-label">CALL STACK DEPTH (Preorder):</text>
+
+  <g class="q-0">
+    <rect x="526" y="398" width="120" height="26" rx="5" fill="#5b21b6" stroke="#a78bfa" stroke-width="1" />
+    <text x="586" y="415" text-anchor="middle" class="order-text">1 → 2 → 4</text>
+  </g>
+  <g class="q-1">
+    <rect x="656" y="398" width="120" height="26" rx="5" fill="#5b21b6" stroke="#a78bfa" stroke-width="1" />
+    <text x="716" y="415" text-anchor="middle" class="order-text">pop 4 → 5</text>
+  </g>
+  <g class="q-2">
+    <rect x="786" y="398" width="116" height="26" rx="5" fill="#5b21b6" stroke="#a78bfa" stroke-width="1" />
+    <text x="844" y="415" text-anchor="middle" class="order-text">3 → 6 → 7</text>
+  </g>
+
+  <text x="526" y="452" class="box-label">VISIT ORDER:</text>
+  <text x="620" y="452" class="order-text" fill="#ddd6fe">1 → 2 → 4 → 5 → 3 → 6 → 7</text>
+  <text x="526" y="468" class="box-label">SPACE: O(h) tree height | Cycle, LCA, Backtracking</text>
+</svg>

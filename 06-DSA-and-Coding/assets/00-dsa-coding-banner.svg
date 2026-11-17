@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-label="DSA and Coding Interview Preparation 8-Module Mastery Track">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="55%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fbbf24" />
+    </linearGradient>
+
+    <pattern id="gridPattern" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#334155" stroke-width="0.6" stroke-opacity="0.35" />
+    </pattern>
+
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <style>
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 800; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 500; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 700; font-size: 11px; fill: #38bdf8; letter-spacing: 0.8px; }
+      .mod-num { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 700; font-size: 11px; }
+      .mod-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 700; font-size: 13.5px; fill: #f1f5f9; }
+      .mod-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 500; font-size: 10.5px; fill: #94a3b8; }
+      .foot-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+
+      .track-flow {
+        stroke-dasharray: 8 6;
+        animation: dashFlow 2.2s linear infinite;
+      }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -28; }
+      }
+
+      .node-pulse {
+        animation: nodeGlow 8s ease-in-out infinite;
+      }
+      .n1 { animation-delay: 0s; }
+      .n2 { animation-delay: 1s; }
+      .n3 { animation-delay: 2s; }
+      .n4 { animation-delay: 3s; }
+      .n5 { animation-delay: 4s; }
+      .n6 { animation-delay: 5s; }
+      .n7 { animation-delay: 6s; }
+      .n8 { animation-delay: 7s; }
+
+      @keyframes nodeGlow {
+        0%, 100% { stroke-opacity: 0.45; transform: translateY(0px); }
+        12.5% { stroke-opacity: 1; transform: translateY(-2px); }
+        25% { stroke-opacity: 0.45; transform: translateY(0px); }
+      }
+
+      .orb-float {
+        animation: floatSlow 6s ease-in-out infinite alternate;
+      }
+      @keyframes floatSlow {
+        from { opacity: 0.14; transform: scale(1); }
+        to { opacity: 0.24; transform: scale(1.06); }
+      }
+    </style>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="2" y="2" width="956" height="356" rx="16" fill="url(#bgGrad)" stroke="#334155" stroke-width="1.5" />
+  <rect x="2" y="2" width="956" height="356" rx="16" fill="url(#gridPattern)" />
+
+  <!-- Ambient Glow Orbs -->
+  <circle cx="140" cy="70" r="110" fill="#38bdf8" opacity="0.14" class="orb-float" />
+  <circle cx="830" cy="290" r="120" fill="#818cf8" opacity="0.14" class="orb-float" />
+
+  <!-- Top Accent Line -->
+  <rect x="32" y="18" width="896" height="3" rx="1.5" fill="url(#accentGrad)" opacity="0.85" />
+
+  <!-- Header Section -->
+  <g transform="translate(36, 36)">
+    <rect x="0" y="0" width="322" height="24" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="1" stroke-opacity="0.6" />
+    <circle cx="15" cy="12" r="4" fill="#34d399">
+      <animate attributeName="opacity" values="1;0.35;1" dur="2s" repeatCount="indefinite" />
+    </circle>
+    <text x="27" y="16" class="badge-text">MODULE 06  •  FAANG PREP  •  JAVA 5+ YOE</text>
+
+    <text x="0" y="54" font-size="26" class="title">DSA &amp; Coding Mastery Track</text>
+    <text x="0" y="75" font-size="13" class="subtitle">7,197 Lines  •  90+ Problems  •  37 Techniques  •  UMPIRE Framework &amp; Blind 75</text>
+
+    <!-- Right-side Quick Stats Pill -->
+    <g transform="translate(696, 8)">
+      <rect x="0" y="0" width="192" height="58" rx="10" fill="#0f172a" fill-opacity="0.85" stroke="#334155" stroke-width="1" />
+      <text x="16" y="23" class="mod-num" fill="#34d399">8-WEEK ROADMAP</text>
+      <text x="16" y="43" class="mod-sub" fill="#e2e8f0">01 Foundations → 08 Mastery</text>
+    </g>
+  </g>
+
+  <!-- Track Connector Path (01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07 -> 08) -->
+  <g fill="none">
+    <!-- Row 1 horizontal connectors -->
+    <path d="M 232 162 L 260 162" stroke="#38bdf8" stroke-width="2" class="track-flow" />
+    <path d="M 456 162 L 484 162" stroke="#38bdf8" stroke-width="2" class="track-flow" />
+    <path d="M 680 162 L 708 162" stroke="#818cf8" stroke-width="2" class="track-flow" />
+
+    <!-- Connector from 04 down and across to 05 -->
+    <path d="M 816 196 L 816 211 L 134 211 L 134 226" stroke="#818cf8" stroke-width="2" class="track-flow" />
+
+    <!-- Row 2 horizontal connectors -->
+    <path d="M 232 260 L 260 260" stroke="#a78bfa" stroke-width="2" class="track-flow" />
+    <path d="M 456 260 L 484 260" stroke="#34d399" stroke-width="2" class="track-flow" />
+    <path d="M 680 260 L 708 260" stroke="#fbbf24" stroke-width="2" class="track-flow" />
+
+    <!-- SMIL Traveling Data Packet along full mastery path -->
+    <path id="masteryPath" d="M 134 162 L 816 162 L 816 211 L 134 211 L 134 260 L 816 260" stroke="none" />
+    <circle r="4.5" fill="#38bdf8" filter="url(#glow)">
+      <animateMotion dur="8s" repeatCount="indefinite">
+        <mpath href="#masteryPath" />
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- Row 1: Modules 01 - 04 -->
+  <!-- 01 Arrays -->
+  <g transform="translate(36, 128)" class="node-pulse n1">
+    <rect x="0" y="0" width="196" height="68" rx="10" fill="url(#cardGrad)" stroke="#38bdf8" stroke-width="1.5" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#0ea5e9" fill-opacity="0.2" />
+    <text x="16" y="23" class="mod-num" fill="#38bdf8">01</text>
+    <text x="46" y="24" class="mod-title">Arrays</text>
+    <text x="12" y="43" class="mod-sub">2-Pointers • Sliding Window</text>
+    <text x="12" y="57" class="mod-sub">Prefix Sum • Kadane • Matrix</text>
+  </g>
+
+  <!-- 02 Hashing/Heaps -->
+  <g transform="translate(260, 128)" class="node-pulse n2">
+    <rect x="0" y="0" width="196" height="68" rx="10" fill="url(#cardGrad)" stroke="#38bdf8" stroke-width="1.5" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#0ea5e9" fill-opacity="0.2" />
+    <text x="16" y="23" class="mod-num" fill="#38bdf8">02</text>
+    <text x="46" y="24" class="mod-title">Hashing/Heaps</text>
+    <text x="12" y="43" class="mod-sub">HashMap Internals • Dual-Heap</text>
+    <text x="12" y="57" class="mod-sub">PriorityQueue • TreeMap</text>
+  </g>
+
+  <!-- 03 Lists/Stacks -->
+  <g transform="translate(484, 128)" class="node-pulse n3">
+    <rect x="0" y="0" width="196" height="68" rx="10" fill="url(#cardGrad)" stroke="#818cf8" stroke-width="1.5" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#6366f1" fill-opacity="0.2" />
+    <text x="16" y="23" class="mod-num" fill="#818cf8">03</text>
+    <text x="46" y="24" class="mod-title">Lists/Stacks</text>
+    <text x="12" y="43" class="mod-sub">Fast/Slow • Monotonic Stack</text>
+    <text x="12" y="57" class="mod-sub">Deque • LRU &amp; LFU Cache</text>
+  </g>
+
+  <!-- 04 Trees/Graphs -->
+  <g transform="translate(708, 128)" class="node-pulse n4">
+    <rect x="0" y="0" width="216" height="68" rx="10" fill="url(#cardGrad)" stroke="#818cf8" stroke-width="1.5" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#6366f1" fill-opacity="0.2" />
+    <text x="16" y="23" class="mod-num" fill="#818cf8">04</text>
+    <text x="46" y="24" class="mod-title">Trees/Graphs</text>
+    <text x="12" y="43" class="mod-sub">BFS/DFS • Topo Sort • Trie</text>
+    <text x="12" y="57" class="mod-sub">Union-Find • Dijkstra</text>
+  </g>
+
+  <!-- Row 2: Modules 05 - 08 -->
+  <!-- 05 DP -->
+  <g transform="translate(36, 226)" class="node-pulse n5">
+    <rect x="0" y="0" width="196" height="68" rx="10" fill="url(#cardGrad)" stroke="#a78bfa" stroke-width="1.5" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#8b5cf6" fill-opacity="0.2" />
+    <text x="16" y="23" class="mod-num" fill="#a78bfa">05</text>
+    <text x="46" y="24" class="mod-title">DP</text>
+    <text x="12" y="43" class="mod-sub">1D/2D • Interval • Tree DP</text>
+    <text x="12" y="57" class="mod-sub">State Machine • Knapsack</text>
+  </g>
+
+  <!-- 06 Backtracking -->
+  <g transform="translate(260, 226)" class="node-pulse n6">
+    <rect x="0" y="0" width="196" height="68" rx="10" fill="url(#cardGrad)" stroke="#34d399" stroke-width="1.5" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#10b981" fill-opacity="0.2" />
+    <text x="16" y="23" class="mod-num" fill="#34d399">06</text>
+    <text x="46" y="24" class="mod-title">Backtracking</text>
+    <text x="12" y="43" class="mod-sub">Make → Explore → Undo</text>
+    <text x="12" y="57" class="mod-sub">Subsets • Permutations • Pruning</text>
+  </g>
+
+  <!-- 07 Search/Sort -->
+  <g transform="translate(484, 226)" class="node-pulse n7">
+    <rect x="0" y="0" width="196" height="68" rx="10" fill="url(#cardGrad)" stroke="#34d399" stroke-width="1.5" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#10b981" fill-opacity="0.2" />
+    <text x="16" y="23" class="mod-num" fill="#34d399">07</text>
+    <text x="46" y="24" class="mod-title">Search/Sort</text>
+    <text x="12" y="43" class="mod-sub">3 Binary Search Variants</text>
+    <text x="12" y="57" class="mod-sub">Bit Ops • Greedy Intervals</text>
+  </g>
+
+  <!-- 08 UMPIRE & Blind 75 -->
+  <g transform="translate(708, 226)" class="node-pulse n8">
+    <rect x="0" y="0" width="216" height="68" rx="10" fill="url(#cardGrad)" stroke="url(#goldGrad)" stroke-width="1.8" />
+    <rect x="10" y="10" width="28" height="18" rx="5" fill="#f59e0b" fill-opacity="0.22" />
+    <text x="16" y="23" class="mod-num" fill="#fbbf24">08</text>
+    <text x="46" y="24" class="mod-title">UMPIRE &amp; Blind 75</text>
+    <text x="12" y="43" class="mod-sub">45-Min Pacing • Trade-offs</text>
+    <text x="12" y="57" class="mod-sub">Java Pitfalls • Mock Prep</text>
+  </g>
+
+  <!-- Bottom Timeline Footer -->
+  <g transform="translate(36, 314)">
+    <rect x="0" y="0" width="888" height="28" rx="8" fill="#0f172a" fill-opacity="0.85" stroke="#334155" stroke-width="1" />
+    <circle cx="18" cy="14" r="4" fill="#38bdf8" />
+    <text x="28" y="18" class="foot-text">Wk 1-2: Arrays &amp; Strings</text>
+
+    <circle cx="228" cy="14" r="4" fill="#818cf8" />
+    <text x="238" y="18" class="foot-text">Wk 3-4: Hashing, Lists, Stacks</text>
+
+    <circle cx="480" cy="14" r="4" fill="#a78bfa" />
+    <text x="490" y="18" class="foot-text">Wk 5-6: Trees, Graphs, DP</text>
+
+    <circle cx="700" cy="14" r="4" fill="#fbbf24" />
+    <text x="710" y="18" class="foot-text">Wk 7-8: Search, Mock &amp; Blind 75</text>
+  </g>
+</svg>

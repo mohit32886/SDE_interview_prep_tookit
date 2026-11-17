@@ -17,6 +17,84 @@ The two-pointer technique is used to solve problems involving pairs, sequences, 
 - **Same direction**: Both pointers move in the same direction (often with different speeds)
 - **Opposite direction**: Pointers start at opposite ends and move towards each other
 
+**Algorithm Intuition:**
+- **Eliminate nested loops**: Instead of checking every `(i, j)` pair in `O(n²)`, use monotonic properties (sorted order, bounding heights, or symmetric indices) to discard impossible states in `O(1)` per step.
+- **Invariant-driven movement**: At each step, move only the pointer that cannot improve the current answer if kept fixed (e.g., the shorter wall in Container With Most Water or Trapping Rain Water).
+- **In-place compaction**: Use a slow `write` pointer (`k`) and fast `read` pointer (`i`) to partition or deduplicate arrays in `O(1)` extra space.
+
+> [!TIP]
+> Whenever an array is **sorted** (or can be sorted without breaking index requirements) and you need pairs/triplets with a target sum, think **Opposite-Direction Two Pointers** first.
+
+```mermaid
+flowchart TD
+    A["Two-Pointer Problem"] --> B{"Array Sorted or Symmetric?"}
+    B -->|"Yes: Pairs, 3Sum, Palindrome"| C["Opposite Direction: left = 0, right = n - 1"]
+    B -->|"No: In-place Dedup / Partition"| D["Same Direction: slow k = 1, fast i = 1"]
+    C --> E{"Compare State at left and right"}
+    E -->|"Need larger sum / taller left"| F["Advance left++"]
+    E -->|"Need smaller sum / taller right"| G["Advance right--"]
+    E -->|"Target Found"| H["Record Result, Skip Duplicates"]
+    D --> I{"nums[i] != nums[i - 1]?"}
+    I -->|"Yes"| J["nums[k] = nums[i], k++"]
+    I -->|"No"| K["Skip Duplicate, i++"]
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class A purple
+    class B,E,I amber
+    class C,D blue
+    class F,G,K red
+    class H,J green
+```
+
+#### Visual Walkthrough: Trapping Rain Water (`O(n)` Time, `O(1)` Space)
+
+![Trapping Rain Water Two Pointers Animation](./assets/01-two-pointers-trapping-water.svg)
+
+```mermaid
+flowchart LR
+    S["Start: left = 0, right = n - 1, leftMax = 0, rightMax = 0"] --> C{"height[left] &lt; height[right]?"}
+    C -->|"Yes: Left is Bottleneck"| L1{"height[left] &gt;= leftMax?"}
+    L1 -->|"Yes"| L2["leftMax = height[left]"]
+    L1 -->|"No"| L3["water += leftMax - height[left]"]
+    L2 --> L4["left++"]
+    L3 --> L4
+    C -->|"No: Right is Bottleneck"| R1{"height[right] &gt;= rightMax?"}
+    R1 -->|"Yes"| R2["rightMax = height[right]"]
+    R1 -->|"No"| R3["water += rightMax - height[right]"]
+    R2 --> R4["right--"]
+    R3 --> R4
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class S purple
+    class C,L1,R1 amber
+    class L2,R2 blue
+    class L3,R3 green
+    class L4,R4 red
+```
+
+#### Section Complexity Overview
+
+| Problem | Pattern | Brute Force | Optimal Time | Optimal Space |
+|---------|---------|-------------|--------------|---------------|
+| Container With Most Water | Opposite Pointers | `O(n²)` | `O(n)` | `O(1)` |
+| 3Sum | Sort + Opposite Pointers | `O(n³)` | `O(n²)` | `O(1)` / `O(n)` |
+| Trapping Rain Water | Converging Max Bounds | `O(n²)` | `O(n)` | `O(1)` |
+| Valid Palindrome | Opposite Skip Pointers | `O(n)` (`O(n)` space) | `O(n)` | `O(1)` |
+| Remove Duplicates | Same-Direction Slow/Fast | `O(n)` (`O(n)` space) | `O(n)` | `O(1)` |
+
+> [!WARNING]
+> In **3Sum**, forgetting to skip duplicate values for `i`, `left`, and `right` after finding a valid triplet is the #1 bug in interviews. Always advance past equal adjacent elements!
+
 ### Problem 1: Container With Most Water
 
 **Problem Statement**
@@ -369,6 +447,74 @@ Sliding window is a technique for solving problems involving subarrays or substr
 - **Fixed size window**: Window size k is predefined
 - **Variable size window**: Window grows/shrinks based on conditions
 
+**Algorithm Intuition:**
+- **Amortized `O(n)` traversal**: Both `left` and `right` pointers only move forward across the array/string, so each element enters and leaves the window at most once (`2n` operations).
+- **Incremental state updates**: Instead of recomputing sums or character frequencies from scratch for each subarray, add `arr[right]` on expansion and subtract `arr[left]` on contraction.
+- **Validity invariant**: For variable-size windows, expand `right` to explore; contract `left` until the window becomes valid again (longest problems) or ceases to be valid (shortest problems).
+
+> [!IMPORTANT]
+> **Longest vs. Shortest Window Contraction**:
+> - For **longest** valid window (e.g., Longest Repeating Character Replacement), contract `while (invalid)` and update `maxLen` **outside** the `while` loop.
+> - For **shortest** valid window (e.g., Minimum Window Substring), update `minLen` **inside** the `while (valid)` loop before shrinking `left++`.
+
+```mermaid
+flowchart TD
+    A["Sliding Window Variant"] --> B{"Is Window Size Fixed at k?"}
+    B -->|"Yes: Fixed Window"| C["Build Initial Window [0..k-1]"]
+    C --> D["Slide: sum += arr[i] - arr[i - k]"]
+    D --> E["Update Best Answer"]
+    B -->|"No: Variable Window"| F["Expand: right++, Update Window State"]
+    F --> G{"Goal: Longest or Shortest?"}
+    G -->|"Longest Valid"| H{"Window Invalid?"}
+    H -->|"Yes"| I["Shrink left++, Update State"]
+    I --> H
+    H -->|"No"| J["Update maxLen = max(maxLen, right - left + 1)"]
+    G -->|"Shortest Valid"| K{"Window Valid?"}
+    K -->|"Yes"| L["Update minLen, Shrink left++"]
+    L --> K
+    K -->|"No"| M["Continue Expanding right++"]
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class A purple
+    class B,G,H,K amber
+    class C,D,F blue
+    class I,L red
+    class E,J,M green
+```
+
+```mermaid
+sequenceDiagram
+    participant R as Right Pointer
+    participant W as Window Frequency Map
+    participant L as Left Pointer
+    Note over R,W: Minimum Window Substring Cycle
+    R->>W: Add s[right] to windowFreq
+    W-->>R: Check if windowFreq[c] == tFreq[c], formed++
+    loop while formed == required
+        L->>W: Record candidate [left..right] if smaller
+        L->>W: Decrement s[left] in windowFreq
+        W-->>L: If count &lt; tFreq[leftChar], formed--
+        L->>L: Advance left++
+    end
+```
+
+#### Section Complexity Overview
+
+| Problem | Window Type | Brute Force | Optimal Time | Optimal Space |
+|---------|-------------|-------------|--------------|---------------|
+| Longest Substring Without Repeating Chars | Variable (HashMap Jump) | `O(n³)` | `O(n)` | `O(min(n, m))` |
+| Minimum Window Substring | Variable (Freq Match) | `O(n² * m)` | `O(|s| + |t|)` | `O(|t|)` |
+| Max Sum Subarray of Size K | Fixed Size `k` | `O(n * k)` | `O(n)` | `O(1)` |
+| Longest Repeating Char Replacement | Variable (`len - maxFreq &lt;= k`) | `O(n²)` | `O(n)` | `O(1)` |
+
+> [!TIP]
+> In **Longest Substring Without Repeating Characters**, `left = Math.max(left, charIndex.get(c) + 1)` prevents `left` from ever jumping backward to a stale duplicate outside the current window!
+
 ### Problem 1: Longest Substring Without Repeating Characters
 
 **Problem Statement**
@@ -647,6 +793,51 @@ Prefix sum allows us to compute the sum of any subarray in O(1) time after O(n) 
 `prefixSum[i] = sum of all elements from index 0 to i-1`
 `sum(left, right) = prefixSum[right+1] - prefixSum[left]`
 
+**Algorithm Intuition:**
+- **Range sum as a difference**: Any contiguous subarray `[i..j]` has sum `P[j+1] - P[i]`, turning a 2D search over `(i, j)` into a 1D lookup.
+- **Handling negative numbers**: Unlike Sliding Window (which requires monotonic sums, i.e., non-negative numbers), **Prefix Sum + HashMap** works with arbitrary negative, zero, and positive integers.
+- **Seed `{0: 1}`**: Initializing `prefixSumCount.put(0, 1)` accounts for subarrays starting at index `0` whose running sum equals `k` directly.
+
+> [!IMPORTANT]
+> **Why Sliding Window Fails Here**: When an array contains negative numbers or zeros, expanding the window does not strictly increase the sum and shrinking does not strictly decrease it. Always reach for **Prefix Sum + HashMap** when negatives are allowed!
+
+```mermaid
+flowchart LR
+    A["Init: map = {0: 1}, currentSum = 0, count = 0"] --> B["Read Next Element num"]
+    B --> C["currentSum += num"]
+    C --> D{"map.containsKey(currentSum - k)?"}
+    D -->|"Yes"| E["count += map.get(currentSum - k)"]
+    D -->|"No"| F["No Match at Current Index"]
+    E --> G["map.put(currentSum, freq + 1)"]
+    F --> G
+    G --> H{"More Elements?"}
+    H -->|"Yes"| B
+    H -->|"No"| I["Return count"]
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class A purple
+    class B,C,G blue
+    class D,H amber
+    class F red
+    class E,I green
+```
+
+#### Section Complexity Overview
+
+| Approach | Works with Negatives? | Time Complexity | Space Complexity |
+|----------|-----------------------|-----------------|------------------|
+| Brute Force Nested Loops | Yes | `O(n²)` | `O(1)` |
+| Prefix Sum Array Only | Yes | `O(n²)` (still pairs) | `O(n)` |
+| Prefix Sum + HashMap (Optimal) | Yes | `O(n)` | `O(n)` |
+
+> [!WARNING]
+> Always check `prefixSumCount.containsKey(currentSum - k)` **before** inserting `currentSum` into the map. If `k = 0`, inserting `currentSum` first would falsely count an empty subarray!
+
 ### Problem: Subarray Sum Equals K
 
 **Problem Statement**
@@ -715,6 +906,54 @@ Return 2: [1,1] and [1,1] (indices 0-1 and 1-2)
 
 ### Core Concept
 Kadane's algorithm finds the maximum sum of a contiguous subarray. Key idea: At each position, decide whether to extend the previous subarray or start fresh.
+
+**Algorithm Intuition:**
+- **Optimal substructure (1D DP in `O(1)` space)**: Let `currentSum` be the maximum subarray sum *ending* at index `i`. Any prefix with a negative sum can only hurt future totals, so we discard it by resetting `currentSum = nums[i]`.
+- **Two-variable tracking**: `currentSum` tracks the local best ending here; `maxSum` tracks the global best seen anywhere so far.
+- **All-negative arrays**: Initializing `maxSum = nums[0]` and `currentSum = nums[0]` (instead of `0`) ensures at least one element is always selected.
+
+> [!TIP]
+> Kadane's is just **Dynamic Programming** with space compression: `dp[i] = max(nums[i], dp[i - 1] + nums[i])`. Since `dp[i]` only depends on `dp[i - 1]`, a single scalar `currentSum` replaces the `O(n)` DP array.
+
+#### Visual Walkthrough: Kadane's Reset vs Extend (`O(n)` Time, `O(1)` Space)
+
+![Kadane's Maximum Subarray Animation](./assets/01-kadane-prefix-sum.svg)
+
+```mermaid
+flowchart TD
+    A["Init: currentSum = nums[0], maxSum = nums[0], i = 1"] --> B{"i &lt; nums.length?"}
+    B -->|"No"| Z["Return maxSum"]
+    B -->|"Yes"| C{"currentSum + nums[i] &gt; nums[i]?"}
+    C -->|"Yes: Positive Prefix Helps"| D["EXTEND: currentSum = currentSum + nums[i]"]
+    C -->|"No: Negative Prefix Hurts"| E["RESET: currentSum = nums[i], tempStart = i"]
+    D --> F["maxSum = max(maxSum, currentSum)"]
+    E --> F
+    F --> G["i++"]
+    G --> B
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class A purple
+    class B,C amber
+    class D blue
+    class E red
+    class F,G,Z green
+```
+
+#### Section Complexity Overview
+
+| Variant | Approach | Time Complexity | Space Complexity |
+|---------|----------|-----------------|------------------|
+| Brute Force | Check All `(i, j)` Subarrays | `O(n³)` | `O(1)` |
+| Kadane's (Max Sum Only) | Local vs Global Max | `O(n)` | `O(1)` |
+| Kadane's (With Start/End Indices) | Track `tempStart`, `start`, `end` | `O(n)` | `O(1)` |
+
+> [!WARNING]
+> Never initialize `maxSum = 0` when negative numbers are possible and a non-empty subarray is required (e.g., `nums = [-5, -2, -8]` must return `-2`, not `0`).
 
 ### Problem: Maximum Subarray
 
@@ -804,6 +1043,53 @@ public int[] maxSubArrayWithIndices(int[] nums) {
 ---
 
 ## String Manipulation
+
+**Algorithm Intuition:**
+- **Canonical signatures for anagrams**: Two strings are anagrams iff they share the exact same character frequency vector (`int[26]`) or identical sorted character sequence.
+- **Expand around center for palindromes**: Every palindrome has a center (either 1 character for odd length or 2 characters for even length). Checking `2n - 1` centers in `O(n)` each avoids `O(n²)` DP table space.
+- **Immutability in Java**: `String` concatenation in loops (`s += c`) allocates a new `String` each iteration (`O(n²)` total); use `StringBuilder`, `char[]`, or `int[26]` frequency arrays.
+
+> [!TIP]
+> For **Group Anagrams**, if strings are long (`k` is large), you can replace `O(k log k)` sorting with an `O(k)` frequency-signature key (e.g., `"#1#0#2..."` from `int[26]`), reducing total time from `O(n * k log k)` to `O(n * k)`.
+
+```mermaid
+flowchart LR
+    A["String Problem"] --> B{"Checking / Grouping Anagrams?"}
+    B -->|"Two Strings"| C["int[26] Frequency Diff"]
+    C --> D["Increment for s, Decrement for t"]
+    D --> E{"Any Count &lt; 0?"}
+    E -->|"Yes"| F["Return false"]
+    E -->|"No"| G["Return true"]
+    B -->|"List of Strings"| H["Sort Chars or Build Freq Key"]
+    H --> I["Map Key → List of Anagrams"]
+    A --> J{"Longest Palindrome?"}
+    J -->|"Expand Around Center"| K["For each i: Expand (i, i) and (i, i + 1)"]
+    K --> L["Track maxLen and start = i - (len - 1) / 2"]
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class A purple
+    class B,E,J amber
+    class C,D,H,K blue
+    class F red
+    class G,I,L green
+```
+
+#### Section Complexity Overview
+
+| Problem | Approach | Time Complexity | Space Complexity |
+|---------|----------|-----------------|------------------|
+| Valid Anagram | Sorting `char[]` | `O(n log n)` | `O(n)` (`char[]`) |
+| Valid Anagram | `int[26]` Frequency Array (Optimal) | `O(n)` | `O(1)` |
+| Longest Palindromic Substring | Expand Around Center | `O(n²)` | `O(1)` |
+| Group Anagrams | Sorted Key + `HashMap` | `O(n * k log k)` | `O(n * k)` |
+
+> [!IMPORTANT]
+> In **Expand Around Center**, the start index formula `start = i - (len - 1) / 2` works uniformly for **both** odd-length (`len = 3`, `i - 1`) and even-length (`len = 4`, `i - 1`) palindromes centered at `(i, i+1)`.
 
 ### Problem 1: Valid Anagram
 
@@ -917,6 +1203,75 @@ public List<List<String>> groupAnagrams(String[] strs) {
 ---
 
 ## Matrix Problems
+
+**Algorithm Intuition:**
+- **4-way cyclic swap (Rotate Matrix)**: Rotating an `n x n` matrix `90°` clockwise in-place is a 4-cell cycle per `offset` in each concentric layer (`top → right → bottom → left → top`), or equivalently **Transpose + Reverse Each Row**.
+- **Shrinking boundaries (Spiral Matrix)**: Maintain `top`, `bottom`, `left`, `right` fences. After each directional sweep, tighten the corresponding boundary and guard `top <= bottom` / `left <= right` before sweeping back.
+- **Saddleback / Staircase search (Search 2D Matrix II)**: Starting at the **top-right** (or **bottom-left**) corner places smaller values strictly to the left and larger values strictly below, eliminating an entire row or column per comparison in `O(m + n)`.
+
+> [!TIP]
+> **Interview Shortcut for Rotate Matrix**: If you struggle with index math for 4-way layer swaps under pressure, remember `90° clockwise = Transpose (swap matrix[i][j] with matrix[j][i]) + Reverse each row`. Both are `O(n²)` time and `O(1)` space!
+
+```mermaid
+flowchart TD
+    A["Spiral Matrix: top = 0, bottom = m - 1, left = 0, right = n - 1"] --> B{"top &lt;= bottom AND left &lt;= right?"}
+    B -->|"No"| Z["Return result"]
+    B -->|"Yes"| C["Sweep Right across row top, then top++"]
+    C --> D["Sweep Down along col right, then right--"]
+    D --> E{"top &lt;= bottom?"}
+    E -->|"Yes"| F["Sweep Left across row bottom, then bottom--"]
+    E -->|"No"| G{"left &lt;= right?"}
+    F --> G
+    G -->|"Yes"| H["Sweep Up along col left, then left++"]
+    G -->|"No"| B
+    H --> B
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class A purple
+    class B,E,G amber
+    class C,D,F,H blue
+    class Z green
+```
+
+```mermaid
+flowchart LR
+    S["Start at Top-Right: row = 0, col = n - 1"] --> C{"row &lt; m AND col &gt;= 0?"}
+    C -->|"No"| F["Return false"]
+    C -->|"Yes"| V{"Compare matrix[row][col] vs target"}
+    V -->|"Equal"| T["Return true"]
+    V -->|"Current &gt; target"| L["Eliminate Column: col--"]
+    V -->|"Current &lt; target"| D["Eliminate Row: row++"]
+    L --> C
+    D --> C
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class S purple
+    class C,V amber
+    class L,D blue
+    class F red
+    class T green
+```
+
+#### Section Complexity Overview
+
+| Problem | Technique | Time Complexity | Space Complexity |
+|---------|-----------|-----------------|------------------|
+| Rotate Matrix (`n x n`) | Layer-by-Layer 4-Way Swap | `O(n²)` | `O(1)` |
+| Spiral Matrix (`m x n`) | 4-Boundary Shrinking Loop | `O(m * n)` | `O(1)` (excl. output) |
+| Search a 2D Matrix (`m x n`) | Top-Right Staircase Search | `O(m + n)` | `O(1)` |
+
+> [!WARNING]
+> In **Spiral Matrix**, omitting the `if (top <= bottom)` and `if (left <= right)` guards before sweeping left and up will cause duplicate elements on non-square matrices (e.g., `1 x 4` or `3 x 1`).
 
 ### Problem 1: Rotate Matrix
 
@@ -1068,6 +1423,35 @@ public boolean searchMatrix(int[][] matrix, int target) {
 
 ## Interview Tips & Patterns
 
+**Pattern Selection Intuition:**
+- Match **data constraints** (sorted vs unsorted, negative numbers allowed vs non-negative only, in-place vs extra space) to the right linear-time pattern before coding.
+- Always state the **brute-force baseline** first (`O(n²)` or `O(n³)`), then explain which redundant work is eliminated by pointers, window state, or prefix sums.
+
+> [!TIP]
+> **The 30-Second Pattern Check**: Ask yourself three questions at the start of any Array/String problem: (1) Is it sorted? (2) Does it ask for a contiguous subarray/substring? (3) Are negative numbers allowed?
+
+```mermaid
+flowchart TD
+    A["Array or String Problem"] --> B{"Contiguous Subarray / Substring?"}
+    B -->|"Yes"| C{"Fixed Size or Monotonic Condition?"}
+    C -->|"Yes: Non-negative or Char Freq"| D["Sliding Window: O(n)"]
+    C -->|"No: Negatives Allowed, Exact Sum k"| E["Prefix Sum + HashMap: O(n)"]
+    C -->|"Max / Min Subarray Sum"| F["Kadane's Algorithm: O(n), O(1)"]
+    B -->|"No: Pairs, Triplets, Palindrome, In-Place"| G{"Sorted or Symmetric?"}
+    G -->|"Yes"| H["Opposite Two Pointers: O(n), O(1)"]
+    G -->|"No: Dedup / Partition / Frequency"| I["Same-Direction Pointers or HashMap"]
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class A purple
+    class B,C,G amber
+    class D,E,F,H,I green
+```
+
 ### When to Use Two Pointers
 - Finding pairs with specific sum
 - Checking palindromes
@@ -1087,9 +1471,43 @@ public boolean searchMatrix(int[][] matrix, int target) {
 - Negative numbers
 - Overflow considerations
 
+#### Quick Pattern & Edge-Case Checklist
+
+| Constraint / Signal | Recommended Pattern | Typical Time | Typical Space |
+|---------------------|---------------------|--------------|---------------|
+| Sorted array + target pair/triplet | Opposite Two Pointers | `O(n)` / `O(n²)` | `O(1)` |
+| Substring / subarray + monotonic rule | Sliding Window | `O(n)` | `O(1)` / `O(k)` |
+| Subarray sum = `k` with negatives | Prefix Sum + HashMap | `O(n)` | `O(n)` |
+| Maximum contiguous subarray sum | Kadane's Algorithm | `O(n)` | `O(1)` |
+| Character counts / anagram grouping | `int[26]` or `HashMap` | `O(n)` | `O(1)` / `O(n)` |
+
+> [!WARNING]
+> **Integer Overflow & Empty Inputs**: In Java, subarray sums can exceed `Integer.MAX_VALUE` (`2^31 - 1`); clarify with your interviewer whether `long` is needed for prefix sums, and always guard `nums == null || nums.length == 0`.
+
 ---
 
 ## Summary Table
+
+**Complexity Optimization Intuition:**
+- Every core technique in this guide compresses a brute-force `O(n²)` or `O(n³)` search into **`O(n)` linear time** by trading redundant inner loops for either **pointer invariants** (`O(1)` space) or **prefix/frequency state** (`O(n)` space).
+
+```mermaid
+flowchart LR
+    B["Brute Force: O(n²) / O(n³)"] -->|"Sorted / Symmetric Invariant"| TP["Two Pointers: O(n) Time, O(1) Space"]
+    B -->|"Incremental Window State"| SW["Sliding Window: O(n) Time, O(1)-O(k) Space"]
+    B -->|"Running Prefix Lookup"| PS["Prefix Sum + Map: O(n) Time, O(n) Space"]
+    B -->|"1D DP Space Compression"| KA["Kadane's: O(n) Time, O(1) Space"]
+
+    classDef blue fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px
+    classDef green fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:1.5px
+    classDef amber fill:#fef3c7,stroke:#f59e0b,color:#78350f,stroke-width:1.5px
+    classDef red fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:1.5px
+    classDef purple fill:#f3e8ff,stroke:#a855f7,color:#581c87,stroke-width:1.5px
+
+    class B red
+    class TP,SW,KA green
+    class PS blue
+```
 
 | Technique | Best For | Time | Space |
 |-----------|----------|------|-------|
@@ -1098,4 +1516,7 @@ public boolean searchMatrix(int[][] matrix, int target) {
 | Prefix Sum | Subarray Sums | O(n) | O(n) |
 | Kadane's | Max Subarray | O(n) | O(1) |
 | HashMap | Frequency, Anagrams | O(n) | O(n) |
+
+> [!IMPORTANT]
+> Master these five `O(n)` primitives—**Two Pointers**, **Sliding Window**, **Prefix Sum**, **Kadane's**, and **Frequency Maps**—as they form the building blocks for 80%+ of FAANG array and string interview questions.
 

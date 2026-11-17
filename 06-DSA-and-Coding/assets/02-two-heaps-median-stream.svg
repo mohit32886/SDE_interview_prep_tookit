@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" width="100%" role="img" aria-label="Two-Heaps Median Finder animation showing Max-Heap lower half, Min-Heap upper half, rebalancing, and O(1) median calculation">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .card-cyan { fill: #1e293b; stroke: #0284c7; stroke-width: 1.5; rx: 12; }
+      .card-violet { fill: #1e293b; stroke: #7c3aed; stroke-width: 1.5; rx: 12; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 12px; fill: #94a3b8; }
+      .label { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 600; fill: #e2e8f0; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; fill: #cbd5e1; }
+      .mono-bold { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; fill: #f8fafc; }
+      .badge-cyan { fill: #0c4a6e; stroke: #38bdf8; stroke-width: 1.5; }
+      .badge-violet { fill: #4c1d95; stroke: #a78bfa; stroke-width: 1.5; }
+      .badge-emerald { fill: #064e3b; stroke: #34d399; stroke-width: 1.5; }
+      .badge-amber { fill: #78350f; stroke: #fbbf24; stroke-width: 1.5; }
+      .edge { stroke: #475569; stroke-width: 2; fill: none; }
+      .flow-arrow { stroke: #38bdf8; stroke-width: 2; fill: none; stroke-dasharray: 5 4; }
+
+      @keyframes pulseGlow {
+        0%, 100% { opacity: 0.7; }
+        50% { opacity: 1; }
+      }
+      @keyframes streamSlide {
+        0% { transform: translateX(0px); opacity: 0; }
+        12% { transform: translateX(0px); opacity: 1; }
+        35% { transform: translateX(130px); opacity: 1; }
+        45% { transform: translateX(130px); opacity: 0; }
+        100% { transform: translateX(0px); opacity: 0; }
+      }
+      @keyframes rebalancePulse {
+        0%, 35% { opacity: 0.35; }
+        50%, 68% { opacity: 1; }
+        85%, 100% { opacity: 0.35; }
+      }
+      @keyframes medianHighlight {
+        0%, 62% { stroke: #334155; stroke-width: 1.5; }
+        74%, 92% { stroke: #34d399; stroke-width: 2.5; }
+        100% { stroke: #334155; stroke-width: 1.5; }
+      }
+      @keyframes dashMove {
+        to { stroke-dashoffset: -18; }
+      }
+
+      .stream-token { animation: streamSlide 8s infinite ease-in-out; }
+      .rebalance-group { animation: rebalancePulse 8s infinite ease-in-out; }
+      .median-box { animation: medianHighlight 8s infinite ease-in-out; }
+      .dash-anim { animation: dashMove 1.2s linear infinite; }
+      .top-pulse { animation: pulseGlow 2.4s infinite ease-in-out; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="880" height="430" rx="14" />
+
+  <!-- Header -->
+  <text x="28" y="36" class="title">Two-Heaps Median Finder</text>
+  <text x="28" y="56" class="subtitle">Maintain Max-Heap (lower half) &amp; Min-Heap (upper half) with |size diff| &lt;= 1</text>
+
+  <!-- Complexity Pill -->
+  <rect x="615" y="20" width="237" height="32" rx="8" class="badge-emerald" />
+  <text x="733" y="40" text-anchor="middle" class="mono-bold" fill="#6ee7b7">addNum: O(log n) · median: O(1)</text>
+
+  <!-- Stream Bar -->
+  <rect x="28" y="74" width="824" height="54" rx="10" class="card" />
+  <text x="44" y="105" class="label" fill="#94a3b8">Data Stream:</text>
+  <g transform="translate(150, 86)">
+    <rect x="0" y="0" width="44" height="30" rx="6" fill="#0f172a" stroke="#475569" />
+    <text x="22" y="20" text-anchor="middle" class="mono-bold">2</text>
+
+    <rect x="56" y="0" width="44" height="30" rx="6" fill="#0f172a" stroke="#475569" />
+    <text x="78" y="20" text-anchor="middle" class="mono-bold">5</text>
+
+    <rect x="112" y="0" width="44" height="30" rx="6" fill="#0f172a" stroke="#475569" />
+    <text x="134" y="20" text-anchor="middle" class="mono-bold">10</text>
+
+    <rect x="168" y="0" width="44" height="30" rx="6" class="badge-amber" />
+    <text x="190" y="20" text-anchor="middle" class="mono-bold" fill="#fde68a">4</text>
+
+    <!-- Animated incoming token -->
+    <g class="stream-token">
+      <rect x="168" y="0" width="44" height="30" rx="6" fill="#f59e0b" stroke="#fef3c7" stroke-width="1.5" />
+      <text x="190" y="20" text-anchor="middle" class="mono-bold" fill="#0f172a">4</text>
+    </g>
+  </g>
+  <text x="435" y="105" class="mono" fill="#fbbf24">Step 1: Offer to Max-Heap → Step 2: Enforce max &lt;= min → Step 3: Rebalance</text>
+
+  <!-- Left Card: Max-Heap (Lower Half) -->
+  <rect x="28" y="146" width="330" height="186" rx="12" class="card-cyan" />
+  <text x="48" y="174" class="label" fill="#38bdf8">Max-Heap (Lower Half)</text>
+  <text x="48" y="192" class="mono" fill="#94a3b8">Stores &lt;= median · Root = largest</text>
+
+  <!-- Max-Heap Tree -->
+  <line x1="193" y1="232" x2="133" y2="290" class="edge" />
+  <circle cx="193" cy="232" r="24" class="badge-cyan top-pulse" />
+  <text x="193" y="237" text-anchor="middle" class="mono-bold" font-size="16">4</text>
+  <text x="230" y="236" class="mono" fill="#38bdf8">← peek()</text>
+
+  <circle cx="133" cy="290" r="21" fill="#0f172a" stroke="#475569" stroke-width="1.5" />
+  <text x="133" y="295" text-anchor="middle" class="mono-bold">2</text>
+
+  <rect x="242" y="276" width="98" height="28" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="291" y="294" text-anchor="middle" class="mono" fill="#7dd3fc">size = 2</text>
+
+  <!-- Center Rebalance Bridge -->
+  <g class="rebalance-group">
+    <path d="M 366 218 L 514 218" class="flow-arrow dash-anim" />
+    <polygon points="514,218 505,213 505,223" fill="#38bdf8" />
+    <path d="M 514 260 L 366 260" stroke="#a78bfa" stroke-width="2" fill="none" stroke-dasharray="5 4" class="dash-anim" />
+    <polygon points="366,260 375,255 375,265" fill="#a78bfa" />
+
+    <rect x="378" y="226" width="124" height="26" rx="6" fill="#0f172a" stroke="#475569" />
+    <text x="440" y="243" text-anchor="middle" class="mono-bold" fill="#e2e8f0">Rebalance</text>
+    <text x="440" y="286" text-anchor="middle" class="mono" fill="#94a3b8">|L - R| &lt;= 1</text>
+    <text x="440" y="303" text-anchor="middle" class="mono" fill="#94a3b8">L.top &lt;= R.top</text>
+  </g>
+
+  <!-- Right Card: Min-Heap (Upper Half) -->
+  <rect x="522" y="146" width="330" height="186" rx="12" class="card-violet" />
+  <text x="542" y="174" class="label" fill="#a78bfa">Min-Heap (Upper Half)</text>
+  <text x="542" y="192" class="mono" fill="#94a3b8">Stores &gt;= median · Root = smallest</text>
+
+  <!-- Min-Heap Tree -->
+  <line x1="687" y1="232" x2="747" y2="290" class="edge" />
+  <circle cx="687" cy="232" r="24" class="badge-violet top-pulse" />
+  <text x="687" y="237" text-anchor="middle" class="mono-bold" font-size="16">5</text>
+  <text x="605" y="236" class="mono" fill="#c4b5fd">peek() →</text>
+
+  <circle cx="747" cy="290" r="21" fill="#0f172a" stroke="#475569" stroke-width="1.5" />
+  <text x="747" y="295" text-anchor="middle" class="mono-bold">10</text>
+
+  <rect x="542" y="276" width="98" height="28" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="591" y="294" text-anchor="middle" class="mono" fill="#c4b5fd">size = 2</text>
+
+  <!-- Bottom O(1) Median Output -->
+  <rect x="28" y="348" width="824" height="62" rx="10" class="card median-box" />
+  <text x="48" y="374" class="label" fill="#34d399">O(1) findMedian()</text>
+  <text x="48" y="394" class="mono" fill="#94a3b8">If maxHeap.size() &gt; minHeap.size() → maxHeap.peek()  |  Else → (maxHeap.peek() + minHeap.peek()) / 2.0</text>
+  <rect x="620" y="361" width="212" height="36" rx="8" class="badge-emerald" />
+  <text x="726" y="384" text-anchor="middle" class="mono-bold" fill="#6ee7b7">(4 + 5) / 2.0 = 4.5</text>
+</svg>
