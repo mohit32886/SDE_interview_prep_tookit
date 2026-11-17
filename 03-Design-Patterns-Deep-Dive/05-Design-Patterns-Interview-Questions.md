@@ -2,9 +2,88 @@
 
 This section contains 40+ interview questions with detailed answers, code review scenarios, and LLD problems typical of FAANG interviews.
 
+## Table of Contents
+
+- [Part 1: Top 25 Design Pattern Questions](#part-1-top-25-design-pattern-questions)
+- [Part 2: Code Review Scenarios](#part-2-code-review-scenarios)
+- [Part 3: Low-Level Design Problems](#part-3-low-level-design-problems)
+- [Part 4: Comparative Questions](#part-4-comparative-questions)
+- [Summary: Interview Preparation Checklist](#summary-interview-preparation-checklist)
+
 ---
 
 ## Part 1: Top 25 Design Pattern Questions
+
+![FAANG Pattern Selector Matrix](./assets/05-pattern-selector-matrix.svg)
+
+```mermaid
+flowchart LR
+    GoF["GoF Design Patterns"] --> C["Creational (Object Creation)"]
+    GoF --> S["Structural (Composition &amp; Wrappers)"]
+    GoF --> B["Behavioral (Interaction &amp; Algorithms)"]
+
+    C --> C1["Singleton / Enum"]
+    C --> C2["Builder (5+ params)"]
+    C --> C3["Factory Method &amp; Abstract Factory"]
+
+    S --> S1["Decorator (Add behavior)"]
+    S --> S2["Proxy (Control access)"]
+    S --> S3["Adapter &amp; Facade"]
+
+    B --> B1["Strategy (Runtime swap)"]
+    B --> B2["Template Method (Fixed skeleton)"]
+    B --> B3["Observer &amp; Pub-Sub"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef cat fill:#0f172a,stroke:#a855f7,stroke-width:1.5px,color:#e2e8f0;
+    classDef leaf fill:#1e293b,stroke:#22c55e,stroke-width:1px,color:#cbd5e1;
+
+    class GoF root;
+    class C,S,B cat;
+    class C1,C2,C3,S1,S2,S3,B1,B2,B3 leaf;
+```
+
+```mermaid
+sequenceDiagram
+    participant Client as EventSource / Publisher
+    participant Broker as EventBus (Async Executor)
+    participant SubA as Observer / Subscriber A
+    participant SubB as Observer / Subscriber B
+
+    Note over Client,SubB: Observer Pattern (Synchronous, Tightly Coupled)
+    Client->>SubA: update(event)
+    activate SubA
+    SubA-->>Client: returns (blocks loop)
+    deactivate SubA
+    Client->>SubB: update(event)
+
+    Note over Client,SubB: Pub-Sub Pattern (Asynchronous, Loosely Coupled)
+    Client->>Broker: publish(topic, message)
+    Broker-->>Client: immediate return
+    par Async Delivery
+        Broker->>SubA: deliver(message)
+    and
+        Broker->>SubB: deliver(message)
+    end
+```
+
+### Quick Reference: Core Interview Patterns
+
+| Pattern | Category | Core Intent | Real-World / Spring Example |
+| :--- | :--- | :--- | :--- |
+| **Singleton** | Creational | Guarantee a single instance globally | `@Service` / `@Repository` beans, `Enum` |
+| **Builder** | Creational | Step-by-step immutable construction (5+ params) | `StringBuilder`, Lombok `@Builder` |
+| **Factory Method** | Creational | Defer single-object instantiation to subclasses | `@Bean` factory methods |
+| **Abstract Factory** | Creational | Create families of related objects | `WidgetFactory` (`LightThemeFactory`) |
+| **Decorator** | Structural | Dynamically add responsibilities (`is-a`) | Java I/O streams (`BufferedInputStream`) |
+| **Proxy** | Structural | Control access, lazy init, or cross-cutting logic | Spring AOP `@Transactional` proxies |
+| **Adapter** | Structural | Convert one interface into another | `StringHttpMessageConverter` |
+| **Strategy** | Behavioral | Swap algorithms at runtime via composition | `SortingStrategy`, `PropertyResolver` |
+| **Template Method** | Behavioral | Fixed algorithm skeleton with subclass hooks | `JdbcTemplate.query(...)` |
+| **Observer / Pub-Sub** | Behavioral | Broadcast state changes (sync vs async) | `@EventListener`, `ApplicationEvent` |
+
+> [!IMPORTANT]
+> In FAANG interviews, **knowing why you chose a pattern** matters more than memorizing UML. Always tie your choice to the **axis of change** (e.g., swapping algorithms → Strategy; protecting a resource → Proxy; >4 optional parameters → Builder).
 
 ### Q1: What are the three categories of design patterns?
 
@@ -321,6 +400,9 @@ public class BadStrategy {
 // - KISS (Keep It Simple, Stupid)
 ```
 
+> [!TIP]
+> **KISS Rule in Interviews:** Never introduce a Builder for a 2-field POJO or an Object Pool for lightweight allocations. Refactor *to* a pattern when requirements demand extensibility.
+
 ---
 
 ### Q9: Explain Observer pattern. How is it different from Pub-Sub?
@@ -415,6 +497,69 @@ private String mode;
 
 ## Part 2: Code Review Scenarios
 
+```mermaid
+flowchart TD
+    Start["Code Review: Anti-Pattern Detected"] --> Check{"What is the smell?"}
+    Check -->|"Exposed hooks &amp; no error handling"| Fix1["Encapsulate hooks as protected + add try/finally"]
+    Check -->|"Long if/else chain on type string"| Fix2["Extract Strategy Interface (OCP)"]
+    Check -->|"Multi-channel orchestration complexity"| Fix3["Combine Facade + Strategy"]
+
+    Fix1 --> Out["Clean, Extensible, Testable Design"]
+    Fix2 --> Out
+    Fix3 --> Out
+
+    classDef start fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+    classDef dec fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#e2e8f0;
+    classDef fix fill:#1e293b,stroke:#a855f7,stroke-width:1.5px,color:#e2e8f0;
+    classDef done fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#86efac;
+
+    class Start start;
+    class Check dec;
+    class Fix1,Fix2,Fix3 fix;
+    class Out done;
+```
+
+```mermaid
+classDiagram
+    class NotificationService {
+        <<Facade>>
+        -List channels
+        -NotificationTemplate template
+        -NotificationLogger logger
+        +notifyUser(userId, messageType) void
+        +setChannels(channels) void
+    }
+    class NotificationChannel {
+        <<Interface>>
+        +sendNotification(recipient, message) void
+    }
+    class EmailNotification {
+        +sendNotification(recipient, message) void
+    }
+    class SMSNotification {
+        +sendNotification(recipient, message) void
+    }
+    class PushNotification {
+        +sendNotification(recipient, message) void
+    }
+
+    NotificationService o-- NotificationChannel : delegates
+    NotificationChannel <|.. EmailNotification : implements
+    NotificationChannel <|.. SMSNotification : implements
+    NotificationChannel <|.. PushNotification : implements
+```
+
+### Code Review Summary
+
+| Scenario | Anti-Pattern / Issue | Pattern Applied | Key Improvement |
+| :--- | :--- | :--- | :--- |
+| **Scenario 1** | Public step methods, rigid header/footer, no file error handling | **Template Method** | Make hooks `protected` and wrap resource lifecycle |
+| **Scenario 2** | `if/else` branching on `"CARD"` / `"PAYPAL"` / `"BITCOIN"` | **Strategy** | Satisfies Open/Closed Principle via `PaymentMethod` |
+| **Scenario 3** | Multi-channel dispatch mixed with templating & logging | **Strategy + Facade** | `NotificationService` orchestrates `NotificationChannel` list |
+
+> [!WARNING]
+> In **Template Method** reviews, always check visibility modifiers: helper steps (`openFile`, `closeFile`) should be `private` or `protected`, while the template `generateReport()` must be `final` so subclasses cannot alter the invariant execution order.
+
 ### Scenario 1: Identify the Pattern and Issues
 
 ```java
@@ -506,6 +651,9 @@ public class PaymentProcessor {
 }
 ```
 
+> [!TIP]
+> When refactoring `if/else` or `switch` chains in an interview, explicitly mention the **Open/Closed Principle (OCP)**: new payment or notification channels are added as new classes without modifying existing orchestration code.
+
 ---
 
 ### Scenario 3: Design Review Question
@@ -578,6 +726,70 @@ service.notifyUser("user123", "ORDER_CONFIRMED");
 ---
 
 ## Part 3: Low-Level Design Problems
+
+![Parking Lot LLD Architecture](./assets/05-lld-parking-lot-architecture.svg)
+
+```mermaid
+classDiagram
+    class ParkingLot {
+        <<Facade>>
+        -List spaces
+        -Map vehicleToSpace
+        -PricingStrategy pricingStrategy
+        +parkVehicle(vehicle) boolean
+        +unparkVehicle(licensePlate) double
+        +getAvailableSpaces() int
+    }
+    class ParkingSpace {
+        -int spaceId
+        -ParkingSpaceType type
+        -ParkingSpaceStatus status
+        -Vehicle parkedVehicle
+        +canFitVehicle(vehicle) boolean
+        +parkVehicle(vehicle) void
+        +unparkVehicle() void
+    }
+    class Vehicle {
+        -String licensePlate
+        -int size
+        -LocalDateTime entryTime
+    }
+    class PricingStrategy {
+        <<Interface>>
+        +calculatePrice(entryTime, exitTime) double
+    }
+    class HourlyPricing {
+        -double RATE_PER_HOUR$
+        +calculatePrice(entryTime, exitTime) double
+    }
+
+    ParkingLot "1" *-- "*" ParkingSpace : manages
+    ParkingLot --> PricingStrategy : uses
+    ParkingSpace o-- "0..1" Vehicle : holds
+    PricingStrategy <|.. HourlyPricing : implements
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> IdleState : ATM Boot
+    IdleState --> CardInsertedState : insertCard(card)
+    CardInsertedState --> TransactionState : enterPin(validPin)
+    CardInsertedState --> CardInsertedState : enterPin(invalidPin)
+    TransactionState --> TransactionState : selectTransaction(type)
+    TransactionState --> IdleState : withdrawCash() / ejectCard()
+```
+
+### LLD Problem Matrix
+
+| Problem | Primary Patterns | Key Design Focus | Core Entities |
+| :--- | :--- | :--- | :--- |
+| **1. Parking Lot** | **Facade + Strategy** | Thread-safe spot allocation (`synchronized`), extensible pricing | `ParkingLot`, `ParkingSpace`, `Vehicle`, `PricingStrategy` |
+| **2. ATM System** | **State + Strategy** | Guarding invalid operations per state (`IllegalStateException`) | `ATM`, `ATMState`, `Transaction`, `BankAccount` |
+| **3. Elevator System** | **State** | Direction-locked transitions & destination queue management | `Elevator`, `ElevatorState`, `IdleElevatorState`, `MovingUpState` |
+| **4. Library System** | **Observer + Facade** | Auto-notifying subscribers when a borrowed `Book` is returned | `LibraryManagementSystem`, `Book`, `Member`, `NotificationObserver` |
+
+> [!IMPORTANT]
+> In **Parking Lot** and **Elevator** interviews, always address **concurrency** (`synchronized` or `ReentrantLock` on `parkVehicle`/`unparkVehicle`) and **extensibility** (injecting `PricingStrategy` rather than hardcoding hourly rates).
 
 ### Problem 1: Design a Parking Lot System
 
@@ -872,6 +1084,9 @@ public enum TransactionType {
     WITHDRAWAL, DEPOSIT, BALANCE_INQUIRY, TRANSFER
 }
 ```
+
+> [!TIP]
+> Notice how **ATM** combines **State** (`ATMState` controls what actions are legal right now) with **Strategy** (`Transaction` encapsulates how each operation executes). Calling out this separation scores strong points in LLD rounds.
 
 ---
 
@@ -1170,6 +1385,54 @@ public class LibraryManagementSystem {
 
 ## Part 4: Comparative Questions
 
+```mermaid
+flowchart LR
+    Q["How does behavior vary?"] -->|"Client swaps algorithm at runtime"| ST["Strategy Pattern (Composition)"]
+    Q -->|"Object transitions through lifecycle"| SM["State Pattern (State-driven)"]
+    Q -->|"Subclasses fill fixed skeleton steps"| TM["Template Method (Inheritance)"]
+
+    classDef root fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef pat fill:#1e293b,stroke:#22c55e,stroke-width:1.5px,color:#e2e8f0;
+
+    class Q root;
+    class ST,SM,TM pat;
+```
+
+```mermaid
+classDiagram
+    class TargetInterface {
+        <<Interface>>
+        +request() void
+    }
+    class Adapter {
+        -Adaptee legacyService
+        +request() void
+    }
+    class Adaptee {
+        +specificRequest() void
+    }
+    class Proxy {
+        -RealSubject realSubject
+        +request() void
+    }
+    class RealSubject {
+        +request() void
+    }
+
+    TargetInterface <|.. Adapter : converts interface
+    Adapter --> Adaptee : wraps incompatible
+    TargetInterface <|.. Proxy : same interface
+    TargetInterface <|.. RealSubject : implements
+    Proxy --> RealSubject : controls access
+```
+
+- **Strategy vs State:** Identical UML structure (context delegates to an interface), opposite intent — *client* picks Strategy; *state machine* transitions State.
+- **Factory vs Builder:** Factory returns a complete object in one call; Builder accumulates optional parameters and validates on `.build()`.
+- **Adapter vs Proxy:** Adapter changes the interface for compatibility; Proxy preserves the interface to add lazy loading, security, or logging.
+
+> [!IMPORTANT]
+> Interviewers love **Strategy vs State** and **Adapter vs Proxy** because their class diagrams look nearly identical. Always anchor your answer on **intent** and **who controls the delegation/interface**.
+
 ### Q: Strategy vs State Pattern
 
 | Aspect | Strategy | State |
@@ -1200,9 +1463,32 @@ public class LibraryManagementSystem {
 | **Responsibility** | Interface conversion | Access control |
 | **Usage** | Legacy code | Remote objects |
 
+> [!TIP]
+> **Rule of Thumb for Factory vs Builder:** If every parameter is required and the object can be constructed in one step, use a **Factory**. If you have optional parameters or need an immutable object with 5+ fields, use a **Builder**.
+
 ---
 
 ## Summary: Interview Preparation Checklist
+
+```mermaid
+flowchart LR
+    S1["1. 3 Categories &amp; SOLID"] --> S2["2. Top 5 Patterns Deep Dive"]
+    S2 --> S3["3. Code Review &amp; Refactoring"]
+    S3 --> S4["4. 2-3 LLD Systems"]
+    S4 --> S5["5. Mock Interview"]
+
+    classDef step fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc;
+    class S1,S2,S3,S4,S5 step;
+```
+
+### Readiness Priority Matrix
+
+| Focus Area | FAANG Interview Weight | Target Readiness |
+| :--- | :--- | :--- |
+| **LLD Systems (Parking Lot, ATM, Elevator)** | High | Whiteboard classes, interfaces, and concurrency in 25 mins |
+| **Comparative Questions (Strategy vs State, etc.)** | High | Articulate intent differences without hesitation |
+| **Code Review & Refactoring** | Medium-High | Spot `if/else` smells and apply Strategy / Facade cleanly |
+| **Spring / Java Real-World Examples** | Medium | Explain `@Transactional` (Proxy), `JdbcTemplate` (Template Method) |
 
 - [ ] Understand 3 pattern categories
 - [ ] Deep dive on 5 most used patterns
@@ -1214,3 +1500,5 @@ public class LibraryManagementSystem {
 - [ ] Review real-world examples
 - [ ] Mock interview with patterns
 
+> [!TIP]
+> Practice explaining **why** you did *not* use a pattern in a simple component — demonstrating restraint and SOLID fundamentals separates senior candidates from pattern-memorizers.

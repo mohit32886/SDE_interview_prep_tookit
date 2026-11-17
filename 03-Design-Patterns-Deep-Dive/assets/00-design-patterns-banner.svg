@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-label="Module 03 Design Patterns and LLD Animated Mastery Roadmap">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="55%" stop-color="#131c31"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="trackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="25%" stop-color="#a78bfa"/>
+      <stop offset="50%" stop-color="#34d399"/>
+      <stop offset="75%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="glowRose" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fb7185" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#fb7185" stop-opacity="0"/>
+    </radialGradient>
+
+    <pattern id="subtleGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#334155" stroke-width="0.6" stroke-opacity="0.35"/>
+    </pattern>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <style>
+    .title {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 800;
+      fill: #f8fafc;
+      letter-spacing: -0.5px;
+    }
+    .subtitle {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 500;
+      fill: #94a3b8;
+    }
+    .pill-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.9px;
+      fill: #38bdf8;
+    }
+    .stage-num {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .stage-title {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 700;
+      font-size: 13.5px;
+      fill: #f1f5f9;
+    }
+    .stage-sub {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 500;
+      font-size: 10.5px;
+      fill: #94a3b8;
+    }
+    .stat-label {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      fill: #cbd5e1;
+    }
+    .flow-dash {
+      stroke-dasharray: 6 6;
+      animation: dashFlow 1.6s linear infinite;
+    }
+    .card-1 { animation: cardPulse 5s ease-in-out infinite 0s; }
+    .card-2 { animation: cardPulse 5s ease-in-out infinite 1s; }
+    .card-3 { animation: cardPulse 5s ease-in-out infinite 2s; }
+    .card-4 { animation: cardPulse 5s ease-in-out infinite 3s; }
+    .card-5 { animation: cardPulse 5s ease-in-out infinite 4s; }
+
+    @keyframes dashFlow {
+      from { stroke-dashoffset: 24; }
+      to { stroke-dashoffset: 0; }
+    }
+    @keyframes cardPulse {
+      0%, 100% { transform: translateY(0px); opacity: 0.92; }
+      15%, 30% { transform: translateY(-4px); opacity: 1; }
+      45% { transform: translateY(0px); opacity: 0.92; }
+    }
+  </style>
+
+  <!-- Outer Card -->
+  <rect x="2" y="2" width="956" height="356" rx="16" fill="url(#bgGrad)" stroke="#334155" stroke-width="1.5"/>
+  <rect x="2" y="2" width="956" height="356" rx="16" fill="url(#subtleGrid)"/>
+
+  <!-- Ambient Glows -->
+  <circle cx="170" cy="110" r="170" fill="url(#glowCyan)"/>
+  <circle cx="810" cy="250" r="180" fill="url(#glowRose)"/>
+
+  <!-- Header Badge -->
+  <rect x="36" y="26" width="276" height="26" rx="13" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.55" stroke-width="1"/>
+  <circle cx="52" cy="39" r="4" fill="#38bdf8">
+    <animate attributeName="opacity" values="1;0.35;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <text x="64" y="43" class="pill-text">MODULE 03 • DESIGN PATTERNS &amp; LLD</text>
+
+  <!-- Right Header Tag -->
+  <rect x="748" y="26" width="176" height="26" rx="13" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="836" y="43" text-anchor="middle" class="stat-label">7,284 LINES • 5 WEEKS</text>
+
+  <!-- Title & Subtitle -->
+  <text x="36" y="84" font-size="28" class="title">Design Patterns Deep Dive</text>
+  <text x="36" y="108" font-size="13.5" class="subtitle">Master all 23 GoF patterns, Java SDK &amp; Spring internals, and FAANG Low-Level Design systems</text>
+
+  <!-- Track Base Line & Animated Flow -->
+  <line x1="115" y1="205" x2="845" y2="205" stroke="#334155" stroke-width="3" stroke-linecap="round"/>
+  <line x1="115" y1="205" x2="845" y2="205" stroke="url(#trackGrad)" stroke-width="2.5" stroke-linecap="round" class="flow-dash"/>
+
+  <!-- Traveling Signal Orb -->
+  <circle r="5" fill="#f8fafc" filter="url(#softGlow)">
+    <animate attributeName="cx" values="115;297;480;662;845;115" dur="5s" repeatCount="indefinite"/>
+    <animate attributeName="cy" values="205;205;205;205;205;205" dur="5s" repeatCount="indefinite"/>
+    <animate attributeName="fill" values="#38bdf8;#a78bfa;#34d399;#fbbf24;#fb7185;#38bdf8" dur="5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Stage 01: Creational -->
+  <g class="card-1">
+    <rect x="36" y="142" width="158" height="126" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.8"/>
+    <rect x="48" y="154" width="32" height="20" rx="6" fill="#0c4a6e"/>
+    <text x="64" y="168" text-anchor="middle" class="stage-num" fill="#38bdf8">01</text>
+    <text x="115" y="196" text-anchor="middle" class="stage-title">Creational</text>
+    <text x="115" y="216" text-anchor="middle" class="stage-sub">Singleton • Factory</text>
+    <text x="115" y="232" text-anchor="middle" class="stage-sub">Builder • Prototype</text>
+    <text x="115" y="252" text-anchor="middle" class="stage-num" fill="#38bdf8" opacity="0.85">6 Patterns • 1,853L</text>
+  </g>
+
+  <!-- Stage 02: Structural -->
+  <g class="card-2">
+    <rect x="218" y="142" width="158" height="126" rx="12" fill="#0f172a" stroke="#a78bfa" stroke-width="1.5" stroke-opacity="0.8"/>
+    <rect x="230" y="154" width="32" height="20" rx="6" fill="#2e1065"/>
+    <text x="246" y="168" text-anchor="middle" class="stage-num" fill="#a78bfa">02</text>
+    <text x="297" y="196" text-anchor="middle" class="stage-title">Structural</text>
+    <text x="297" y="216" text-anchor="middle" class="stage-sub">Adapter • Decorator</text>
+    <text x="297" y="232" text-anchor="middle" class="stage-sub">Proxy • Facade • Bridge</text>
+    <text x="297" y="252" text-anchor="middle" class="stage-num" fill="#a78bfa" opacity="0.85">7 Patterns • 1,659L</text>
+  </g>
+
+  <!-- Stage 03: Behavioral -->
+  <g class="card-3">
+    <rect x="401" y="142" width="158" height="126" rx="12" fill="#0f172a" stroke="#34d399" stroke-width="1.5" stroke-opacity="0.8"/>
+    <rect x="413" y="154" width="32" height="20" rx="6" fill="#064e3b"/>
+    <text x="429" y="168" text-anchor="middle" class="stage-num" fill="#34d399">03</text>
+    <text x="480" y="196" text-anchor="middle" class="stage-title">Behavioral</text>
+    <text x="480" y="216" text-anchor="middle" class="stage-sub">Strategy • Observer</text>
+    <text x="480" y="232" text-anchor="middle" class="stage-sub">State • Command • CoR</text>
+    <text x="480" y="252" text-anchor="middle" class="stage-num" fill="#34d399" opacity="0.85">10+ Patterns • 1,550L</text>
+  </g>
+
+  <!-- Stage 04: Real-World Java & Spring -->
+  <g class="card-4">
+    <rect x="583" y="142" width="158" height="126" rx="12" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" stroke-opacity="0.8"/>
+    <rect x="595" y="154" width="32" height="20" rx="6" fill="#451a03"/>
+    <text x="611" y="168" text-anchor="middle" class="stage-num" fill="#fbbf24">04</text>
+    <text x="662" y="194" text-anchor="middle" class="stage-title">Real-World</text>
+    <text x="662" y="210" text-anchor="middle" class="stage-title">Java &amp; Spring</text>
+    <text x="662" y="229" text-anchor="middle" class="stage-sub">SDK • IoC • AOP • SOLID</text>
+    <text x="662" y="252" text-anchor="middle" class="stage-num" fill="#fbbf24" opacity="0.85">Frameworks • 1,006L</text>
+  </g>
+
+  <!-- Stage 05: 25 Q&As & LLD -->
+  <g class="card-5">
+    <rect x="766" y="142" width="158" height="126" rx="12" fill="#0f172a" stroke="#fb7185" stroke-width="1.5" stroke-opacity="0.8"/>
+    <rect x="778" y="154" width="32" height="20" rx="6" fill="#4c0519"/>
+    <text x="794" y="168" text-anchor="middle" class="stage-num" fill="#fb7185">05</text>
+    <text x="845" y="196" text-anchor="middle" class="stage-title">25 Q&amp;As &amp; LLD</text>
+    <text x="845" y="216" text-anchor="middle" class="stage-sub">Parking Lot • ATM</text>
+    <text x="845" y="232" text-anchor="middle" class="stage-sub">Elevator • Library</text>
+    <text x="845" y="252" text-anchor="middle" class="stage-num" fill="#fb7185" opacity="0.85">40+ Q&amp;As • 1,216L</text>
+  </g>
+
+  <!-- Bottom Footer Bar -->
+  <rect x="36" y="294" width="888" height="40" rx="10" fill="#0f172a" fill-opacity="0.85" stroke="#334155" stroke-width="1"/>
+  <circle cx="58" cy="314" r="4" fill="#34d399"/>
+  <text x="70" y="318" class="stat-label">150+ Runnable Java Examples</text>
+
+  <circle cx="288" cy="314" r="4" fill="#38bdf8"/>
+  <text x="300" y="318" class="stat-label">23 GoF + Enterprise Patterns</text>
+
+  <circle cx="524" cy="314" r="4" fill="#fbbf24"/>
+  <text x="536" y="318" class="stat-label">4 Complete LLD Systems</text>
+
+  <circle cx="726" cy="314" r="4" fill="#fb7185"/>
+  <text x="738" y="318" class="stat-label">FAANG 5+ YOE Target</text>
+</svg>

@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" width="100%" role="img" aria-labelledby="title desc">
+  <title id="title">SOLID Principles to GoF Design Patterns Map</title>
+  <desc id="desc">Animated mapping from each SOLID principle (SRP, OCP, LSP, ISP, DIP) to its enabling GoF design patterns and real-world Java implementations.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .card { fill: #0f172a; stroke: #334155; stroke-width: 1.3; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12.5px; fill: #94a3b8; }
+      .col-hdr { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; fill: #94a3b8; letter-spacing: 0.8px; }
+      .solid-letter { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 800; text-anchor: middle; }
+      .solid-name { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f8fafc; }
+      .solid-desc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10.5px; fill: #94a3b8; }
+      .pat-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f8fafc; }
+      .pat-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #cbd5e1; }
+      .wire { fill: none; stroke-width: 2; stroke-dasharray: 6 5; animation: wireFlow 1.6s linear infinite; }
+      .row-1 { animation: rowGlow 5s ease-in-out infinite 0s; }
+      .row-2 { animation: rowGlow 5s ease-in-out infinite 1s; }
+      .row-3 { animation: rowGlow 5s ease-in-out infinite 2s; }
+      .row-4 { animation: rowGlow 5s ease-in-out infinite 3s; }
+      .row-5 { animation: rowGlow 5s ease-in-out infinite 4s; }
+      @keyframes wireFlow {
+        to { stroke-dashoffset: -22; }
+      }
+      @keyframes rowGlow {
+        0%, 100% { opacity: 0.88; }
+        15%, 25% { opacity: 1; filter: drop-shadow(0 0 6px rgba(129, 140, 248, 0.35)); }
+      }
+    </style>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg" x="0" y="0" width="960" height="460" rx="14" />
+  <rect class="panel" x="14" y="14" width="932" height="432" rx="12" />
+
+  <!-- Header -->
+  <text class="title" x="36" y="48">SOLID Principles to GoF Design Patterns Map</text>
+  <text class="subtitle" x="36" y="70">Translating Object-Oriented Design Principles into Concrete Java &amp; Spring Patterns</text>
+
+  <!-- Column Headers -->
+  <text class="col-hdr" x="36" y="98">SOLID PRINCIPLE</text>
+  <text class="col-hdr" x="455" y="98" text-anchor="middle">MECHANISM</text>
+  <text class="col-hdr" x="560" y="98">ENABLING GOF PATTERNS &amp; JAVA EXAMPLES</text>
+
+  <!-- Row 1: SRP -->
+  <g class="row-1">
+    <rect class="card" x="36" y="110" width="330" height="58" rx="8" stroke="#38bdf8" />
+    <rect x="46" y="120" width="38" height="38" rx="8" fill="#0c4a6e" />
+    <text class="solid-letter" x="65" y="146" fill="#38bdf8">S</text>
+    <text class="solid-name" x="96" y="134">Single Responsibility (SRP)</text>
+    <text class="solid-desc" x="96" y="152">One class, one reason to change</text>
+
+    <path class="wire" d="M 366 139 C 430 139, 490 139, 558 139" stroke="#38bdf8" />
+    <circle r="4" fill="#38bdf8">
+      <animateMotion dur="2.2s" repeatCount="indefinite" path="M 366 139 C 430 139, 490 139, 558 139" />
+    </circle>
+
+    <rect class="card" x="560" y="110" width="364" height="58" rx="8" stroke="#38bdf8" />
+    <text class="pat-title" x="576" y="134" fill="#38bdf8">Facade &amp; Strategy</text>
+    <text class="pat-code" x="576" y="152">UserService -&gt; Validator + Repository + Email</text>
+  </g>
+
+  <!-- Row 2: OCP -->
+  <g class="row-2">
+    <rect class="card" x="36" y="178" width="330" height="58" rx="8" stroke="#34d399" />
+    <rect x="46" y="188" width="38" height="38" rx="8" fill="#064e3b" />
+    <text class="solid-letter" x="65" y="214" fill="#34d399">O</text>
+    <text class="solid-name" x="96" y="202">Open / Closed (OCP)</text>
+    <text class="solid-desc" x="96" y="220">Open for extension, closed for modification</text>
+
+    <path class="wire" d="M 366 207 C 430 207, 490 207, 558 207" stroke="#34d399" />
+    <circle r="4" fill="#34d399">
+      <animateMotion dur="2.2s" begin="0.4s" repeatCount="indefinite" path="M 366 207 C 430 207, 490 207, 558 207" />
+    </circle>
+
+    <rect class="card" x="560" y="178" width="364" height="58" rx="8" stroke="#34d399" />
+    <text class="pat-title" x="576" y="202" fill="#34d399">Strategy &amp; Decorator</text>
+    <text class="pat-code" x="576" y="220">PaymentStrategy, BufferedInputStream</text>
+  </g>
+
+  <!-- Row 3: LSP -->
+  <g class="row-3">
+    <rect class="card" x="36" y="246" width="330" height="58" rx="8" stroke="#fbbf24" />
+    <rect x="46" y="256" width="38" height="38" rx="8" fill="#78350f" />
+    <text class="solid-letter" x="65" y="282" fill="#fbbf24">L</text>
+    <text class="solid-name" x="96" y="270">Liskov Substitution (LSP)</text>
+    <text class="solid-desc" x="96" y="288">Subtypes honor base contract invariants</text>
+
+    <path class="wire" d="M 366 275 C 430 275, 490 275, 558 275" stroke="#fbbf24" />
+    <circle r="4" fill="#fbbf24">
+      <animateMotion dur="2.2s" begin="0.8s" repeatCount="indefinite" path="M 366 275 C 430 275, 490 275, 558 275" />
+    </circle>
+
+    <rect class="card" x="560" y="246" width="364" height="58" rx="8" stroke="#fbbf24" />
+    <text class="pat-title" x="576" y="270" fill="#fbbf24">Polymorphic Subtypes &amp; Template Method</text>
+    <text class="pat-code" x="576" y="288">Shape &lt;- Rectangle / Square (no broken setters)</text>
+  </g>
+
+  <!-- Row 4: ISP -->
+  <g class="row-4">
+    <rect class="card" x="36" y="314" width="330" height="58" rx="8" stroke="#f472b6" />
+    <rect x="46" y="324" width="38" height="38" rx="8" fill="#831843" />
+    <text class="solid-letter" x="65" y="350" fill="#f472b6">I</text>
+    <text class="solid-name" x="96" y="338">Interface Segregation (ISP)</text>
+    <text class="solid-desc" x="96" y="356">Small role interfaces over fat contracts</text>
+
+    <path class="wire" d="M 366 343 C 430 343, 490 343, 558 343" stroke="#f472b6" />
+    <circle r="4" fill="#f472b6">
+      <animateMotion dur="2.2s" begin="1.2s" repeatCount="indefinite" path="M 366 343 C 430 343, 490 343, 558 343" />
+    </circle>
+
+    <rect class="card" x="560" y="314" width="364" height="58" rx="8" stroke="#f472b6" />
+    <text class="pat-title" x="576" y="338" fill="#f472b6">Adapter &amp; Role Interfaces</text>
+    <text class="pat-code" x="576" y="356">Workable | Manageable | Sleepable</text>
+  </g>
+
+  <!-- Row 5: DIP -->
+  <g class="row-5">
+    <rect class="card" x="36" y="382" width="330" height="58" rx="8" stroke="#818cf8" />
+    <rect x="46" y="392" width="38" height="38" rx="8" fill="#312e81" />
+    <text class="solid-letter" x="65" y="418" fill="#818cf8">D</text>
+    <text class="solid-name" x="96" y="406">Dependency Inversion (DIP)</text>
+    <text class="solid-desc" x="96" y="424">Depend on abstractions, not concretions</text>
+
+    <path class="wire" d="M 366 411 C 430 411, 490 411, 558 411" stroke="#818cf8" />
+    <circle r="4" fill="#818cf8">
+      <animateMotion dur="2.2s" begin="1.6s" repeatCount="indefinite" path="M 366 411 C 430 411, 490 411, 558 411" />
+    </circle>
+
+    <rect class="card" x="560" y="382" width="364" height="58" rx="8" stroke="#818cf8" />
+    <text class="pat-title" x="576" y="406" fill="#818cf8">Abstract Factory &amp; DI Container</text>
+    <text class="pat-code" x="576" y="424">@Autowired DatabaseRepository (MySQL/Postgres)</text>
+  </g>
+</svg>

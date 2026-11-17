@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">Observer Pattern vs. State Pattern</title>
+  <desc id="desc">Side-by-side animated comparison: Observer broadcasts events 1-to-N from Subject.notifyAll() to EmailListener, MetricsListener, and AuditListener, while State transitions an Order context through OrderDraft, Paid, Shipped, and Delivered.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .panel-title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 15px; font-weight: 700; fill: #f8fafc; }
+      .panel-tag { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; font-weight: 700; }
+      .box { fill: #0f172a; stroke: #475569; stroke-width: 1.5; rx: 8; }
+      .box-title { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 12.5px; font-weight: 700; fill: #e2e8f0; text-anchor: middle; }
+      .box-sub { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #94a3b8; text-anchor: middle; }
+      .edge-obs { stroke: #38bdf8; stroke-width: 2; fill: none; }
+      .edge-state { stroke: #f59e0b; stroke-width: 2; fill: none; }
+      .edge-label { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; fill: #fbbf24; text-anchor: middle; }
+      .footer-note { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #cbd5e1; text-anchor: middle; }
+
+      @keyframes obsGlow {
+        0%, 35% { stroke: #475569; }
+        50%, 82% { stroke: #38bdf8; stroke-width: 2.5; }
+        95%, 100% { stroke: #475569; }
+      }
+      @keyframes st1 {
+        0%, 20% { stroke: #10b981; stroke-width: 2.5; }
+        26%, 100% { stroke: #475569; }
+      }
+      @keyframes st2 {
+        0%, 24% { stroke: #475569; }
+        28%, 48% { stroke: #10b981; stroke-width: 2.5; }
+        54%, 100% { stroke: #475569; }
+      }
+      @keyframes st3 {
+        0%, 50% { stroke: #475569; }
+        54%, 74% { stroke: #10b981; stroke-width: 2.5; }
+        80%, 100% { stroke: #475569; }
+      }
+      @keyframes st4 {
+        0%, 76% { stroke: #475569; }
+        80%, 96% { stroke: #10b981; stroke-width: 2.5; }
+        100% { stroke: #475569; }
+      }
+      .obs-target { animation: obsGlow 3.6s infinite; }
+      .s1 { animation: st1 6s infinite; }
+      .s2 { animation: st2 6s infinite; }
+      .s3 { animation: st3 6s infinite; }
+      .s4 { animation: st4 6s infinite; }
+    </style>
+
+    <marker id="arrSky" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrAmber" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#f59e0b" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="960" height="460" rx="14" />
+
+  <!-- Header -->
+  <text x="32" y="38" class="title">Observer (Pub-Sub Fan-Out) vs. State (Internal State Machine)</text>
+  <text x="32" y="60" class="subtitle">Observer notifies N independent dependents on change; State alters object behavior across lifecycle transitions</text>
+
+  <!-- LEFT PANEL: OBSERVER -->
+  <rect x="24" y="80" width="444" height="352" class="panel" />
+  <text x="44" y="110" class="panel-title">1. Observer Pattern (1-to-N Fan-Out)</text>
+  <text x="44" y="128" class="panel-tag" fill="#38bdf8">DECOUPLED EVENT BROADCAST</text>
+
+  <!-- Subject -->
+  <rect x="44" y="218" width="144" height="72" class="box" />
+  <text x="116" y="246" class="box-title">Subject</text>
+  <text x="116" y="266" class="box-sub">notifyAll(event)</text>
+
+  <!-- Fan-out paths -->
+  <path d="M 188 238 C 235 238, 240 180, 282 180" class="edge-obs" marker-end="url(#arrSky)" />
+  <path d="M 188 254 L 282 254" class="edge-obs" marker-end="url(#arrSky)" />
+  <path d="M 188 270 C 235 270, 240 328, 282 328" class="edge-obs" marker-end="url(#arrSky)" />
+
+  <!-- Observers -->
+  <rect x="286" y="152" width="160" height="56" class="box obs-target" />
+  <text x="366" y="176" class="box-title">EmailListener</text>
+  <text x="366" y="194" class="box-sub">sendReceipt()</text>
+
+  <rect x="286" y="226" width="160" height="56" class="box obs-target" />
+  <text x="366" y="250" class="box-title">MetricsListener</text>
+  <text x="366" y="268" class="box-sub">recordLatency()</text>
+
+  <rect x="286" y="300" width="160" height="56" class="box obs-target" />
+  <text x="366" y="324" class="box-title">AuditListener</text>
+  <text x="366" y="342" class="box-sub">appendLog()</text>
+
+  <!-- Animated event pulses along all 3 fan-out paths -->
+  <circle r="5.5" fill="#38bdf8" stroke="#e0f2fe" stroke-width="1.5">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 188 238 C 235 238, 240 180, 282 180" />
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.7;1" dur="3.6s" repeatCount="indefinite" />
+  </circle>
+  <circle r="5.5" fill="#a855f7" stroke="#f3e8ff" stroke-width="1.5">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 188 254 L 282 254" />
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.7;1" dur="3.6s" repeatCount="indefinite" />
+  </circle>
+  <circle r="5.5" fill="#38bdf8" stroke="#e0f2fe" stroke-width="1.5">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 188 270 C 235 270, 240 328, 282 328" />
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.7;1" dur="3.6s" repeatCount="indefinite" />
+  </circle>
+
+  <text x="246" y="408" class="footer-note">Listeners subscribe/unsubscribe dynamically at runtime</text>
+
+  <!-- RIGHT PANEL: STATE -->
+  <rect x="492" y="80" width="444" height="352" class="panel" />
+  <text x="512" y="110" class="panel-title">2. State Pattern (Lifecycle Machine)</text>
+  <text x="512" y="128" class="panel-tag" fill="#f59e0b">BEHAVIOR DELEGATED TO CURRENT STATE</text>
+
+  <!-- Context Header -->
+  <rect x="594" y="148" width="240" height="44" class="box" />
+  <text x="714" y="168" class="box-title">Context: Order</text>
+  <text x="714" y="184" class="box-sub">order.setState(nextState)</text>
+
+  <!-- State Nodes (2x2 Grid Clockwise) -->
+  <rect x="522" y="218" width="150" height="58" class="box s1" />
+  <text x="597" y="243" class="box-title">OrderDraft</text>
+  <text x="597" y="261" class="box-sub">can cancel / pay</text>
+
+  <rect x="756" y="218" width="150" height="58" class="box s2" />
+  <text x="831" y="243" class="box-title">Paid</text>
+  <text x="831" y="261" class="box-sub">ready to ship</text>
+
+  <rect x="756" y="316" width="150" height="58" class="box s3" />
+  <text x="831" y="341" class="box-title">Shipped</text>
+  <text x="831" y="359" class="box-sub">in transit</text>
+
+  <rect x="522" y="316" width="150" height="58" class="box s4" />
+  <text x="597" y="341" class="box-title">Delivered</text>
+  <text x="597" y="359" class="box-sub">terminal state</text>
+
+  <!-- State Transitions -->
+  <line x1="672" y1="247" x2="752" y2="247" class="edge-state" marker-end="url(#arrAmber)" />
+  <text x="714" y="238" class="edge-label">pay()</text>
+
+  <line x1="831" y1="276" x2="831" y2="312" class="edge-state" marker-end="url(#arrAmber)" />
+  <text x="860" y="298" class="edge-label">ship()</text>
+
+  <line x1="756" y1="345" x2="676" y2="345" class="edge-state" marker-end="url(#arrAmber)" />
+  <text x="714" y="336" class="edge-label">deliver()</text>
+
+  <!-- Animated Active State Token -->
+  <circle r="6.5" fill="#10b981" stroke="#d1fae5" stroke-width="2">
+    <animateMotion dur="6s" repeatCount="indefinite" path="M 597 247 L 831 247 L 831 345 L 597 345" keyPoints="0;0.33;0.66;1" keyTimes="0;0.33;0.66;1" calcMode="linear" />
+    <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.08;0.85;0.95;1" dur="6s" repeatCount="indefinite" />
+  </circle>
+
+  <text x="714" y="408" class="footer-note">Eliminates giant switch/if-else blocks on order status</text>
+</svg>

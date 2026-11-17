@@ -1,14 +1,121 @@
 # Behavioral Design Patterns: In-Depth Guide for FAANG Interviews
 
+## Table of Contents
+
+- [Overview](#overview)
+- [1. Strategy Pattern](#1-strategy-pattern)
+- [2. Observer Pattern](#2-observer-pattern)
+- [3. Template Method Pattern](#3-template-method-pattern)
+- [4. Command Pattern](#4-command-pattern)
+- [5. Chain of Responsibility Pattern](#5-chain-of-responsibility-pattern)
+- [6. State Pattern](#6-state-pattern)
+- [7. Iterator Pattern](#7-iterator-pattern)
+- [Summary of Behavioral Patterns](#summary-of-behavioral-patterns)
+
+---
+
 ## Overview
-Behavioral patterns focus on object collaboration and the distribution of responsibility. They define how objects interact and distribute work, making communication more flexible and helping design algorithms that are decoupled from the objects that use them.
+
+Behavioral patterns focus on **object collaboration** and the **distribution of responsibility**. They define how objects interact and distribute work, making communication more flexible and helping design algorithms that are decoupled from the objects that use them.
+
+```mermaid
+flowchart LR
+    BP["Behavioral Patterns"] --> ALG["Algorithm & Execution"]
+    BP --> EVT["State & Notification"]
+    BP --> RTE["Routing & Traversal"]
+
+    ALG --> S["Strategy: Swap algorithms at runtime"]
+    ALG --> TM["Template Method: Fixed skeleton, subclass steps"]
+    ALG --> CMD["Command: Reify requests for undo & queuing"]
+
+    EVT --> OBS["Observer: 1-to-N event broadcast"]
+    EVT --> ST["State: Behavior mutates with internal state"]
+
+    RTE --> COR["Chain of Responsibility: Handler pipeline"]
+    RTE --> IT["Iterator: Uniform sequential traversal"]
+
+    classDef root fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef group fill:#1e293b,stroke:#a855f7,stroke-width:1.5px,color:#f8fafc
+    classDef leaf fill:#0f172a,stroke:#10b981,stroke-width:1.5px,color:#e2e8f0
+
+    class BP root
+    class ALG,EVT,RTE group
+    class S,TM,CMD,OBS,ST,COR,IT leaf
+```
+
+| Focus Area | Patterns | Core Mechanism |
+|---|---|---|
+| **Encapsulating Behavior** | Strategy, Template Method, Command | Composition (`Strategy`, `Command`) or inheritance (`Template Method`) |
+| **Managing State & Events** | Observer, State | Pub-sub fan-out (`Observer`) vs. state-driven delegation (`State`) |
+| **Decoupling Flow & Access** | Chain of Responsibility, Iterator | Linked handler pipeline (`CoR`) vs. cursor abstraction (`Iterator`) |
+
+> [!TIP]
+> In FAANG system design and LLD interviews, behavioral patterns are your primary tool for eliminating **Open/Closed Principle violations** (giant `if/else` or `switch` blocks) and **tight coupling** between producers and consumers.
 
 ---
 
 ## 1. Strategy Pattern
 
 ### Intent
-Define a family of algorithms, encapsulate each one, and make them interchangeable.
+Define a family of algorithms, encapsulate each one, and make them interchangeable at runtime.
+
+### Architecture & Flow
+
+```mermaid
+classDiagram
+    class GoodPaymentProcessor {
+        -PaymentStrategy strategy
+        +setPaymentStrategy(PaymentStrategy strategy) void
+        +processPayment(double amount) boolean
+    }
+    class PaymentStrategy {
+        <<Interface>>
+        +pay(double amount) void
+        +validatePayment() boolean
+    }
+    class CreditCardStrategy {
+        -String cardNumber
+        -String cvv
+        +pay(double amount) void
+        +validatePayment() boolean
+    }
+    class PayPalStrategy {
+        -String email
+        -String password
+        +pay(double amount) void
+        +validatePayment() boolean
+    }
+    class GooglePayStrategy {
+        -String phoneNumber
+        +pay(double amount) void
+        +validatePayment() boolean
+    }
+
+    GoodPaymentProcessor o-- PaymentStrategy : delegates to
+    PaymentStrategy <|.. CreditCardStrategy
+    PaymentStrategy <|.. PayPalStrategy
+    PaymentStrategy <|.. GooglePayStrategy
+```
+
+```mermaid
+flowchart TD
+    REQ["processPayment(amount)"] --> CHK{"strategy != null?"}
+    CHK -- "No" --> FAIL1["Return false: No strategy set"]
+    CHK -- "Yes" --> VAL{"strategy.validatePayment()"}
+    VAL -- "False" --> FAIL2["Return false: Validation failed"]
+    VAL -- "True" --> PAY["strategy.pay(amount)"]
+    PAY --> OK["Return true"]
+
+    classDef start fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef dec fill:#1e293b,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    classDef err fill:#4c0519,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    classDef ok fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5
+
+    class REQ,PAY start
+    class CHK,VAL dec
+    class FAIL1,FAIL2 err
+    class OK ok
+```
 
 ### Problem: Conditional Logic Explosion
 
@@ -282,17 +389,17 @@ public class CompressionStrategyDemo {
 }
 ```
 
-### When to Use
-- Multiple algorithms for a task
-- Runtime selection of algorithm
-- Avoiding conditional logic
-- Family of related algorithms
-- Sorting, compression, payment processing
+### Trade-Offs
 
-### When NOT to Use
-- Single algorithm only
-- Algorithms rarely change
-- Performance-critical code (slight overhead)
+| When to Use | When NOT to Use |
+|---|---|
+| Multiple algorithms for a single task | Single algorithm only |
+| Runtime selection or swapping of algorithm | Algorithms rarely or never change |
+| Avoiding `if/else` or `switch` conditional explosion | Performance-critical inner loops sensitive to virtual dispatch |
+| Family of related algorithms (sorting, compression, payment) | Over-engineering simple 2-branch logic |
+
+> [!IMPORTANT]
+> In modern Java (8+), functional interfaces like `Comparator<T>` and lambdas often replace boilerplate concrete strategy classes when the strategy has only a single method.
 
 ---
 
@@ -300,6 +407,55 @@ public class CompressionStrategyDemo {
 
 ### Intent
 Define a one-to-many dependency where when one object changes state, all its dependents are notified automatically.
+
+![Observer vs State](./assets/03-observer-vs-state.svg)
+
+### Architecture & Notification Sequence
+
+```mermaid
+classDiagram
+    class WeatherStation {
+        -double temperature
+        -List~Observer~ observers
+        +addObserver(Observer observer) void
+        +removeObserver(Observer observer) void
+        +notifyObservers() void
+        +setTemperature(double temp) void
+    }
+    class Observer {
+        <<Interface>>
+        +update(double temperature) void
+    }
+    class TemperatureDisplay {
+        -String location
+        +update(double temperature) void
+    }
+    class MobileApp {
+        -String userId
+        +update(double temperature) void
+    }
+
+    WeatherStation o-- Observer : notifies
+    Observer <|.. TemperatureDisplay
+    Observer <|.. MobileApp
+```
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Station as WeatherStation
+    participant Display as TemperatureDisplay
+    participant App as MobileApp
+
+    Client->>Station: addObserver(Display)
+    Client->>Station: addObserver(App)
+    Client->>Station: setTemperature(25.5)
+    activate Station
+    Station->>Station: notifyObservers()
+    Station->>Display: update(25.5)
+    Station->>App: update(25.5)
+    deactivate Station
+```
 
 ### Problem: Tight Coupling Between Components
 
@@ -500,23 +656,73 @@ public class SpringWeatherStation {
 }
 ```
 
-### When to Use
-- Event-driven systems
-- MVC architectures (Model notifies Views)
-- Real-time updates (weather, stock prices)
-- Publish-Subscribe messaging
+### Trade-Offs
 
-### When NOT to Use
-- Simple, direct communication is enough
-- Order of notifications matters
-- One-way relationships
+| When to Use | When NOT to Use |
+|---|---|
+| Event-driven systems & UI listeners | Simple, direct communication is enough |
+| MVC architectures (Model notifies Views) | Strict notification ordering is required |
+| Real-time updates (weather, stock prices) | Simple one-way relationships |
+| Publish-Subscribe messaging | Memory-leak-prone lifecycles without weak refs / unsubscribe |
+
+> [!WARNING]
+> Always provide a mechanism to **unsubscribe** (`removeObserver`) or use weak references—forgetting to detach observers is a classic source of **memory leaks** ("lapsed listener problem").
 
 ---
 
 ## 3. Template Method Pattern
 
 ### Intent
-Define the skeleton of an algorithm in a base class, letting subclasses override specific steps.
+Define the skeleton of an algorithm in a base class, letting subclasses override specific steps without changing the algorithm's structure.
+
+### Architecture & Execution Skeleton
+
+```mermaid
+classDiagram
+    class DatabaseOperation {
+        <<Abstract>>
+        +execute() void
+        #validateInput()* void
+        #performOperation()* void
+        #openConnection() void
+        #commitTransaction() void
+        #closeConnection() void
+    }
+    class InsertOperation {
+        -String data
+        #validateInput() void
+        #performOperation() void
+    }
+    class UpdateOperation {
+        -String id
+        -String data
+        #validateInput() void
+        #performOperation() void
+    }
+    class DeleteOperation {
+        -String id
+        #validateInput() void
+        #performOperation() void
+    }
+
+    DatabaseOperation <|-- InsertOperation
+    DatabaseOperation <|-- UpdateOperation
+    DatabaseOperation <|-- DeleteOperation
+```
+
+```mermaid
+flowchart TD
+    S1["1. openConnection() — Base default"] --> S2["2. validateInput() — Abstract Hook"]
+    S2 --> S3["3. performOperation() — Abstract Hook"]
+    S3 --> S4["4. commitTransaction() — Base default"]
+    S4 --> S5["5. closeConnection() — Base default"]
+
+    classDef fixed fill:#1e293b,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef hook fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5
+
+    class S1,S4,S5 fixed
+    class S2,S3 hook
+```
 
 ### Real-World Example: Database Operations
 
@@ -661,23 +867,87 @@ public class UserRepositoryWithTemplate {
 }
 ```
 
-### When to Use
-- Algorithm has steps that vary between implementations
-- Common code should not be duplicated
-- Subclasses should only override specific steps
-- Enforcing algorithm structure
+### Trade-Offs
 
-### When NOT to Use
-- Simple algorithms without variation
-- Only one implementation exists
-- Inheritance hierarchy not justified
+| When to Use | When NOT to Use |
+|---|---|
+| Algorithm has steps that vary between implementations | Simple algorithms without step variation |
+| Common boilerplate (e.g., connection/cleanup) shouldn't be duplicated | Only one implementation exists |
+| Subclasses should only override specific hooks | Inheritance hierarchy is not justified (prefer Strategy) |
+| Enforcing invariant algorithm ordering via `final` method | Runtime swapping of individual steps is needed |
+
+> [!TIP]
+> Always mark the template method `final` (like `public final void execute()`) so subclasses cannot accidentally break the invariant step ordering.
 
 ---
 
 ## 4. Command Pattern
 
 ### Intent
-Encapsulate a request as an object, allowing you to parameterize clients with different requests, queue requests, and log requests.
+Encapsulate a request as an object, allowing you to parameterize clients with different requests, queue requests, log requests, and support undoable operations.
+
+### Architecture & Undo/Redo Flow
+
+```mermaid
+classDiagram
+    class EditorInvoker {
+        -Deque~Command~ history
+        -Deque~Command~ redoStack
+        +executeCommand(Command command) void
+        +undo() void
+        +redo() void
+    }
+    class Command {
+        <<Interface>>
+        +execute() void
+        +undo() void
+    }
+    class InsertCommand {
+        -TextEditor editor
+        -String textToInsert
+        +execute() void
+        +undo() void
+    }
+    class DeleteCommand {
+        -TextEditor editor
+        -int length
+        -String deletedText
+        +execute() void
+        +undo() void
+    }
+    class TextEditor {
+        <<Receiver>>
+        -StringBuilder content
+        +insertText(String text) void
+        +deleteText(int length) void
+        +getContent() String
+    }
+
+    EditorInvoker o-- Command : manages stacks
+    Command <|.. InsertCommand
+    Command <|.. DeleteCommand
+    InsertCommand --> TextEditor : mutates
+    DeleteCommand --> TextEditor : mutates
+```
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Invoker as EditorInvoker
+    participant Cmd as InsertCommand
+    participant Editor as TextEditor
+
+    Client->>Invoker: executeCommand(Cmd)
+    Invoker->>Cmd: execute()
+    Cmd->>Editor: insertText("Hello ")
+    Invoker->>Invoker: history.push(Cmd) & redoStack.clear()
+
+    Client->>Invoker: undo()
+    Invoker->>Invoker: cmd = history.pop()
+    Invoker->>Cmd: undo()
+    Cmd->>Editor: deleteText(6)
+    Invoker->>Invoker: redoStack.push(Cmd)
+```
 
 ### Real-World Example: Undo/Redo System
 
@@ -872,17 +1142,17 @@ public class TaskSchedulerDemo {
 }
 ```
 
-### When to Use
-- Undo/Redo functionality
-- Command queuing and execution
-- Logging requests
-- Scheduling and batch processing
-- Transaction systems
+### Trade-Offs
 
-### When NOT to Use
-- Simple, direct method calls are sufficient
-- No need for undo/redo
-- No command history needed
+| When to Use | When NOT to Use |
+|---|---|
+| Undo / Redo functionality (`history` + `redoStack`) | Simple, direct method calls are sufficient |
+| Command queuing, delayed execution, or thread pools | No need for undo/redo or auditing |
+| Logging requests / transaction replay | No command history needed |
+| Macro commands (composing multiple actions) | Tight memory constraints with large state snapshots |
+
+> [!IMPORTANT]
+> Executing a new command **must clear the `redoStack`** (`redoStack.clear()`), otherwise redoing an invalidated future action will corrupt document state.
 
 ---
 
@@ -890,6 +1160,60 @@ public class TaskSchedulerDemo {
 
 ### Intent
 Pass a request along a chain of handlers where each handler decides either to process it or pass it to the next handler.
+
+![Chain of Responsibility Filter Pipeline](./assets/03-chain-of-responsibility.svg)
+
+### Architecture & Approval Routing
+
+```mermaid
+classDiagram
+    class LogHandler {
+        <<Abstract>>
+        #LogHandler nextHandler
+        +setNextHandler(LogHandler nextHandler) void
+        +handle(LoggingRequest request) void
+        #canHandle(LoggingRequest request)* boolean
+        #process(LoggingRequest request)* void
+    }
+    class DebugHandler {
+        #canHandle(LoggingRequest request) boolean
+        #process(LoggingRequest request) void
+    }
+    class InfoHandler {
+        #canHandle(LoggingRequest request) boolean
+        #process(LoggingRequest request) void
+    }
+    class ErrorHandler {
+        #canHandle(LoggingRequest request) boolean
+        #process(LoggingRequest request) void
+    }
+
+    LogHandler --> LogHandler : nextHandler
+    LogHandler <|-- DebugHandler
+    LogHandler <|-- InfoHandler
+    LogHandler <|-- ErrorHandler
+```
+
+```mermaid
+flowchart LR
+    REQ["ExpenseRequest(amount)"] --> M{"amount &lt;= 1000?"}
+    M -- "Yes" --> MOK["ManagerApprover.approve()"]
+    M -- "No" --> D{"amount &lt;= 5000?"}
+    D -- "Yes" --> DOK["DirectorApprover.approve()"]
+    D -- "No" --> C{"nextHandler != null?"}
+    C -- "Yes" --> COK["CEOApprover.approve()"]
+    C -- "No" --> REJ["REJECTED"]
+
+    classDef dec fill:#1e293b,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7
+    classDef app fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5
+    classDef rej fill:#4c0519,stroke:#f43f5e,stroke-width:1.5px,color:#ffe4e6
+    classDef req fill:#0f172a,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+
+    class REQ req
+    class M,D,C dec
+    class MOK,DOK,COK app
+    class REJ rej
+```
 
 ### Real-World Example: Request Filtering
 
@@ -1108,24 +1432,44 @@ public class ApprovalChainDemo {
 }
 ```
 
-### When to Use
-- Request processing should be handled by multiple handlers
-- Handlers are determined at runtime
-- Event handling in UI frameworks
-- Middleware in web frameworks
-- Logging with different levels
+### Trade-Offs
 
-### When NOT to Use
-- Single handler is sufficient
-- Handler order is complex
-- Performance is critical (chain traversal)
+| When to Use | When NOT to Use |
+|---|---|
+| Request should be handled by multiple handlers | Single handler is always sufficient |
+| Handler chain is composed or reordered at runtime | Handler order is overly complex or fragile |
+| Event bubbling in UI frameworks | Latency-critical hot paths (deep chain traversal) |
+| Middleware / HTTP filter pipelines (Spring Security) | Guaranteed delivery is required without a fallback sink |
+
+> [!TIP]
+> Distinguish the **two CoR variants** in interviews: **Pure CoR** (only one handler processes the request, e.g., `ApprovalHandler`) vs. **Pipeline/Filter CoR** (every handler intercepts and forwards via `chain.doFilter()`, e.g., Spring `FilterChain`).
 
 ---
 
 ## 6. State Pattern
 
 ### Intent
-Allow an object to alter its behavior when its internal state changes.
+Allow an object to alter its behavior when its internal state changes, making it appear as if the object changed its class.
+
+### State Machines
+
+```mermaid
+stateDiagram-v2
+    [*] --> PendingState
+    PendingState --> ProcessingState : process()
+    ProcessingState --> ShippedState : ship()
+    ShippedState --> DeliveredState : deliver()
+    DeliveredState --> [*]
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> IdleState
+    IdleState --> MoneyInsertedState : insertMoney()
+    MoneyInsertedState --> MoneyInsertedState : insertMoney()
+    MoneyInsertedState --> DispensingState : selectProduct()
+    DispensingState --> IdleState : dispenseProduct()
+```
 
 ### Real-World Example: Order Status Management
 
@@ -1394,23 +1738,70 @@ public class VendingMachineDemo {
 }
 ```
 
-### When to Use
-- Object behavior changes based on internal state
-- Complex conditional logic based on state
-- State transitions are well-defined
-- State machines (order processing, workflow)
+### Trade-Offs
 
-### When NOT to Use
-- Simple objects with no state variation
-- Few states (use if-else instead)
-- Performance-critical code
+| When to Use | When NOT to Use |
+|---|---|
+| Object behavior changes dramatically based on internal state | Simple objects with no state-dependent behavior |
+| Complex conditional logic (`switch`/`if-else`) scattered across methods | Only 2–3 trivial states (simple `if-else` or `enum` suffices) |
+| State transitions are well-defined | Performance-critical loops allocating new state objects |
+| State machines (order processing, vending machine, TCP connection) | States don't share a common behavioral interface |
+
+> [!NOTE]
+> **Strategy vs. State**: Both share the exact same UML structure (composition + delegation), but in **Strategy** the client chooses the algorithm externally and strategies are unaware of each other, whereas in **State** the context or states themselves drive transitions internally.
 
 ---
 
 ## 7. Iterator Pattern
 
 ### Intent
-Provide a way to access elements of a collection sequentially without exposing the underlying representation.
+Provide a way to access elements of an aggregate collection sequentially without exposing its underlying representation (array, list, tree, graph).
+
+### Architecture & Traversal Flow
+
+```mermaid
+classDiagram
+    class IterableCollection~T~ {
+        <<Interface>>
+        +createIterator() Iterator~T~
+    }
+    class Iterator~T~ {
+        <<Interface>>
+        +hasNext() boolean
+        +next() T
+    }
+    class BookShelf {
+        -List~Book~ books
+        +addBook(Book book) void
+        +createIterator() Iterator~Book~
+    }
+    class BookShelfIterator {
+        -List~Book~ books
+        -int index
+        +hasNext() boolean
+        +next() Book
+    }
+
+    IterableCollection <|.. BookShelf
+    Iterator <|.. BookShelfIterator
+    BookShelf ..> BookShelfIterator : creates
+```
+
+```mermaid
+flowchart LR
+    C["Client"] -->|"1. createIterator()"| BS["BookShelf"]
+    BS -->|"2. returns"| IT["BookShelfIterator"]
+    C -->|"3. while (hasNext())"| IT
+    IT -->|"4. next() returns Book"| C
+
+    classDef client fill:#0f172a,stroke:#38bdf8,stroke-width:1.5px,color:#f8fafc
+    classDef col fill:#1e293b,stroke:#a855f7,stroke-width:1.5px,color:#f8fafc
+    classDef it fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5
+
+    class C client
+    class BS col
+    class IT it
+```
 
 ### Real-World Example: Custom Iterator
 
@@ -1524,27 +1915,52 @@ public class JavaIteratorDemo {
 }
 ```
 
-### When to Use
-- Accessing elements of collection without exposing structure
-- Multiple iteration strategies
-- Uniform interface for different collections
-- Java's Iterator and Iterable interfaces
+### Trade-Offs
 
-### When NOT to Use
-- Simple array/list access is sufficient
-- Collection type is fixed
+| When to Use | When NOT to Use |
+|---|---|
+| Accessing collection elements without exposing internal structure | Direct random access (`list.get(i)`) on a simple array/list suffices |
+| Supporting multiple traversal strategies (BFS, DFS, reverse) | Collection type is fixed and never changes |
+| Providing a uniform interface across heterogeneous collections | Overhead of iterator object allocation in ultra-tight loops |
+| Integrating with Java's `for-each` loop (`Iterable<T>`) | — |
+
+> [!TIP]
+> In Java interviews, implement `java.lang.Iterable<T>` so your custom data structure works seamlessly with enhanced `for (T item : collection)` loops and `Spliterator` streams.
 
 ---
 
 ## Summary of Behavioral Patterns
 
-| Pattern | Purpose | Key Use Case |
-|---------|---------|--------------|
-| **Strategy** | Encapsulate algorithms | Payment methods, sorting |
-| **Observer** | Notify multiple objects | Event handling |
-| **Template Method** | Define algorithm skeleton | Database operations |
-| **Command** | Encapsulate requests | Undo/Redo, scheduling |
-| **Chain of Responsibility** | Pass request through chain | Logging, filtering |
-| **State** | Alter behavior by state | Order processing, vending machine |
-| **Iterator** | Access collection elements | Collection traversal |
+### Interview Pattern Selection Guide
 
+```mermaid
+flowchart TD
+    Q1{"What problem are you solving?"} -->|Swap algorithms at runtime| P1["Strategy"]
+    Q1 -->|Fixed skeleton, custom steps| P2["Template Method"]
+    Q1 -->|1-to-N event notification| P3["Observer"]
+    Q1 -->|Undo/Redo or task queue| P4["Command"]
+    Q1 -->|Multi-step filter / approval| P5["Chain of Responsibility"]
+    Q1 -->|Lifecycle state transitions| P6["State"]
+    Q1 -->|Hide collection internals| P7["Iterator"]
+
+    classDef q fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef p fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5
+
+    class Q1 q
+    class P1,P2,P3,P4,P5,P6,P7 p
+```
+
+### Quick Reference Table
+
+| Pattern | Purpose | Key Use Case | Java / Spring Example |
+|---|---|---|---|
+| **Strategy** | Encapsulate interchangeable algorithms | Payment methods, sorting, compression | `Comparator<T>`, `Arrays.sort()` |
+| **Observer** | Notify multiple objects of state changes | Event handling, pub-sub | `ApplicationEventPublisher`, RxJava `PublishSubject` |
+| **Template Method** | Define algorithm skeleton in base class | Database operations, workflows | `JdbcTemplate`, `AbstractList` |
+| **Command** | Encapsulate requests as objects | Undo/Redo, task scheduling | `Runnable`, `Callable` |
+| **Chain of Responsibility** | Pass request through handler chain | Logging, HTTP filters, approvals | Servlet `FilterChain`, Spring Security |
+| **State** | Alter behavior by internal state | Order processing, vending machine | Order / Workflow state machines |
+| **Iterator** | Access collection elements sequentially | Collection traversal | `java.util.Iterator`, `Iterable<T>` |
+
+> [!TIP]
+> When asked **"Strategy vs. Template Method?"** in an interview: **Strategy** uses **composition** to swap the *entire* algorithm at runtime, whereas **Template Method** uses **inheritance** to let subclasses override *specific steps* of a fixed algorithm skeleton.

@@ -1,34 +1,100 @@
 # Creational Design Patterns: In-Depth Guide for FAANG Interviews
 
 ## Overview
-Creational patterns focus on object creation mechanisms. They abstract the instantiation process to make systems more independent of how objects are created, composed, and represented. For FAANG companies, understanding creational patterns is crucial as they form the backbone of frameworks like Spring and design decisions in microservices.
+Creational patterns abstract the object instantiation process so systems remain independent of how objects are created, composed, and represented. In FAANG interviews and production Java systems (such as Spring, JDBC, and `java.util.concurrent`), they govern **instance lifecycle**, **polymorphic creation**, and **complex object assembly**.
+
+```mermaid
+flowchart LR
+    Root["Creational Patterns"] --> Lifecycle["Instance Lifecycle"]
+    Root --> Poly["Polymorphic Creation"]
+    Root --> Assembly["Assembly &amp; Replication"]
+
+    Lifecycle --> S["Singleton: One shared instance"]
+    Lifecycle --> OP["Object Pool: Bounded reusable instances"]
+
+    Poly --> FM["Factory Method: Subclass picks 1 product"]
+    Poly --> AF["Abstract Factory: Family of related products"]
+
+    Assembly --> B["Builder: Step-by-step immutable object"]
+    Assembly --> P["Prototype: Clone existing template"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class Root blue
+    class Lifecycle,Poly,Assembly purple
+    class S,FM,B green
+    class OP,AF,P amber
+```
+
+---
+
+## Table of Contents
+1. [1. Singleton Pattern](#1-singleton-pattern)
+2. [2. Factory Method Pattern](#2-factory-method-pattern)
+3. [3. Abstract Factory Pattern](#3-abstract-factory-pattern)
+4. [4. Builder Pattern](#4-builder-pattern)
+5. [5. Prototype Pattern](#5-prototype-pattern)
+6. [6. Object Pool Pattern](#6-object-pool-pattern)
+7. [Summary Table: When to Use Each Creational Pattern](#summary-table-when-to-use-each-creational-pattern)
 
 ---
 
 ## 1. Singleton Pattern
 
 ### Intent
-Ensure a class has only one instance and provide a global point of access to it.
+Ensure a class has **only one instance** and provide a **global point of access** to it.
 
 ### Problem It Solves
-- Multiple instances create resource waste (e.g., database connections)
-- Inconsistent state across the application
-- Coordinating access to shared resources
-- Logging systems, configuration managers, thread pools
+- Prevents resource waste from duplicate heavy objects (e.g., database connection pools, thread pools).
+- Maintains consistent global state (e.g., configuration managers, logging systems, caches).
+- Coordinates synchronized access to shared resources.
 
-### Text-Based UML
-```
-┌──────────────────────┐
-│     Singleton        │
-├──────────────────────┤
-│ - instance: static   │
-│ - Singleton()        │
-├──────────────────────┤
-│ + getInstance()      │
-└──────────────────────┘
+![Singleton Thread-Safety: DCL vs Bill Pugh Holder vs Enum](./assets/01-singleton-dcl-vs-holder.svg)
+
+```mermaid
+classDiagram
+    class Singleton {
+        -Singleton instance$
+        -Singleton()
+        +getInstance()$ Singleton
+    }
 ```
 
-### 1.1 Eager Initialization (Thread-Safe but Wasteful)
+### 1.1 Implementation Variants Compared
+
+| Variant | Lazy? | Thread-Safe? | Reflection / Serialization Safe? | Performance | Verdict |
+|---|---|---|---|---|---|
+| **Eager Initialization** | No | Yes (classloader) | No | Fast | Good only if always used |
+| **Synchronized Method** | Yes | Yes | No | Slow (lock on every call) | Avoid in high concurrency |
+| **Double-Checked Locking (`volatile`)** | Yes | Yes | No | Fast after init | Good if args needed at runtime |
+| **Bill Pugh Static Holder** | Yes | Yes (JVM `<clinit>`) | No (needs guards) | Fastest lazy | **Recommended** for classes |
+| **Enum Singleton** | On 1st access | Yes (JVM) | **Yes (built-in)** | Fastest | **Most bulletproof** |
+
+```mermaid
+flowchart TD
+    Start["Need a Singleton?"] --> Q1{"Need protection against Reflection &amp; Serialization?"}
+    Q1 -- "Yes" --> Enum["Use Enum Singleton"]
+    Q1 -- "No" --> Q2{"Need runtime parameters at init?"}
+    Q2 -- "Yes" --> DCL["Use Double-Checked Locking with volatile"]
+    Q2 -- "No" --> Q3{"Must defer creation until first use?"}
+    Q3 -- "Yes" --> BP["Use Bill Pugh Static Inner Holder"]
+    Q3 -- "No" --> Eager["Use Eager static final"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class Start,Q1,Q2,Q3 blue
+    class Enum,BP green
+    class DCL amber
+    class Eager purple
+```
+
+### 1.2 Eager Initialization (Thread-Safe but Wasteful)
 
 ```java
 public class EagerSingleton {
@@ -36,7 +102,6 @@ public class EagerSingleton {
     private static final EagerSingleton instance = new EagerSingleton();
 
     private EagerSingleton() {
-        // Prevent instantiation
         if (instance != null) {
             throw new IllegalStateException("Singleton already initialized");
         }
@@ -46,38 +111,19 @@ public class EagerSingleton {
         return instance;
     }
 }
-
-// Usage
-public class Main {
-    public static void main(String[] args) {
-        EagerSingleton singleton1 = EagerSingleton.getInstance();
-        EagerSingleton singleton2 = EagerSingleton.getInstance();
-        System.out.println(singleton1 == singleton2); // true
-    }
-}
 ```
+- **Pros:** Simple, thread-safe by JVM classloader guarantees.
+- **Cons:** Wastes memory if never used; cannot pass runtime initialization parameters.
 
-**Pros:**
-- Thread-safe by nature (class loader guarantees)
-- Simple and straightforward
-
-**Cons:**
-- Instance created even if never used (wastes memory)
-- Difficult to control initialization parameters
-- Cannot delay initialization
-
----
-
-### 1.2 Lazy Initialization with Synchronization (Simple but Slow)
+### 1.3 Lazy Initialization with Synchronization (Simple but Slow)
 
 ```java
 public class LazySingleton {
     private static LazySingleton instance;
 
-    private LazySingleton() {
-    }
+    private LazySingleton() {}
 
-    // Synchronized method - thread-safe but performance bottleneck
+    // Synchronized method - thread-safe but every call acquires a monitor lock
     public synchronized static LazySingleton getInstance() {
         if (instance == null) {
             instance = new LazySingleton();
@@ -85,52 +131,22 @@ public class LazySingleton {
         return instance;
     }
 }
-
-// Performance Issue Demo
-public class PerformanceTest {
-    public static void main(String[] args) throws InterruptedException {
-        long start = System.currentTimeMillis();
-
-        // Simulating 1000 concurrent requests
-        for (int i = 0; i < 1000; i++) {
-            new Thread(() -> {
-                LazySingleton.getInstance(); // Synchronized call - bottleneck
-            }).start();
-        }
-
-        Thread.sleep(2000);
-        long end = System.currentTimeMillis();
-        System.out.println("Time: " + (end - start) + "ms");
-    }
-}
 ```
+- **Pros:** Thread-safe and lazy.
+- **Cons:** Severe contention bottleneck under high concurrency because every `getInstance()` call synchronizes.
 
-**Pros:**
-- Thread-safe
-- Lazy initialization (created only when needed)
-
-**Cons:**
-- Severe performance penalty due to synchronization
-- Every getInstance() call is synchronized
-- Not suitable for high-concurrency scenarios
-
----
-
-### 1.3 Double-Checked Locking (Good Performance + Thread Safety)
+### 1.4 Double-Checked Locking (Good Performance + Thread Safety)
 
 ```java
 public class DoubleCheckedLockingSingleton {
     private static volatile DoubleCheckedLockingSingleton instance;
 
-    private DoubleCheckedLockingSingleton() {
-    }
+    private DoubleCheckedLockingSingleton() {}
 
     public static DoubleCheckedLockingSingleton getInstance() {
-        // First check without synchronization
-        if (instance == null) {
+        if (instance == null) { // 1st check (unlocked)
             synchronized (DoubleCheckedLockingSingleton.class) {
-                // Second check inside synchronized block
-                if (instance == null) {
+                if (instance == null) { // 2nd check (locked)
                     instance = new DoubleCheckedLockingSingleton();
                 }
             }
@@ -138,60 +154,19 @@ public class DoubleCheckedLockingSingleton {
         return instance;
     }
 }
-
-// Demonstrating why volatile is critical
-public class VolatileDemo {
-    public static void main(String[] args) throws InterruptedException {
-        // Without volatile: other threads might see a partially constructed object
-        // due to memory visibility issues and CPU caching
-
-        // volatile ensures:
-        // 1. Memory barrier - changes are visible to all threads
-        // 2. Prevents instruction reordering
-        // 3. Disables CPU cache optimization for this variable
-
-        Thread t1 = new Thread(() -> {
-            for (int i = 0; i < 10000; i++) {
-                DoubleCheckedLockingSingleton.getInstance();
-            }
-        });
-
-        t1.start();
-        t1.join();
-        System.out.println("Singleton accessed safely");
-    }
-}
 ```
 
-**Key Points about `volatile`:**
-- Guarantees memory visibility across threads
-- Prevents compiler optimizations that could cause issues
-- Ensures happens-before relationship
+> [!IMPORTANT]
+> **Why `volatile` is mandatory in DCL:** `new Singleton()` is not atomic—it involves (1) memory allocation, (2) constructor execution, and (3) reference assignment. Without `volatile`, the JVM/CPU may reorder steps 2 and 3, allowing another thread to observe a non-null but **partially constructed** object. `volatile` establishes a happens-before memory barrier.
 
-**Pros:**
-- Lazy initialization
-- Thread-safe
-- Good performance after first initialization
-
-**Cons:**
-- Complex to understand and implement correctly
-- Easy to make mistakes (forgetting volatile)
-- Still has overhead for the first check
-
----
-
-### 1.4 Bill Pugh Singleton (Class Loader Pattern - RECOMMENDED)
+### 1.5 Bill Pugh Singleton (Class Loader Pattern — Recommended)
 
 ```java
 public class BillPughSingleton {
+    private BillPughSingleton() {}
 
-    private BillPughSingleton() {
-    }
-
-    // Static inner helper class
+    // Loaded only when getInstance() references SingletonHelper.INSTANCE
     private static class SingletonHelper {
-        // Class loader loads this class only when needed
-        // Thread-safe and lazy without synchronization overhead
         private static final BillPughSingleton INSTANCE = new BillPughSingleton();
     }
 
@@ -199,207 +174,57 @@ public class BillPughSingleton {
         return SingletonHelper.INSTANCE;
     }
 }
-
-// Why this works:
-// 1. Inner class is not loaded until getInstance() is called
-// 2. Class loader synchronizes class loading (thread-safe by JVM)
-// 3. No explicit synchronization needed
-// 4. No performance penalty
-
-public class BillPughDemo {
-    public static void main(String[] args) throws InterruptedException {
-        long start = System.currentTimeMillis();
-
-        for (int i = 0; i < 1000; i++) {
-            new Thread(() -> {
-                BillPughSingleton.getInstance(); // Class loader handles synchronization
-            }).start();
-        }
-
-        Thread.sleep(2000);
-        long end = System.currentTimeMillis();
-        System.out.println("Time: " + (end - start) + "ms"); // Much faster than synchronized
-    }
-}
 ```
+- **Why it is superior:** Zero explicit `synchronized` overhead. The JVM synchronizes class initialization (`<clinit>`) on first reference to `SingletonHelper`, making it both **lazy** and **thread-safe**.
 
-**Why This is Superior:**
-- Thread-safe without explicit synchronization
-- Lazy initialization without performance penalty
-- Simple and elegant
-- Preferred by Java experts (used in Spring, Hibernate, etc.)
-
----
-
-### 1.5 Enum-Based Singleton (Most Bulletproof)
+### 1.6 Enum-Based Singleton (Most Bulletproof)
 
 ```java
 public enum EnumSingleton {
     INSTANCE;
 
-    private String data;
+    private String data = "Enum Singleton";
 
-    EnumSingleton() {
-        this.data = "Enum Singleton";
-    }
-
-    public String getData() {
-        return data;
-    }
-
-    public void setData(String data) {
-        this.data = data;
-    }
-}
-
-// Usage
-public class EnumSingletonDemo {
-    public static void main(String[] args) throws IOException, ClassNotFoundException {
-        EnumSingleton singleton1 = EnumSingleton.INSTANCE;
-        EnumSingleton singleton2 = EnumSingleton.INSTANCE;
-
-        System.out.println(singleton1 == singleton2); // true
-        System.out.println(singleton1.getData()); // "Enum Singleton"
-
-        // Even serialization/deserialization preserves singleton property
-        testSerializationAttack();
-    }
-
-    // Serialization Attack (PREVENTED by Enum)
-    private static void testSerializationAttack() throws IOException, ClassNotFoundException {
-        EnumSingleton singleton1 = EnumSingleton.INSTANCE;
-
-        // Serialize
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(baos);
-        oos.writeObject(singleton1);
-
-        // Deserialize
-        ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
-        ObjectInputStream ois = new ObjectInputStream(bais);
-        EnumSingleton singleton2 = (EnumSingleton) ois.readObject();
-
-        System.out.println(singleton1 == singleton2); // true - still same instance!
-    }
+    public String getData() { return data; }
+    public void setData(String data) { this.data = data; }
 }
 ```
+- **Why Enums win on safety:**
+  1. **Serialization-safe:** JVM resolves enum constants by name; `readResolve()` is unnecessary.
+  2. **Reflection-proof:** `Constructor.newInstance()` explicitly rejects `Enum` types.
+  3. **Thread-safe:** Guaranteed by JVM enum initialization.
 
-**Why Enums are the Best Choice:**
-1. **Serialization-safe**: Enum provides readResolve() automatically
-2. **Reflection-proof**: Reflection cannot create enum instances
-3. **Thread-safe**: Guaranteed by JVM
-4. **Lazy loading**: Enums are loaded when first accessed
-5. **Immutable**: Field values cannot be modified
+### 1.7 Breaking Singleton — Attacks and Prevention
 
----
-
-### 1.6 Breaking Singleton - Common Attacks and Prevention
-
-#### Attack 1: Reflection
+| Attack Vector | How It Breaks Singleton | Prevention |
+|---|---|---|
+| **Reflection** | `constructor.setAccessible(true); constructor.newInstance();` | Throw `IllegalStateException` in private constructor if already created (or use `enum`) |
+| **Serialization** | `ObjectInputStream.readObject()` allocates a new instance | Implement `protected Object readResolve() { return getInstance(); }` (or use `enum`) |
+| **Cloning** | `singleton.clone()` via `Cloneable` creates a copy | Override `clone()` and throw `CloneNotSupportedException` |
 
 ```java
-public class ReflectionAttack {
-    public static void main(String[] args) throws Exception {
-        BillPughSingleton singleton1 = BillPughSingleton.getInstance();
-
-        // Attack: Use reflection to invoke private constructor
-        Constructor<BillPughSingleton> constructor = BillPughSingleton.class.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        BillPughSingleton singleton2 = constructor.newInstance();
-
-        System.out.println(singleton1 == singleton2); // false - Broken!
-    }
-}
-
-// Prevention: Add check in constructor
-public class SafeBillPughSingleton {
+// Combined Reflection + Serialization + Cloning Guards
+public class HardenedSingleton implements Serializable, Cloneable {
+    private static final long serialVersionUID = 1L;
     private static boolean instanceCreated = false;
 
-    private SafeBillPughSingleton() {
+    private HardenedSingleton() {
         if (instanceCreated) {
             throw new IllegalStateException("Singleton already created");
         }
         instanceCreated = true;
     }
 
-    private static class SingletonHelper {
-        private static final SafeBillPughSingleton INSTANCE = new SafeBillPughSingleton();
+    private static class Holder {
+        private static final HardenedSingleton INSTANCE = new HardenedSingleton();
     }
 
-    public static SafeBillPughSingleton getInstance() {
-        return SingletonHelper.INSTANCE;
-    }
-}
-```
-
-#### Attack 2: Serialization
-
-```java
-public class SerializationAttack {
-    public static void main(String[] args) throws Exception {
-        BillPughSingleton singleton1 = BillPughSingleton.getInstance();
-
-        // Serialize
-        FileOutputStream fos = new FileOutputStream("singleton.ser");
-        ObjectOutputStream oos = new ObjectOutputStream(fos);
-        oos.writeObject(singleton1);
-        oos.close();
-
-        // Deserialize
-        FileInputStream fis = new FileInputStream("singleton.ser");
-        ObjectInputStream ois = new ObjectInputStream(fis);
-        BillPughSingleton singleton2 = (BillPughSingleton) ois.readObject();
-        ois.close();
-
-        System.out.println(singleton1 == singleton2); // false - Broken!
-    }
-}
-
-// Prevention: Override readResolve method
-public class SerializableSafeSingleton implements Serializable {
-    private static final long serialVersionUID = 1L;
-
-    private SerializableSafeSingleton() {
+    public static HardenedSingleton getInstance() {
+        return Holder.INSTANCE;
     }
 
-    private static class SingletonHelper {
-        private static final SerializableSafeSingleton INSTANCE = new SerializableSafeSingleton();
-    }
-
-    public static SerializableSafeSingleton getInstance() {
-        return SingletonHelper.INSTANCE;
-    }
-
-    // This method is called during deserialization
     protected Object readResolve() {
-        return getInstance(); // Return the singleton instance
-    }
-}
-```
-
-#### Attack 3: Cloning
-
-```java
-public class CloningAttack {
-    public static void main(String[] args) throws CloneNotSupportedException {
-        CloneableSingleton singleton1 = CloneableSingleton.getInstance();
-        CloneableSingleton singleton2 = (CloneableSingleton) singleton1.clone();
-
-        System.out.println(singleton1 == singleton2); // false - Broken!
-    }
-}
-
-// Prevention: Prevent cloning
-public class CloneableSingleton implements Cloneable {
-    private CloneableSingleton() {
-    }
-
-    private static class SingletonHelper {
-        private static final CloneableSingleton INSTANCE = new CloneableSingleton();
-    }
-
-    public static CloneableSingleton getInstance() {
-        return SingletonHelper.INSTANCE;
+        return getInstance();
     }
 
     @Override
@@ -409,201 +234,113 @@ public class CloneableSingleton implements Cloneable {
 }
 ```
 
----
-
 ### Real-World Examples
+- **Logger (Spring / SLF4J):** `LoggerFactory.getLogger(ApplicationLogger.class)` caches logger instances per class name.
+- **Database Connection Pool:** A single `DatabaseConnectionPool` (using Bill Pugh `PoolHelper`) manages a fixed pool of `Connection` objects with `synchronized getConnection()` (`wait()`) and `releaseConnection()` (`notifyAll()`).
 
-#### Logger (Spring Framework)
-```java
-// Spring's LoggerFactory uses singleton pattern
-public class ApplicationLogger {
-    private static final Logger logger = LoggerFactory.getLogger(ApplicationLogger.class);
-
-    private ApplicationLogger() {
-    }
-
-    public static Logger getLogger() {
-        return logger;
-    }
-}
-```
-
-#### Connection Pool
-```java
-public class DatabaseConnectionPool {
-    private static final int POOL_SIZE = 10;
-    private Queue<Connection> availableConnections;
-    private Set<Connection> allConnections;
-
-    private DatabaseConnectionPool() {
-        availableConnections = new LinkedList<>();
-        allConnections = new HashSet<>();
-        initializePool();
-    }
-
-    private static class PoolHelper {
-        private static final DatabaseConnectionPool INSTANCE = new DatabaseConnectionPool();
-    }
-
-    public static DatabaseConnectionPool getInstance() {
-        return PoolHelper.INSTANCE;
-    }
-
-    private void initializePool() {
-        for (int i = 0; i < POOL_SIZE; i++) {
-            try {
-                Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/db");
-                availableConnections.add(conn);
-                allConnections.add(conn);
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public synchronized Connection getConnection() throws InterruptedException {
-        while (availableConnections.isEmpty()) {
-            wait();
-        }
-        Connection conn = availableConnections.poll();
-        return conn;
-    }
-
-    public synchronized void releaseConnection(Connection conn) {
-        availableConnections.add(conn);
-        notifyAll();
-    }
-}
-```
-
-### When to Use
-- Database connection pools
-- Logging systems
-- Cache managers
-- Configuration managers
-- Thread pools
-- Event bus/message broker
-
-### When NOT to Use
-- Testability issues (hard to mock)
-- Tight coupling (increases dependencies)
-- When multiple instances are needed
-- In multi-module applications with complex initialization
-- When scalability requires distributed instances
-
-### Interview Questions
-
-**Q1: Why is `volatile` necessary in Double-Checked Locking?**
-A: Without volatile, due to CPU caching and instruction reordering, one thread might see a partially initialized instance while another thread is initializing it. The volatile keyword ensures memory visibility and prevents reordering.
-
-**Q2: What are the advantages of enum-based Singleton over Bill Pugh?**
-A: Enums are automatically serialization-safe, reflection-proof, and immutable. They handle all edge cases without additional code. Bill Pugh requires additional preventive measures.
-
-**Q3: Can you break a Singleton using reflection, and how do you prevent it?**
-A: Yes, by accessing the private constructor and invoking it. Prevention: Add a flag check in the constructor to throw an exception if already instantiated.
-
-**Q4: How does Spring handle Singleton scope?**
-A: Spring uses a Singleton registry pattern where beans are created once and cached in a container. Each request retrieves the same instance from the registry.
-
-**Q5: Explain the difference between Eager and Lazy initialization with trade-offs.**
-A: Eager loads the instance at startup (simple, thread-safe, but wastes memory), while Lazy loads only when needed (saves memory, but adds initialization overhead).
+### Trade-Offs & Interview Questions
+- **When to Use:** Connection pools, loggers, cache managers, config managers, thread pools, event buses.
+- **When NOT to Use:** When unit testing requires easy mocking, when tight coupling hurts modularity, or when distributed/multi-instance scaling is required.
+- **Q1: Why is `volatile` necessary in DCL?** Prevents instruction reordering and ensures memory visibility across threads so no thread sees a half-initialized object.
+- **Q2: Enum vs Bill Pugh?** Enum is automatically reflection-proof and serialization-safe; Bill Pugh requires explicit guards (`readResolve()`, constructor flag) but supports class inheritance/lazy loading without enum constraints.
+- **Q3: How does Spring handle Singleton scope?** Spring uses a **Singleton registry** (`DefaultSingletonBeanRegistry`) per `ApplicationContext` container rather than a strict JVM-wide GoF Singleton.
 
 ---
 
 ## 2. Factory Method Pattern
 
 ### Intent
-Define an interface for creating an object, but let subclasses decide which class to instantiate.
+Define an interface for creating an object, but **let subclasses decide which class to instantiate**.
 
 ### Problem It Solves
-- Decouples object creation from usage
-- Centralized object creation logic
-- Easy to add new types without modifying existing code
-- Reduces tight coupling
+- Decouples client code from concrete product classes.
+- Centralizes object creation and pre/post-initialization workflow (often paired with a Template Method).
+- Follows the **Open/Closed Principle**: add new product types without modifying existing client logic.
 
-### Text-Based UML
-```
-┌──────────────────┐
-│    Creator       │
-├──────────────────┤
-│ + factoryMethod()│
-│ + operation()    │
-└────────┬─────────┘
-         │
-    ┌────┴─────┬─────────┐
-    │           │         │
-┌───▼──┐   ┌───▼──┐  ┌──▼───┐
-│ConcreteA│ │ConcreteB│ │ConcreteC│
-└────────┘ └────────┘ └───────┘
+```mermaid
+classDiagram
+    class ConnectionFactory {
+        <<Abstract>>
+        +createConnection()* DatabaseConnection
+        +performDatabaseOperation(String query) void
+    }
+    class MySQLConnectionFactory {
+        +createConnection() DatabaseConnection
+    }
+    class PostgreSQLConnectionFactory {
+        +createConnection() DatabaseConnection
+    }
+    class MongoDBConnectionFactory {
+        +createConnection() DatabaseConnection
+    }
+    class DatabaseConnection {
+        <<Interface>>
+        +connect() void
+        +executeQuery(String query) void
+        +disconnect() void
+    }
+    class MySQLConnection
+    class PostgreSQLConnection
+    class MongoDBConnection
+
+    ConnectionFactory <|-- MySQLConnectionFactory
+    ConnectionFactory <|-- PostgreSQLConnectionFactory
+    ConnectionFactory <|-- MongoDBConnectionFactory
+    DatabaseConnection <|.. MySQLConnection
+    DatabaseConnection <|.. PostgreSQLConnection
+    DatabaseConnection <|.. MongoDBConnection
+    MySQLConnectionFactory ..> MySQLConnection : creates
+    PostgreSQLConnectionFactory ..> PostgreSQLConnection : creates
+    MongoDBConnectionFactory ..> MongoDBConnection : creates
 ```
 
-### Implementation with Interface
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Factory as ConnectionFactory
+    participant Product as DatabaseConnection
+
+    Client->>Factory: performDatabaseOperation(query)
+    Factory->>Factory: createConnection()
+    Note over Factory: Subclass instantiates concrete DB
+    Factory-->>Product: new MySQLConnection()
+    Factory->>Product: connect()
+    Factory->>Product: executeQuery(query)
+    Factory->>Product: disconnect()
+```
+
+### Implementation: Database Connection Factory
 
 ```java
-// Product interface
 public interface DatabaseConnection {
     void connect();
     void executeQuery(String query);
     void disconnect();
 }
 
-// Concrete Products
 public class MySQLConnection implements DatabaseConnection {
-    @Override
-    public void connect() {
-        System.out.println("Connecting to MySQL database...");
-    }
-
-    @Override
-    public void executeQuery(String query) {
-        System.out.println("Executing MySQL query: " + query);
-    }
-
-    @Override
-    public void disconnect() {
-        System.out.println("Disconnecting from MySQL");
-    }
+    @Override public void connect() { System.out.println("Connecting to MySQL..."); }
+    @Override public void executeQuery(String q) { System.out.println("MySQL: " + q); }
+    @Override public void disconnect() { System.out.println("Disconnecting MySQL"); }
 }
 
 public class PostgreSQLConnection implements DatabaseConnection {
-    @Override
-    public void connect() {
-        System.out.println("Connecting to PostgreSQL database...");
-    }
-
-    @Override
-    public void executeQuery(String query) {
-        System.out.println("Executing PostgreSQL query: " + query);
-    }
-
-    @Override
-    public void disconnect() {
-        System.out.println("Disconnecting from PostgreSQL");
-    }
+    @Override public void connect() { System.out.println("Connecting to PostgreSQL..."); }
+    @Override public void executeQuery(String q) { System.out.println("PostgreSQL: " + q); }
+    @Override public void disconnect() { System.out.println("Disconnecting PostgreSQL"); }
 }
 
 public class MongoDBConnection implements DatabaseConnection {
-    @Override
-    public void connect() {
-        System.out.println("Connecting to MongoDB...");
-    }
-
-    @Override
-    public void executeQuery(String query) {
-        System.out.println("Executing MongoDB query: " + query);
-    }
-
-    @Override
-    public void disconnect() {
-        System.out.println("Disconnecting from MongoDB");
-    }
+    @Override public void connect() { System.out.println("Connecting to MongoDB..."); }
+    @Override public void executeQuery(String q) { System.out.println("MongoDB: " + q); }
+    @Override public void disconnect() { System.out.println("Disconnecting MongoDB"); }
 }
 
-// Creator/Factory interface
+// Creator
 public abstract class ConnectionFactory {
     public abstract DatabaseConnection createConnection();
 
-    // Template method
+    // Template method using the factory method
     public void performDatabaseOperation(String query) {
         DatabaseConnection connection = createConnection();
         connection.connect();
@@ -612,135 +349,24 @@ public abstract class ConnectionFactory {
     }
 }
 
-// Concrete Factories
 public class MySQLConnectionFactory extends ConnectionFactory {
-    @Override
-    public DatabaseConnection createConnection() {
-        return new MySQLConnection();
-    }
+    @Override public DatabaseConnection createConnection() { return new MySQLConnection(); }
 }
 
 public class PostgreSQLConnectionFactory extends ConnectionFactory {
-    @Override
-    public DatabaseConnection createConnection() {
-        return new PostgreSQLConnection();
-    }
+    @Override public DatabaseConnection createConnection() { return new PostgreSQLConnection(); }
 }
 
 public class MongoDBConnectionFactory extends ConnectionFactory {
-    @Override
-    public DatabaseConnection createConnection() {
-        return new MongoDBConnection();
-    }
-}
-
-// Usage
-public class FactoryMethodDemo {
-    public static void main(String[] args) {
-        // Without knowing concrete classes
-        ConnectionFactory factory = getConnectionFactory("mysql");
-        factory.performDatabaseOperation("SELECT * FROM users");
-
-        factory = getConnectionFactory("postgresql");
-        factory.performDatabaseOperation("SELECT * FROM products");
-
-        factory = getConnectionFactory("mongodb");
-        factory.performDatabaseOperation("db.users.find()");
-    }
-
-    private static ConnectionFactory getConnectionFactory(String type) {
-        return switch (type.toLowerCase()) {
-            case "mysql" -> new MySQLConnectionFactory();
-            case "postgresql" -> new PostgreSQLConnectionFactory();
-            case "mongodb" -> new MongoDBConnectionFactory();
-            default -> throw new IllegalArgumentException("Unknown database type: " + type);
-        };
-    }
+    @Override public DatabaseConnection createConnection() { return new MongoDBConnection(); }
 }
 ```
 
-### Spring's BeanFactory Analogy
+### Real-World Examples
+- **Spring `BeanFactory` / `@Bean`:** `ApplicationContext.getBean("mysqlConnection", DatabaseConnection.class)` acts as a factory returning configured beans without exposing concrete instantiation.
+- **Payment Processing:** `PaymentProcessorFactory` defines `createProcessor(String... args)` and a `final processPaymentSafely(double amount, String... args)` template that validates (`CreditCardProcessor` / `PayPalProcessor`) before charging.
 
 ```java
-// Spring uses Factory Method pattern extensively
-public class SpringFactoryMethodDemo {
-
-    @Configuration
-    public static class AppConfig {
-
-        // Bean factory method
-        @Bean
-        public DatabaseConnection mysqlConnection() {
-            return new MySQLConnection();
-        }
-
-        @Bean
-        public DatabaseConnection postgresConnection() {
-            return new PostgreSQLConnection();
-        }
-
-        @Bean
-        @Primary // Default factory method
-        public ConnectionFactory connectionFactory() {
-            return new MySQLConnectionFactory();
-        }
-    }
-
-    public static void main(String[] args) {
-        ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
-
-        // Spring's ApplicationContext acts as a factory
-        DatabaseConnection connection = context.getBean("mysqlConnection", DatabaseConnection.class);
-        connection.connect();
-    }
-}
-```
-
-### Real-World Example: Payment Processing
-
-```java
-public interface PaymentProcessor {
-    void processPayment(double amount);
-    boolean validatePayment();
-}
-
-public class CreditCardProcessor implements PaymentProcessor {
-    private String cardNumber;
-
-    public CreditCardProcessor(String cardNumber) {
-        this.cardNumber = cardNumber;
-    }
-
-    @Override
-    public void processPayment(double amount) {
-        System.out.println("Processing credit card payment: $" + amount);
-    }
-
-    @Override
-    public boolean validatePayment() {
-        return cardNumber.length() == 16;
-    }
-}
-
-public class PayPalProcessor implements PaymentProcessor {
-    private String email;
-
-    public PayPalProcessor(String email) {
-        this.email = email;
-    }
-
-    @Override
-    public void processPayment(double amount) {
-        System.out.println("Processing PayPal payment: $" + amount + " from " + email);
-    }
-
-    @Override
-    public boolean validatePayment() {
-        return email.contains("@");
-    }
-}
-
-// Factory
 public abstract class PaymentProcessorFactory {
     public abstract PaymentProcessor createProcessor(String... args);
 
@@ -750,121 +376,103 @@ public abstract class PaymentProcessorFactory {
             processor.processPayment(amount);
             return true;
         }
-        System.out.println("Payment validation failed");
         return false;
-    }
-}
-
-public class CreditCardProcessorFactory extends PaymentProcessorFactory {
-    @Override
-    public PaymentProcessor createProcessor(String... args) {
-        return new CreditCardProcessor(args[0]);
-    }
-}
-
-public class PayPalProcessorFactory extends PaymentProcessorFactory {
-    @Override
-    public PaymentProcessor createProcessor(String... args) {
-        return new PayPalProcessor(args[0]);
     }
 }
 ```
 
-### When to Use
-- Creating objects whose exact types are determined at runtime
-- Decoupling client code from specific classes
-- Adding new product types without modifying existing code
-- Centralizing object creation logic
+> [!TIP]
+> **Interview Distinction:** **Factory Method** creates a *single* product via inheritance/overriding, whereas **Abstract Factory** creates *families of related products* via composition.
 
-### When NOT to Use
-- Simple objects that don't require complex creation logic
-- When there's only one implementation
-- When using dependency injection containers (Spring, Guice)
-
-### Interview Question
-
-**Q: Explain the difference between Factory Method and Abstract Factory.**
-A: Factory Method creates a single product, while Abstract Factory creates families of related products. Factory Method is about how to create an object, Abstract Factory is about families of related objects.
+### Trade-Offs
+- **When to Use:** Runtime type selection, decoupling client from concrete classes, extensible plugin architectures.
+- **When NOT to Use:** Simple objects with one implementation, or when a DI container (Spring/Guice) already wires dependencies.
 
 ---
 
 ## 3. Abstract Factory Pattern
 
 ### Intent
-Provide an interface for creating families of related or dependent objects without specifying their concrete classes.
+Provide an interface for creating **families of related or dependent objects** without specifying their concrete classes.
 
-### Text-Based UML
+```mermaid
+classDiagram
+    class UIFactory {
+        <<Interface>>
+        +createButton() Button
+        +createCheckbox() Checkbox
+        +createTextBox() TextBox
+    }
+    class LightThemeFactory {
+        +createButton() Button
+        +createCheckbox() Checkbox
+        +createTextBox() TextBox
+    }
+    class DarkThemeFactory {
+        +createButton() Button
+        +createCheckbox() Checkbox
+        +createTextBox() TextBox
+    }
+    class Button { <<Interface>> }
+    class Checkbox { <<Interface>> }
+    class TextBox { <<Interface>> }
+
+    UIFactory <|.. LightThemeFactory
+    UIFactory <|.. DarkThemeFactory
+    LightThemeFactory ..> Button : LightButton
+    LightThemeFactory ..> Checkbox : LightCheckbox
+    LightThemeFactory ..> TextBox : LightTextBox
+    DarkThemeFactory ..> Button : DarkButton
+    DarkThemeFactory ..> Checkbox : DarkCheckbox
+    DarkThemeFactory ..> TextBox : DarkTextBox
 ```
-┌─────────────────┐
-│AbstractFactory  │
-├─────────────────┤
-│+createProductA()│
-│+createProductB()│
-└────────┬────────┘
-         │
-    ┌────┴─────┬──────────┐
-    │           │          │
-  ConcreteFactory1    ConcreteFactory2
+
+```mermaid
+flowchart LR
+    Client["UIApplication"] --> Choice{"Theme / OS Config"}
+    Choice -- "Light" --> LF["LightThemeFactory"]
+    Choice -- "Dark" --> DF["DarkThemeFactory"]
+
+    LF --> LP["LightButton + LightCheckbox + LightTextBox"]
+    DF --> DP["DarkButton + DarkCheckbox + DarkTextBox"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef purple fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class Client,Choice blue
+    class LF,LP green
+    class DF,DP purple
 ```
 
 ### Complete Example: UI Theme System
 
 ```java
 // Abstract Products
-public interface Button {
-    void render();
-}
-
-public interface Checkbox {
-    void render();
-}
-
-public interface TextBox {
-    void render();
-}
+public interface Button { void render(); }
+public interface Checkbox { void render(); }
+public interface TextBox { void render(); }
 
 // Concrete Products - Light Theme
 public class LightButton implements Button {
-    @Override
-    public void render() {
-        System.out.println("Rendering Light Button (white background)");
-    }
+    @Override public void render() { System.out.println("Rendering Light Button"); }
 }
-
 public class LightCheckbox implements Checkbox {
-    @Override
-    public void render() {
-        System.out.println("Rendering Light Checkbox (light colors)");
-    }
+    @Override public void render() { System.out.println("Rendering Light Checkbox"); }
 }
-
 public class LightTextBox implements TextBox {
-    @Override
-    public void render() {
-        System.out.println("Rendering Light TextBox (black text on white)");
-    }
+    @Override public void render() { System.out.println("Rendering Light TextBox"); }
 }
 
 // Concrete Products - Dark Theme
 public class DarkButton implements Button {
-    @Override
-    public void render() {
-        System.out.println("Rendering Dark Button (dark background)");
-    }
+    @Override public void render() { System.out.println("Rendering Dark Button"); }
 }
-
 public class DarkCheckbox implements Checkbox {
-    @Override
-    public void render() {
-        System.out.println("Rendering Dark Checkbox (dark colors)");
-    }
+    @Override public void render() { System.out.println("Rendering Dark Checkbox"); }
 }
-
 public class DarkTextBox implements TextBox {
-    @Override
-    public void render() {
-        System.out.println("Rendering Dark TextBox (white text on dark)");
-    }
+    @Override public void render() { System.out.println("Rendering Dark TextBox"); }
 }
 
 // Abstract Factory
@@ -874,46 +482,23 @@ public interface UIFactory {
     TextBox createTextBox();
 }
 
-// Concrete Factories
 public class LightThemeFactory implements UIFactory {
-    @Override
-    public Button createButton() {
-        return new LightButton();
-    }
-
-    @Override
-    public Checkbox createCheckbox() {
-        return new LightCheckbox();
-    }
-
-    @Override
-    public TextBox createTextBox() {
-        return new LightTextBox();
-    }
+    @Override public Button createButton() { return new LightButton(); }
+    @Override public Checkbox createCheckbox() { return new LightCheckbox(); }
+    @Override public TextBox createTextBox() { return new LightTextBox(); }
 }
 
 public class DarkThemeFactory implements UIFactory {
-    @Override
-    public Button createButton() {
-        return new DarkButton();
-    }
-
-    @Override
-    public Checkbox createCheckbox() {
-        return new DarkCheckbox();
-    }
-
-    @Override
-    public TextBox createTextBox() {
-        return new DarkTextBox();
-    }
+    @Override public Button createButton() { return new DarkButton(); }
+    @Override public Checkbox createCheckbox() { return new DarkCheckbox(); }
+    @Override public TextBox createTextBox() { return new DarkTextBox(); }
 }
 
-// Client Code
+// Client Code - guaranteed consistent family
 public class UIApplication {
-    private Button button;
-    private Checkbox checkbox;
-    private TextBox textBox;
+    private final Button button;
+    private final Checkbox checkbox;
+    private final TextBox textBox;
 
     public UIApplication(UIFactory factory) {
         this.button = factory.createButton();
@@ -927,202 +512,77 @@ public class UIApplication {
         textBox.render();
     }
 }
-
-// Usage
-public class AbstractFactoryDemo {
-    public static void main(String[] args) {
-        // Light Theme
-        UIFactory lightFactory = new LightThemeFactory();
-        UIApplication lightApp = new UIApplication(lightFactory);
-        lightApp.render();
-
-        System.out.println("---");
-
-        // Dark Theme
-        UIFactory darkFactory = new DarkThemeFactory();
-        UIApplication darkApp = new UIApplication(darkFactory);
-        darkApp.render();
-    }
-}
 ```
 
-### Real-World Example: Cross-Platform UI
+### Real-World Example: Cross-Platform OS Factory
+`OSFactory` exposes `createDialog()` and `createFileChooser()`. At startup, `System.getProperty("os.name")` selects `WindowsFactory` or `MacFactory`, guaranteeing `WindowsDialog` is never paired with `MacFileChooser`.
 
-```java
-// Abstract products for different OS
-public interface Dialog {
-    void show();
-}
-
-public interface FileChooser {
-    void browse();
-}
-
-// Windows implementations
-public class WindowsDialog implements Dialog {
-    @Override
-    public void show() {
-        System.out.println("Showing Windows-style dialog");
-    }
-}
-
-public class WindowsFileChooser implements FileChooser {
-    @Override
-    public void browse() {
-        System.out.println("Opening Windows file explorer");
-    }
-}
-
-// Mac implementations
-public class MacDialog implements Dialog {
-    @Override
-    public void show() {
-        System.out.println("Showing Mac-style dialog");
-    }
-}
-
-public class MacFileChooser implements FileChooser {
-    @Override
-    public void browse() {
-        System.out.println("Opening Mac file browser");
-    }
-}
-
-// Abstract factory
-public interface OSFactory {
-    Dialog createDialog();
-    FileChooser createFileChooser();
-}
-
-// Factories
-public class WindowsFactory implements OSFactory {
-    @Override
-    public Dialog createDialog() {
-        return new WindowsDialog();
-    }
-
-    @Override
-    public FileChooser createFileChooser() {
-        return new WindowsFileChooser();
-    }
-}
-
-public class MacFactory implements OSFactory {
-    @Override
-    public Dialog createDialog() {
-        return new MacDialog();
-    }
-
-    @Override
-    public FileChooser createFileChooser() {
-        return new MacFileChooser();
-    }
-}
-
-// Usage
-public class CrossPlatformApp {
-    public static void main(String[] args) {
-        String os = System.getProperty("os.name").toLowerCase();
-        OSFactory factory = os.contains("win") ? new WindowsFactory() : new MacFactory();
-
-        Dialog dialog = factory.createDialog();
-        FileChooser fileChooser = factory.createFileChooser();
-
-        dialog.show();
-        fileChooser.browse();
-    }
-}
-```
-
-### When to Use
-- Systems supporting multiple families of related products
-- Preventing creation of incompatible product families
-- Cross-platform UI rendering
-- Database abstraction layers
-
-### When NOT to Use
-- When there's only one product family
-- When new families are added frequently
-- When product creation is simple
+### Trade-Offs
+- **When to Use:** Multi-family product suites (UI themes, cross-platform widgets, database dialect layers) where mixing families is a bug.
+- **When NOT to Use:** When new product types are added frequently (requires updating the `AbstractFactory` interface and every concrete factory).
 
 ---
 
 ## 4. Builder Pattern
 
 ### Intent
-Separate the construction of a complex object from its representation, allowing the same construction process to create different representations.
+Separate the construction of a complex object from its representation so the same construction process can create different representations—typically yielding an **immutable** object via a **fluent API**.
 
-### Problem: Telescoping Constructor Problem
+![Fluent Builder Construction vs Object Pool Lifecycle](./assets/01-builder-and-object-pool.svg)
 
-```java
-// Anti-pattern: Telescoping Constructor
-public class PersonBad {
-    private String firstName;
-    private String lastName;
-    private int age;
-    private String email;
-    private String phone;
-    private String address;
-    private String city;
-    private String state;
-    private String zipCode;
+```mermaid
+flowchart LR
+    Bad["Telescoping Constructor: new Person('John', 'Doe', 30, null, null, ...)"] --> Problem["Hard to read &amp; error-prone"]
+    Good["new PersonBuilder('John', 'Doe').age(30).city('NYC').build()"] --> Benefit["Readable, validates invariants, immutable"]
 
-    // Nightmare of constructors!
-    public PersonBad(String firstName, String lastName) {
-        this.firstName = firstName;
-        this.lastName = lastName;
-    }
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
 
-    public PersonBad(String firstName, String lastName, int age) {
-        this(firstName, lastName);
-        this.age = age;
-    }
-
-    public PersonBad(String firstName, String lastName, int age, String email) {
-        this(firstName, lastName, age);
-        this.email = email;
-    }
-
-    public PersonBad(String firstName, String lastName, int age, String email, String phone) {
-        this(firstName, lastName, age, email);
-        this.phone = phone;
-    }
-
-    // And more constructors...
-
-    public PersonBad(String firstName, String lastName, int age, String email, String phone,
-                     String address, String city, String state, String zipCode) {
-        this.firstName = firstName;
-        this.lastName = lastName;
-        this.age = age;
-        this.email = email;
-        this.phone = phone;
-        this.address = address;
-        this.city = city;
-        this.state = state;
-        this.zipCode = zipCode;
-    }
-}
-
-// Confusing usage
-PersonBad person = new PersonBad("John", "Doe", 30, "john@example.com", "123-456-7890", "123 Main St", "NYC", "NY", "10001");
+    class Bad,Problem red
+    class Good,Benefit green
 ```
+
+```mermaid
+classDiagram
+    class Person {
+        -String firstName
+        -String lastName
+        -int age
+        -String email
+        -Person(PersonBuilder builder)
+    }
+    class PersonBuilder {
+        -String firstName
+        -String lastName
+        -int age
+        -String email
+        +PersonBuilder(String firstName, String lastName)
+        +age(int age) PersonBuilder
+        +email(String email) PersonBuilder
+        +build() Person
+    }
+
+    PersonBuilder ..> Person : builds immutable
+```
+
+### Problem: Telescoping Constructor Anti-Pattern
+Having 5+ optional parameters forces chains of overloaded constructors (`Person(fn, ln)`, `Person(fn, ln, age)`, ..., `Person(fn, ln, age, email, phone, address, city, state, zip)`), making call sites unreadable and prone to swapped arguments.
 
 ### Builder Pattern Solution
 
 ```java
 public class Person {
-    private String firstName;
-    private String lastName;
-    private int age;
-    private String email;
-    private String phone;
-    private String address;
-    private String city;
-    private String state;
-    private String zipCode;
+    private final String firstName;
+    private final String lastName;
+    private final int age;
+    private final String email;
+    private final String phone;
+    private final String address;
+    private final String city;
+    private final String state;
+    private final String zipCode;
 
-    // Immutable object - constructor is private
+    // Immutable object - private constructor
     private Person(PersonBuilder builder) {
         this.firstName = builder.firstName;
         this.lastName = builder.lastName;
@@ -1135,604 +595,303 @@ public class Person {
         this.zipCode = builder.zipCode;
     }
 
-    // Builder inner class
     public static class PersonBuilder {
-        private String firstName;
-        private String lastName;
+        private final String firstName; // Required
+        private final String lastName;  // Required
         private int age;
-        private String email;
-        private String phone;
-        private String address;
-        private String city;
-        private String state;
-        private String zipCode;
+        private String email, phone, address, city, state, zipCode;
 
         public PersonBuilder(String firstName, String lastName) {
             this.firstName = firstName;
             this.lastName = lastName;
         }
 
-        public PersonBuilder age(int age) {
-            this.age = age;
-            return this; // Fluent API
-        }
+        public PersonBuilder age(int age) { this.age = age; return this; }
+        public PersonBuilder email(String email) { this.email = email; return this; }
+        public PersonBuilder phone(String phone) { this.phone = phone; return this; }
+        public PersonBuilder address(String address) { this.address = address; return this; }
+        public PersonBuilder city(String city) { this.city = city; return this; }
+        public PersonBuilder state(String state) { this.state = state; return this; }
+        public PersonBuilder zipCode(String zipCode) { this.zipCode = zipCode; return this; }
 
-        public PersonBuilder email(String email) {
-            this.email = email;
-            return this;
-        }
-
-        public PersonBuilder phone(String phone) {
-            this.phone = phone;
-            return this;
-        }
-
-        public PersonBuilder address(String address) {
-            this.address = address;
-            return this;
-        }
-
-        public PersonBuilder city(String city) {
-            this.city = city;
-            return this;
-        }
-
-        public PersonBuilder state(String state) {
-            this.state = state;
-            return this;
-        }
-
-        public PersonBuilder zipCode(String zipCode) {
-            this.zipCode = zipCode;
-            return this;
-        }
-
-        // Build method returns the final object
         public Person build() {
             return new Person(this);
         }
     }
-
-    @Override
-    public String toString() {
-        return "Person{" +
-                "firstName='" + firstName + '\'' +
-                ", lastName='" + lastName + '\'' +
-                ", age=" + age +
-                ", email='" + email + '\'' +
-                ", phone='" + phone + '\'' +
-                ", address='" + address + '\'' +
-                ", city='" + city + '\'' +
-                ", state='" + state + '\'' +
-                ", zipCode='" + zipCode + '\'' +
-                '}';
-    }
-}
-
-// Beautiful, readable usage
-public class BuilderPatternDemo {
-    public static void main(String[] args) {
-        Person person = new Person.PersonBuilder("John", "Doe")
-                .age(30)
-                .email("john@example.com")
-                .phone("123-456-7890")
-                .address("123 Main St")
-                .city("NYC")
-                .state("NY")
-                .zipCode("10001")
-                .build();
-
-        System.out.println(person);
-    }
-}
-```
-
-### Lombok's @Builder Annotation
-
-```java
-@Data
-@Builder
-public class PersonLombok {
-    private String firstName;
-    private String lastName;
-    private int age;
-    private String email;
-    private String phone;
-    private String address;
-    private String city;
-    private String state;
-    private String zipCode;
-}
-
-// Usage - Lombok generates builder automatically
-public class LombokBuilderDemo {
-    public static void main(String[] args) {
-        PersonLombok person = PersonLombok.builder()
-                .firstName("John")
-                .lastName("Doe")
-                .age(30)
-                .email("john@example.com")
-                .phone("123-456-7890")
-                .address("123 Main St")
-                .city("NYC")
-                .state("NY")
-                .zipCode("10001")
-                .build();
-
-        System.out.println(person);
-    }
-}
-```
-
-### Real-World Example: SQL Query Builder
-
-```java
-public class SQLQueryBuilder {
-    private String selectClause = "";
-    private String fromClause = "";
-    private String whereClause = "";
-    private String orderByClause = "";
-    private int limitValue = -1;
-
-    public SQLQueryBuilder select(String... columns) {
-        this.selectClause = "SELECT " + String.join(", ", columns);
-        return this;
-    }
-
-    public SQLQueryBuilder from(String table) {
-        this.fromClause = " FROM " + table;
-        return this;
-    }
-
-    public SQLQueryBuilder where(String condition) {
-        this.whereClause = " WHERE " + condition;
-        return this;
-    }
-
-    public SQLQueryBuilder orderBy(String column, String direction) {
-        this.orderByClause = " ORDER BY " + column + " " + direction;
-        return this;
-    }
-
-    public SQLQueryBuilder limit(int limit) {
-        this.limitValue = limit;
-        return this;
-    }
-
-    public String build() {
-        StringBuilder query = new StringBuilder();
-        query.append(selectClause);
-        query.append(fromClause);
-        query.append(whereClause);
-        query.append(orderByClause);
-        if (limitValue > 0) {
-            query.append(" LIMIT ").append(limitValue);
-        }
-        return query.toString();
-    }
 }
 
 // Usage
-public class SQLQueryBuilderDemo {
-    public static void main(String[] args) {
-        String query = new SQLQueryBuilder()
-                .select("id", "name", "email")
-                .from("users")
-                .where("age > 18")
-                .orderBy("name", "ASC")
-                .limit(10)
-                .build();
+Person person = new Person.PersonBuilder("John", "Doe")
+        .age(30)
+        .email("john@example.com")
+        .city("NYC")
+        .build();
+```
 
-        System.out.println(query);
-        // Output: SELECT id, name, email FROM users WHERE age > 18 ORDER BY name ASC LIMIT 10
+### Lombok `@Builder` & Real-World SQL Query Builder
+
+```java
+// 1. Lombok generates the static builder automatically
+@Data
+@Builder
+public class PersonLombok {
+    private String firstName, lastName, email, phone, address, city, state, zipCode;
+    private int age;
+}
+
+// 2. Real-World Example: Fluent SQL Query Builder
+public class SQLQueryBuilder {
+    private String selectClause = "", fromClause = "", whereClause = "", orderByClause = "";
+    private int limitValue = -1;
+
+    public SQLQueryBuilder select(String... cols) { this.selectClause = "SELECT " + String.join(", ", cols); return this; }
+    public SQLQueryBuilder from(String table) { this.fromClause = " FROM " + table; return this; }
+    public SQLQueryBuilder where(String cond) { this.whereClause = " WHERE " + cond; return this; }
+    public SQLQueryBuilder orderBy(String col, String dir) { this.orderByClause = " ORDER BY " + col + " " + dir; return this; }
+    public SQLQueryBuilder limit(int limit) { this.limitValue = limit; return this; }
+
+    public String build() {
+        StringBuilder q = new StringBuilder().append(selectClause).append(fromClause).append(whereClause).append(orderByClause);
+        if (limitValue > 0) q.append(" LIMIT ").append(limitValue);
+        return q.toString();
     }
 }
 ```
 
-### When to Use vs Constructor
+### Builder vs Constructor
+
 | Aspect | Builder | Constructor |
-|--------|---------|------------|
-| Parameters | 5+ optional parameters | Few, mostly required |
-| Readability | Excellent (fluent) | Harder to read |
-| Immutability | Easy to implement | Possible but verbose |
-| Default values | Natural support | Requires multiple constructors |
-| Thread safety | Easier | Same |
-| Performance | Slight overhead | Minimal |
+|---|---|---|
+| **Parameters** | 5+ optional parameters | Few, mostly required |
+| **Readability** | High (named fluent methods) | Positional, hard to read |
+| **Immutability** | Easy (`final` fields, no setters) | Verbose with many overloads |
+| **Default Values** | Natural support in Builder | Requires telescoping overloads |
+| **Performance** | Slight extra Builder allocation | Minimal |
 
-### When to Use
-- Objects with many optional parameters
-- Creating immutable objects
-- Complex construction logic
-- Builder's fluent API improves readability
-- Default values needed
-
-### When NOT to Use
-- Simple objects with few parameters
-- When performance is critical (micro-optimizations)
-- Objects with only required parameters
+### Trade-Offs
+- **When to Use:** Many optional parameters, immutable objects, invariant validation in `build()`, fluent DSLs (`StringBuilder`, `HttpRequest.Builder`, SQL builders).
+- **When NOT to Use:** Simple POJOs with 1–3 required fields, or ultra-hot allocation paths.
 
 ---
 
 ## 5. Prototype Pattern
 
 ### Intent
-Create new objects by copying a prototype rather than instantiating from scratch.
+Create new objects by **copying an existing prototype** rather than instantiating from scratch.
 
-### Problem: Shallow vs Deep Copy
+```mermaid
+flowchart LR
+    subgraph Shallow["Shallow Copy (super.clone)"]
+        P1["person1"] --> A1["Address ('NYC')"]
+        P2["person2"] --> A1
+    end
+
+    subgraph Deep["Deep Copy / Copy Constructor"]
+        DP1["person1"] --> DA1["Address ('NYC')"]
+        DP2["person2"] --> DA2["Address ('Boston')"]
+    end
+
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+    class P1,P2,A1 red
+    class DP1,DP2,DA1,DA2 green
+```
+
+```mermaid
+classDiagram
+    class DocumentPrototypeRegistry {
+        -Map~String, Document~ prototypes
+        +registerPrototype(String key, Document doc) void
+        +createDocument(String key) Document
+    }
+    class Document {
+        -String title
+        -List~String~ content
+        -List~String~ permissions
+        +clone() Document
+    }
+    class Cloneable {
+        <<Interface>>
+    }
+
+    Cloneable <|.. Document
+    DocumentPrototypeRegistry o-- Document : caches templates
+```
+
+### Shallow Copy vs Deep Copy
 
 ```java
-public class PrototypeDemonstration {
+public static class Address {
+    public String street, city;
+    public Address(String street, String city) { this.street = street; this.city = city; }
+}
 
-    // Shallow copy problem
-    public static class Address {
-        public String street;
-        public String city;
+// Shallow copy: person2.address == person1.address (mutating one mutates both!)
+public static class PersonShallow implements Cloneable {
+    public String name;
+    public Address address;
 
-        public Address(String street, String city) {
-            this.street = street;
-            this.city = city;
-        }
-
-        @Override
-        public String toString() {
-            return city + " - " + street;
-        }
+    @Override
+    public PersonShallow clone() throws CloneNotSupportedException {
+        return (PersonShallow) super.clone();
     }
+}
 
-    public static class PersonShallow implements Cloneable {
-        public String name;
-        public Address address;
+// Deep copy: clones mutable nested objects
+public static class PersonDeep implements Cloneable {
+    public String name;
+    public Address address;
 
-        public PersonShallow(String name, Address address) {
-            this.name = name;
-            this.address = address;
-        }
-
-        @Override
-        public PersonShallow clone() throws CloneNotSupportedException {
-            return (PersonShallow) super.clone(); // Shallow copy!
-        }
-
-        @Override
-        public String toString() {
-            return name + " @ " + address;
-        }
-    }
-
-    public static void testShallowCopy() throws CloneNotSupportedException {
-        Address address = new Address("123 Main St", "NYC");
-        PersonShallow person1 = new PersonShallow("John", address);
-        PersonShallow person2 = person1.clone(); // Shallow copy
-
-        System.out.println("Before modification:");
-        System.out.println("person1: " + person1);
-        System.out.println("person2: " + person2);
-
-        // Modifying address affects both!
-        person2.address.city = "Boston";
-
-        System.out.println("\nAfter modification:");
-        System.out.println("person1: " + person1); // Also changed!
-        System.out.println("person2: " + person2);
-        System.out.println("Same address object: " + (person1.address == person2.address)); // true
-    }
-
-    // Deep copy solution
-    public static class PersonDeep implements Cloneable {
-        public String name;
-        public Address address;
-
-        public PersonDeep(String name, Address address) {
-            this.name = name;
-            this.address = address;
-        }
-
-        @Override
-        public PersonDeep clone() throws CloneNotSupportedException {
-            PersonDeep cloned = (PersonDeep) super.clone();
-            // Deep copy - manually clone mutable objects
-            cloned.address = new Address(this.address.street, this.address.city);
-            return cloned;
-        }
-
-        @Override
-        public String toString() {
-            return name + " @ " + address;
-        }
-    }
-
-    public static void testDeepCopy() throws CloneNotSupportedException {
-        Address address = new Address("123 Main St", "NYC");
-        PersonDeep person1 = new PersonDeep("John", address);
-        PersonDeep person2 = person1.clone(); // Deep copy
-
-        System.out.println("\nBefore modification:");
-        System.out.println("person1: " + person1);
-        System.out.println("person2: " + person2);
-
-        // Modifying address in person2 doesn't affect person1
-        person2.address.city = "Boston";
-
-        System.out.println("\nAfter modification:");
-        System.out.println("person1: " + person1); // Unchanged
-        System.out.println("person2: " + person2);
-        System.out.println("Different address objects: " + (person1.address != person2.address)); // true
-    }
-
-    public static void main(String[] args) throws CloneNotSupportedException {
-        testShallowCopy();
-        testDeepCopy();
+    @Override
+    public PersonDeep clone() throws CloneNotSupportedException {
+        PersonDeep cloned = (PersonDeep) super.clone();
+        cloned.address = new Address(this.address.street, this.address.city);
+        return cloned;
     }
 }
 ```
 
-### Copy Constructor Alternative (Preferred)
+> [!WARNING]
+> **Java `Cloneable` Pitfalls:** `Cloneable` is a marker interface without a `clone()` method, `Object.clone()` is `protected` and performs only a shallow copy, and it bypasses constructors. Prefer a **Copy Constructor** (`public Person(Person other)`) in modern Java.
+
+### Copy Constructor Alternative (Preferred) & Prototype Registry
 
 ```java
+// Preferred: Explicit Copy Constructor
 public class PersonCopyConstructor {
     private String name;
     private Address address;
 
-    // Regular constructor
     public PersonCopyConstructor(String name, Address address) {
         this.name = name;
         this.address = address;
     }
 
-    // Copy constructor - explicit deep copy
     public PersonCopyConstructor(PersonCopyConstructor other) {
         this.name = other.name;
-        // Deep copy of mutable objects
         this.address = new Address(other.address.street, other.address.city);
     }
-
-    public static class Address {
-        public String street;
-        public String city;
-
-        public Address(String street, String city) {
-            this.street = street;
-            this.city = city;
-        }
-    }
-
-    @Override
-    public String toString() {
-        return name + " @ " + address.city;
-    }
 }
 
-public class CopyConstructorDemo {
-    public static void main(String[] args) {
-        PersonCopyConstructor.Address address = new PersonCopyConstructor.Address("123 Main St", "NYC");
-        PersonCopyConstructor person1 = new PersonCopyConstructor("John", address);
-        PersonCopyConstructor person2 = new PersonCopyConstructor(person1); // Clear intent!
-
-        System.out.println("person1: " + person1);
-        System.out.println("person2: " + person2);
-    }
-}
-```
-
-### Real-World Example: Document Cloning
-
-```java
+// Real-World Example: Document Prototype Registry
 public class Document implements Cloneable {
     private String title;
-    private List<String> content;
-    private List<String> permissions;
+    private List<String> content = new ArrayList<>();
+    private List<String> permissions = new ArrayList<>();
 
-    public Document(String title) {
-        this.title = title;
-        this.content = new ArrayList<>();
-        this.permissions = new ArrayList<>();
-    }
-
-    public void addContent(String text) {
-        this.content.add(text);
-    }
-
-    public void addPermission(String permission) {
-        this.permissions.add(permission);
-    }
+    public Document(String title) { this.title = title; }
 
     @Override
     public Document clone() throws CloneNotSupportedException {
         Document cloned = (Document) super.clone();
-        // Deep copy collections
         cloned.content = new ArrayList<>(this.content);
         cloned.permissions = new ArrayList<>(this.permissions);
         return cloned;
     }
-
-    @Override
-    public String toString() {
-        return "Document{" +
-                "title='" + title + '\'' +
-                ", content=" + content +
-                ", permissions=" + permissions +
-                '}';
-    }
 }
 
-// Prototype Registry for efficient object creation
 public class DocumentPrototypeRegistry {
-    private Map<String, Document> prototypes = new HashMap<>();
+    private final Map<String, Document> prototypes = new HashMap<>();
 
-    public void registerPrototype(String key, Document document) {
-        prototypes.put(key, document);
-    }
+    public void registerPrototype(String key, Document doc) { prototypes.put(key, doc); }
 
     public Document createDocument(String key) throws CloneNotSupportedException {
         Document prototype = prototypes.get(key);
-        if (prototype == null) {
-            throw new IllegalArgumentException("Prototype not found: " + key);
-        }
+        if (prototype == null) throw new IllegalArgumentException("Prototype not found: " + key);
         return prototype.clone();
     }
 }
-
-public class DocumentPrototypeDemo {
-    public static void main(String[] args) throws CloneNotSupportedException {
-        DocumentPrototypeRegistry registry = new DocumentPrototypeRegistry();
-
-        // Create and register prototypes
-        Document reportTemplate = new Document("Monthly Report");
-        reportTemplate.addContent("Report header");
-        reportTemplate.addPermission("read");
-        registry.registerPrototype("report", reportTemplate);
-
-        // Create new documents from prototypes
-        Document report1 = registry.createDocument("report");
-        Document report2 = registry.createDocument("report");
-
-        report1.addContent("January data");
-        report2.addContent("February data");
-
-        System.out.println(report1);
-        System.out.println(report2);
-    }
-}
 ```
 
-### Issues with Cloneable and Solutions
-
-```java
-public class CloneableIssues {
-
-    // Problem 1: Cloneable doesn't override clone()
-    public static class BadImplementation implements Cloneable {
-        private int value;
-
-        public BadImplementation(int value) {
-            this.value = value;
-        }
-
-        // clone() from Object is protected, hard to use
-    }
-
-    // Solution: Provide public clone() method
-    public static class GoodImplementation implements Cloneable {
-        private int value;
-
-        public GoodImplementation(int value) {
-            this.value = value;
-        }
-
-        @Override
-        public GoodImplementation clone() {
-            try {
-                return (GoodImplementation) super.clone();
-            } catch (CloneNotSupportedException e) {
-                // Should never happen if properly implementing Cloneable
-                throw new AssertionError(e);
-            }
-        }
-    }
-
-    // Problem 2: No deep copy by default
-    // Solution: See deep copy examples above
-
-    // Better alternative: Avoid Cloneable, use copy constructor
-    public static class BestImplementation {
-        private int value;
-
-        public BestImplementation(int value) {
-            this.value = value;
-        }
-
-        // Copy constructor - explicit and clear
-        public BestImplementation(BestImplementation other) {
-            this.value = other.value;
-        }
-    }
-}
-```
-
-### When to Use
-- Expensive object creation (database queries, file I/O)
-- Creating variations of complex objects
-- Needing independent copies of mutable objects
-- Prototype registries for managing object templates
-
-### When NOT to Use
-- Simple objects (use constructors)
-- When deep copy is difficult to implement correctly
-- Performance is not a concern
+### Trade-Offs
+- **When to Use:** Expensive initialization (DB/file/network templates), creating variations of complex configured objects, prototype registries.
+- **When NOT to Use:** Simple objects, or object graphs with circular references where deep copying is error-prone.
 
 ---
 
 ## 6. Object Pool Pattern
 
 ### Intent
-Reuse objects instead of creating and destroying them repeatedly.
+**Reuse** expensive-to-create objects from a bounded pool instead of creating and destroying them repeatedly.
 
-### Real-World Example: Connection Pooling
+```mermaid
+flowchart TD
+    Req["Thread calls getConnection()"] --> Check{"availableConnections.isEmpty()?"}
+    Check -- "Yes (Pool Exhausted)" --> Wait["wait() until notifyAll()"]
+    Wait --> Check
+    Check -- "No" --> Poll["Poll Connection &amp; mark unavailable"]
+    Poll --> Use["Client executes query"]
+    Use --> Rel["releaseConnection(conn)"]
+    Rel --> Reset["Reset available=true, add back to Queue, notifyAll()"]
+
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    class Req,Check blue
+    class Wait red
+    class Poll,Use amber
+    class Rel,Reset green
+```
+
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1
+    participant T2 as Thread 2
+    participant Pool as ConnectionPool (max=1)
+    participant Conn as Connection
+
+    T1->>Pool: getConnection()
+    Pool-->>T1: Conn_1 (available=false)
+    T2->>Pool: getConnection()
+    Note over T2,Pool: Pool empty -> T2 calls wait()
+    T1->>Conn: execute("SELECT * FROM users")
+    T1->>Pool: releaseConnection(Conn_1)
+    Pool->>Pool: available=true, notifyAll()
+    Pool-->>T2: Conn_1 (reused!)
+```
+
+### Real-World Example: Thread-Safe Connection Pool
 
 ```java
 public class Connection implements Serializable {
-    private String id;
-    private boolean available;
-    private long createdAt;
-    private long lastUsedAt;
+    private final String id;
+    private boolean available = true;
+    private long lastUsedAt = System.currentTimeMillis();
 
-    public Connection(String id) {
-        this.id = id;
-        this.available = true;
-        this.createdAt = System.currentTimeMillis();
-        this.lastUsedAt = System.currentTimeMillis();
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public boolean isAvailable() {
-        return available;
-    }
-
+    public Connection(String id) { this.id = id; }
+    public String getId() { return id; }
     public void setAvailable(boolean available) {
         this.available = available;
         this.lastUsedAt = System.currentTimeMillis();
     }
-
     public void execute(String query) {
-        System.out.println("Executing query on connection " + id + ": " + query);
+        System.out.println("Executing on " + id + ": " + query);
         this.lastUsedAt = System.currentTimeMillis();
     }
-
     public boolean isExpired(long timeoutMs) {
         return System.currentTimeMillis() - lastUsedAt > timeoutMs;
     }
 }
 
 public class ConnectionPool {
-    private final Queue<Connection> availableConnections;
-    private final Set<Connection> allConnections;
-    private final int maxPoolSize;
+    private final Queue<Connection> availableConnections = new LinkedList<>();
+    private final Set<Connection> allConnections = Collections.synchronizedSet(new HashSet<>());
     private final long connectionTimeout;
-    private int connectionCounter = 0;
 
     public ConnectionPool(int maxPoolSize, long connectionTimeout) {
-        this.maxPoolSize = maxPoolSize;
         this.connectionTimeout = connectionTimeout;
-        this.availableConnections = new LinkedList<>();
-        this.allConnections = Collections.synchronizedSet(new HashSet<>());
-        initializePool();
-    }
-
-    private void initializePool() {
-        for (int i = 0; i < maxPoolSize; i++) {
-            Connection conn = new Connection("Conn_" + (++connectionCounter));
+        for (int i = 1; i <= maxPoolSize; i++) {
+            Connection conn = new Connection("Conn_" + i);
             availableConnections.add(conn);
             allConnections.add(conn);
         }
-        System.out.println("Initialized connection pool with " + maxPoolSize + " connections");
     }
 
     public synchronized Connection getConnection() throws InterruptedException {
         while (availableConnections.isEmpty()) {
-            System.out.println("Waiting for available connection...");
             wait();
         }
         Connection conn = availableConnections.poll();
@@ -1744,110 +903,52 @@ public class ConnectionPool {
         if (conn != null && allConnections.contains(conn)) {
             conn.setAvailable(true);
             availableConnections.add(conn);
-            notifyAll(); // Notify waiting threads
-            System.out.println("Connection " + conn.getId() + " released back to pool");
+            notifyAll();
         }
     }
 
-    // Maintenance: Remove expired connections
     public synchronized void removeExpiredConnections() {
         allConnections.removeIf(conn -> conn.isExpired(connectionTimeout));
-        System.out.println("Removed expired connections. Pool size: " + allConnections.size());
-    }
-
-    public synchronized int getAvailableConnectionCount() {
-        return availableConnections.size();
-    }
-
-    public synchronized int getTotalConnectionCount() {
-        return allConnections.size();
-    }
-}
-
-// Usage
-public class ConnectionPoolDemo {
-    public static void main(String[] args) throws InterruptedException {
-        ConnectionPool pool = new ConnectionPool(3, 60000); // 3 connections, 60s timeout
-
-        // Simulate multiple threads accessing the pool
-        ExecutorService executor = Executors.newFixedThreadPool(5);
-
-        for (int i = 0; i < 5; i++) {
-            final int threadId = i;
-            executor.submit(() -> {
-                try {
-                    Connection conn = pool.getConnection();
-                    System.out.println("Thread " + threadId + " got connection: " + conn.getId());
-
-                    conn.execute("SELECT * FROM users");
-                    Thread.sleep(1000); // Simulate query execution
-
-                    pool.releaseConnection(conn);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-
-        executor.shutdown();
-        executor.awaitTermination(10, TimeUnit.SECONDS);
-
-        System.out.println("Final pool state:");
-        System.out.println("Available: " + pool.getAvailableConnectionCount());
-        System.out.println("Total: " + pool.getTotalConnectionCount());
     }
 }
 ```
 
 ### Thread Pool as Object Pool
+Java's `ExecutorService executor = Executors.newFixedThreadPool(4);` is a built-in Object Pool: worker threads are pre-created/reused across tasks rather than spawning a new OS thread per task.
 
-```java
-public class ThreadPoolDemo {
-    public static void main(String[] args) {
-        // Java's ExecutorService is an object pool pattern
-        ExecutorService executor = Executors.newFixedThreadPool(4); // Pool of 4 threads
-
-        // Tasks are executed using threads from the pool
-        for (int i = 0; i < 10; i++) {
-            final int taskId = i;
-            executor.submit(() -> {
-                System.out.println("Task " + taskId + " executed by " + Thread.currentThread().getName());
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-
-        executor.shutdown();
-    }
-}
-```
-
-### When to Use
-- Database connection management
-- Thread pool management
-- Buffer/memory pool management
-- Expensive object creation
-- High-frequency object creation and destruction
-
-### When NOT to Use
-- Objects with limited lifespan
-- Simple, lightweight objects
-- Stateful objects that cannot be reused safely
-- Memory is not a constraint
+### Trade-Offs
+- **When to Use:** Database connections (HikariCP), thread pools (`ExecutorService`), byte buffers, sockets—any resource with high creation cost or strict concurrency caps.
+- **When NOT to Use:** Lightweight short-lived objects (JVM generational GC handles them faster than synchronization), or stateful objects that leak state if not reset cleanly.
 
 ---
 
 ## Summary Table: When to Use Each Creational Pattern
 
-| Pattern | Use Case | Key Benefit |
-|---------|----------|------------|
-| **Singleton** | Logging, configuration, caching | Single instance guarantee |
-| **Factory Method** | Creating objects whose type varies | Decouples client from concrete classes |
-| **Abstract Factory** | Families of related products | Ensures consistency across families |
-| **Builder** | Complex objects with many options | Clear, readable object construction |
-| **Prototype** | Expensive object copying | Efficient object replication |
-| **Object Pool** | Frequently created/destroyed objects | Reduces allocation overhead |
+```mermaid
+flowchart TD
+    Q1{"Need exactly 1 global instance?"} -- "Yes" --> S["Singleton"]
+    Q1 -- "No" --> Q2{"Need bounded reuse of expensive objects?"}
+    Q2 -- "Yes" --> OP["Object Pool"]
+    Q2 -- "No" --> Q3{"Cloning an existing configured instance?"}
+    Q3 -- "Yes" --> P["Prototype"]
+    Q3 -- "No" --> Q4{"Many optional parameters / immutable build?"}
+    Q4 -- "Yes" --> B["Builder"]
+    Q4 -- "No" --> Q5{"Creating a family of related objects?"}
+    Q5 -- "Yes" --> AF["Abstract Factory"]
+    Q5 -- "No" --> FM["Factory Method"]
 
+    classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+    class Q1,Q2,Q3,Q4,Q5 blue
+    class S,OP,P,B,AF,FM green
+```
+
+| Pattern | Use Case | Key Benefit | Primary Java / Spring Example |
+|---|---|---|---|
+| **Singleton** | Logging, configuration, caching | Single instance guarantee | `EnumSingleton`, Spring Singleton Registry |
+| **Factory Method** | Creating objects whose type varies at runtime | Decouples client from concrete classes | `ConnectionFactory`, Spring `@Bean` |
+| **Abstract Factory** | Families of related products | Ensures consistency across families | `UIFactory` (Light/Dark), `OSFactory` |
+| **Builder** | Complex objects with 5+ optional params | Readable fluent API, immutability | `StringBuilder`, Lombok `@Builder`, `SQLQueryBuilder` |
+| **Prototype** | Expensive object copying / templates | Efficient replication without re-init | Copy Constructor, `DocumentPrototypeRegistry` |
+| **Object Pool** | Frequently borrowed expensive resources | Amortizes allocation &amp; caps concurrency | `ConnectionPool`, `Executors.newFixedThreadPool` |

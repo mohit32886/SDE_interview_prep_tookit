@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">LLD Parking Lot End-to-End Architecture</title>
+  <desc id="desc">Animated lifecycle showing EntryGate, ParkingStrategy spot selection, Ticket issuance, ExitGate, PricingStrategy calculation, PaymentProcessor, and Spot freed.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .title { font: 700 18px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 12px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+      .node-title { font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #f8fafc; }
+      .node-sub { font: 400 11px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #cbd5e1; }
+      .badge-text { font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #0f172a; }
+      .flow-label { font: 600 10px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+      .connector { fill: none; stroke: #475569; stroke-width: 2; stroke-dasharray: 6 5; animation: dash 1.8s linear infinite; }
+      .connector-loop { fill: none; stroke: #22c55e; stroke-width: 1.8; stroke-dasharray: 5 5; opacity: 0.75; animation: dash 2.2s linear infinite; }
+      @keyframes dash {
+        to { stroke-dashoffset: -22; }
+      }
+      @keyframes pulseNode {
+        0%, 100% { filter: drop-shadow(0 0 0px rgba(56, 189, 248, 0)); }
+        50% { filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.45)); }
+      }
+      .pulse-1 { animation: pulseNode 7s ease-in-out infinite 0s; }
+      .pulse-2 { animation: pulseNode 7s ease-in-out infinite 1s; }
+      .pulse-3 { animation: pulseNode 7s ease-in-out infinite 2s; }
+      .pulse-4 { animation: pulseNode 7s ease-in-out infinite 3s; }
+      .pulse-5 { animation: pulseNode 7s ease-in-out infinite 4s; }
+      .pulse-6 { animation: pulseNode 7s ease-in-out infinite 5s; }
+      .pulse-7 { animation: pulseNode 7s ease-in-out infinite 6s; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e" />
+    </marker>
+    <path id="lifecyclePath" d="M 130 127 L 365 127 L 600 127 L 830 127 L 830 205 L 765 205 L 765 287 L 480 287 L 195 287" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg" x="0" y="0" width="960" height="430" rx="14" />
+  <rect x="12" y="12" width="936" height="406" rx="10" fill="none" stroke="#1e293b" stroke-width="2" />
+
+  <!-- Header -->
+  <text class="title" x="32" y="42">Parking Lot LLD — Request &amp; Lifecycle Flow</text>
+  <text class="subtitle" x="32" y="62">Facade (ParkingLot) coordinates Strategy (spot &amp; pricing), Ticket state, and concurrent Spot release</text>
+
+  <!-- Connectors Top Row -->
+  <line class="connector" x1="220" y1="127" x2="262" y2="127" marker-end="url(#arrow)" />
+  <line class="connector" x1="460" y1="127" x2="502" y2="127" marker-end="url(#arrow)" />
+  <line class="connector" x1="690" y1="127" x2="732" y2="127" marker-end="url(#arrow)" />
+
+  <!-- Connector Down to Exit Pricing -->
+  <path class="connector" d="M 830 171 L 830 205 L 765 205 L 765 237" marker-end="url(#arrow)" />
+  <text class="flow-label" x="840" y="203">Exit Scan</text>
+
+  <!-- Connectors Bottom Row (Right to Left) -->
+  <line class="connector" x1="660" y1="287" x2="593" y2="287" marker-end="url(#arrow)" />
+  <line class="connector" x1="375" y1="287" x2="308" y2="287" marker-end="url(#arrow)" />
+
+  <!-- Loopback to ParkingStrategy -->
+  <path class="connector-loop" d="M 195 245 L 195 205 L 365 205 L 365 177" marker-end="url(#arrow-green)" />
+  <text class="flow-label" x="215" y="197" fill="#4ade80">Pool Updated: AVAILABLE</text>
+
+  <!-- Step 1: EntryGate -->
+  <g class="pulse-1">
+    <rect class="panel" x="40" y="85" width="180" height="84" rx="10" stroke="#38bdf8" />
+    <rect x="52" y="75" width="64" height="18" rx="4" fill="#38bdf8" />
+    <text class="badge-text" x="84" y="87" text-anchor="middle">1. ENTRY</text>
+    <text class="node-title" x="130" y="116" text-anchor="middle">EntryGate</text>
+    <text class="node-sub" x="130" y="136" text-anchor="middle">scanPlate(vehicle)</text>
+    <text class="node-sub" x="130" y="153" text-anchor="middle" fill="#7dd3fc">synchronized park()</text>
+  </g>
+
+  <!-- Step 2: ParkingStrategy -->
+  <g class="pulse-2">
+    <rect class="panel" x="270" y="85" width="190" height="84" rx="10" stroke="#a855f7" />
+    <rect x="282" y="75" width="84" height="18" rx="4" fill="#a855f7" />
+    <text class="badge-text" x="324" y="87" text-anchor="middle" fill="#ffffff">2. STRATEGY</text>
+    <text class="node-title" x="365" y="116" text-anchor="middle">ParkingStrategy</text>
+    <text class="node-sub" x="365" y="136" text-anchor="middle">findAvailableSpace()</text>
+    <text class="node-sub" x="365" y="153" text-anchor="middle" fill="#d8b4fe">Nearest / BestFit</text>
+  </g>
+
+  <!-- Step 3: Ticket -->
+  <g class="pulse-3">
+    <rect class="panel" x="510" y="85" width="180" height="84" rx="10" stroke="#f59e0b" />
+    <rect x="522" y="75" width="76" height="18" rx="4" fill="#f59e0b" />
+    <text class="badge-text" x="560" y="87" text-anchor="middle">3. TICKET</text>
+    <text class="node-title" x="600" y="116" text-anchor="middle">Ticket Issued</text>
+    <text class="node-sub" x="600" y="136" text-anchor="middle">id, entryTime, spotId</text>
+    <text class="node-sub" x="600" y="153" text-anchor="middle" fill="#fcd34d">Spot -&gt; OCCUPIED</text>
+  </g>
+
+  <!-- Step 4: ExitGate -->
+  <g class="pulse-4">
+    <rect class="panel" x="740" y="85" width="180" height="84" rx="10" stroke="#38bdf8" />
+    <rect x="752" y="75" width="64" height="18" rx="4" fill="#38bdf8" />
+    <text class="badge-text" x="784" y="87" text-anchor="middle">4. EXIT</text>
+    <text class="node-title" x="830" y="116" text-anchor="middle">ExitGate</text>
+    <text class="node-sub" x="830" y="136" text-anchor="middle">unparkVehicle(plate)</text>
+    <text class="node-sub" x="830" y="153" text-anchor="middle" fill="#7dd3fc">lookup vehicleToSpace</text>
+  </g>
+
+  <!-- Step 5: PricingStrategy -->
+  <g class="pulse-5">
+    <rect class="panel" x="660" y="245" width="210" height="84" rx="10" stroke="#a855f7" />
+    <rect x="672" y="235" width="84" height="18" rx="4" fill="#a855f7" />
+    <text class="badge-text" x="714" y="247" text-anchor="middle" fill="#ffffff">5. PRICING</text>
+    <text class="node-title" x="765" y="276" text-anchor="middle">PricingStrategy</text>
+    <text class="node-sub" x="765" y="296" text-anchor="middle">calculatePrice(in, out)</text>
+    <text class="node-sub" x="765" y="313" text-anchor="middle" fill="#d8b4fe">Hourly / Flat / Dynamic</text>
+  </g>
+
+  <!-- Step 6: PaymentProcessor -->
+  <g class="pulse-6">
+    <rect class="panel" x="375" y="245" width="210" height="84" rx="10" stroke="#ec4899" />
+    <rect x="387" y="235" width="88" height="18" rx="4" fill="#ec4899" />
+    <text class="badge-text" x="431" y="247" text-anchor="middle" fill="#ffffff">6. PAYMENT</text>
+    <text class="node-title" x="480" y="276" text-anchor="middle">PaymentProcessor</text>
+    <text class="node-sub" x="480" y="296" text-anchor="middle">charge(amount)</text>
+    <text class="node-sub" x="480" y="313" text-anchor="middle" fill="#f9a8d4">Card / UPI / Cash</text>
+  </g>
+
+  <!-- Step 7: Spot Freed -->
+  <g class="pulse-7">
+    <rect class="panel" x="90" y="245" width="210" height="84" rx="10" stroke="#22c55e" />
+    <rect x="102" y="235" width="88" height="18" rx="4" fill="#22c55e" />
+    <text class="badge-text" x="146" y="247" text-anchor="middle">7. RELEASE</text>
+    <text class="node-title" x="195" y="276" text-anchor="middle">Spot Freed</text>
+    <text class="node-sub" x="195" y="296" text-anchor="middle">space.unparkVehicle()</text>
+    <text class="node-sub" x="195" y="313" text-anchor="middle" fill="#86efac">status = AVAILABLE</text>
+  </g>
+
+  <!-- Animated Token Traveling Along Lifecycle -->
+  <circle r="6" fill="#38bdf8">
+    <animateMotion dur="7s" repeatCount="indefinite" rotate="auto">
+      <mpath href="#lifecyclePath" />
+    </animateMotion>
+  </circle>
+  <circle r="11" fill="#38bdf8" opacity="0.25">
+    <animateMotion dur="7s" repeatCount="indefinite" rotate="auto">
+      <mpath href="#lifecyclePath" />
+    </animateMotion>
+  </circle>
+
+  <!-- Footer Legend -->
+  <rect x="32" y="358" width="896" height="44" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" />
+  <circle cx="54" cy="380" r="5" fill="#38bdf8" />
+  <text class="node-sub" x="66" y="384">Facade Gates (Entry/Exit)</text>
+  <circle cx="244" cy="380" r="5" fill="#a855f7" />
+  <text class="node-sub" x="256" y="384">Swappable Strategies (Spot/Pricing)</text>
+  <circle cx="494" cy="380" r="5" fill="#f59e0b" />
+  <text class="node-sub" x="506" y="384">Ticket &amp; State</text>
+  <circle cx="644" cy="380" r="5" fill="#22c55e" />
+  <text class="node-sub" x="656" y="384">Thread-Safe Spot Release</text>
+</svg>

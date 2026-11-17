@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Interview Pattern Selector Decision Matrix</title>
+  <desc id="desc">Animated decision tree mapping interview prompts to Strategy, Builder, Decorator or Proxy, and State patterns.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .title { font: 700 18px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 12px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+      .q-text { font: 600 12px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
+      .p-title { font: 700 14px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #f8fafc; }
+      .p-sub { font: 400 11px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #cbd5e1; }
+      .badge { font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #0f172a; }
+      .branch-line { fill: none; stroke: #475569; stroke-width: 2; stroke-dasharray: 6 5; animation: dashFlow 2s linear infinite; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -22; }
+      }
+      @keyframes cardGlow {
+        0%, 100% { stroke-opacity: 0.75; }
+        50% { stroke-opacity: 1; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.35)); }
+      }
+      .glow-1 { animation: cardGlow 4s ease-in-out infinite 0s; }
+      .glow-2 { animation: cardGlow 4s ease-in-out infinite 1s; }
+      .glow-3 { animation: cardGlow 4s ease-in-out infinite 2s; }
+      .glow-4 { animation: cardGlow 4s ease-in-out infinite 3s; }
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+    <path id="path1" d="M 230 220 L 295 220 L 295 108 L 350 108" />
+    <path id="path2" d="M 230 220 L 295 220 L 295 182 L 350 182" />
+    <path id="path3" d="M 230 220 L 295 220 L 295 258 L 350 258" />
+    <path id="path4" d="M 230 220 L 295 220 L 295 332 L 350 332" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg" x="0" y="0" width="960" height="440" rx="14" />
+  <rect x="12" y="12" width="936" height="416" rx="10" fill="none" stroke="#1e293b" stroke-width="2" />
+
+  <!-- Header -->
+  <text class="title" x="32" y="42">FAANG Pattern Selector Matrix</text>
+  <text class="subtitle" x="32" y="62">Map interview requirements to the right GoF pattern in seconds</text>
+
+  <!-- Root Node -->
+  <rect class="panel" x="36" y="176" width="194" height="88" rx="12" stroke="#38bdf8" stroke-width="2" />
+  <rect x="52" y="166" width="104" height="18" rx="4" fill="#38bdf8" />
+  <text class="badge" x="104" y="178" text-anchor="middle">INTERVIEW PROMPT</text>
+  <text class="p-title" x="133" y="212" text-anchor="middle">Design Need</text>
+  <text class="p-sub" x="133" y="232" text-anchor="middle">Identify core axis of</text>
+  <text class="p-sub" x="133" y="248" text-anchor="middle">change or complexity</text>
+
+  <!-- Branch Lines (Root -> Questions) -->
+  <path class="branch-line" d="M 230 220 L 295 220 L 295 108 L 342 108" marker-end="url(#arr)" />
+  <path class="branch-line" d="M 230 220 L 295 220 L 295 182 L 342 182" marker-end="url(#arr)" />
+  <path class="branch-line" d="M 230 220 L 295 220 L 295 258 L 342 258" marker-end="url(#arr)" />
+  <path class="branch-line" d="M 230 220 L 295 220 L 295 332 L 342 332" marker-end="url(#arr)" />
+
+  <!-- Animated Signal Dots along branches -->
+  <circle r="4" fill="#38bdf8">
+    <animateMotion dur="2.6s" repeatCount="indefinite" begin="0s">
+      <mpath href="#path1" />
+    </animateMotion>
+  </circle>
+  <circle r="4" fill="#a855f7">
+    <animateMotion dur="2.6s" repeatCount="indefinite" begin="0.65s">
+      <mpath href="#path2" />
+    </animateMotion>
+  </circle>
+  <circle r="4" fill="#f59e0b">
+    <animateMotion dur="2.6s" repeatCount="indefinite" begin="1.3s">
+      <mpath href="#path3" />
+    </animateMotion>
+  </circle>
+  <circle r="4" fill="#22c55e">
+    <animateMotion dur="2.6s" repeatCount="indefinite" begin="1.95s">
+      <mpath href="#path4" />
+    </animateMotion>
+  </circle>
+
+  <!-- Row 1: Strategy -->
+  <rect class="panel" x="350" y="80" width="250" height="56" rx="8" />
+  <text class="q-text" x="475" y="105" text-anchor="middle">Changing algorithm at runtime?</text>
+  <text class="p-sub" x="475" y="123" text-anchor="middle" fill="#94a3b8">Swap behavior without if/else</text>
+  <line class="branch-line" x1="600" y1="108" x2="652" y2="108" marker-end="url(#arr)" />
+  <g class="glow-1">
+    <rect class="panel" x="660" y="80" width="264" height="56" rx="8" stroke="#38bdf8" />
+    <rect x="672" y="71" width="76" height="16" rx="4" fill="#38bdf8" />
+    <text class="badge" x="710" y="82" text-anchor="middle">BEHAVIORAL</text>
+    <text class="p-title" x="792" y="105" text-anchor="middle" fill="#7dd3fc">Strategy</text>
+    <text class="p-sub" x="792" y="123" text-anchor="middle">SortingStrategy, PaymentMethod</text>
+  </g>
+
+  <!-- Row 2: Builder -->
+  <rect class="panel" x="350" y="154" width="250" height="56" rx="8" />
+  <text class="q-text" x="475" y="179" text-anchor="middle">Multi-step object?</text>
+  <text class="p-sub" x="475" y="197" text-anchor="middle" fill="#94a3b8">5+ params, optional fields, immutable</text>
+  <line class="branch-line" x1="600" y1="182" x2="652" y2="182" marker-end="url(#arr)" />
+  <g class="glow-2">
+    <rect class="panel" x="660" y="154" width="264" height="56" rx="8" stroke="#a855f7" />
+    <rect x="672" y="145" width="76" height="16" rx="4" fill="#a855f7" />
+    <text class="badge" x="710" y="156" text-anchor="middle" fill="#ffffff">CREATIONAL</text>
+    <text class="p-title" x="792" y="179" text-anchor="middle" fill="#d8b4fe">Builder</text>
+    <text class="p-sub" x="792" y="197" text-anchor="middle">UserBuilder, fluent .build()</text>
+  </g>
+
+  <!-- Row 3: Decorator / Proxy -->
+  <rect class="panel" x="350" y="230" width="250" height="56" rx="8" />
+  <text class="q-text" x="475" y="255" text-anchor="middle">Cross-cutting wrapper?</text>
+  <text class="p-sub" x="475" y="273" text-anchor="middle" fill="#94a3b8">Add behavior vs control access</text>
+  <line class="branch-line" x1="600" y1="258" x2="652" y2="258" marker-end="url(#arr)" />
+  <g class="glow-3">
+    <rect class="panel" x="660" y="230" width="264" height="56" rx="8" stroke="#f59e0b" />
+    <rect x="672" y="221" width="76" height="16" rx="4" fill="#f59e0b" />
+    <text class="badge" x="710" y="232" text-anchor="middle">STRUCTURAL</text>
+    <text class="p-title" x="792" y="255" text-anchor="middle" fill="#fcd34d">Decorator / Proxy</text>
+    <text class="p-sub" x="792" y="273" text-anchor="middle">CoffeeDecorator vs @Transactional</text>
+  </g>
+
+  <!-- Row 4: State -->
+  <rect class="panel" x="350" y="304" width="250" height="56" rx="8" />
+  <text class="q-text" x="475" y="329" text-anchor="middle">State-dependent behavior?</text>
+  <text class="p-sub" x="475" y="347" text-anchor="middle" fill="#94a3b8">Lifecycle transitions drive actions</text>
+  <line class="branch-line" x1="600" y1="332" x2="652" y2="332" marker-end="url(#arr)" />
+  <g class="glow-4">
+    <rect class="panel" x="660" y="304" width="264" height="56" rx="8" stroke="#22c55e" />
+    <rect x="672" y="295" width="76" height="16" rx="4" fill="#22c55e" />
+    <text class="badge" x="710" y="306" text-anchor="middle">BEHAVIORAL</text>
+    <text class="p-title" x="792" y="329" text-anchor="middle" fill="#86efac">State</text>
+    <text class="p-sub" x="792" y="347" text-anchor="middle">ATMState, ElevatorState</text>
+  </g>
+
+  <!-- Footer -->
+  <rect x="36" y="380" width="888" height="34" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" />
+  <text class="p-sub" x="480" y="401" text-anchor="middle" fill="#94a3b8">Rule of Thumb: Prefer Composition (Strategy/Decorator) over Inheritance (Template Method) when runtime flexibility matters.</text>
+</svg>

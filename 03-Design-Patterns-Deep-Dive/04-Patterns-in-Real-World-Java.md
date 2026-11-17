@@ -1,11 +1,107 @@
 # Design Patterns in Real-World Java: SDK, Frameworks, and Best Practices
 
+## Table of Contents
+
+- [Overview](#overview)
+- [1. Design Patterns in Java SDK](#1-design-patterns-in-java-sdk)
+- [2. Design Patterns in Spring Framework](#2-design-patterns-in-spring-framework)
+- [3. Anti-Patterns to Avoid](#3-anti-patterns-to-avoid)
+- [4. SOLID Principles and Design Patterns](#4-solid-principles-and-design-patterns)
+- [5. Refactoring to Patterns](#5-refactoring-to-patterns)
+- [6. Interview Discussion Points](#6-interview-discussion-points)
+- [Summary: Design Patterns Mapping](#summary-design-patterns-mapping)
+
+---
+
 ## Overview
-This section maps design patterns to real-world implementations in Java SDK, Spring Framework, and standard libraries. Understanding these connections is crucial for FAANG interviews and practical development.
+
+This section maps design patterns to real-world implementations in the **Java SDK**, **Spring Framework**, and standard libraries. Understanding these connections is crucial for FAANG interviews and practical enterprise development.
+
+- **Java SDK Foundation**: Collections, `java.io` streams, and `java.util.concurrent` bake GoF patterns directly into standard APIs.
+- **Spring Framework Backbone**: `DispatcherServlet`, `ApplicationContext`, `BeanFactory`, AOP dynamic proxies, and `JdbcTemplate` turn patterns into declarative infrastructure.
+- **Architectural Discipline**: Pairing SOLID principles with pattern-driven refactoring prevents God Objects, circular dependencies, and hidden Service Locator coupling.
+
+```mermaid
+flowchart LR
+    SDK["Java SDK (Collections, IO, Concurrent)"] -->|"Foundational GoF"| APP["Production Java Services"]
+    SPRING["Spring Framework (IoC, AOP, MVC, JDBC)"] -->|"Declarative Infrastructure"| APP
+    SOLID["SOLID Principles & Refactoring"] -->|"Guards Against Anti-Patterns"| APP
+
+    classDef sdk fill:#0c4a6e,stroke:#38bdf8,color:#f8fafc
+    classDef spring fill:#064e3b,stroke:#34d399,color:#f8fafc
+    classDef solid fill:#312e81,stroke:#818cf8,color:#f8fafc
+    classDef app fill:#1e293b,stroke:#fbbf24,color:#f8fafc
+
+    class SDK sdk
+    class SPRING spring
+    class SOLID solid
+    class APP app
+```
+
+> [!TIP]
+> In system design and LLD interviews, citing **where a pattern already exists in the JDK or Spring** (e.g., `BufferedInputStream` for Decorator, `JdbcTemplate` for Template Method, `DispatcherServlet` for Front Controller) signals senior-level practical fluency.
 
 ---
 
 ## 1. Design Patterns in Java SDK
+
+The Java Standard Library is a living catalog of GoF patterns. Recognizing them helps you reuse standard abstractions instead of reinventing custom plumbing.
+
+| Package / API | Pattern | Key Types | Core Benefit |
+| :--- | :--- | :--- | :--- |
+| `java.util` | **Iterator** | `Iterable`, `Iterator`, `ListIterator` | Uniform traversal without exposing internal storage |
+| `java.util.Collections` | **Decorator** | `unmodifiableList`, `synchronizedList`, `singletonList` | Runtime immutability or thread-safety wrappers |
+| `java.util` (Java 9+) | **Factory Method** | `List.of()`, `Set.of()`, `Map.of()` | Concise immutable collection instantiation |
+| `java.util` / `java.lang` | **Strategy** | `Comparable`, `Comparator` | Swappable sorting and comparison algorithms |
+| `java.io` | **Decorator** | `FileInputStream`, `BufferedInputStream`, `DataInputStream` | Composable buffering and primitive I/O layers |
+| `java.util.concurrent` | **Command** | `Runnable`, `Callable`, `ExecutorService` | Decouples task submission from thread execution |
+
+```mermaid
+flowchart LR
+    CLIENT["Client Code"] -->|"reads primitives"| DATA["DataInputStream (Decorator 2)"]
+    DATA -->|"buffers bytes"| BUF["BufferedInputStream (Decorator 1)"]
+    BUF -->|"raw byte stream"| FILE["FileInputStream (Concrete Component)"]
+    FILE -->|"OS handle"| DISK["data.txt"]
+
+    classDef client fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef deco fill:#312e81,stroke:#818cf8,color:#f8fafc
+    classDef comp fill:#064e3b,stroke:#34d399,color:#f8fafc
+    classDef disk fill:#78350f,stroke:#fbbf24,color:#f8fafc
+
+    class CLIENT client
+    class DATA,BUF deco
+    class FILE comp
+    class DISK disk
+```
+
+```mermaid
+classDiagram
+    class Iterable~T~ {
+        <<Interface>>
+        +iterator() Iterator~T~
+    }
+    class Iterator~T~ {
+        <<Interface>>
+        +hasNext() boolean
+        +next() T
+    }
+    class ListIterator~T~ {
+        <<Interface>>
+        +hasPrevious() boolean
+        +previous() T
+    }
+    class ArrayList~T~ {
+        +iterator() Iterator~T~
+    }
+    class Comparator~T~ {
+        <<Interface>>
+        +compare(T o1, T o2) int
+    }
+
+    Iterable~T~ <|.. ArrayList~T~
+    Iterator~T~ <|-- ListIterator~T~
+    ArrayList~T~ ..> Iterator~T~ : creates
+```
 
 ### Collections Framework
 
@@ -213,9 +309,92 @@ public class ConcurrentPatternsDemo {
 }
 ```
 
+> [!IMPORTANT]
+> `Collections.unmodifiableList(list)` is a **read-only view decorator**, not a deep copy. Mutating the backing `list` still reflects through the unmodifiable wrapper, whereas `List.of(...)` creates a truly immutable collection.
+
 ---
 
 ## 2. Design Patterns in Spring Framework
+
+Spring operationalizes GoF and enterprise patterns so application code stays focused on business logic while the container handles lifecycle, transactions, routing, and resource cleanup.
+
+![Spring Framework Request and Pattern Pipeline](./assets/04-spring-patterns-pipeline.svg)
+
+| Spring Component | Design Pattern | Mechanism | Real-World Role |
+| :--- | :--- | :--- | :--- |
+| `DispatcherServlet` | **Front Controller** | Central `doDispatch()` entrypoint | Routes all HTTP requests through `HandlerMapping` & `HandlerAdapter` |
+| `BeanFactory` / `ApplicationContext` | **Factory** + **Singleton** | Bean registry & `@Bean` factories | Instantiates, wires, and caches singleton beans by default |
+| `@Transactional` / `@Cacheable` / `@Aspect` | **Proxy (AOP)** | JDK Dynamic Proxy or CGLIB subclass | Intercepts calls for transactions, caching, logging, `@Async` |
+| `JdbcTemplate` | **Template Method** | Fixed JDBC skeleton + `RowMapper` hook | Automates connection, statement, exception translation, and close |
+| `ApplicationEventPublisher` | **Observer** | Event dispatch to `@EventListener` beans | Decouples side effects (welcome email, audit) from core writes |
+| `ResourceLoader` | **Strategy** | `classpath:`, `file:`, `http:` prefixes | Swaps resource resolution strategy behind `Resource` interface |
+
+```mermaid
+flowchart TD
+    REQ["HTTP Request"] --> DS["DispatcherServlet (Front Controller)"]
+    DS -->|"resolves route"| HM["HandlerMapping (Strategy)"]
+    HM -->|"invokes controller"| PROXY["AOP Dynamic Proxy (@Transactional / @Cacheable)"]
+    PROXY -->|"delegates to"| SVC["UserService (@Service Singleton Bean)"]
+    SVC -->|"queries via"| JDBC["JdbcTemplate (Template Method)"]
+    SVC -->|"publishes event"| EVT["ApplicationEventPublisher (Observer)"]
+    EVT -->|"notifies"| LST["@EventListener Beans"]
+    CTX["ApplicationContext / BeanFactory (Factory)"] -.->|"wires & manages"| SVC
+
+    classDef mvc fill:#0c4a6e,stroke:#38bdf8,color:#f8fafc
+    classDef proxy fill:#831843,stroke:#f472b6,color:#f8fafc
+    classDef core fill:#064e3b,stroke:#34d399,color:#f8fafc
+    classDef data fill:#78350f,stroke:#fbbf24,color:#f8fafc
+    classDef ioc fill:#312e81,stroke:#818cf8,color:#f8fafc
+
+    class REQ,DS,HM mvc
+    class PROXY proxy
+    class SVC,EVT,LST core
+    class JDBC data
+    class CTX ioc
+```
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as "AOP Proxy (@Transactional)"
+    participant Aspect as "LoggingAspect (@Around)"
+    participant Target as "UserService (Target Bean)"
+    participant DB as "JdbcTemplate / DB"
+
+    Client->>Proxy: saveUser(user)
+    Proxy->>Aspect: logExecutionTime(joinPoint)
+    Aspect->>Proxy: joinPoint.proceed()
+    Proxy->>Proxy: Begin Transaction
+    Proxy->>Target: saveUser(user)
+    Target->>DB: update(sql, params)
+    DB-->>Target: rows affected
+    Target-->>Proxy: return
+    Proxy->>Proxy: Commit Transaction
+    Aspect-->>Client: log duration and return
+```
+
+### Front Controller Pattern - DispatcherServlet
+
+In Spring MVC, `DispatcherServlet` acts as the **Front Controller**, providing a single centralized entry point for all incoming HTTP requests. It delegates route lookup to `HandlerMapping` (Strategy), invocation to `HandlerAdapter` (Adapter), and response rendering to `ViewResolver` or `HttpMessageConverter`.
+
+```java
+// Spring MVC Front Controller flow (conceptual)
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+
+    // DispatcherServlet -> HandlerMapping -> HandlerAdapter -> UserController
+    @GetMapping("/{id}")
+    public User getUser(@PathVariable String id) {
+        return userService.getUserById(id);
+    }
+}
+```
 
 ### Inversion of Control (IoC) and Dependency Injection
 
@@ -393,6 +572,9 @@ public class UserService {
 // - Aspects (@Aspect)
 ```
 
+> [!WARNING]
+> **Self-invocation pitfall**: Calling a `@Transactional` or `@Cacheable` method from *another method inside the same class* (`this.saveUser(...)`) bypasses the Spring AOP proxy, so transactions and caching will silently not apply.
+
 ### Observer Pattern - Spring Events
 
 ```java
@@ -489,9 +671,35 @@ public class BeanFactoryDemo {
 }
 ```
 
+> [!IMPORTANT]
+> `ApplicationContext` extends `BeanFactory` and adds eager singleton pre-instantiation, internationalization (`MessageSource`), `ApplicationEventPublisher`, and `ResourceLoader` strategy support.
+
 ---
 
 ## 3. Anti-Patterns to Avoid
+
+Misapplying patterns—or ignoring separation of concerns—creates brittle codebases that are hard to test and evolve.
+
+| Anti-Pattern | Symptom | Root Cause | Pattern-Based Fix |
+| :--- | :--- | :--- | :--- |
+| **God Object** | 100+ methods, unrelated responsibilities | Violates SRP | Split into focused services + DI |
+| **Singleton Overuse** | Global static state everywhere | Tight coupling, untestable globals | Container-managed DI beans |
+| **Circular Dependencies** | `ServiceA <-> ServiceB` deadlock | Tangled domain boundaries | Extract shared dependency or use Events |
+| **Service Locator** | `ServiceLocator.getService(...)` calls | Hidden dependencies, runtime failures | Explicit constructor/field DI |
+
+```mermaid
+flowchart TD
+    GOD["God Object (BadUserManager)"] -->|"split by responsibility"| SRP["UserService + EmailService + PasswordService"]
+    SING["Static Singleton Overuse"] -->|"replace global state"| DI["Spring DI Container (@Service)"]
+    CIRC["Circular Dependency (A &lt;-&gt; B)"] -->|"extract common collaborator"| SHARED["ServiceA &amp; ServiceB -&gt; SharedRepository"]
+    LOC["Service Locator (Hidden Lookup)"] -->|"invert lookup"| EXPL["Explicit Constructor / @Autowired DI"]
+
+    classDef bad fill:#7f1d1d,stroke:#f87171,color:#f8fafc
+    classDef good fill:#064e3b,stroke:#34d399,color:#f8fafc
+
+    class GOD,SING,CIRC,LOC bad
+    class SRP,DI,SHARED,EXPL good
+```
 
 ### God Object Anti-Pattern
 
@@ -623,9 +831,74 @@ public class GoodClient {
 }
 ```
 
+> [!WARNING]
+> Spring Boot 2.6+ disables circular references by default (`BeanCurrentlyInCreationException`). Always break cycles by extracting a shared collaborator, introducing an interface, or publishing an `ApplicationEvent`.
+
 ---
 
 ## 4. SOLID Principles and Design Patterns
+
+Design patterns are concrete realizations of SOLID principles. Knowing which pattern enforces which principle turns abstract theory into actionable architecture.
+
+![SOLID Principles to GoF Design Patterns Map](./assets/04-solid-patterns-map.svg)
+
+| Principle | Core Rule | Violation Symptom | Enabling Patterns |
+| :--- | :--- | :--- | :--- |
+| **SRP** | One class, one reason to change | `BadUserService` validates, persists, emails, logs | **Facade**, **Strategy** |
+| **OCP** | Open for extension, closed for modification | `if/else` chains for payment types | **Strategy**, **Decorator** |
+| **LSP** | Subtypes must honor base invariants | `Square extends Rectangle` breaks `setWidth` | **Polymorphic Subtypes**, **Template Method** |
+| **ISP** | Clients shouldn't depend on unused methods | `Robot` forced to implement `sleep()` | **Adapter**, **Role Interfaces** |
+| **DIP** | Depend on abstractions, not concretions | `new MySQLDatabase()` inside business service | **Abstract Factory**, **DI Container** |
+
+```mermaid
+classDiagram
+    class PaymentStrategy {
+        <<Interface>>
+        +process(double amount)
+    }
+    class CreditCardProcessor {
+        +process(double amount)
+    }
+    class PaymentService {
+        -PaymentStrategy strategy
+        +setStrategy(PaymentStrategy strategy)
+        +processPayment(double amount)
+    }
+    class Shape {
+        <<Interface>>
+        +getArea() int
+    }
+    class Rectangle {
+        -int width
+        -int height
+        +getArea() int
+    }
+    class Square {
+        -int side
+        +getArea() int
+    }
+
+    PaymentStrategy <|.. CreditCardProcessor
+    PaymentService o-- PaymentStrategy
+    Shape <|.. Rectangle
+    Shape <|.. Square
+```
+
+```mermaid
+flowchart LR
+    SVC["GoodUserService"] -->|"depends on abstraction (DIP)"| IFACE["DatabaseRepository (Interface)"]
+    MYSQL["MySQLRepository"] -->|"implements"| IFACE
+    PG["PostgreSQLRepository"] -->|"implements"| IFACE
+    ROBOT["Robot"] -->|"implements only needed role (ISP)"| WORK["Workable"]
+
+    classDef svc fill:#064e3b,stroke:#34d399,color:#f8fafc
+    classDef iface fill:#312e81,stroke:#818cf8,color:#f8fafc
+    classDef impl fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+
+    class SVC,ROBOT svc
+    class IFACE,WORK iface
+    class MYSQL,PG impl
+```
 
 ### Single Responsibility Principle (SRP)
 
@@ -853,9 +1126,35 @@ public class GoodUserService {
 }
 ```
 
+> [!TIP]
+> **Constructor injection** is the cleanest way to enforce DIP in Spring: it makes dependencies `final`, guarantees valid state at construction time, and enables unit testing without a Spring context.
+
 ---
 
 ## 5. Refactoring to Patterns
+
+Rather than forcing patterns upfront, **refactor toward patterns** when specific code smells appear.
+
+| Code Smell | Problem | Target Pattern | Refactored Artifact |
+| :--- | :--- | :--- | :--- |
+| **Duplicate Validation Code** | Repeated null/format checks across methods | **Template Method** / **Strategy** | `Validator` base class + `UserValidator` |
+| **Long Parameter List** | 9+ positional arguments in `createOrder(...)` | **Builder** | `OrderBuilder` fluent API |
+
+```mermaid
+flowchart LR
+    SMELL1["Code Smell: Duplicate Validation"] -->|"extract invariant flow"| TM["Template Method (Validator)"]
+    TM -->|"subclass hook"| UV["UserValidator.validateObject()"]
+    SMELL2["Code Smell: Long Parameter List"] -->|"replace telescoping args"| BLD["Builder Pattern (OrderBuilder)"]
+    BLD -->|"fluent chaining"| ORD["new OrderBuilder()...build()"]
+
+    classDef smell fill:#78350f,stroke:#fbbf24,color:#f8fafc
+    classDef pat fill:#312e81,stroke:#818cf8,color:#f8fafc
+    classDef out fill:#064e3b,stroke:#34d399,color:#f8fafc
+
+    class SMELL1,SMELL2 smell
+    class TM,BLD pat
+    class UV,ORD out
+```
 
 ### Identifying Code Smells
 
@@ -948,19 +1247,49 @@ Order order = new OrderBuilder()
         .build();
 ```
 
+> [!TIP]
+> Note that `Validator` above uses a shared `errors` field, which is **not thread-safe** if registered as a singleton bean. In production Spring services, return a fresh `ValidationResult` per `validate()` call.
+
 ---
 
 ## 6. Interview Discussion Points
 
+Key architectural trade-offs interviewers probe when evaluating real-world Java and Spring experience.
+
+| Comparison | Option A | Option B | Key Differentiator |
+| :--- | :--- | :--- | :--- |
+| **Proxy vs Decorator** | Controls access; transparent to caller | Adds behavior; explicitly composed | **Intent**: Access/cross-cutting control vs layered enhancement |
+| **DI vs Service Locator** | Container pushes explicit dependencies | Client pulls from global registry | **Testability & Visibility**: Compile-time clarity vs hidden coupling |
+
+```mermaid
+flowchart TD
+    Q["Interview Trade-off"] --> PVD{"Proxy vs Decorator?"}
+    Q --> DISL{"DI vs Service Locator?"}
+    PVD -->|"Controls access / AOP"| PROXY["Proxy (Transparent)"]
+    PVD -->|"Adds layered behavior"| DECO["Decorator (Visible wrapping)"]
+    DISL -->|"Explicit, mockable, DIP"| DI["Dependency Injection"]
+    DISL -->|"Hidden registry lookup"| SL["Service Locator (Anti-Pattern)"]
+
+    classDef q fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef dec fill:#312e81,stroke:#818cf8,color:#f8fafc
+    classDef good fill:#064e3b,stroke:#34d399,color:#f8fafc
+    classDef bad fill:#7f1d1d,stroke:#f87171,color:#f8fafc
+
+    class Q q
+    class PVD,DISL dec
+    class PROXY,DECO,DI good
+    class SL bad
+```
+
 ### Q: Explain how Spring uses design patterns.
 **A:** Spring extensively uses:
 1. **Singleton** - Bean scope (default)
-2. **Factory** - BeanFactory, @Bean methods
-3. **Proxy** - AOP, @Transactional
-4. **Template Method** - JdbcTemplate
-5. **Observer** - ApplicationEvent
+2. **Factory** - `BeanFactory`, `@Bean` methods
+3. **Proxy** - AOP, `@Transactional`
+4. **Template Method** - `JdbcTemplate`
+5. **Observer** - `ApplicationEvent`
 6. **Adapter** - Various converters
-7. **Strategy** - PropertyResolver
+7. **Strategy** - `PropertyResolver`
 8. **Decorator** - Collections utilities
 
 ### Q: Why is Dependency Injection better than Service Locator?
@@ -987,20 +1316,44 @@ Order order = new OrderBuilder()
 4. Follow Single Responsibility Principle
 5. Use composition over inheritance
 
+> [!IMPORTANT]
+> When asked **"Proxy vs Decorator?"**, emphasize **who controls instantiation**: a Proxy typically manages or intercepts access to a target transparently (like Spring AOP), whereas a Decorator is explicitly stacked by the caller (`new BufferedInputStream(new FileInputStream(...))`).
+
 ---
 
 ## Summary: Design Patterns Mapping
 
-| Pattern | Java SDK | Spring | Use Case |
-|---------|----------|--------|----------|
-| **Singleton** | Logger | @Service | Single instance |
-| **Factory** | List.of() | BeanFactory | Object creation |
-| **Decorator** | BufferedInputStream | @Transactional | Behavior enhancement |
-| **Observer** | Observable | ApplicationEvent | Event handling |
-| **Strategy** | Comparator | PropertyResolver | Algorithm switching |
-| **Iterator** | Iterator | Stream API | Element access |
-| **Template Method** | JdbcTemplate | JdbcTemplate | Algorithm structure |
-| **Adapter** | Collections | Resource | Incompatible interfaces |
-| **Proxy** | Dynamic Proxy | AOP | Access control |
-| **Builder** | StringBuilder | fluent APIs | Complex object creation |
+A quick-reference cheat sheet connecting each GoF pattern to its Java SDK and Spring Framework counterparts.
 
+```mermaid
+flowchart LR
+    CR["Creational (Singleton, Factory, Builder)"] -->|"Object Lifecycle"| JAVA["Java SDK &amp; Spring Ecosystem"]
+    ST["Structural (Decorator, Adapter, Proxy)"] -->|"Composition &amp; Interception"| JAVA
+    BH["Behavioral (Observer, Strategy, Iterator, Template Method)"] -->|"Algorithms &amp; Events"| JAVA
+
+    classDef cr fill:#0c4a6e,stroke:#38bdf8,color:#f8fafc
+    classDef st fill:#312e81,stroke:#818cf8,color:#f8fafc
+    classDef bh fill:#064e3b,stroke:#34d399,color:#f8fafc
+    classDef eco fill:#1e293b,stroke:#fbbf24,color:#f8fafc
+
+    class CR cr
+    class ST st
+    class BH bh
+    class JAVA eco
+```
+
+| Pattern | Java SDK | Spring | Use Case |
+| :--- | :--- | :--- | :--- |
+| **Singleton** | `Logger` | `@Service` | Single instance |
+| **Factory** | `List.of()` | `BeanFactory` | Object creation |
+| **Decorator** | `BufferedInputStream` | `@Transactional` | Behavior enhancement |
+| **Observer** | `Observable` | `ApplicationEvent` | Event handling |
+| **Strategy** | `Comparator` | `PropertyResolver` | Algorithm switching |
+| **Iterator** | `Iterator` | Stream API | Element access |
+| **Template Method** | `JdbcTemplate` | `JdbcTemplate` | Algorithm structure |
+| **Adapter** | `Collections` | `Resource` | Incompatible interfaces |
+| **Proxy** | Dynamic Proxy | AOP | Access control |
+| **Builder** | `StringBuilder` | fluent APIs | Complex object creation |
+
+> [!TIP]
+> Keep this mapping table handy for rapid pre-interview review: being able to name one **Java SDK** class and one **Spring** class for each pattern covers 90% of real-world pattern follow-ups.

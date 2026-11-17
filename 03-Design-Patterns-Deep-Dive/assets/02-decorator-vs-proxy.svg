@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="100%" height="auto" role="img" aria-label="Decorator Pattern vs Proxy Pattern Animation">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 14; }
+      .title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12.5px; fill: #94a3b8; }
+      .panel-title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 15px; font-weight: 700; letter-spacing: 0.6px; }
+      .mono { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; }
+      .mono-sm { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; fill: #cbd5e1; }
+      .label { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11.5px; fill: #cbd5e1; }
+      .badge-text { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 10.5px; font-weight: 600; }
+
+      .pulse-cyan { animation: pulseCyan 3.6s ease-in-out infinite; }
+      .pulse-indigo { animation: pulseIndigo 3.6s ease-in-out infinite; animation-delay: 0.7s; }
+      .pulse-emerald { animation: pulseEmerald 3.6s ease-in-out infinite; animation-delay: 1.4s; }
+      .proxy-gate { animation: proxyGate 3.6s ease-in-out infinite; }
+
+      @keyframes pulseCyan {
+        0%, 100% { stroke-opacity: 0.5; filter: none; }
+        20%, 35% { stroke-opacity: 1; stroke-width: 2.5; }
+      }
+      @keyframes pulseIndigo {
+        0%, 100% { stroke-opacity: 0.5; }
+        20%, 35% { stroke-opacity: 1; stroke-width: 2.5; }
+      }
+      @keyframes pulseEmerald {
+        0%, 100% { stroke-opacity: 0.5; }
+        20%, 35% { stroke-opacity: 1; stroke-width: 2.5; }
+      }
+      @keyframes proxyGate {
+        0%, 100% { stroke-opacity: 0.55; }
+        25%, 55% { stroke-opacity: 1; stroke-width: 2.5; }
+      }
+    </style>
+
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="960" height="520" rx="16"/>
+
+  <!-- Header -->
+  <text x="480" y="38" text-anchor="middle" class="title">Decorator vs. Proxy — Wrapping Behavior vs. Controlling Access</text>
+  <text x="480" y="58" text-anchor="middle" class="subtitle">Same structural wrapper shape, fundamentally different intent and client relationship</text>
+
+  <!-- ==================== LEFT PANEL: DECORATOR ==================== -->
+  <rect class="card" x="28" y="78" width="438" height="414" rx="14"/>
+  <text x="50" y="106" class="panel-title" fill="#38bdf8">DECORATOR PATTERN</text>
+  <text x="50" y="124" class="subtitle">Stacks responsibilities dynamically at runtime</text>
+
+  <!-- Client box -->
+  <rect x="165" y="140" width="164" height="34" rx="8" fill="#0f172a" stroke="#64748b" stroke-width="1.2"/>
+  <text x="247" y="161" text-anchor="middle" class="mono" fill="#f8fafc">Client: stream.read()</text>
+
+  <!-- Arrow from client to outer decorator -->
+  <line x1="247" y1="174" x2="247" y2="196" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+
+  <!-- Layer 1: BufferedInputStream -->
+  <rect class="pulse-cyan" x="58" y="200" width="378" height="218" rx="12" fill="#0c4a6e" fill-opacity="0.22" stroke="#38bdf8" stroke-width="1.6"/>
+  <text x="74" y="222" class="mono" fill="#38bdf8">BufferedInputStream</text>
+  <rect x="318" y="207" width="104" height="20" rx="5" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1"/>
+  <text x="370" y="221" text-anchor="middle" class="badge-text" fill="#bae6fd">+ 8KB Buffer</text>
+
+  <!-- Layer 2: GzipInputStream -->
+  <rect class="pulse-indigo" x="82" y="242" width="330" height="158" rx="10" fill="#312e81" fill-opacity="0.28" stroke="#818cf8" stroke-width="1.6"/>
+  <text x="98" y="264" class="mono" fill="#a5b4fc">GzipInputStream</text>
+  <rect x="300" y="249" width="98" height="20" rx="5" fill="#312e81" stroke="#818cf8" stroke-width="1"/>
+  <text x="349" y="263" text-anchor="middle" class="badge-text" fill="#e0e7ff">+ Decompress</text>
+
+  <!-- Core: FileInputStream -->
+  <rect class="pulse-emerald" x="108" y="286" width="278" height="94" rx="8" fill="#064e3b" fill-opacity="0.35" stroke="#34d399" stroke-width="1.8"/>
+  <text x="247" y="314" text-anchor="middle" class="mono" fill="#34d399">FileInputStream (Core)</text>
+  <text x="247" y="335" text-anchor="middle" class="mono-sm">Reads raw bytes from disk</text>
+  <rect x="167" y="348" width="160" height="20" rx="5" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
+  <text x="247" y="362" text-anchor="middle" class="badge-text" fill="#a7f3d0">Base Component</text>
+
+  <!-- Animated request dot descending & ascending Decorator stack -->
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 247 176 L 247 315 L 247 176"/>
+  </circle>
+  <circle r="9" fill="#38bdf8" fill-opacity="0.25">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 247 176 L 247 315 L 247 176"/>
+  </circle>
+
+  <!-- Decorator Footer Pill -->
+  <rect x="58" y="434" width="378" height="40" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="247" y="451" text-anchor="middle" class="mono-sm" fill="#38bdf8">new BufferedInputStream(new GzipInputStream(new FileInputStream()))</text>
+  <text x="247" y="466" text-anchor="middle" class="label">Client explicitly composes stackable layers</text>
+
+  <!-- ==================== RIGHT PANEL: PROXY ==================== -->
+  <rect class="card" x="494" y="78" width="438" height="414" rx="14"/>
+  <text x="516" y="106" class="panel-title" fill="#fbbf24">PROXY PATTERN</text>
+  <text x="516" y="124" class="subtitle">Intercepts calls to control access &amp; lifecycle</text>
+
+  <!-- Client box -->
+  <rect x="615" y="140" width="196" height="34" rx="8" fill="#0f172a" stroke="#64748b" stroke-width="1.2"/>
+  <text x="713" y="161" text-anchor="middle" class="mono" fill="#f8fafc">Client: userService.save()</text>
+
+  <!-- Arrow Client -> Proxy -->
+  <line x1="713" y1="174" x2="713" y2="198" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow-amber)"/>
+
+  <!-- Proxy Gate Box -->
+  <rect class="proxy-gate" x="524" y="202" width="378" height="114" rx="10" fill="#78350f" fill-opacity="0.25" stroke="#fbbf24" stroke-width="1.8"/>
+  <text x="542" y="224" class="mono" fill="#fbbf24">Spring CGLIB / Dynamic Proxy</text>
+  <rect x="786" y="209" width="102" height="20" rx="5" fill="#78350f" stroke="#fbbf24" stroke-width="1"/>
+  <text x="837" y="223" text-anchor="middle" class="badge-text" fill="#fde68a">Gatekeeper</text>
+
+  <!-- 3 Interception Steps inside Proxy -->
+  <rect x="542" y="242" width="106" height="56" rx="7" fill="#0f172a" stroke="#fbbf24" stroke-width="1" stroke-opacity="0.7"/>
+  <text x="595" y="264" text-anchor="middle" class="mono-sm" fill="#fde68a">1. Auth /</text>
+  <text x="595" y="280" text-anchor="middle" class="mono-sm" fill="#fde68a">Cache Check</text>
+
+  <rect x="660" y="242" width="106" height="56" rx="7" fill="#0f172a" stroke="#fbbf24" stroke-width="1" stroke-opacity="0.7"/>
+  <text x="713" y="264" text-anchor="middle" class="mono-sm" fill="#fde68a">2. Begin</text>
+  <text x="713" y="280" text-anchor="middle" class="mono-sm" fill="#fde68a">@Transactional</text>
+
+  <rect x="778" y="242" width="106" height="56" rx="7" fill="#0f172a" stroke="#fbbf24" stroke-width="1" stroke-opacity="0.7"/>
+  <text x="831" y="264" text-anchor="middle" class="mono-sm" fill="#fde68a">4. Commit /</text>
+  <text x="831" y="280" text-anchor="middle" class="mono-sm" fill="#fde68a">Rollback</text>
+
+  <!-- Arrow Proxy -> Real Target -->
+  <line x1="713" y1="316" x2="713" y2="342" stroke="#34d399" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+
+  <!-- Real Target Box -->
+  <rect class="pulse-emerald" x="564" y="346" width="298" height="72" rx="8" fill="#064e3b" fill-opacity="0.35" stroke="#34d399" stroke-width="1.8"/>
+  <text x="713" y="374" text-anchor="middle" class="mono" fill="#34d399">RealUserService (Target)</text>
+  <text x="713" y="395" text-anchor="middle" class="mono-sm">Executes core business logic only</text>
+
+  <!-- Animated request dot through Proxy Gate to Target -->
+  <circle r="5.5" fill="#fbbf24">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 713 176 L 713 240 L 595 240 L 713 240 L 713 370 L 713 240 L 831 240 L 713 240 L 713 176"/>
+  </circle>
+  <circle r="9" fill="#fbbf24" fill-opacity="0.25">
+    <animateMotion dur="3.6s" repeatCount="indefinite" path="M 713 176 L 713 240 L 595 240 L 713 240 L 713 370 L 713 240 L 831 240 L 713 240 L 713 176"/>
+  </circle>
+
+  <!-- Proxy Footer Pill -->
+  <rect x="524" y="434" width="378" height="40" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="713" y="451" text-anchor="middle" class="mono-sm" fill="#fbbf24">Proxy created by framework / factory — transparent to caller</text>
+  <text x="713" y="466" text-anchor="middle" class="label">Same interface • Controls access, lazy init, AOP, caching</text>
+</svg>

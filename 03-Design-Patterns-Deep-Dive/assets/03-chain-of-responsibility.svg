@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">Chain of Responsibility: HTTP &amp; Auth Filter Pipeline</title>
+  <desc id="desc">Animated diagram showing a valid HTTP request passing through RateLimitFilter, JwtAuthFilter, RoleCheckFilter, and Controller, compared with an invalid request short-circuiting with 401 Unauthorized at JwtAuthFilter.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .lane-label { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; }
+      .node-box { fill: #0f172a; stroke: #475569; stroke-width: 1.5; rx: 8; }
+      .node-muted { fill: #0f172a; stroke: #334155; stroke-width: 1.5; stroke-dasharray: 4 3; rx: 8; opacity: 0.55; }
+      .node-title { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 12.5px; font-weight: 700; fill: #e2e8f0; text-anchor: middle; }
+      .node-sub { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #94a3b8; text-anchor: middle; }
+      .arrow-pass { stroke: #38bdf8; stroke-width: 2; fill: none; }
+      .arrow-fail { stroke: #f43f5e; stroke-width: 2; fill: none; }
+      .arrow-skip { stroke: #475569; stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; opacity: 0.6; }
+      .badge-ok { fill: #064e3b; stroke: #10b981; stroke-width: 1.5; rx: 6; }
+      .badge-ok-text { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; font-weight: 700; fill: #34d399; text-anchor: middle; }
+      .badge-err { fill: #4c0519; stroke: #f43f5e; stroke-width: 1.5; rx: 6; }
+      .badge-err-text { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; font-weight: 700; fill: #fb7185; text-anchor: middle; }
+      .legend-text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11.5px; fill: #cbd5e1; }
+
+      @keyframes pulseGreen1 {
+        0%, 10% { stroke: #475569; }
+        16%, 28% { stroke: #10b981; stroke-width: 2.5; }
+        34%, 100% { stroke: #475569; }
+      }
+      @keyframes pulseGreen2 {
+        0%, 30% { stroke: #475569; }
+        36%, 48% { stroke: #10b981; stroke-width: 2.5; }
+        54%, 100% { stroke: #475569; }
+      }
+      @keyframes pulseGreen3 {
+        0%, 50% { stroke: #475569; }
+        56%, 68% { stroke: #10b981; stroke-width: 2.5; }
+        74%, 100% { stroke: #475569; }
+      }
+      @keyframes pulseGreen4 {
+        0%, 70% { stroke: #475569; }
+        76%, 90% { stroke: #10b981; stroke-width: 2.5; }
+        96%, 100% { stroke: #475569; }
+      }
+      @keyframes pulseRed {
+        0%, 34% { stroke: #475569; }
+        40%, 75% { stroke: #f43f5e; stroke-width: 2.5; }
+        82%, 100% { stroke: #475569; }
+      }
+      @keyframes popErr {
+        0%, 36% { opacity: 0.25; transform: scale(0.96); }
+        42%, 78% { opacity: 1; transform: scale(1); }
+        86%, 100% { opacity: 0.25; transform: scale(0.96); }
+      }
+      .g1 { animation: pulseGreen1 5s infinite; }
+      .g2 { animation: pulseGreen2 5s infinite; }
+      .g3 { animation: pulseGreen3 5s infinite; }
+      .g4 { animation: pulseGreen4 5s infinite; }
+      .r2 { animation: pulseRed 5s infinite; }
+      .err-pop { animation: popErr 5s infinite; transform-origin: 425px 344px; }
+    </style>
+
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrowRose" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#f43f5e" />
+    </marker>
+    <marker id="arrowMuted" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#475569" />
+    </marker>
+  </defs>
+
+  <!-- Canvas -->
+  <rect class="bg" width="960" height="440" rx="14" />
+
+  <!-- Header -->
+  <text x="32" y="38" class="title">Chain of Responsibility — HTTP &amp; Auth Filter Pipeline</text>
+  <text x="32" y="60" class="subtitle">Each handler inspects the request: pass downstream via chain.doFilter() or short-circuit early</text>
+
+  <!-- Lane 1 Card: Valid Request -->
+  <rect x="24" y="80" width="912" height="145" class="card" />
+  <text x="44" y="106" class="lane-label" fill="#34d399">PATH A: VALID REQUEST (PASSES FULL CHAIN)</text>
+
+  <!-- Lane 1 Connectors -->
+  <line x1="136" y1="158" x2="178" y2="158" class="arrow-pass" marker-end="url(#arrowCyan)" />
+  <line x1="316" y1="158" x2="358" y2="158" class="arrow-pass" marker-end="url(#arrowCyan)" />
+  <line x1="496" y1="158" x2="538" y2="158" class="arrow-pass" marker-end="url(#arrowCyan)" />
+  <line x1="676" y1="158" x2="718" y2="158" class="arrow-pass" marker-end="url(#arrowCyan)" />
+  <line x1="836" y1="158" x2="862" y2="158" class="arrow-pass" marker-end="url(#arrowCyan)" />
+
+  <!-- Lane 1 Nodes -->
+  <rect x="44" y="130" width="92" height="56" class="node-box" />
+  <text x="90" y="154" class="node-title">Client</text>
+  <text x="90" y="172" class="node-sub">GET /orders</text>
+
+  <rect x="182" y="130" width="134" height="56" class="node-box g1" />
+  <text x="249" y="154" class="node-title">RateLimitFilter</text>
+  <text x="249" y="172" class="node-sub">Quota OK</text>
+
+  <rect x="362" y="130" width="134" height="56" class="node-box g2" />
+  <text x="429" y="154" class="node-title">JwtAuthFilter</text>
+  <text x="429" y="172" class="node-sub">Token Valid</text>
+
+  <rect x="542" y="130" width="134" height="56" class="node-box g3" />
+  <text x="609" y="154" class="node-title">RoleCheckFilter</text>
+  <text x="609" y="172" class="node-sub">ROLE_USER OK</text>
+
+  <rect x="722" y="130" width="114" height="56" class="node-box g4" />
+  <text x="779" y="154" class="node-title">Controller</text>
+  <text x="779" y="172" class="node-sub">Handle Req</text>
+
+  <rect x="866" y="140" width="54" height="36" class="badge-ok" />
+  <text x="893" y="162" class="badge-ok-text">200</text>
+
+  <!-- Animated Valid Packet -->
+  <circle r="7" fill="#38bdf8" stroke="#e0f2fe" stroke-width="2">
+    <animateMotion dur="5s" repeatCount="indefinite" path="M 90 158 L 249 158 L 429 158 L 609 158 L 779 158 L 893 158" />
+    <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.08;0.85;0.94;1" dur="5s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Lane 2 Card: Short-Circuit Rejection -->
+  <rect x="24" y="242" width="912" height="148" class="card" />
+  <text x="44" y="268" class="lane-label" fill="#fb7185">PATH B: SHORT-CIRCUIT EARLY REJECTION (401 / 429)</text>
+
+  <!-- Lane 2 Connectors -->
+  <line x1="136" y1="316" x2="178" y2="316" class="arrow-fail" marker-end="url(#arrowRose)" />
+  <line x1="316" y1="316" x2="358" y2="316" class="arrow-fail" marker-end="url(#arrowRose)" />
+  <line x1="496" y1="316" x2="538" y2="316" class="arrow-skip" marker-end="url(#arrowMuted)" />
+  <line x1="676" y1="316" x2="718" y2="316" class="arrow-skip" marker-end="url(#arrowMuted)" />
+
+  <!-- Lane 2 Nodes -->
+  <rect x="44" y="288" width="92" height="56" class="node-box" />
+  <text x="90" y="312" class="node-title">Client</text>
+  <text x="90" y="330" class="node-sub">Bad / No JWT</text>
+
+  <rect x="182" y="288" width="134" height="56" class="node-box" />
+  <text x="249" y="312" class="node-title">RateLimitFilter</text>
+  <text x="249" y="330" class="node-sub">429 if exceeded</text>
+
+  <rect x="362" y="288" width="134" height="56" class="node-box r2" />
+  <text x="429" y="312" class="node-title">JwtAuthFilter</text>
+  <text x="429" y="330" class="node-sub">Invalid Token!</text>
+
+  <rect x="542" y="288" width="134" height="56" class="node-muted" />
+  <text x="609" y="312" class="node-title">RoleCheckFilter</text>
+  <text x="609" y="330" class="node-sub">Skipped</text>
+
+  <rect x="722" y="288" width="114" height="56" class="node-muted" />
+  <text x="779" y="312" class="node-title">Controller</text>
+  <text x="779" y="330" class="node-sub">Not Reached</text>
+
+  <!-- Short-circuit return badge -->
+  <g class="err-pop">
+    <rect x="362" y="354" width="134" height="26" class="badge-err" />
+    <text x="429" y="371" class="badge-err-text">401 Unauthorized</text>
+  </g>
+
+  <!-- Animated Rejected Packet -->
+  <circle r="7" fill="#f43f5e" stroke="#ffe4e6" stroke-width="2">
+    <animateMotion dur="5s" repeatCount="indefinite" path="M 90 316 L 249 316 L 429 316 L 429 316 L 90 316" keyPoints="0;0.22;0.44;0.62;1" keyTimes="0;0.2;0.42;0.65;1" calcMode="linear" />
+    <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.08;0.45;0.9;1" dur="5s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Legend -->
+  <circle cx="44" cy="416" r="5" fill="#38bdf8" />
+  <text x="56" y="420" class="legend-text">chain.doFilter(req, res) — Forward to next handler</text>
+
+  <circle cx="385" cy="416" r="5" fill="#f43f5e" />
+  <text x="397" y="420" class="legend-text">Short-circuit return (401 / 429) — Chain halted</text>
+
+  <line x1="700" y1="416" x2="728" y2="416" class="arrow-skip" />
+  <text x="736" y="420" class="legend-text">Downstream handlers skipped</text>
+</svg>

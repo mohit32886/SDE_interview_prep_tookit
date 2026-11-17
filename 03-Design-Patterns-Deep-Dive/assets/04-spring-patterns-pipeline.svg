@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Spring Framework Request and Pattern Pipeline</title>
+  <desc id="desc">Animated pipeline showing DispatcherServlet Front Controller, HandlerMapping, AOP Proxy with Transactional and Cacheable, Service bean, and JdbcTemplate Template Method.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .subpanel { fill: #0f172a; stroke: #334155; stroke-width: 1.2; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12.5px; fill: #94a3b8; }
+      .node-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #f8fafc; text-anchor: middle; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #cbd5e1; text-anchor: middle; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; text-anchor: middle; }
+      .foot-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 700; fill: #e2e8f0; }
+      .foot-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .flow-line { fill: none; stroke: #475569; stroke-width: 2; stroke-dasharray: 6 5; animation: dashFlow 1.4s linear infinite; }
+      .step-1 { animation: pulseNode 5s ease-in-out infinite 0s; }
+      .step-2 { animation: pulseNode 5s ease-in-out infinite 1s; }
+      .step-3 { animation: pulseNode 5s ease-in-out infinite 2s; }
+      .step-4 { animation: pulseNode 5s ease-in-out infinite 3s; }
+      .step-5 { animation: pulseNode 5s ease-in-out infinite 4s; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -22; }
+      }
+      @keyframes pulseNode {
+        0%, 100% { opacity: 0.88; }
+        15%, 25% { opacity: 1; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.35)); }
+      }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <path id="pipelinePath" d="M 96 175 L 272 175 L 448 175 L 624 175 L 800 175" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg" x="0" y="0" width="960" height="440" rx="14" />
+  <rect class="panel" x="14" y="14" width="932" height="412" rx="12" />
+
+  <!-- Header -->
+  <text class="title" x="36" y="48">Spring Framework Request &amp; Design Pattern Pipeline</text>
+  <text class="subtitle" x="36" y="70">Front Controller, Strategy, Dynamic Proxy (AOP), Singleton IoC Bean, and Template Method in Action</text>
+
+  <!-- Connectors -->
+  <line class="flow-line" x1="184" y1="175" x2="216" y2="175" marker-end="url(#arrow)" />
+  <line class="flow-line" x1="360" y1="175" x2="392" y2="175" marker-end="url(#arrow)" />
+  <line class="flow-line" x1="536" y1="175" x2="568" y2="175" marker-end="url(#arrow)" />
+  <line class="flow-line" x1="712" y1="175" x2="744" y2="175" marker-end="url(#arrow)" />
+
+  <!-- Stage 1: DispatcherServlet -->
+  <g class="step-1">
+    <rect class="subpanel" x="32" y="110" width="152" height="130" rx="10" stroke="#38bdf8" stroke-width="1.8" />
+    <rect x="44" y="120" width="128" height="20" rx="10" fill="#0c4a6e" />
+    <text class="badge-text" x="108" y="134" fill="#38bdf8">FRONT CONTROLLER</text>
+    <text class="node-title" x="108" y="164">DispatcherServlet</text>
+    <text class="node-sub" x="108" y="186">doDispatch(req)</text>
+    <text class="node-sub" x="108" y="204">Central Entry</text>
+    <text class="node-sub" x="108" y="222">HTTP -&gt; Handler</text>
+  </g>
+
+  <!-- Stage 2: HandlerMapping -->
+  <g class="step-2">
+    <rect class="subpanel" x="218" y="110" width="142" height="130" rx="10" stroke="#818cf8" stroke-width="1.8" />
+    <rect x="230" y="120" width="118" height="20" rx="10" fill="#312e81" />
+    <text class="badge-text" x="289" y="134" fill="#a5b4fc">STRATEGY</text>
+    <text class="node-title" x="289" y="164">HandlerMapping</text>
+    <text class="node-sub" x="289" y="186">getHandler(req)</text>
+    <text class="node-sub" x="289" y="204">Route Resolution</text>
+    <text class="node-sub" x="289" y="222">HandlerAdapter</text>
+  </g>
+
+  <!-- Stage 3: AOP Proxy -->
+  <g class="step-3">
+    <rect class="subpanel" x="394" y="110" width="142" height="130" rx="10" stroke="#f472b6" stroke-width="1.8" />
+    <rect x="406" y="120" width="118" height="20" rx="10" fill="#831843" />
+    <text class="badge-text" x="465" y="134" fill="#f9a8d4">PROXY (AOP)</text>
+    <text class="node-title" x="465" y="164">Dynamic Proxy</text>
+    <text class="node-sub" x="465" y="186">@Transactional</text>
+    <text class="node-sub" x="465" y="204">@Cacheable</text>
+    <text class="node-sub" x="465" y="222">joinPoint.proceed()</text>
+  </g>
+
+  <!-- Stage 4: Service Bean -->
+  <g class="step-4">
+    <rect class="subpanel" x="570" y="110" width="142" height="130" rx="10" stroke="#34d399" stroke-width="1.8" />
+    <rect x="582" y="120" width="118" height="20" rx="10" fill="#064e3b" />
+    <text class="badge-text" x="641" y="134" fill="#6ee7b7">SINGLETON + DI</text>
+    <text class="node-title" x="641" y="164">UserService</text>
+    <text class="node-sub" x="641" y="186">@Service Bean</text>
+    <text class="node-sub" x="641" y="204">Business Logic</text>
+    <text class="node-sub" x="641" y="222">EventPublisher</text>
+  </g>
+
+  <!-- Stage 5: JdbcTemplate -->
+  <g class="step-5">
+    <rect class="subpanel" x="746" y="110" width="182" height="130" rx="10" stroke="#fbbf24" stroke-width="1.8" />
+    <rect x="758" y="120" width="158" height="20" rx="10" fill="#78350f" />
+    <text class="badge-text" x="837" y="134" fill="#fcd34d">TEMPLATE METHOD</text>
+    <text class="node-title" x="837" y="164">JdbcTemplate</text>
+    <text class="node-sub" x="837" y="186">1. Open Connection</text>
+    <text class="node-sub" x="837" y="204">2. RowMapper Callback</text>
+    <text class="node-sub" x="837" y="222">3. Cleanup &amp; Translate</text>
+  </g>
+
+  <!-- Animated Request Packet -->
+  <circle r="6" fill="#38bdf8" filter="url(#glow)">
+    <animateMotion dur="5s" repeatCount="indefinite">
+      <mpath href="#pipelinePath" />
+    </animateMotion>
+  </circle>
+
+  <!-- Bottom Architecture Strip -->
+  <rect class="subpanel" x="32" y="268" width="286" height="136" rx="10" />
+  <text class="foot-title" x="48" y="294" fill="#38bdf8">IoC Container (Factory + Singleton)</text>
+  <text class="foot-text" x="48" y="318">BeanFactory.getBean(UserService.class)</text>
+  <text class="foot-text" x="48" y="338">ApplicationContext extends BeanFactory</text>
+  <text class="foot-text" x="48" y="358">Default scope: Singleton per container</text>
+  <text class="foot-text" x="48" y="378">@Scope("prototype") -&gt; new instance</text>
+
+  <rect class="subpanel" x="337" y="268" width="286" height="136" rx="10" />
+  <text class="foot-title" x="353" y="294" fill="#f472b6">AOP Proxy Interception Lifecycle</text>
+  <text class="foot-text" x="353" y="318">1. @Before / Cache Lookup</text>
+  <text class="foot-text" x="353" y="338">2. Begin Transaction (PlatformTxMgr)</text>
+  <text class="foot-text" x="353" y="358">3. Target Method: joinPoint.proceed()</text>
+  <text class="foot-text" x="353" y="378">4. Commit / Rollback + @After log</text>
+
+  <rect class="subpanel" x="642" y="268" width="286" height="136" rx="10" />
+  <text class="foot-title" x="658" y="294" fill="#fbbf24">Observer &amp; Strategy Extensions</text>
+  <text class="foot-text" x="658" y="318">ApplicationEventPublisher (Observer)</text>
+  <text class="foot-text" x="658" y="338">  -&gt; @EventListener(UserCreatedEvent)</text>
+  <text class="foot-text" x="658" y="358">ResourceLoader (Strategy)</text>
+  <text class="foot-text" x="658" y="378">  -&gt; classpath: | file: | http:</text>
+</svg>

@@ -1,467 +1,357 @@
 # Design Patterns Deep Dive: Complete FAANG Interview Preparation
 
-## Overview
-This comprehensive resource contains 5 detailed markdown files with **7,284 lines** of content covering all 23 Gang of Four design patterns plus enterprise patterns, real-world implementations, and interview problems. Designed specifically for mid-level Java engineers (5+ years) targeting FAANG companies.
+![Design Patterns & LLD Animated Roadmap Banner](./assets/00-design-patterns-banner.svg)
+
+> [!NOTE]
+> **Module 03 Overview:** This comprehensive resource contains **5 detailed markdown files** with **7,284 lines** of content and **150+ complete, runnable Java implementations** covering all **23 Gang of Four (GoF) design patterns**, enterprise patterns, Java SDK & Spring internals, and 4 full Low-Level Design (LLD) systems. Designed specifically for **mid-level Java engineers (5+ years)** targeting FAANG interviews, system design discussions, architecture decisions, code reviews, and mentoring.
 
 ---
 
-## File Structure
+## GoF 23-Pattern & Module Taxonomy
 
-### 1. **01-Creational-Patterns.md** (1,853 lines)
-Covers object creation mechanisms with deep focus on initialization strategies.
+```mermaid
+flowchart TD
+    ROOT["Module 03: Design Patterns Deep Dive (7,284 Lines)"]
 
-#### Patterns Covered:
-- **Singleton Pattern** (500+ lines)
-  - Eager initialization
-  - Lazy initialization with synchronization
-  - Double-checked locking with `volatile`
-  - Bill Pugh pattern (class loader approach) - RECOMMENDED
-  - Enum-based singleton - MOST SECURE
-  - Security attacks: Reflection, Serialization, Cloning
-  - Prevention strategies
-  - Real-world: Logger, Connection Pool
+    ROOT --> CR["01-Creational-Patterns.md (1,853 Lines • 25%)"]
+    ROOT --> ST["02-Structural-Patterns.md (1,659 Lines • 23%)"]
+    ROOT --> BH["03-Behavioral-Patterns.md (1,550 Lines • 20%)"]
+    ROOT --> RW["04-Patterns-in-Real-World-Java.md (1,006 Lines • 20%)"]
+    ROOT --> IQ["05-Design-Patterns-Interview-Questions.md (1,216 Lines • 12%)"]
 
-- **Factory Method Pattern** (350+ lines)
-  - Interface-based design
-  - Spring's BeanFactory analogy
-  - Payment processing example
-  - vs Abstract Factory comparison
+    CR --> CR1["GoF: Singleton, Factory Method, Abstract Factory, Builder, Prototype"]
+    CR --> CR2["Enterprise: Object Pool"]
 
-- **Abstract Factory Pattern** (300+ lines)
-  - Family of related products
-  - UI Theme system (Light/Dark)
-  - Cross-platform UI rendering
-  - Vs Factory Method comparison
+    ST --> ST1["GoF: Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy"]
 
-- **Builder Pattern** (400+ lines)
-  - Telescoping constructor problem
-  - Fluent API design
-  - Immutable object creation
-  - Lombok `@Builder`
-  - SQL Query Builder example
-  - When to use vs constructor
+    BH --> BH1["Core GoF: Strategy, Observer, Template Method, Command, Chain of Responsibility, State, Iterator"]
+    BH --> BH2["Additional: Mediator, Memento, Visitor, Null Object"]
 
-- **Prototype Pattern** (350+ lines)
-  - Shallow vs Deep copy issues
-  - `Cloneable` interface problems
-  - Copy constructor alternative
-  - Document cloning example
-  - Prototype registry pattern
+    RW --> RW1["Java SDK: Collections, java.io, java.util.concurrent"]
+    RW --> RW2["Spring Framework, SOLID Principles & Anti-Patterns"]
 
-- **Object Pool Pattern** (300+ lines)
-  - Connection pooling
-  - Thread pool management
-  - Resource optimization
+    IQ --> IQ1["40+ Interview Q&As & Code Review Scenarios"]
+    IQ --> IQ2["4 Full LLD Systems: Parking Lot, ATM, Elevator, Library"]
 
-#### Key Learning: Understanding initialization strategies and thread safety mechanisms critical for FAANG interviews.
+    classDef rootNode fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef creational fill:#0c4a6e,stroke:#38bdf8,stroke-width:1.5px,color:#e0f2fe
+    classDef structural fill:#2e1065,stroke:#a78bfa,stroke-width:1.5px,color:#ede9fe
+    classDef behavioral fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#d1fae5
+    classDef realworld fill:#451a03,stroke:#fbbf24,stroke-width:1.5px,color:#fef3c7
+    classDef interview fill:#4c0519,stroke:#fb7185,stroke-width:1.5px,color:#ffe4e6
+    classDef leaf fill:#1e293b,stroke:#475569,stroke-width:1px,color:#cbd5e1
+
+    class ROOT rootNode
+    class CR creational
+    class ST structural
+    class BH behavioral
+    class RW realworld
+    class IQ interview
+    class CR1,CR2,ST1,BH1,BH2,RW1,RW2,IQ1,IQ2 leaf
+```
 
 ---
 
-### 2. **02-Structural-Patterns.md** (1,659 lines)
-Focuses on object composition and relationships.
+## Content Summary & Statistics
 
-#### Patterns Covered:
-- **Adapter Pattern** (350+ lines)
-  - Class adapter vs Object adapter
-  - `Arrays.asList` example
-  - `InputStreamReader` use case
-  - Collection adapter
-  - Thread safety considerations
-
-- **Bridge Pattern** (250+ lines)
-  - Separating abstraction from implementation
-  - JDBC driver example
-  - Preventing class explosion
-  - Database operations
-
-- **Composite Pattern** (300+ lines)
-  - Tree structures
-  - File system implementation
-  - Organization hierarchy
-  - Recursive operations
-
-- **Decorator Pattern** (400+ lines)
-  - Inheritance explosion problem
-  - Coffee shop example
-  - Java I/O streams (classic)
-  - Dynamic behavior addition
-  - Vs Inheritance comparison
-
-- **Facade Pattern** (250+ lines)
-  - Simplifying complex subsystems
-  - Spring's JdbcTemplate analogy
-  - Payment processing facade
-  - Multi-layer coordination
-
-- **Flyweight Pattern** (300+ lines)
-  - String pool optimization
-  - Integer cache
-  - Game character example
-  - Memory footprint reduction
-  - Text rendering
-
-- **Proxy Pattern** (400+ lines)
-  - Virtual proxy (lazy loading)
-  - Protection proxy (access control)
-  - Remote proxy (network)
-  - Java dynamic proxy (`InvocationHandler`)
-  - Spring AOP implementation
-  - Vs Decorator comparison
-
-#### Key Learning: Object composition strategies and when to choose composition over inheritance.
+| Metric / Category | Details | Coverage |
+|---|---|---|
+| **Total Lines & Files** | **7,284 lines** across **5 comprehensive markdown files** | 100% |
+| **Code Examples** | **150+** complete, runnable Java implementations | All modules |
+| **Patterns Covered** | **23 Gang of Four (GoF)** + enterprise patterns (Object Pool, Null Object) | Core + Enterprise |
+| **Interview Questions** | **40+ Q&As** (Top 25 detailed + comparative + code reviews) | Part 1, 2 & 4 |
+| **LLD Systems** | **4 complete systems** with full code (Parking Lot, ATM, Elevator, Library) | Part 3 |
+| **Creational** | 6 patterns (`1,853` lines) | 25% of content |
+| **Structural** | 7 patterns (`1,659` lines) | 23% of content |
+| **Behavioral** | 10+ patterns (`1,550` lines) | 20% of content |
+| **Real-World** | Java SDK, Spring Framework, Anti-patterns, SOLID (`1,006` lines) | 20% of content |
+| **Interview Prep** | Q&A, Code Review, LLD Problems (`1,216` lines) | 12% of content |
 
 ---
 
-### 3. **03-Behavioral-Patterns.md** (1,550 lines)
-Addresses object interaction and responsibility distribution.
+## File Structure & Pattern Breakdown
 
-#### Patterns Covered:
-- **Strategy Pattern** (400+ lines)
-  - Algorithm selection
-  - Conditional logic elimination
-  - Payment processing strategies
-  - Java Comparator example
-  - Compression strategies
+### 1. [01-Creational-Patterns.md](./01-Creational-Patterns.md) (1,853 lines)
+Focuses on object creation mechanisms with deep coverage of initialization strategies and thread-safety mechanisms critical for FAANG interviews.
 
-- **Observer Pattern** (350+ lines)
-  - Event-driven systems
-  - Weather station example
-  - Java's Observable (deprecated)
-  - Reactive streams alternative
-  - Spring ApplicationEvent
-  - Pub-Sub vs Observer
-
-- **Template Method Pattern** (300+ lines)
-  - Algorithm skeleton
-  - Database operations
-  - Spring's JdbcTemplate analysis
-  - Enforcing algorithm structure
-
-- **Command Pattern** (350+ lines)
-  - Request encapsulation
-  - Undo/Redo implementation
-  - Task scheduling
-  - Queue management
-
-- **Chain of Responsibility** (300+ lines)
-  - Request forwarding
-  - Logging handlers
-  - Spring servlet filters
-  - Approval workflows
-
-- **State Pattern** (350+ lines)
-  - State-based behavior
-  - Order status management
-  - Vending machine example
-  - State transitions
-
-- **Iterator Pattern** (200+ lines)
-  - Sequential access
-  - Custom iterators
-  - Java's Iterable interface
-
-- **Additional Patterns**: Mediator, Memento, Visitor, Null Object (mentioned)
-
-#### Key Learning: Understanding how objects communicate and distribute responsibilities in complex systems.
+| Pattern | Depth | Key Concepts & Examples Covered |
+|---|---|---|
+| **Singleton** | 500+ lines | Eager, Lazy (synchronized), Double-checked locking (`volatile`), Bill Pugh (class loader — **RECOMMENDED**), Enum-based (**MOST SECURE**); Security attacks (Reflection, Serialization, Cloning) & prevention; Real-world: Logger, Connection Pool |
+| **Factory Method** | 350+ lines | Interface-based design, Spring's `BeanFactory` analogy, Payment processing example, vs Abstract Factory comparison |
+| **Abstract Factory** | 300+ lines | Family of related products, UI Theme system (Light/Dark), Cross-platform UI rendering, vs Factory Method comparison |
+| **Builder** | 400+ lines | Telescoping constructor problem, Fluent API design, Immutable object creation, Lombok `@Builder`, SQL Query Builder example, When to use vs constructor |
+| **Prototype** | 350+ lines | Shallow vs Deep copy issues, `Cloneable` interface problems, Copy constructor alternative, Document cloning example, Prototype registry pattern |
+| **Object Pool** | 300+ lines | Connection pooling, Thread pool management, Resource optimization |
 
 ---
 
-### 4. **04-Patterns-in-Real-World-Java.md** (1,006 lines)
-Maps patterns to actual Java implementations.
+### 2. [02-Structural-Patterns.md](./02-Structural-Patterns.md) (1,659 lines)
+Focuses on object composition strategies, relationships, and when to choose composition over inheritance.
 
-#### Sections:
-
-1. **Java SDK Patterns** (300+ lines)
-   - Collections Framework
-     - Iterator pattern (ArrayList, LinkedList)
-     - Decorator pattern (Collections utilities)
-     - Factory pattern (List.of(), Set.of())
-     - Strategy pattern (Comparator)
-   - java.io (Decorator showcase)
-   - java.util.concurrent (Command, Observer)
-
-2. **Spring Framework Patterns** (400+ lines)
-   - IoC/DI (Factory, Singleton)
-   - JdbcTemplate (Template Method)
-   - AOP (Proxy pattern)
-   - BeanFactory (Factory pattern)
-   - Singleton scope
-   - ApplicationEvent (Observer)
-   - Resource loading (Strategy)
-
-3. **Anti-Patterns to Avoid** (150+ lines)
-   - God Object
-   - Singleton overuse
-   - Circular dependencies
-   - Service Locator anti-pattern
-
-4. **SOLID Principles** (150+ lines)
-   - Single Responsibility + patterns
-   - Open/Closed + patterns
-   - Liskov Substitution + patterns
-   - Interface Segregation + patterns
-   - Dependency Inversion + patterns
-
-#### Key Learning: How to recognize patterns in existing code and understand why they're used in frameworks you use daily.
+| Pattern | Depth | Key Concepts & Examples Covered |
+|---|---|---|
+| **Adapter** | 350+ lines | Class adapter vs Object adapter, `Arrays.asList` example, `InputStreamReader` use case, Collection adapter, Thread safety considerations |
+| **Bridge** | 250+ lines | Separating abstraction from implementation, JDBC driver example, Preventing class explosion, Database operations |
+| **Composite** | 300+ lines | Tree structures, File system implementation, Organization hierarchy, Recursive operations |
+| **Decorator** | 400+ lines | Inheritance explosion problem, Coffee shop example, Java I/O streams (classic), Dynamic behavior addition, vs Inheritance comparison |
+| **Facade** | 250+ lines | Simplifying complex subsystems, Spring's `JdbcTemplate` analogy, Payment processing facade, Multi-layer coordination |
+| **Flyweight** | 300+ lines | String pool optimization, Integer cache, Game character example, Memory footprint reduction, Text rendering |
+| **Proxy** | 400+ lines | Virtual proxy (lazy loading), Protection proxy (access control), Remote proxy (network), Java dynamic proxy (`InvocationHandler`), Spring AOP implementation, vs Decorator comparison |
 
 ---
 
-### 5. **05-Design-Patterns-Interview-Questions.md** (1,216 lines)
-Comprehensive interview preparation with 40+ questions.
+### 3. [03-Behavioral-Patterns.md](./03-Behavioral-Patterns.md) (1,550 lines)
+Addresses how objects communicate, interact, and distribute responsibilities in complex systems.
 
-#### Parts:
-
-**Part 1: Top 25 Design Pattern Questions** (400+ lines)
-1. Pattern categories
-2. Singleton issues and solutions
-3. Builder vs Constructor
-4. Factory Method vs Abstract Factory
-5. Decorator vs Proxy
-6. Strategy vs Template Method
-7. Breaking Singleton (reflection, serialization, cloning)
-8. When NOT to use patterns
-9. Observer vs Pub-Sub
-10. Spring's pattern usage
-... and 15 more detailed Q&As
-
-**Part 2: Code Review Scenarios** (200+ lines)
-- Identify pattern and suggest improvements
-- Refactoring exercises
-- Design review questions
-- Real-world problem solving
-
-**Part 3: Low-Level Design Problems** (450+ lines)
-Complete implementations for FAANG interviews:
-1. **Parking Lot System**
-   - State management
-   - Pricing strategies
-   - Vehicle allocation
-
-2. **ATM System**
-   - State machine
-   - Transaction strategies
-   - Balance management
-
-3. **Elevator System**
-   - Complex state transitions
-   - Destination queue
-   - Movement logic
-
-4. **Library Management**
-   - Observer notifications
-   - Member management
-   - Book availability
-
-**Part 4: Comparative Questions** (100+ lines)
-- Strategy vs State
-- Factory vs Builder
-- Adapter vs Proxy
-- Quick reference tables
-
-#### Key Learning: How to solve complex design problems in interviews and articulate your pattern choices.
+| Pattern | Depth | Key Concepts & Examples Covered |
+|---|---|---|
+| **Strategy** | 400+ lines | Algorithm selection, Conditional logic elimination, Payment processing strategies, Java `Comparator` example, Compression strategies |
+| **Observer** | 350+ lines | Event-driven systems, Weather station example, Java's `Observable` (deprecated), Reactive streams alternative, Spring `ApplicationEvent`, Pub-Sub vs Observer |
+| **Template Method** | 300+ lines | Algorithm skeleton, Database operations, Spring's `JdbcTemplate` analysis, Enforcing algorithm structure |
+| **Command** | 350+ lines | Request encapsulation, Undo/Redo implementation, Task scheduling, Queue management |
+| **Chain of Responsibility** | 300+ lines | Request forwarding, Logging handlers, Spring servlet filters, Approval workflows |
+| **State** | 350+ lines | State-based behavior, Order status management, Vending machine example, State transitions |
+| **Iterator** | 200+ lines | Sequential access, Custom iterators, Java's `Iterable` interface |
+| **Additional Patterns** | Survey | Mediator, Memento, Visitor, Null Object |
 
 ---
 
-## Content Summary
+### 4. [04-Patterns-in-Real-World-Java.md](./04-Patterns-in-Real-World-Java.md) (1,006 lines)
+Maps patterns to actual Java SDK and Spring implementations so you can recognize why frameworks use them daily.
 
-### Total Statistics
-- **Total Lines**: 7,284
-- **Total Files**: 5 comprehensive markdown files
-- **Code Examples**: 150+ complete, runnable Java implementations
-- **Patterns Covered**: 23 Gang of Four + enterprise patterns
-- **Interview Questions**: 40+ with detailed answers
-- **LLD Problems**: 4 complete systems with full code
-
-### Coverage by Category
-- **Creational**: 6 patterns (25% of content)
-- **Structural**: 7 patterns (23% of content)
-- **Behavioral**: 10+ patterns (20% of content)
-- **Real-World**: Java SDK, Spring, Anti-patterns (20% of content)
-- **Interview Prep**: Q&A, Code Review, LLD (12% of content)
+| Section | Depth | Frameworks, Principles & Anti-Patterns Covered |
+|---|---|---|
+| **Java SDK Patterns** | 300+ lines | **Collections Framework**: Iterator (`ArrayList`, `LinkedList`), Decorator (`Collections` utilities), Factory (`List.of()`, `Set.of()`), Strategy (`Comparator`); **`java.io`**: Decorator showcase; **`java.util.concurrent`**: Command, Observer |
+| **Spring Framework Patterns** | 400+ lines | IoC/DI (Factory, Singleton), `JdbcTemplate` (Template Method), AOP (Proxy), `BeanFactory` (Factory), Singleton scope, `ApplicationEvent` (Observer), Resource loading (Strategy) |
+| **Anti-Patterns to Avoid** | 150+ lines | God Object, Singleton overuse, Circular dependencies, Service Locator anti-pattern |
+| **SOLID Principles** | 150+ lines | Single Responsibility + patterns, Open/Closed + patterns, Liskov Substitution + patterns, Interface Segregation + patterns, Dependency Inversion + patterns |
 
 ---
 
-## Target Audience
-**Mid-level Java engineers with 5+ years experience** preparing for:
-- Google FAANG interviews
-- System design discussions
-- Architecture decisions
-- Code reviews
-- Mentoring junior developers
+### 5. [05-Design-Patterns-Interview-Questions.md](./05-Design-Patterns-Interview-Questions.md) (1,216 lines)
+Trains you to solve complex design problems in interviews and articulate your pattern choices under pressure.
+
+| Part | Depth | Topics & Systems Covered |
+|---|---|---|
+| **Part 1: Top 25 Design Pattern Questions** | 400+ lines | Pattern categories, Singleton issues & solutions, Builder vs Constructor, Factory Method vs Abstract Factory, Decorator vs Proxy, Strategy vs Template Method, Breaking Singleton (reflection, serialization, cloning), When NOT to use patterns, Observer vs Pub-Sub, Spring's pattern usage + 15 more detailed Q&As |
+| **Part 2: Code Review Scenarios** | 200+ lines | Identify pattern & suggest improvements, Refactoring exercises, Design review questions, Real-world problem solving |
+| **Part 3: Low-Level Design Problems** | 450+ lines | **1. Parking Lot System** (State management, pricing strategies, vehicle allocation) • **2. ATM System** (State machine, transaction strategies, balance management) • **3. Elevator System** (Complex state transitions, destination queue, movement logic) • **4. Library Management** (Observer notifications, member management, book availability) |
+| **Part 4: Comparative Questions** | 100+ lines | Strategy vs State, Factory vs Builder, Adapter vs Proxy, Quick reference tables |
 
 ---
 
-## How to Use This Resource
+## Study Roadmap (5-Week Mastery Track)
 
-### Week 1: Foundations
-- Read 01-Creational-Patterns (focus on Singleton, Factory, Builder)
-- Understand when to use each pattern
-- Practice implementing them from scratch
+```mermaid
+flowchart LR
+    W1["Week 1: Foundations - 01-Creational-Patterns"] --> W2["Week 2: Structure - 02-Structural-Patterns"]
+    W2 --> W3["Week 3: Behavior - 03-Behavioral-Patterns"]
+    W3 --> W4["Week 4: Real-World - 04-Patterns-in-Real-World-Java"]
+    W4 --> W5["Week 5: Interview Prep - 05-Design-Patterns-Interview-Questions"]
 
-### Week 2: Structural Understanding
-- Read 02-Structural-Patterns
-- Focus on real-world examples (I/O streams, Spring proxies)
-- Compare patterns with similar intent
+    classDef w1 fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe
+    classDef w2 fill:#2e1065,stroke:#a78bfa,stroke-width:2px,color:#ede9fe
+    classDef w3 fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#d1fae5
+    classDef w4 fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+    classDef w5 fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#ffe4e6
 
-### Week 3: Behavioral & Interactions
-- Read 03-Behavioral-Patterns
-- Practice writing strategy/observer/state examples
-- Understand object communication
+    class W1 w1
+    class W2 w2
+    class W3 w3
+    class W4 w4
+    class W5 w5
+```
 
-### Week 4: Real-World Application
-- Read 04-Patterns-in-Real-World-Java
-- Identify patterns in your codebase
-- Understand SOLID principles connection
-
-### Week 5: Interview Prep
-- Work through 05-Design-Patterns-Interview-Questions
-- Solve 1-2 LLD problems daily
-- Mock interviews with senior engineers
+| Week | Focus Area | Actionable Study Plan |
+|---|---|---|
+| **Week 1** | Foundations | Read [01-Creational-Patterns.md](./01-Creational-Patterns.md) (focus on Singleton, Factory, Builder); understand when to use each; implement from scratch |
+| **Week 2** | Structural Understanding | Read [02-Structural-Patterns.md](./02-Structural-Patterns.md); focus on real-world examples (I/O streams, Spring proxies); compare patterns with similar intent |
+| **Week 3** | Behavioral & Interactions | Read [03-Behavioral-Patterns.md](./03-Behavioral-Patterns.md); practice Strategy, Observer, and State examples; understand object communication |
+| **Week 4** | Real-World Application | Read [04-Patterns-in-Real-World-Java.md](./04-Patterns-in-Real-World-Java.md); identify patterns in your own codebase; connect patterns to SOLID principles |
+| **Week 5** | Interview Prep | Work through [05-Design-Patterns-Interview-Questions.md](./05-Design-Patterns-Interview-Questions.md); solve 1–2 LLD problems daily; run mock interviews with senior engineers |
 
 ---
 
 ## Key Concepts to Master
 
-### Patterns You MUST Know for FAANG
-1. **Singleton** - Thread safety, security attacks
-2. **Factory Method** - Object creation abstraction
-3. **Builder** - Complex object construction
-4. **Adapter** - Legacy system integration
-5. **Decorator** - Dynamic behavior addition
-6. **Strategy** - Algorithm encapsulation
-7. **Observer** - Event handling
-8. **Template Method** - Algorithm structure
-9. **State** - State machine design
-10. **Proxy** - Access control and lazy loading
+> [!IMPORTANT]
+> **Top 10 Patterns You MUST Know for FAANG:**
+> 1. **Singleton** — Thread safety, security attacks (Reflection, Serialization, Cloning)
+> 2. **Factory Method** — Object creation abstraction
+> 3. **Builder** — Complex object construction
+> 4. **Adapter** — Legacy system integration
+> 5. **Decorator** — Dynamic behavior addition
+> 6. **Strategy** — Algorithm encapsulation
+> 7. **Observer** — Event handling
+> 8. **Template Method** — Algorithm structure
+> 9. **State** — State machine design
+> 10. **Proxy** — Access control and lazy loading
 
 ### Critical Interview Topics
-- Differences between similar patterns
-- When NOT to use patterns
-- Security vulnerabilities (Singleton attacks)
-- Thread-safety implementations
+- Differences between similar patterns (Decorator vs Proxy, Strategy vs State, Factory vs Builder, Adapter vs Proxy)
+- When **NOT** to use patterns
+- Security vulnerabilities (Singleton attacks) & thread-safety implementations
 - Real-world implementations in Java SDK and Spring
-- SOLID principles connection
-- Anti-patterns to avoid
+- SOLID principles connection & anti-patterns to avoid
 
 ---
 
-## Interview Pattern
+## LLD Interview Flow & Pattern Relationships
 
-Typical FAANG pattern interview structure:
-1. **Design a system** (15-20 min)
-   - Identify required patterns
-   - Explain trade-offs
-   - Code implementation
+```mermaid
+flowchart LR
+    P1["1. Design a System (15-20 min) - Identify patterns, explain trade-offs, write code"] --> P2["2. Code Review (10 min) - Spot pattern, suggest improvements, discuss alternatives"]
+    P2 --> P3["3. Deep Dive (5-10 min) - Why this pattern? When NOT to use? Thread safety & perf?"]
 
-2. **Code review** (10 min)
-   - Spot the pattern
-   - Suggest improvements
-   - Discuss alternatives
+    classDef phase1 fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe
+    classDef phase2 fill:#2e1065,stroke:#a78bfa,stroke-width:2px,color:#ede9fe
+    classDef phase3 fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#d1fae5
 
-3. **Deep dive** (5-10 min)
-   - Why this pattern?
-   - When would you NOT use it?
-   - Thread safety? Performance?
+    class P1 phase1
+    class P2 phase2
+    class P3 phase3
+```
+
+```mermaid
+classDiagram
+    class Context {
+        -Strategy strategy
+        +setStrategy(Strategy)
+        +execute()
+    }
+    class Strategy {
+        <<interface>>
+        +executeAlgorithm()
+    }
+    class ConcreteStrategyA {
+        +executeAlgorithm()
+    }
+    class ConcreteStrategyB {
+        +executeAlgorithm()
+    }
+    Context o-- Strategy : delegates
+    Strategy <|.. ConcreteStrategyA
+    Strategy <|.. ConcreteStrategyB
+```
 
 ---
 
-## Quick Reference Tables
+## Pattern Comparison Selector & Quick Reference
+
+```mermaid
+flowchart TD
+    Q{"What problem are you solving?"}
+    Q -->|"Object Creation"| C{"Single global or complex build?"}
+    Q -->|"Object Structure"| S{"Wrap interface or add behavior?"}
+    Q -->|"Object Behavior"| B{"Swap algorithm or manage state?"}
+
+    C -->|"One global instance"| C1["Singleton (Bill Pugh / Enum)"]
+    C -->|"Decouple creation"| C2["Factory Method / Abstract Factory"]
+    C -->|"Many optional fields"| C3["Builder"]
+
+    S -->|"Incompatible interface"| S1["Adapter"]
+    S -->|"Add responsibilities dynamically"| S2["Decorator"]
+    S -->|"Control access or lazy load"| S3["Proxy"]
+    S -->|"Simplify subsystem"| S4["Facade"]
+
+    B -->|"Interchangeable algorithms"| B1["Strategy"]
+    B -->|"State-dependent transitions"| B2["State"]
+    B -->|"Event notifications"| B3["Observer"]
+    B -->|"Fixed skeleton with hooks"| B4["Template Method"]
+
+    classDef qNode fill:#1e293b,stroke:#94a3b8,stroke-width:2px,color:#f8fafc
+    classDef cNode fill:#0c4a6e,stroke:#38bdf8,stroke-width:1.5px,color:#e0f2fe
+    classDef sNode fill:#2e1065,stroke:#a78bfa,stroke-width:1.5px,color:#ede9fe
+    classDef bNode fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#d1fae5
+
+    class Q,C,S,B qNode
+    class C1,C2,C3 cNode
+    class S1,S2,S3,S4 sNode
+    class B1,B2,B3,B4 bNode
+```
 
 ### When to Use Each Pattern
 
-| Pattern | When | Example |
-|---------|------|---------|
-| **Singleton** | One instance needed globally | Logger, DB connection pool |
-| **Factory** | Decouple object creation | Database drivers |
-| **Builder** | Complex object with options | Configuration objects |
-| **Adapter** | Incompatible interfaces | Legacy code integration |
-| **Decorator** | Add behavior dynamically | I/O streams |
-| **Strategy** | Multiple algorithms | Payment methods |
-| **Observer** | Event notification | UI updates |
-| **Proxy** | Control access | Remote objects, lazy loading |
+| Pattern | When | Complexity | Example |
+|---|---|---|---|
+| **Singleton** | One instance needed globally | Simple | Logger, DB connection pool |
+| **Factory Method** | Decouple object creation | Simple | Database drivers, `BeanFactory` |
+| **Abstract Factory** | Family of related products | Complex | Light/Dark UI themes |
+| **Builder** | Complex object with options | Moderate | Configuration objects, SQL Query Builder |
+| **Adapter** | Incompatible interfaces | Moderate | Legacy code integration, `InputStreamReader` |
+| **Decorator** | Add behavior dynamically | Moderate | Java I/O streams, Coffee shop |
+| **Proxy** | Control access / lazy loading | Moderate | Remote objects, Spring AOP |
+| **Strategy** | Multiple interchangeable algorithms | Simple | Payment methods, `Comparator` |
+| **Observer** | Event notification | Moderate | UI updates, Spring `ApplicationEvent` |
+| **State** | State-driven behavior & transitions | Complex | Vending machine, Order status |
+| **Chain of Responsibility** | Pass request along handler chain | Complex | Servlet filters, Approval workflows |
 
-### Pattern Complexity vs Benefit
-
-- **Simple**: Singleton, Factory Method, Strategy
-- **Moderate**: Builder, Decorator, Adapter, Observer
-- **Complex**: Abstract Factory, State, Chain of Responsibility
+> [!TIP]
+> **Complexity vs Benefit Rule of Thumb:**
+> - **Simple:** Singleton, Factory Method, Strategy
+> - **Moderate:** Builder, Decorator, Adapter, Observer, Proxy
+> - **Complex:** Abstract Factory, State, Chain of Responsibility
 
 ---
 
 ## Common Mistakes to Avoid
 
-1. **Using Singleton for everything** - Causes tight coupling
-2. **Over-engineering simple problems** - Complexity without benefit
-3. **Forgetting thread safety** - Race conditions in Singleton
-4. **Confusing similar patterns** - Decorator vs Proxy, Strategy vs State
-5. **Ignoring SOLID principles** - Patterns without clear purpose
-6. **Not considering testability** - Patterns that make mocking hard
-7. **Performance overhead** - Using patterns in tight loops
-8. **Circular dependencies** - Bad architecture design
+> [!WARNING]
+> **8 Pitfalls That Hurt Interview Scores:**
+> 1. **Using Singleton for everything** — Causes tight coupling and hidden global state.
+> 2. **Over-engineering simple problems** — Adds complexity without measurable benefit.
+> 3. **Forgetting thread safety** — Causes race conditions in lazy Singleton initialization.
+> 4. **Confusing similar patterns** — Mixing up Decorator vs Proxy, or Strategy vs State.
+> 5. **Ignoring SOLID principles** — Applying patterns without a clear architectural purpose.
+> 6. **Not considering testability** — Choosing patterns that make unit mocking difficult.
+> 7. **Performance overhead** — Introducing heavy pattern indirection inside tight loops.
+> 8. **Circular dependencies** — Creating tangled object graphs from poor architecture design.
 
 ---
 
-## File Locations
-```
-/sessions/festive-vigilant-keller/mnt/mohitgupta/Interview Prep/03-Design-Patterns-Deep-Dive/
+## File Locations & Supplementary Resources
 
-├── 01-Creational-Patterns.md (1,853 lines)
-├── 02-Structural-Patterns.md (1,659 lines)
-├── 03-Behavioral-Patterns.md (1,550 lines)
-├── 04-Patterns-in-Real-World-Java.md (1,006 lines)
+```text
+03-Design-Patterns-Deep-Dive/
+├── assets/
+│   └── 00-design-patterns-banner.svg
+├── 01-Creational-Patterns.md               (1,853 lines)
+├── 02-Structural-Patterns.md               (1,659 lines)
+├── 03-Behavioral-Patterns.md               (1,550 lines)
+├── 04-Patterns-in-Real-World-Java.md       (1,006 lines)
 ├── 05-Design-Patterns-Interview-Questions.md (1,216 lines)
-└── README.md (this file)
+└── README.md                               (this file)
 ```
 
----
-
-## Additional Resources to Supplement
-
-While these files are comprehensive, consider complementing with:
-- **Refactoring: Improving the Design of Existing Code** by Martin Fowler
-- **Clean Code** by Robert C. Martin
-- **Design Patterns: Elements of Reusable Object-Oriented Software** by Gang of Four
-- **Spring Framework documentation** for real-world examples
-- **LeetCode System Design** problems for practice
+### Recommended Complementary Reading
+- **Refactoring: Improving the Design of Existing Code** — Martin Fowler
+- **Clean Code** — Robert C. Martin
+- **Design Patterns: Elements of Reusable Object-Oriented Software** — Gang of Four
+- **Spring Framework Documentation** — Real-world enterprise pattern implementations
+- **LeetCode System Design** — Hands-on LLD & system design practice
 
 ---
 
-## Success Metrics
+## Success Metrics & FAANG Interview Expectations
 
-After completing this resource, you should be able to:
-- ✓ Identify patterns in existing code
-- ✓ Explain when and why to use each pattern
-- ✓ Implement any pattern from scratch
-- ✓ Discuss trade-offs and alternatives
-- ✓ Design complex systems using patterns
-- ✓ Write thread-safe, production-ready code
-- ✓ Understand Spring Framework's pattern usage
-- ✓ Solve LLD problems in interviews
-- ✓ Discuss SOLID principles and patterns
-- ✓ Answer comparative pattern questions
+### Mastery Checklist
+- [x] Identify patterns in existing codebases
+- [x] Explain when and why to use each pattern
+- [x] Implement any pattern from scratch
+- [x] Discuss trade-offs and alternatives
+- [x] Design complex systems using patterns
+- [x] Write thread-safe, production-ready code
+- [x] Understand Spring Framework's pattern usage
+- [x] Solve LLD problems in interviews
+- [x] Discuss SOLID principles and patterns
+- [x] Answer comparative pattern questions
 
----
-
-## Final Notes for FAANG Interviews
-
-**Interviewer Expectations:**
-1. Show deep understanding, not just definitions
-2. Connect patterns to real-world code
-3. Discuss trade-offs and when NOT to use
-4. Write production-quality code
-5. Explain architectural decisions clearly
-6. Know Spring/Java implementations
-7. Consider thread safety and performance
-8. Apply SOLID principles
-
-**Your Competitive Advantage:**
-- Understanding why patterns exist
-- Recognizing them in existing code
-- Knowing when they make things worse
-- Connecting to your experience
-- Demonstrating practical application
-
----
+| Interviewer Expectations | Your Competitive Advantage |
+|---|---|
+| Show deep understanding, not just definitions | Understand **why** patterns exist |
+| Connect patterns to real-world code & Spring/Java | Recognize patterns in existing production code |
+| Discuss trade-offs and when **NOT** to use | Know when patterns make a design worse |
+| Write production-quality, thread-safe code | Connect design choices to your real experience |
+| Explain architectural decisions & SOLID clearly | Demonstrate practical, balanced application |
 
 Good luck with your FAANG interviews! Master these patterns and you'll excel in any design discussion.
-

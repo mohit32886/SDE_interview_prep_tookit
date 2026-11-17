@@ -1,7 +1,47 @@
 # Structural Design Patterns: In-Depth Guide for FAANG Interviews
 
+## Table of Contents
+- [Overview](#overview)
+- [1. Adapter Pattern](#1-adapter-pattern)
+- [2. Bridge Pattern](#2-bridge-pattern)
+- [3. Composite Pattern](#3-composite-pattern)
+- [4. Decorator Pattern](#4-decorator-pattern)
+- [5. Facade Pattern](#5-facade-pattern)
+- [6. Flyweight Pattern](#6-flyweight-pattern)
+- [7. Proxy Pattern](#7-proxy-pattern)
+- [Summary Table: Structural Patterns](#summary-table-structural-patterns)
+
+---
+
 ## Overview
-Structural patterns deal with object composition and relationships between entities. They help simplify complex systems by defining how different objects and classes combine to form larger structures. Understanding these patterns is essential for system design, especially in enterprise applications.
+
+Structural patterns deal with **object composition** and **relationships between entities**. They simplify complex systems by defining how classes and objects combine to form larger, flexible structures—a core requirement in system design and enterprise Java/Spring architectures.
+
+```mermaid
+flowchart TD
+    Root["Structural Design Patterns"] --> Wrap["Wrapper & Interface Patterns"]
+    Root --> Struct["Hierarchy & Sharing Patterns"]
+
+    Wrap --> Adapter["Adapter: Convert incompatible interface"]
+    Wrap --> Decorator["Decorator: Add behavior dynamically"]
+    Wrap --> Proxy["Proxy: Control access & interception"]
+    Wrap --> Facade["Facade: Simplify complex subsystem"]
+
+    Struct --> Bridge["Bridge: Decouple abstraction & impl"]
+    Struct --> Composite["Composite: Uniform tree hierarchies"]
+    Struct --> Flyweight["Flyweight: Share immutable state"]
+
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef cat fill:#0f172a,stroke:#818cf8,stroke-width:1.5px,color:#e2e8f0
+    classDef item fill:#0f172a,stroke:#34d399,stroke-width:1.2px,color:#cbd5e1
+
+    class Root root
+    class Wrap,Struct cat
+    class Adapter,Decorator,Proxy,Facade,Bridge,Composite,Flyweight item
+```
+
+> [!TIP]
+> In FAANG interviews, interviewers rarely ask "define Adapter." Instead, they test whether you can distinguish **look-alike wrappers** (`Adapter` vs. `Bridge` vs. `Decorator` vs. `Proxy` vs. `Facade`) by their **intent**.
 
 ---
 
@@ -11,28 +51,46 @@ Structural patterns deal with object composition and relationships between entit
 Convert the interface of a class into another interface that clients expect. Let classes work together that couldn't otherwise due to incompatible interfaces.
 
 ### Problem
-Integrating incompatible components or third-party libraries with existing code.
+Integrating incompatible components, legacy codebases, or third-party libraries with existing client code without modifying either side.
 
-### Text-Based UML
+```mermaid
+classDiagram
+    class PaymentGateway {
+        <<Interface>>
+        +processPayment(double amount)* void
+        +refund(double amount)* void
+    }
+    class LegacyPaymentSystem {
+        +makePayment(float paymentAmount) void
+        +reverseTransaction(float transactionAmount) void
+    }
+    class PaymentGatewayObjectAdapter {
+        -LegacyPaymentSystem legacySystem
+        +processPayment(double amount) void
+        +refund(double amount) void
+    }
+    class PaymentGatewayAdapter {
+        +processPayment(double amount) void
+        +refund(double amount) void
+    }
+
+    PaymentGateway <|.. PaymentGatewayObjectAdapter : implements
+    PaymentGatewayObjectAdapter o-- LegacyPaymentSystem : composes (preferred)
+    PaymentGateway <|.. PaymentGatewayAdapter : implements
+    LegacyPaymentSystem <|-- PaymentGatewayAdapter : extends
 ```
-┌──────────┐
-│ Target   │
-│Interface │
-└────┬─────┘
-     △
-     │
-     │
-┌────┴─────────┐
-│   Adapter    │
-├──────────────┤
-│ - adaptee    │
-└──────────────┘
-     │
-     │ uses
-┌────▼─────┐
-│ Adaptee  │
-│(Incomp.) │
-└──────────┘
+
+```mermaid
+sequenceDiagram
+    participant Client as PaymentProcessor
+    participant Adapter as PaymentGatewayObjectAdapter
+    participant Adaptee as LegacyPaymentSystem
+
+    Client->>Adapter: processPayment(150.00)
+    Note over Adapter: Converts double to float
+    Adapter->>Adaptee: makePayment(150.0f)
+    Adaptee-->>Adapter: void
+    Adapter-->>Client: void
 ```
 
 ### 1.1 Class Adapter (Inheritance-based)
@@ -132,9 +190,12 @@ public class ObjectAdapterDemo {
 }
 ```
 
+> [!IMPORTANT]
+> Always prefer **Object Adapter (composition)** over **Class Adapter (inheritance)** in Java. Java does not support multiple class inheritance, and composition lets a single adapter wrap an entire hierarchy of `Adaptee` subclasses.
+
 ### Real-World Examples in Java
 
-#### Example 1: Arrays.asList Adapter
+#### Example 1: `Arrays.asList` Adapter
 
 ```java
 public class ArraysAsListAdapterDemo {
@@ -155,7 +216,7 @@ public class ArraysAsListAdapterDemo {
 }
 ```
 
-#### Example 2: InputStreamReader Adapter
+#### Example 2: `InputStreamReader` Adapter
 
 ```java
 public class InputStreamReaderDemo {
@@ -249,22 +310,21 @@ public class DictionaryAdapterDemo {
 
 | Aspect | Class Adapter | Object Adapter |
 |--------|---------------|----------------|
-| Mechanism | Inheritance | Composition |
-| Flexibility | Limited (single parent) | High (can adapt at runtime) |
-| Code reuse | Limited to single adaptee | Can wrap multiple adaptees |
-| Type compatibility | Adaptee type must be class | Any type (class/interface) |
-| Recommendation | Rarely used | PREFERRED |
+| **Mechanism** | Inheritance (`extends`) | Composition (`has-a`) |
+| **Flexibility** | Limited (single parent class) | High (can adapt any subtype at runtime) |
+| **Code reuse** | Limited to single adaptee | Can wrap multiple adaptees |
+| **Type compatibility** | Adaptee must be a non-final class | Any type (class or interface) |
+| **Recommendation** | Rarely used | **PREFERRED** |
 
-### When to Use
-- Integrating third-party libraries
-- Making incompatible interfaces work together
-- Working with legacy systems
-- Adapting external APIs
-
-### When NOT to Use
-- When no incompatibility exists
-- Simple type conversions (use utility methods instead)
-- Performance-critical code (slight overhead)
+### When to Use / When NOT to Use
+- **Use when:**
+  - Integrating third-party libraries or external APIs.
+  - Making incompatible interfaces work together without altering source code.
+  - Wrapping legacy systems behind modern interfaces.
+- **Avoid when:**
+  - No interface incompatibility exists.
+  - Simple type conversions suffice (use static utility/mapper methods instead).
+  - Extreme hot-path performance forbids even minor wrapper indirection.
 
 ---
 
@@ -274,7 +334,74 @@ public class DictionaryAdapterDemo {
 Decouple an abstraction from its implementation so that the two can vary independently.
 
 ### Problem
-When both abstraction and implementation can vary, creating an explosion of classes.
+When both the abstraction (e.g., database access mode) and implementation (e.g., database vendor) vary independently, inheritance creates an $M \times N$ **class explosion**.
+
+```mermaid
+classDiagram
+    class Database {
+        <<Interface>>
+        +connect()* void
+        +executeQuery(String query)* void
+        +disconnect()* void
+    }
+    class DatabaseBridge {
+        <<Abstract>>
+        #DatabaseDriver driver
+        +connect() void
+        +disconnect() void
+    }
+    class ReadOnlyDatabase {
+        +executeQuery(String query) void
+    }
+    class AdminDatabase {
+        +executeQuery(String query) void
+    }
+    class DatabaseDriver {
+        <<Interface>>
+        +establishConnection()* void
+        +runQuery(String query)* void
+        +closeConnection()* void
+    }
+    class MySQLDriver {
+        +establishConnection() void
+        +runQuery(String query) void
+        +closeConnection() void
+    }
+    class PostgreSQLDriver {
+        +establishConnection() void
+        +runQuery(String query) void
+        +closeConnection() void
+    }
+
+    Database <|.. DatabaseBridge
+    DatabaseBridge <|-- ReadOnlyDatabase
+    DatabaseBridge <|-- AdminDatabase
+    DatabaseBridge o-- DatabaseDriver : bridge
+    DatabaseDriver <|.. MySQLDriver
+    DatabaseDriver <|.. PostgreSQLDriver
+```
+
+```mermaid
+flowchart LR
+    subgraph Bad["Without Bridge: M x N Explosion"]
+        B1["MySQLReadOnlyDB"]
+        B2["MySQLAdminDB"]
+        B3["PostgresReadOnlyDB"]
+        B4["PostgresAdminDB"]
+    end
+
+    subgraph Good["With Bridge: M + N Decoupled"]
+        A1["ReadOnlyDatabase"] -->|"delegates"| D1["DatabaseDriver"]
+        A2["AdminDatabase"] -->|"delegates"| D1
+        D1 --> I1["MySQLDriver"]
+        D1 --> I2["PostgreSQLDriver"]
+    end
+
+    classDef bad fill:#450a0a,stroke:#f87171,color:#fecaca
+    classDef good fill:#064e3b,stroke:#34d399,color:#a7f3d0
+    class B1,B2,B3,B4 bad
+    class A1,A2,D1,I1,I2 good
+```
 
 ### Real-World Example: JDBC Driver Architecture
 
@@ -403,8 +530,8 @@ public class BridgePatternDemo {
 ### Key Difference from Adapter
 
 ```java
-// Adapter: Makes incompatible things work together
-// Bridge: Separates abstraction from implementation for independent variation
+// Adapter: Makes incompatible things work together (retrofitted after design)
+// Bridge: Separates abstraction from implementation for independent variation (upfront design)
 
 // Example: Without Bridge (tight coupling)
 public class BadDatabaseDesign {
@@ -426,27 +553,74 @@ public class BadDatabaseDesign {
     // 4 classes for 2 abstractions × 2 implementations = explosion!
 }
 
-// With Bridge: Only 4 classes (2 abstractions + 2 implementations)
-// As shown in the BridgePatternDemo above
+// With Bridge: Only 4 leaf classes (2 abstractions + 2 implementations)
+// Adding a 3rd DB driver (Oracle) adds 1 class instead of 2!
 ```
 
-### When to Use
-- Both abstraction and implementation should vary independently
-- Avoiding permanent binding between abstraction and implementation
-- Sharing implementation among multiple objects
-- Reducing number of classes in explosion scenarios
+> [!TIP]
+> **Interview Distinction:** **Adapter** is usually applied *after* classes are built to make incompatible interfaces work together. **Bridge** is designed *upfront* so two dimensions (e.g., UI Platform × Shape, or Access Mode × DB Driver) can evolve independently.
 
-### When NOT to Use
-- Simple systems without variation
-- Implementation is tied to abstraction
-- Performance is critical (bridge adds indirection)
+### When to Use / When NOT to Use
+- **Use when:**
+  - Both abstraction and implementation should vary independently.
+  - Avoiding permanent compile-time binding between abstraction and implementation.
+  - Sharing an implementation among multiple objects or preventing $M \times N$ class explosion.
+- **Avoid when:**
+  - Simple systems with a single dimension of variation.
+  - Implementation is permanently tied to one abstraction.
+  - Extra indirection is unacceptable in ultra-low-latency paths.
 
 ---
 
 ## 3. Composite Pattern
 
 ### Intent
-Compose objects into tree structures to represent part-whole hierarchies. Let clients treat individual objects and compositions uniformly.
+Compose objects into tree structures to represent part-whole hierarchies. Let clients treat individual objects (`Leaf`) and compositions (`Composite`) uniformly.
+
+```mermaid
+classDiagram
+    class FileSystemComponent {
+        <<Interface>>
+        +display(int indent)* void
+        +getSize()* long
+        +delete()* void
+    }
+    class File {
+        -String name
+        -long size
+        +display(int indent) void
+        +getSize() long
+        +delete() void
+    }
+    class Directory {
+        -String name
+        -List~FileSystemComponent~ children
+        +add(FileSystemComponent component) void
+        +remove(FileSystemComponent component) void
+        +display(int indent) void
+        +getSize() long
+        +delete() void
+    }
+
+    FileSystemComponent <|.. File
+    FileSystemComponent <|.. Directory
+    Directory o-- FileSystemComponent : children
+```
+
+```mermaid
+flowchart TD
+    Root["Directory: root/"] --> Docs["Directory: documents/"]
+    Root --> Photos["Directory: photos/"]
+    Docs --> F1["File: resume.pdf (250 B)"]
+    Docs --> F2["File: cover_letter.txt (150 B)"]
+    Photos --> F3["File: vacation.jpg (2000 B)"]
+    Photos --> F4["File: family.jpg (2500 B)"]
+
+    classDef dir fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef file fill:#0f172a,stroke:#34d399,stroke-width:1.5px,color:#a7f3d0
+    class Root,Docs,Photos dir
+    class F1,F2,F3,F4 file
+```
 
 ### Real-World Example: File System
 
@@ -650,23 +824,63 @@ public class OrganizationDemo {
 }
 ```
 
-### When to Use
-- Tree structures (file systems, organizational hierarchies, UI components)
-- Part-whole relationships
-- Treating individual objects and compositions uniformly
-- Recursive structures
+> [!WARNING]
+> Keep `add()`/`remove()` methods on the **Composite** (`Directory`, `Manager`) rather than the `Component` interface if you want compile-time safety against adding children to a `Leaf`. Placing them on `Component` favors uniformity at the cost of runtime `UnsupportedOperationException` checks.
 
-### When NOT to Use
-- Linear structures (use simple collections)
-- No need for tree traversal
-- Performance-critical applications (traversal overhead)
+### When to Use / When NOT to Use
+- **Use when:**
+  - Modeling tree structures (file systems, org charts, UI component trees, ASTs).
+  - Representing part-whole hierarchies where clients treat leaves and containers uniformly.
+- **Avoid when:**
+  - Data is flat or linear (use standard `List`/`Set`).
+  - Type constraints between parent and child nodes are overly rigid.
+  - Deep recursive traversal causes unacceptable overhead.
 
 ---
 
 ## 4. Decorator Pattern
 
 ### Intent
-Attach additional responsibilities to an object dynamically. Decorators provide a flexible alternative to subclassing for extending functionality.
+Attach additional responsibilities to an object dynamically. Decorators provide a flexible, composable alternative to subclassing for extending functionality.
+
+![Decorator Pattern vs Proxy Pattern](./assets/02-decorator-vs-proxy.svg)
+
+```mermaid
+classDiagram
+    class Beverage {
+        <<Interface>>
+        +getCost()* double
+        +getDescription()* String
+    }
+    class SimpleCoffee {
+        +getCost() double
+        +getDescription() String
+    }
+    class BeverageDecorator {
+        <<Abstract>>
+        #Beverage beverage
+        +BeverageDecorator(Beverage beverage)
+    }
+    class MilkDecorator {
+        +getCost() double
+        +getDescription() String
+    }
+    class SugarDecorator {
+        +getCost() double
+        +getDescription() String
+    }
+    class WhippedCreamDecorator {
+        +getCost() double
+        +getDescription() String
+    }
+
+    Beverage <|.. SimpleCoffee
+    Beverage <|.. BeverageDecorator
+    BeverageDecorator o-- Beverage : wraps
+    BeverageDecorator <|-- MilkDecorator
+    BeverageDecorator <|-- SugarDecorator
+    BeverageDecorator <|-- WhippedCreamDecorator
+```
 
 ### Problem: Inheritance Explosion
 
@@ -791,6 +1005,20 @@ public class DecoratorPatternDemo {
 
 ### Real-World Example: Java I/O Streams
 
+```mermaid
+flowchart LR
+    Client["Client: dataIn.readLine()"] --> D1["DataInputStream (Decorator)"]
+    D1 --> D2["BufferedInputStream (Decorator)"]
+    D2 --> Core["FileInputStream (Component)"]
+
+    classDef client fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef dec fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe
+    classDef core fill:#064e3b,stroke:#34d399,color:#a7f3d0
+    class Client client
+    class D1,D2 dec
+    class Core core
+```
+
 ```java
 public class JavaIODecoratorDemo {
     public static void main(String[] args) throws IOException {
@@ -812,15 +1040,6 @@ public class JavaIODecoratorDemo {
         } finally {
             dataIn.close(); // Closes all decorators
         }
-
-        // Visual representation:
-        // ┌─────────────────────────────────┐
-        // │ DataInputStream (Decorator)     │
-        // ├─────────────────────────────────┤
-        // │ BufferedInputStream (Decorator) │
-        // ├─────────────────────────────────┤
-        // │ FileInputStream (Component)     │
-        // └─────────────────────────────────┘
     }
 }
 ```
@@ -842,24 +1061,61 @@ Beverage coffee = new SugarDecorator(new MilkDecorator(new SimpleCoffee()));
 // Dynamic, runtime composition
 ```
 
-### When to Use
-- Adding responsibilities dynamically
-- Avoiding inheritance explosion
-- Single Responsibility Principle (each decorator adds one responsibility)
-- Java I/O streams (classic example)
+> [!TIP]
+> **Single Responsibility & Open/Closed Principles:** Each decorator encapsulates exactly one enhancement (`Milk`, `Buffering`, `Compression`) and can be combined in any order at runtime without touching existing classes.
 
-### When NOT to Use
-- Simple objects with no variation
-- Order of decorators matters and is complex
-- Many decorators cause deep nesting
-- Performance is critical (decorator chain overhead)
+### When to Use / When NOT to Use
+- **Use when:**
+  - Adding responsibilities dynamically and transparently at runtime.
+  - Avoiding $2^n$ subclass explosion.
+  - Enforcing Single Responsibility across layered features (e.g., Java I/O streams, `Collections.unmodifiableList`).
+- **Avoid when:**
+  - Objects have no dynamic feature combinations.
+  - Order of decorators is fragile or hard to reason about.
+  - Deeply nested decorator stacks hurt debuggability or hot-path performance.
 
 ---
 
 ## 5. Facade Pattern
 
 ### Intent
-Provide a unified, simplified interface to a set of interfaces in a subsystem.
+Provide a unified, simplified interface to a set of interfaces in a complex subsystem.
+
+```mermaid
+flowchart LR
+    Client["Client / Controller"] --> Facade["LoginFacade.login()"]
+    Facade --> S1["UserService"]
+    Facade --> S2["AuthenticationService"]
+    Facade --> S3["AuthorizationService"]
+    Facade --> S4["AuditService"]
+
+    classDef client fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+    classDef facade fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+    classDef sub fill:#0f172a,stroke:#34d399,color:#a7f3d0
+    class Client client
+    class Facade facade
+    class S1,S2,S3,S4 sub
+```
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Facade as PaymentProcessingFacade
+    participant Val as PaymentValidator
+    participant Fraud as FraudDetectionService
+    participant GW as PaymentGateway
+    participant Bill as BillingService
+
+    Client->>Facade: processPayment(card, 100.00)
+    Facade->>Val: validate(card)
+    Val-->>Facade: true
+    Facade->>Fraud: isFraudulent(card, 100.00)
+    Fraud-->>Facade: false
+    Facade->>GW: processPayment(card, 100.00)
+    GW-->>Facade: "txn_12345"
+    Facade->>Bill: generateBill("txn_12345", 100.00)
+    Facade-->>Client: PaymentResult(true, "txn_12345")
+```
 
 ### Real-World Example: Simplifying Complex Subsystem
 
@@ -931,7 +1187,7 @@ public class FacadePatternDemo {
 }
 ```
 
-### Spring's JdbcTemplate as Facade
+### Spring's `JdbcTemplate` as Facade
 
 ```java
 @Service
@@ -1057,23 +1313,68 @@ public class PaymentFacadeDemo {
 }
 ```
 
-### When to Use
-- Simplifying complex subsystems
-- Decoupling client from subsystem components
-- Layered architectures
-- Third-party integrations
+> [!IMPORTANT]
+> A Facade **does not forbid** advanced clients from accessing the underlying subsystem classes directly when fine-grained control is needed—it simply provides a clean default entry point.
 
-### When NOT to Use
-- Simple systems without complexity
-- Facade itself becomes complex
-- When clients need flexibility of subsystem components
+### When to Use / When NOT to Use
+- **Use when:**
+  - Simplifying complex, multi-step subsystems (e.g., `JdbcTemplate`, `SLF4J`, checkout orchestrators).
+  - Decoupling client layers from volatile third-party SDKs.
+  - Defining clean boundaries in layered/microservice architectures.
+- **Avoid when:**
+  - The subsystem is already simple.
+  - The Facade itself turns into a bloated "God Object" (split into smaller facades or orchestrators).
+  - Clients routinely need low-level customization that the facade hides.
 
 ---
 
 ## 6. Flyweight Pattern
 
 ### Intent
-Use sharing to support large numbers of fine-grained objects efficiently.
+Use sharing to support large numbers of fine-grained objects efficiently by separating **intrinsic** (shared, immutable) state from **extrinsic** (unique, context-dependent) state.
+
+![Flyweight Pattern Memory Sharing](./assets/02-flyweight-memory-sharing.svg)
+
+```mermaid
+classDiagram
+    class CharacterTypeFactory {
+        <<Factory>>
+        -Map~String, CharacterType~ cache$
+        +getCharacterType(String name, String sprite, int health, int attackPower)$ CharacterType
+        +getPoolSize()$ int
+    }
+    class CharacterType {
+        -String name
+        -String sprite
+        -int health
+        -int attackPower
+        +displayStats() void
+    }
+    class Character {
+        -CharacterType type
+        -int posX
+        -int posY
+        -int currentHealth
+        +moveAndAttack(int targetX, int targetY) void
+    }
+
+    CharacterTypeFactory --> CharacterType : caches &amp; shares
+    Character o-- CharacterType : references
+```
+
+```mermaid
+flowchart LR
+    Ext["Extrinsic State: posX, posY, currentHealth"] --> Char["15,000 Character Instances"]
+    Char -->|"O(1) Lookup"| Fac["CharacterTypeFactory Cache"]
+    Fac --> Int["2 Shared CharacterType Flyweights: Warrior, Mage"]
+
+    classDef ext fill:#1e293b,stroke:#38bdf8,color:#e0f2fe
+    classDef fac fill:#78350f,stroke:#fbbf24,color:#fde68a
+    classDef intr fill:#064e3b,stroke:#34d399,color:#a7f3d0
+    class Ext,Char ext
+    class Fac fac
+    class Int intr
+```
 
 ### Real-World Example 1: String Pool
 
@@ -1095,7 +1396,7 @@ public class StringPoolDemo {
 }
 ```
 
-### Real-World Example 2: Integer Cache
+### Real-World Example 2: `Integer` Cache
 
 ```java
 public class IntegerCacheDemo {
@@ -1271,23 +1572,61 @@ public class FontFactory {
 }
 ```
 
-### When to Use
-- Many similar objects consuming memory
-- Immutable shared state
-- Pool of objects can be created once
-- String pooling, caching, object pools
+> [!WARNING]
+> Flyweight objects **must be immutable**. If any caller mutates a shared flyweight's intrinsic state, every instance referencing it is silently corrupted. In multi-threaded apps, back the factory cache with `ConcurrentHashMap.computeIfAbsent()`.
 
-### When NOT to Use
-- Objects have mostly unique state
-- Memory is not a constraint
-- Complexity not justified by memory savings
+### When to Use / When NOT to Use
+- **Use when:**
+  - Tens of thousands or millions of similar objects exhaust heap memory.
+  - Heavy intrinsic state can be cleanly separated and made immutable.
+  - Built-in JDK examples apply: `String.intern()`, `Integer.valueOf(-128..127)`, `Boolean.valueOf()`.
+- **Avoid when:**
+  - Objects have mostly unique, non-shareable state.
+  - Memory is not a bottleneck and factory lookup complexity isn't justified.
 
 ---
 
 ## 7. Proxy Pattern
 
 ### Intent
-Provide a surrogate or placeholder for another object to control access to it.
+Provide a surrogate or placeholder for another object to control access to it (lazy initialization, access control, remote calls, caching, or AOP).
+
+```mermaid
+classDiagram
+    class Image {
+        <<Interface>>
+        +display()* void
+    }
+    class RealImage {
+        -String filename
+        -loadImage() void
+        +display() void
+    }
+    class ProxyImage {
+        -String filename
+        -RealImage realImage
+        +display() void
+    }
+
+    Image <|.. RealImage
+    Image <|.. ProxyImage
+    ProxyImage o-- RealImage : lazy delegates
+```
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Proxy as Spring AOP Proxy
+    participant Target as Real UserService
+
+    Caller->>Proxy: saveUser(user)
+    Note over Proxy: 1. Intercept call
+    Note over Proxy: 2. Check @Cacheable / Begin @Transactional
+    Proxy->>Target: saveUser(user)
+    Target-->>Proxy: void
+    Note over Proxy: 3. Commit Transaction (or Rollback on error)
+    Proxy-->>Caller: return
+```
 
 ### Types of Proxy
 
@@ -1533,7 +1872,7 @@ public class RemoteProxyDemo {
 }
 ```
 
-#### 4. Java Dynamic Proxy (InvocationHandler)
+#### 4. Java Dynamic Proxy (`InvocationHandler`)
 
 ```java
 public interface PaymentService {
@@ -1621,39 +1960,55 @@ public class UserService {
 // 4. Then invokes the real method
 ```
 
+> [!WARNING]
+> **Spring AOP Self-Invocation Pitfall:** Because Spring uses a **Proxy** around `@Service` beans, calling a `@Transactional` or `@Cacheable` method from *another method inside the same class* (`this.saveUser(...)`) bypasses the proxy and silently skips transactions/caching!
+
 ### Proxy vs Decorator
 
 | Aspect | Proxy | Decorator |
 |--------|-------|-----------|
-| Purpose | Control access | Add responsibilities |
-| Client awareness | Proxy is transparent | Decorator is visible |
-| Change interface | No | No |
-| Add functionality | No | Yes |
-| Examples | Virtual, Protection, Remote | I/O streams, coffee example |
+| **Purpose** | Control access / cross-cutting concerns | Add new responsibilities dynamically |
+| **Client awareness** | Transparent (client thinks it has the real object) | Explicit (client composes decorators) |
+| **Change interface** | No | No |
+| **Lifecycle** | Proxy often instantiates/manages the real subject | Client passes the wrapped component in |
+| **Examples** | Virtual, Protection, Remote, Spring AOP | Java I/O streams, Beverage coffee example |
 
-### When to Use
-- Lazy initialization (Virtual Proxy)
-- Access control (Protection Proxy)
-- Remote objects (Remote Proxy)
-- Cross-cutting concerns (Logging, caching)
-- Spring AOP, transaction management
-
-### When NOT to Use
-- Simple objects without special requirements
-- When proxy overhead is not justified
-- Transparent access needed without control
+### When to Use / When NOT to Use
+- **Use when:**
+  - Lazy initialization of heavy resources (Virtual Proxy).
+  - Role-based access checks (Protection Proxy).
+  - Transparent RPC/network stubs (Remote Proxy).
+  - Cross-cutting concerns: logging, metrics, `@Transactional`, `@Cacheable` (Dynamic/CGLIB Proxy).
+- **Avoid when:**
+  - Direct access is needed with zero reflection/indirection overhead.
+  - No access control, lazy loading, or cross-cutting interception is required.
 
 ---
 
 ## Summary Table: Structural Patterns
 
-| Pattern | Purpose | Key Benefit |
-|---------|---------|------------|
-| **Adapter** | Make incompatible interfaces compatible | Integrates legacy systems |
-| **Bridge** | Separate abstraction from implementation | Independent variation |
-| **Composite** | Treat parts and wholes uniformly | Tree structures |
-| **Decorator** | Add responsibilities dynamically | Flexible alternative to inheritance |
-| **Facade** | Simplify complex subsystem | Easy interface |
-| **Flyweight** | Share objects for efficiency | Memory optimization |
-| **Proxy** | Control access to objects | Lazy loading, access control |
+```mermaid
+flowchart TD
+    Q{"What structural problem are you solving?"} -->|"Incompatible interfaces"| A["Adapter"]
+    Q -->|"M x N class explosion"| B["Bridge"]
+    Q -->|"Tree / part-whole hierarchy"| C["Composite"]
+    Q -->|"Add behavior dynamically"| D["Decorator"]
+    Q -->|"Simplify complex subsystem"| F["Facade"]
+    Q -->|"Millions of objects / high RAM"| FL["Flyweight"]
+    Q -->|"Control access / lazy / AOP"| P["Proxy"]
 
+    classDef q fill:#1e293b,stroke:#fbbf24,stroke-width:2px,color:#fde68a
+    classDef pat fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#a7f3d0
+    class Q q
+    class A,B,C,D,F,FL,P pat
+```
+
+| Pattern | Purpose | Key Benefit | Classic JDK / Spring Example |
+|---------|---------|-------------|------------------------------|
+| **Adapter** | Make incompatible interfaces compatible | Integrates legacy systems & 3P SDKs | `Arrays.asList()`, `InputStreamReader` |
+| **Bridge** | Separate abstraction from implementation | Independent variation ($M + N$) | JDBC `Driver` & `Connection` |
+| **Composite** | Treat parts and wholes uniformly | Recursive tree structures | Swing `JComponent`, File systems |
+| **Decorator** | Add responsibilities dynamically | Flexible alternative to subclassing | `BufferedInputStream(FileInputStream)` |
+| **Facade** | Simplify complex subsystem | Clean, unified entry point | Spring `JdbcTemplate`, `SLF4J` |
+| **Flyweight** | Share objects for efficiency | Massive memory optimization | `String.intern()`, `Integer.valueOf()` |
+| **Proxy** | Control access to objects | Lazy loading, auth, caching, AOP | `java.lang.reflect.Proxy`, Spring `@Transactional` |

@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-labelledby="title2 desc2">
+  <title id="title2">Fluent Builder Construction vs Object Pool Lifecycle</title>
+  <desc id="desc2">Animated side-by-side diagram showing fluent Builder step-by-step immutable Config construction and Object Pool borrow, active use, return, and pool-exhausted wait.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .box { fill: #0f172a; stroke: #475569; stroke-width: 1.2; }
+      .title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12.5px; fill: #94a3b8; }
+      .panel-title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 14.5px; font-weight: 700; fill: #f1f5f9; }
+      .code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; fill: #e2e8f0; }
+      .muted { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #94a3b8; }
+      .label { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #cbd5e1; }
+      .badge-text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 700; }
+
+      @keyframes step1 { 0%, 20% { stroke: #38bdf8; stroke-width: 2; } 25%, 100% { stroke: #475569; stroke-width: 1.2; } }
+      @keyframes step2 { 0%, 20% { stroke: #475569; stroke-width: 1.2; } 25%, 45% { stroke: #38bdf8; stroke-width: 2; } 50%, 100% { stroke: #475569; stroke-width: 1.2; } }
+      @keyframes step3 { 0%, 45% { stroke: #475569; stroke-width: 1.2; } 50%, 70% { stroke: #fbbf24; stroke-width: 2; } 75%, 100% { stroke: #475569; stroke-width: 1.2; } }
+      @keyframes step4 { 0%, 70% { stroke: #475569; stroke-width: 1.2; } 75%, 95% { stroke: #4ade80; stroke-width: 2; } 100% { stroke: #475569; stroke-width: 1.2; } }
+
+      @keyframes waitPulse {
+        0%, 45% { opacity: 0.4; }
+        55%, 80% { opacity: 1; }
+        90%, 100% { opacity: 0.4; }
+      }
+
+      .s1 { animation: step1 6s ease-in-out infinite; }
+      .s2 { animation: step2 6s ease-in-out infinite; }
+      .s3 { animation: step3 6s ease-in-out infinite; }
+      .s4 { animation: step4 6s ease-in-out infinite; }
+      .wait-box { animation: waitPulse 5s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#4ade80" />
+    </marker>
+    <marker id="arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24" />
+    </marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f87171" />
+    </marker>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg" x="0" y="0" width="960" height="540" rx="14" stroke="#334155" stroke-width="2" />
+
+  <!-- Header -->
+  <text x="28" y="38" class="title">Fluent Builder Construction vs Object Pool Lifecycle</text>
+  <text x="28" y="58" class="subtitle">Step-by-step immutable object assembly (left) vs bounded resource reuse &amp; wait queue (right)</text>
+
+  <!-- ==================== LEFT PANEL: FLUENT BUILDER ==================== -->
+  <rect class="panel" x="24" y="78" width="444" height="438" rx="10" />
+  <rect x="24" y="78" width="444" height="36" rx="10" fill="#172554" />
+  <rect x="24" y="102" width="444" height="12" fill="#172554" />
+  <text x="42" y="101" class="panel-title">1. Fluent Builder Pattern</text>
+  <rect x="358" y="86" width="96" height="20" rx="10" fill="#0284c7" fill-opacity="0.25" stroke="#38bdf8" stroke-width="1" />
+  <text x="368" y="100" class="badge-text" fill="#7dd3fc">Immutable</text>
+
+  <!-- Step 1: setHost -->
+  <rect class="box s1" x="48" y="132" width="396" height="54" rx="8" />
+  <text x="64" y="154" class="code" fill="#7dd3fc">new Config.Builder().setHost("db.prod")</text>
+  <text x="64" y="173" class="muted">Returns this (Builder) — fluent chaining</text>
+
+  <!-- Step 2: setPort -->
+  <rect class="box s2" x="48" y="204" width="396" height="54" rx="8" />
+  <text x="64" y="226" class="code" fill="#7dd3fc">.setPort(5432).setTimeoutMs(3000)</text>
+  <text x="64" y="245" class="muted">Optional params with safe defaults</text>
+
+  <!-- Step 3: validate() -->
+  <rect class="box s3" x="48" y="276" width="396" height="54" rx="8" />
+  <text x="64" y="298" class="code" fill="#fcd34d">.validate()  // check invariants</text>
+  <text x="64" y="317" class="muted">if (port &lt; 1 || port &gt; 65535) throw IllegalState</text>
+
+  <!-- Step 4: build() -> Immutable Config -->
+  <rect class="box s4" x="48" y="352" width="396" height="96" rx="8" fill="#052e16" fill-opacity="0.45" />
+  <text x="64" y="375" class="code" fill="#86efac">.build() -&gt; Immutable Config (final fields)</text>
+  <line x1="64" y1="385" x2="428" y2="385" stroke="#334155" stroke-width="1" />
+  <text x="64" y="405" class="muted">host = "db.prod" | port = 5432 | timeout = 3000</text>
+  <text x="64" y="424" class="code" fill="#4ade80">Thread-safe &amp; sealed (no setters exposed)</text>
+
+  <!-- Connectors -->
+  <path d="M 246 186 L 246 202" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrBlue)" />
+  <path d="M 246 258 L 246 274" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrBlue)" />
+  <path d="M 246 330 L 246 350" stroke="#4ade80" stroke-width="1.5" marker-end="url(#arrGreen)" />
+
+  <!-- Animated Builder Pipeline Dot -->
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="6s" repeatCount="indefinite" path="M 60 159 L 60 231 L 60 303 L 60 380 L 420 380" />
+  </circle>
+
+  <!-- Bottom Badge -->
+  <rect x="48" y="468" width="396" height="30" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="68" y="487" class="badge-text" fill="#93c5fd">Solves Telescoping Constructors + Enforces Invariants</text>
+
+
+  <!-- ==================== RIGHT PANEL: OBJECT POOL ==================== -->
+  <rect class="panel" x="492" y="78" width="444" height="438" rx="10" />
+  <rect x="492" y="78" width="444" height="36" rx="10" fill="#064e3b" />
+  <rect x="492" y="102" width="444" height="12" fill="#064e3b" />
+  <text x="510" y="101" class="panel-title">2. Object Pool Pattern</text>
+  <rect x="816" y="86" width="106" height="20" rx="10" fill="#16a34a" fill-opacity="0.25" stroke="#4ade80" stroke-width="1" />
+  <text x="826" y="100" class="badge-text" fill="#86efac">Reuse / Wait</text>
+
+  <!-- Available Pool -->
+  <rect class="box" x="516" y="132" width="396" height="82" rx="8" stroke="#4ade80" />
+  <text x="532" y="153" class="label" fill="#86efac">Available Pool (Queue&lt;Connection&gt;, max=3)</text>
+  <rect x="532" y="164" width="108" height="36" rx="6" fill="#052e16" stroke="#4ade80" stroke-width="1.2" />
+  <text x="556" y="186" class="code" fill="#86efac">Conn-1</text>
+  <rect x="658" y="164" width="108" height="36" rx="6" fill="#052e16" stroke="#4ade80" stroke-width="1.2" />
+  <text x="682" y="186" class="code" fill="#86efac">Conn-2</text>
+  <rect x="784" y="164" width="108" height="36" rx="6" fill="#1e293b" stroke="#64748b" stroke-dasharray="4 3" />
+  <text x="802" y="186" class="muted">Conn-3 out</text>
+
+  <!-- Borrow & Return Arrows -->
+  <path d="M 590 214 L 590 272" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#arrBlue)" />
+  <text x="600" y="248" class="code" fill="#7dd3fc">borrowObject()</text>
+
+  <path d="M 838 274 L 838 216" stroke="#4ade80" stroke-width="1.8" marker-end="url(#arrGreen)" />
+  <text x="726" y="248" class="code" fill="#86efac">returnObject()</text>
+
+  <!-- Active Client Use -->
+  <rect class="box" x="516" y="276" width="396" height="72" rx="8" stroke="#38bdf8" />
+  <text x="532" y="298" class="label" fill="#7dd3fc">Active Client Execution (In-Use)</text>
+  <text x="532" y="317" class="code">conn.execute("SELECT * FROM orders");</text>
+  <text x="532" y="334" class="muted">Reset state before returning to pool (no new alloc)</text>
+
+  <!-- Pool Exhausted Wait Box -->
+  <rect class="box wait-box" x="516" y="368" width="396" height="80" rx="8" stroke="#f87171" stroke-width="1.5" />
+  <text x="532" y="390" class="label" fill="#fca5a5">Pool Exhausted (available.isEmpty())</text>
+  <text x="532" y="410" class="code" fill="#fecaca">while (available.isEmpty()) wait();</text>
+  <text x="532" y="429" class="muted">Thread-4 blocks until returnObject() calls notifyAll()</text>
+
+  <!-- Arrow from Active to Wait notification -->
+  <path d="M 714 348 L 714 366" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="3 3" marker-end="url(#arrAmber)" />
+
+  <!-- Animated Object Token Cycling in Pool -->
+  <circle r="6" fill="#4ade80">
+    <animateMotion dur="5s" repeatCount="indefinite" path="M 590 182 L 590 312 L 838 312 L 838 182 L 590 182" />
+  </circle>
+
+  <!-- Bottom Badge -->
+  <rect x="516" y="468" width="396" height="30" rx="6" fill="#0f172a" stroke="#334155" />
+  <text x="538" y="487" class="badge-text" fill="#86efac">Amortizes Expensive Init | Caps Max Connections</text>
+</svg>
