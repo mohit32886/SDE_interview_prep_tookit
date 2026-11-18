@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="Thread-Safe LRU Cache and Token Bucket Rate Limiter LLD Architecture">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 8; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 500; fill: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #e2e8f0; }
+      .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #cbd5e1; }
+      .badge-blue { fill: #1e3a8a; stroke: #3b82f6; stroke-width: 1; }
+      .badge-teal { fill: #134e4a; stroke: #14b8a6; stroke-width: 1; }
+      .badge-amber { fill: #451a03; stroke: #f59e0b; stroke-width: 1; }
+      .badge-green { fill: #064e3b; stroke: #10b981; stroke-width: 1; }
+      .badge-red { fill: #450a0a; stroke: #ef4444; stroke-width: 1; }
+      .node-box { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.5; }
+      .node-hot { fill: #172554; stroke: #60a5fa; stroke-width: 2; }
+      .node-evict { fill: #1e293b; stroke: #f87171; stroke-width: 1.5; stroke-dasharray: 4 2; }
+      .edge { stroke: #64748b; stroke-width: 1.5; fill: none; }
+      .edge-cyan { stroke: #38bdf8; stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; }
+      .edge-green { stroke: #10b981; stroke-width: 1.8; fill: none; }
+      .edge-red { stroke: #ef4444; stroke-width: 1.8; fill: none; stroke-dasharray: 3 3; }
+
+      @keyframes pulseGlow {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 1; }
+      }
+      @keyframes flowDash {
+        to { stroke-dashoffset: -14; }
+      }
+      @keyframes tokenDrop {
+        0% { transform: translateY(0px); opacity: 0; }
+        20% { opacity: 1; }
+        80% { opacity: 1; }
+        100% { transform: translateY(38px); opacity: 0; }
+      }
+      @keyframes promotePulse {
+        0%, 100% { stroke: #60a5fa; stroke-width: 2; }
+        50% { stroke: #22d3ee; stroke-width: 3; }
+      }
+
+      .pulse { animation: pulseGlow 2.4s ease-in-out infinite; }
+      .dash-anim { animation: flowDash 1.2s linear infinite; }
+      .drop-anim { animation: tokenDrop 2s ease-in infinite; }
+      .hot-anim { animation: promotePulse 2.4s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+    </marker>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="14" />
+
+  <!-- Header Bar -->
+  <text class="title" x="24" y="28">In-Memory Concurrency Primitives — LLD Architecture</text>
+  <text class="subtitle" x="24" y="45">O(1) Thread-Safe LRU Cache &amp; Token Bucket Rate Limiter</text>
+
+  <!-- ========================================================= -->
+  <!-- LEFT PANEL: Thread-Safe LRU Cache                         -->
+  <!-- ========================================================= -->
+  <rect class="card" x="20" y="58" width="420" height="244" rx="12" />
+  <text class="title" x="36" y="82">1. Thread-Safe LRU Cache</text>
+  <text class="subtitle" x="36" y="98">HashMap O(1) Lookup + Doubly Linked List</text>
+
+  <!-- ReadWriteLock Badge -->
+  <rect class="badge-amber pulse" x="272" y="68" width="154" height="26" rx="6" />
+  <text class="mono-sm" x="281" y="85" fill="#fcd34d">ReentrantReadWriteLock</text>
+
+  <!-- HashMap Column -->
+  <rect class="subcard" x="34" y="114" width="108" height="172" rx="8" />
+  <text class="mono-sm" x="56" y="132" fill="#38bdf8">HashMap&lt;K,Node&gt;</text>
+
+  <rect class="node-box" x="44" y="144" width="88" height="28" rx="5" />
+  <text class="mono-sm" x="54" y="162">k1 -&gt; NodeA</text>
+
+  <rect class="node-hot hot-anim" x="44" y="182" width="88" height="28" rx="5" />
+  <text class="mono-sm" x="54" y="200">k2 -&gt; NodeB</text>
+
+  <rect class="node-box" x="44" y="220" width="88" height="28" rx="5" />
+  <text class="mono-sm" x="54" y="238">k3 -&gt; NodeC</text>
+
+  <text class="mono-sm" x="48" y="272" fill="#94a3b8">O(1) key index</text>
+
+  <!-- Pointers from HashMap to DLL -->
+  <path id="lookupPath" class="edge-cyan dash-anim" d="M 132 196 C 165 196, 170 156, 200 156" marker-end="url(#arrow-cyan)" />
+  <path class="edge" d="M 132 158 C 160 158, 175 198, 200 198" marker-end="url(#arrow-slate)" />
+  <path class="edge" d="M 132 234 C 160 234, 175 240, 200 240" marker-end="url(#arrow-slate)" />
+
+  <!-- Animated Lookup Packet -->
+  <circle r="4" fill="#22d3ee">
+    <animateMotion dur="2.4s" repeatCount="indefinite" path="M 132 196 C 165 196, 170 156, 200 156" />
+  </circle>
+
+  <!-- Doubly Linked List Column -->
+  <rect class="subcard" x="192" y="114" width="234" height="172" rx="8" />
+  <text class="mono-sm" x="206" y="132" fill="#38bdf8">Doubly Linked List (MRU -&gt; LRU)</text>
+
+  <!-- MRU Node -->
+  <rect class="node-hot hot-anim" x="204" y="142" width="136" height="30" rx="6" />
+  <text class="mono-sm" x="214" y="161" fill="#e0f2fe">HEAD | k2:v2 (MRU)</text>
+
+  <!-- Middle Node -->
+  <rect class="node-box" x="204" y="184" width="136" height="30" rx="6" />
+  <text class="mono-sm" x="214" y="203">k1:v1 (TTL: 42s)</text>
+
+  <!-- LRU Node -->
+  <rect class="node-evict" x="204" y="226" width="136" height="30" rx="6" />
+  <text class="mono-sm" x="214" y="245" fill="#fca5a5">TAIL | k3:v3 (LRU)</text>
+
+  <!-- Bidirectional DLL Links -->
+  <line x1="272" y1="172" x2="272" y2="184" class="edge" marker-end="url(#arrow-slate)" />
+  <line x1="272" y1="214" x2="272" y2="226" class="edge" marker-end="url(#arrow-slate)" />
+
+  <!-- Promotion & Eviction Labels -->
+  <rect class="badge-green" x="350" y="146" width="66" height="22" rx="4" />
+  <text class="mono-sm" x="357" y="161" fill="#6ee7b7">Promote</text>
+
+  <rect class="badge-red" x="350" y="230" width="66" height="22" rx="4" />
+  <text class="mono-sm" x="362" y="245" fill="#fca5a5">Evict</text>
+
+  <path class="edge-cyan" d="M 340 198 C 365 198, 370 172, 342 160" marker-end="url(#arrow-cyan)" />
+  <text class="mono-sm" x="206" y="274" fill="#94a3b8">WriteLock on miss/evict, ReadLock on hit</text>
+
+  <!-- ========================================================= -->
+  <!-- RIGHT PANEL: Token Bucket Rate Limiter                    -->
+  <!-- ========================================================= -->
+  <rect class="card" x="460" y="58" width="420" height="244" rx="12" />
+  <text class="title" x="476" y="82">2. Token Bucket Rate Limiter</text>
+  <text class="subtitle" x="476" y="98">Lazy Atomic Refill + Burst Capacity Cap</text>
+
+  <!-- Concurrency Badge -->
+  <rect class="badge-teal pulse" x="720" y="68" width="146" height="26" rx="6" />
+  <text class="mono-sm" x="729" y="85" fill="#5eead4">ConcurrentHashMap</text>
+
+  <!-- Refill Source -->
+  <rect class="subcard" x="476" y="114" width="112" height="54" rx="8" />
+  <text class="mono-sm" x="488" y="133" fill="#38bdf8">Refill Clock</text>
+  <text class="mono-sm" x="488" y="150" fill="#cbd5e1">rate = r tok/s</text>
+
+  <!-- Bucket Container -->
+  <rect class="subcard" x="476" y="180" width="112" height="106" rx="8" />
+  <text class="mono-sm" x="488" y="197" fill="#94a3b8">Bucket (cap=4)</text>
+
+  <!-- Animated Refill Drop -->
+  <circle class="drop-anim" cx="532" cy="168" r="5" fill="#22d3ee" />
+
+  <!-- Tokens inside Bucket -->
+  <rect x="492" y="206" width="80" height="16" rx="4" fill="#0891b2" stroke="#22d3ee" stroke-width="1" />
+  <rect x="492" y="226" width="80" height="16" rx="4" fill="#0891b2" stroke="#22d3ee" stroke-width="1" />
+  <rect x="492" y="246" width="80" height="16" rx="4" fill="#0891b2" stroke="#22d3ee" stroke-width="1" />
+  <rect x="492" y="266" width="80" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1" stroke-dasharray="3 2">
+    <animate attributeName="opacity" values="0.3;0.9;0.3" dur="2s" repeatCount="indefinite" />
+  </rect>
+
+  <!-- Gate / Decision Box -->
+  <rect class="subcard" x="614" y="132" width="118" height="132" rx="8" />
+  <text class="mono-sm" x="632" y="152" fill="#f8fafc">allowRequest()</text>
+  <text class="mono-sm" x="626" y="172" fill="#94a3b8">1. refill(now)</text>
+  <text class="mono-sm" x="626" y="190" fill="#94a3b8">2. min(cap, tok)</text>
+  <text class="mono-sm" x="626" y="208" fill="#94a3b8">3. if tok &gt;= 1:</text>
+  <text class="mono-sm" x="634" y="225" fill="#34d399">tok -= 1 (OK)</text>
+  <text class="mono-sm" x="626" y="243" fill="#f87171">4. else: 429</text>
+
+  <!-- Arrow from Bucket to Decision -->
+  <path class="edge-cyan dash-anim" d="M 588 232 L 614 232" marker-end="url(#arrow-cyan)" />
+
+  <!-- Output Streams -->
+  <rect class="badge-green" x="756" y="142" width="110" height="44" rx="6" />
+  <text class="mono-sm" x="772" y="161" fill="#6ee7b7">200 ALLOWED</text>
+  <text class="mono-sm" x="772" y="177" fill="#a7f3d0">token -1</text>
+
+  <rect class="badge-red" x="756" y="208" width="110" height="44" rx="6" />
+  <text class="mono-sm" x="768" y="227" fill="#fca5a5">429 REJECTED</text>
+  <text class="mono-sm" x="768" y="243" fill="#fecaca">Retry-After</text>
+
+  <path class="edge-green" d="M 732 164 L 756 164" marker-end="url(#arrow-green)" />
+  <path class="edge-red" d="M 732 230 L 756 230" marker-end="url(#arrow-red)" />
+
+  <!-- Animated Request Dots -->
+  <circle r="4" fill="#10b981">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 588 220 L 614 220 L 732 164 L 756 164" />
+  </circle>
+  <circle r="4" fill="#ef4444">
+    <animateMotion dur="2.8s" repeatCount="indefinite" path="M 614 244 L 732 230 L 756 230" />
+  </circle>
+
+  <text class="mono-sm" x="614" y="284" fill="#94a3b8">Per-client bucket key: userId / IP</text>
+</svg>

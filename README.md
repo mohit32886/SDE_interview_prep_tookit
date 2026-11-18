@@ -91,6 +91,25 @@ Interview Prep/
 │   ├── 04-Replication-and-Sharding.md
 │   └── 05-MongoDB-Interview-Questions.md
 │
+├── 11-Machine-Coding-and-LLD/                   ← 60–90 min runnable Java LLD rounds
+│   ├── README.md
+│   ├── 01-Parking-Lot-System.md
+│   ├── 02-Splitwise-Expense-Sharing.md
+│   ├── 03-Rate-Limiter-and-LRU-Cache.md
+│   └── 04-Elevator-and-Task-Scheduler.md
+│
+├── 12-Redis-and-Distributed-Caching/            ← In-memory internals & cache defense
+│   ├── 01-Redis-Internals-and-Data-Structures.md
+│   ├── 02-Caching-Patterns-and-Failure-Modes.md
+│   └── 03-Redis-Cluster-Replication-and-Persistence.md
+│
+├── 13-Cloud-Kubernetes-and-AI-Backend/          ← K8s, AWS tradeoffs & RAG/LLM systems
+│   ├── 01-Kubernetes-and-Production-Ops.md
+│   ├── 02-AWS-Managed-Services-Tradeoffs.md
+│   └── 03-AI-LLM-Backend-Architecture.md
+│
+├── web/                                         ← SDE Prep Studio (React + Express portal)
+│
 └── README.md  ← You are here
 ```
 

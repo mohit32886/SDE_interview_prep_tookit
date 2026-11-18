@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="Redis Single-Threaded Event Loop and In-Memory Encodings">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.2; }
+      .card-accent { fill: #1e293b; stroke: #ef4444; stroke-width: 1.5; }
+      .pill { fill: #0f172a; stroke: #475569; stroke-width: 1; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #94a3b8; }
+      .hdr { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; font-weight: 700; fill: #e2e8f0; }
+      .lbl { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #cbd5e1; }
+      .sub-lbl { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9px; fill: #94a3b8; }
+      .badge-txt { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9px; font-weight: 700; fill: #fca5a5; }
+      .flow-line { fill: none; stroke: #475569; stroke-width: 1.5; stroke-dasharray: 4 3; }
+      .loop-track { fill: none; stroke: #334155; stroke-width: 2.5; }
+      .loop-active { fill: none; stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: 36 180; stroke-linecap: round; animation: spinDash 2.8s linear infinite; }
+      .pulse-node { animation: nodePulse 2.2s ease-in-out infinite; }
+      .ram-pulse { animation: ramGlow 3s ease-in-out infinite; }
+      @keyframes spinDash {
+        from { stroke-dashoffset: 216; }
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes nodePulse {
+        0%, 100% { opacity: 0.75; }
+        50% { opacity: 1; }
+      }
+      @keyframes ramGlow {
+        0%, 100% { stroke: #334155; }
+        50% { stroke: #38bdf8; }
+      }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Frame -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="12"/>
+  <rect x="1" y="1" width="898" height="318" rx="11" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text class="title" x="24" y="28">Redis Single-Threaded Event Loop &amp; In-Memory Encodings</text>
+  <text class="subtitle" x="24" y="44">epoll / kqueue I/O Multiplexing • Redis 6+ Threaded Network I/O • Lock-Free Command Execution</text>
+  <rect x="705" y="16" width="171" height="22" rx="6" fill="#450a0a" stroke="#ef4444" stroke-width="1"/>
+  <text class="badge-txt" x="790" y="30" text-anchor="middle">100% IN-MEMORY • ZERO LOCKS</text>
+
+  <!-- Section 1: Clients & Redis 6+ I/O Threads -->
+  <rect class="card" x="24" y="62" width="170" height="236" rx="8"/>
+  <text class="hdr" x="109" y="81" text-anchor="middle">Clients &amp; I/O Threads</text>
+
+  <rect class="pill" x="36" y="94" width="146" height="28" rx="5"/>
+  <text class="lbl" x="46" y="112">Socket FD #11 (GET)</text>
+
+  <rect class="pill" x="36" y="130" width="146" height="28" rx="5"/>
+  <text class="lbl" x="46" y="148">Socket FD #24 (ZADD)</text>
+
+  <rect class="pill" x="36" y="166" width="146" height="28" rx="5"/>
+  <text class="lbl" x="46" y="184">Socket FD #39 (XADD)</text>
+
+  <rect x="36" y="206" width="146" height="78" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2"/>
+  <text class="hdr" x="109" y="224" text-anchor="middle" fill="#38bdf8">Redis 6+ I/O Pool</text>
+  <text class="sub-lbl" x="109" y="240" text-anchor="middle">Parallel Socket Read</text>
+  <text class="sub-lbl" x="109" y="253" text-anchor="middle">RESP Parse &amp; Flush</text>
+  <text class="sub-lbl" x="109" y="271" text-anchor="middle" fill="#7dd3fc">io-threads 4</text>
+
+  <!-- Flow lines: Clients -> Multiplexer -->
+  <path id="path-c1" class="flow-line" d="M 194 108 L 234 150" marker-end="url(#arrow)"/>
+  <path id="path-c2" class="flow-line" d="M 194 144 L 234 166" marker-end="url(#arrow)"/>
+  <path id="path-c3" class="flow-line" d="M 194 180 L 234 182" marker-end="url(#arrow)"/>
+
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 194 108 L 234 150"/>
+  </circle>
+  <circle r="3.5" fill="#fbbf24">
+    <animateMotion dur="2.1s" begin="0.5s" repeatCount="indefinite" path="M 194 144 L 234 166"/>
+  </circle>
+  <circle r="3.5" fill="#34d399">
+    <animateMotion dur="1.9s" begin="1.0s" repeatCount="indefinite" path="M 194 180 L 234 182"/>
+  </circle>
+
+  <!-- Section 2: I/O Multiplexer -->
+  <rect class="card" x="236" y="88" width="146" height="184" rx="8"/>
+  <text class="hdr" x="309" y="108" text-anchor="middle">I/O Multiplexer</text>
+  <text class="sub-lbl" x="309" y="122" text-anchor="middle">epoll / kqueue</text>
+
+  <rect class="pill" x="248" y="134" width="122" height="32" rx="5"/>
+  <text class="lbl" x="309" y="154" text-anchor="middle">aeApiPoll()</text>
+
+  <rect class="pill" x="248" y="176" width="122" height="44" rx="5"/>
+  <text class="lbl" x="309" y="195" text-anchor="middle">Ready Event Queue</text>
+  <text class="sub-lbl" x="309" y="210" text-anchor="middle">FD #11 → #24 → #39</text>
+
+  <rect x="248" y="230" width="122" height="28" rx="5" fill="#172554" stroke="#3b82f6" stroke-width="1"/>
+  <text class="sub-lbl" x="309" y="248" text-anchor="middle" fill="#93c5fd">O(1) Ready Dispatch</text>
+
+  <!-- Flow line: Multiplexer -> Event Loop -->
+  <path class="flow-line" d="M 382 180 L 420 180" stroke="#ef4444" marker-end="url(#arrow-red)"/>
+  <circle r="4" fill="#ef4444">
+    <animateMotion dur="1.2s" repeatCount="indefinite" path="M 382 180 L 420 180"/>
+  </circle>
+
+  <!-- Section 3: Single-Threaded Event Loop -->
+  <rect class="card-accent" x="422" y="62" width="204" height="236" rx="8"/>
+  <text class="hdr" x="524" y="82" text-anchor="middle" fill="#fca5a5">Single-Threaded Event Loop</text>
+  <text class="sub-lbl" x="524" y="96" text-anchor="middle">aeMain() • Serialized Execution</text>
+
+  <!-- Loop Ring -->
+  <circle class="loop-track" cx="524" cy="182" r="64"/>
+  <circle class="loop-active" cx="524" cy="182" r="64"/>
+
+  <!-- Moving Token on Ring -->
+  <circle r="4.5" fill="#f87171">
+    <animateMotion dur="2.8s" repeatCount="indefinite" path="M 524 118 A 64 64 0 1 1 523.9 118 Z"/>
+  </circle>
+
+  <!-- Loop Stage Pills -->
+  <rect class="pill pulse-node" x="472" y="108" width="104" height="26" rx="5"/>
+  <text class="lbl" x="524" y="125" text-anchor="middle">1. Dequeue Event</text>
+
+  <rect class="pill pulse-node" x="456" y="168" width="136" height="30" rx="5" stroke="#ef4444"/>
+  <text class="lbl" x="524" y="187" text-anchor="middle" fill="#fecaca">2. Execute in RAM</text>
+
+  <rect class="pill pulse-node" x="472" y="230" width="104" height="26" rx="5"/>
+  <text class="lbl" x="524" y="247" text-anchor="middle">3. Enqueue Reply</text>
+
+  <text class="sub-lbl" x="524" y="284" text-anchor="middle" fill="#94a3b8">No Mutexes • No Context Switches</text>
+
+  <!-- Flow lines: Event Loop -> In-Memory Encodings -->
+  <path class="flow-line" d="M 626 182 L 664 108" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+  <path class="flow-line" d="M 626 182 L 664 182" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+  <path class="flow-line" d="M 626 182 L 664 256" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M 626 182 L 664 108"/>
+  </circle>
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="1.6s" begin="0.5s" repeatCount="indefinite" path="M 626 182 L 664 182"/>
+  </circle>
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="1.6s" begin="1.0s" repeatCount="indefinite" path="M 626 182 L 664 256"/>
+  </circle>
+
+  <!-- Section 4: In-Memory Encodings (RAM) -->
+  <rect class="card" x="666" y="62" width="210" height="236" rx="8"/>
+  <text class="hdr" x="771" y="81" text-anchor="middle">In-Memory Encodings (RAM)</text>
+
+  <rect class="pill ram-pulse" x="678" y="92" width="186" height="34" rx="5"/>
+  <text class="lbl" x="688" y="107" fill="#38bdf8">SDS (Strings)</text>
+  <text class="sub-lbl" x="688" y="120">O(1) len • binary-safe • prealloc</text>
+
+  <rect class="pill ram-pulse" x="678" y="132" width="186" height="34" rx="5"/>
+  <text class="lbl" x="688" y="147" fill="#34d399">Listpack (List/Hash/ZSet)</text>
+  <text class="sub-lbl" x="688" y="160">Contiguous • cache-friendly</text>
+
+  <rect class="pill ram-pulse" x="678" y="172" width="186" height="34" rx="5"/>
+  <text class="lbl" x="688" y="187" fill="#fbbf24">SkipList + Dict (ZSET)</text>
+  <text class="sub-lbl" x="688" y="200">O(log N) range • O(1) score</text>
+
+  <rect class="pill ram-pulse" x="678" y="212" width="186" height="34" rx="5"/>
+  <text class="lbl" x="688" y="227" fill="#c084fc">HyperLogLog (Probabilistic)</text>
+  <text class="sub-lbl" x="688" y="240">12 KB fixed • 0.81% std error</text>
+
+  <rect class="pill ram-pulse" x="678" y="252" width="186" height="34" rx="5"/>
+  <text class="lbl" x="688" y="267" fill="#f472b6">Streams (Radix + Listpack)</text>
+  <text class="sub-lbl" x="688" y="280">Append-only log • Consumer Grps</text>
+</svg>

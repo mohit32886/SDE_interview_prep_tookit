@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="75-Minute Machine Coding Execution Loop">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0b1120"/>
+    </linearGradient>
+    <linearGradient id="trackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="25%" stop-color="#a78bfa"/>
+      <stop offset="55%" stop-color="#34d399"/>
+      <stop offset="80%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .sans { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }
+      .card { fill: #1e293b; stroke-width: 1.5; }
+      @keyframes phasePulse {
+        0%, 100% { opacity: 0.75; }
+        50% { opacity: 1; }
+      }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      .pulse-card { animation: phasePulse 4s ease-in-out infinite; }
+      .pulse-delay-1 { animation-delay: 0s; }
+      .pulse-delay-2 { animation-delay: 0.8s; }
+      .pulse-delay-3 { animation-delay: 1.6s; }
+      .pulse-delay-4 { animation-delay: 2.4s; }
+      .pulse-delay-5 { animation-delay: 3.2s; }
+      .flow-line {
+        stroke-dasharray: 6 6;
+        animation: dashFlow 1.4s linear infinite;
+      }
+    </style>
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="1" y="1" width="898" height="318" rx="16" fill="url(#bgGrad)" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Subtle Header -->
+  <circle cx="32" cy="30" r="5" fill="#34d399" filter="url(#glow)">
+    <animate attributeName="opacity" values="1;0.35;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <text x="46" y="34" class="sans" font-size="14" font-weight="700" fill="#f8fafc" letter-spacing="0.6">75-MINUTE MACHINE CODING EXECUTION LOOP</text>
+  <text x="46" y="52" class="mono" font-size="10.5" fill="#94a3b8">Module 11 • Bridging Design Patterns (03) &amp; System Design (07) • Flipkart / Uber / Atlassian / Razorpay / Amazon</text>
+
+  <!-- Total Time Badge -->
+  <rect x="786" y="20" width="90" height="24" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+  <text x="831" y="36" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#38bdf8">75m LOOP</text>
+
+  <!-- Connecting Flow Path Behind Cards -->
+  <path id="loopPath" d="M 100 162 L 800 162" fill="none" stroke="url(#trackGrad)" stroke-width="2" class="flow-line" opacity="0.55"/>
+
+  <!-- Phase 01: Clarify & Entities (10m) -->
+  <g class="pulse-card pulse-delay-1">
+    <rect x="24" y="76" width="152" height="170" rx="10" class="card" stroke="#38bdf8"/>
+    <rect x="24" y="76" width="152" height="4" rx="2" fill="#38bdf8"/>
+    <rect x="36" y="90" width="32" height="20" rx="5" fill="#0c4a6e"/>
+    <text x="52" y="104" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#38bdf8">01</text>
+    <rect x="122" y="90" width="42" height="20" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="1"/>
+    <text x="143" y="104" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#38bdf8">10m</text>
+    <text x="36" y="132" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Clarify &amp;</text>
+    <text x="36" y="149" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Entities</text>
+    <line x1="36" y1="162" x2="164" y2="162" stroke="#334155" stroke-width="1"/>
+    <text x="36" y="180" class="mono" font-size="9.5" fill="#cbd5e1">• Scope &amp; Constraints</text>
+    <text x="36" y="196" class="mono" font-size="9.5" fill="#cbd5e1">• Core Domain Models</text>
+    <text x="36" y="212" class="mono" font-size="9.5" fill="#cbd5e1">• Enums &amp; Exceptions</text>
+    <rect x="36" y="228" width="128" height="5" rx="2.5" fill="#0f172a"/>
+    <rect x="36" y="228" width="18" height="5" rx="2.5" fill="#38bdf8"/>
+  </g>
+
+  <!-- Phase 02: Interfaces & SOLID (10m) -->
+  <g class="pulse-card pulse-delay-2">
+    <rect x="199" y="76" width="152" height="170" rx="10" class="card" stroke="#a78bfa"/>
+    <rect x="199" y="76" width="152" height="4" rx="2" fill="#a78bfa"/>
+    <rect x="211" y="90" width="32" height="20" rx="5" fill="#2e1065"/>
+    <text x="227" y="104" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#a78bfa">02</text>
+    <rect x="297" y="90" width="42" height="20" rx="10" fill="#0f172a" stroke="#a78bfa" stroke-width="1"/>
+    <text x="318" y="104" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#a78bfa">10m</text>
+    <text x="211" y="132" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Interfaces &amp;</text>
+    <text x="211" y="149" class="sans" font-size="13" font-weight="700" fill="#f8fafc">SOLID</text>
+    <line x1="211" y1="162" x2="339" y2="162" stroke="#334155" stroke-width="1"/>
+    <text x="211" y="180" class="mono" font-size="9.5" fill="#cbd5e1">• Strategy / Factory</text>
+    <text x="211" y="196" class="mono" font-size="9.5" fill="#cbd5e1">• Repository Contracts</text>
+    <text x="211" y="212" class="mono" font-size="9.5" fill="#cbd5e1">• Dependency Inversion</text>
+    <rect x="211" y="228" width="128" height="5" rx="2.5" fill="#0f172a"/>
+    <rect x="211" y="228" width="18" height="5" rx="2.5" fill="#a78bfa"/>
+  </g>
+
+  <!-- Phase 03: Core Domain & Concurrency (35m) -->
+  <g class="pulse-card pulse-delay-3">
+    <rect x="374" y="76" width="152" height="170" rx="10" class="card" stroke="#34d399"/>
+    <rect x="374" y="76" width="152" height="4" rx="2" fill="#34d399"/>
+    <rect x="386" y="90" width="32" height="20" rx="5" fill="#064e3b"/>
+    <text x="402" y="104" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#34d399">03</text>
+    <rect x="472" y="90" width="42" height="20" rx="10" fill="#0f172a" stroke="#34d399" stroke-width="1"/>
+    <text x="493" y="104" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#34d399">35m</text>
+    <text x="386" y="132" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Core Domain &amp;</text>
+    <text x="386" y="149" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Concurrency</text>
+    <line x1="386" y1="162" x2="514" y2="162" stroke="#334155" stroke-width="1"/>
+    <text x="386" y="180" class="mono" font-size="9.5" fill="#cbd5e1">• Service &amp; Algorithms</text>
+    <text x="386" y="196" class="mono" font-size="9.5" fill="#cbd5e1">• Locks &amp; Atomics</text>
+    <text x="386" y="212" class="mono" font-size="9.5" fill="#cbd5e1">• In-Memory Stores</text>
+    <rect x="386" y="228" width="128" height="5" rx="2.5" fill="#0f172a"/>
+    <rect x="386" y="228" width="60" height="5" rx="2.5" fill="#34d399"/>
+  </g>
+
+  <!-- Phase 04: Driver & Unit Tests (15m) -->
+  <g class="pulse-card pulse-delay-4">
+    <rect x="549" y="76" width="152" height="170" rx="10" class="card" stroke="#fbbf24"/>
+    <rect x="549" y="76" width="152" height="4" rx="2" fill="#fbbf24"/>
+    <rect x="561" y="90" width="32" height="20" rx="5" fill="#451a03"/>
+    <text x="577" y="104" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#fbbf24">04</text>
+    <rect x="647" y="90" width="42" height="20" rx="10" fill="#0f172a" stroke="#fbbf24" stroke-width="1"/>
+    <text x="668" y="104" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#fbbf24">15m</text>
+    <text x="561" y="132" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Driver &amp;</text>
+    <text x="561" y="149" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Unit Tests</text>
+    <line x1="561" y1="162" x2="689" y2="162" stroke="#334155" stroke-width="1"/>
+    <text x="561" y="180" class="mono" font-size="9.5" fill="#cbd5e1">• Runnable Main Demo</text>
+    <text x="561" y="196" class="mono" font-size="9.5" fill="#cbd5e1">• Edge-Case Assertions</text>
+    <text x="561" y="212" class="mono" font-size="9.5" fill="#cbd5e1">• Multi-Thread Stress</text>
+    <rect x="561" y="228" width="128" height="5" rx="2.5" fill="#0f172a"/>
+    <rect x="561" y="228" width="26" height="5" rx="2.5" fill="#fbbf24"/>
+  </g>
+
+  <!-- Phase 05: Extensibility Demo (5m) -->
+  <g class="pulse-card pulse-delay-5">
+    <rect x="724" y="76" width="152" height="170" rx="10" class="card" stroke="#fb7185"/>
+    <rect x="724" y="76" width="152" height="4" rx="2" fill="#fb7185"/>
+    <rect x="736" y="90" width="32" height="20" rx="5" fill="#4c0519"/>
+    <text x="752" y="104" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#fb7185">05</text>
+    <rect x="822" y="90" width="42" height="20" rx="10" fill="#0f172a" stroke="#fb7185" stroke-width="1"/>
+    <text x="843" y="104" text-anchor="middle" class="mono" font-size="10.5" font-weight="700" fill="#fb7185">5m</text>
+    <text x="736" y="132" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Extensibility</text>
+    <text x="736" y="149" class="sans" font-size="13" font-weight="700" fill="#f8fafc">Demo</text>
+    <line x1="736" y1="162" x2="864" y2="162" stroke="#334155" stroke-width="1"/>
+    <text x="736" y="180" class="mono" font-size="9.5" fill="#cbd5e1">• Plug New Strategy</text>
+    <text x="736" y="196" class="mono" font-size="9.5" fill="#cbd5e1">• Explain Trade-offs</text>
+    <text x="736" y="212" class="mono" font-size="9.5" fill="#cbd5e1">• DB / Scale Bridge</text>
+    <rect x="736" y="228" width="128" height="5" rx="2.5" fill="#0f172a"/>
+    <rect x="736" y="228" width="10" height="5" rx="2.5" fill="#fb7185"/>
+  </g>
+
+  <!-- Connector Arrows Between Cards -->
+  <polygon points="184,157 192,162 184,167" fill="#38bdf8"/>
+  <polygon points="359,157 367,162 359,167" fill="#a78bfa"/>
+  <polygon points="534,157 542,162 534,167" fill="#34d399"/>
+  <polygon points="709,157 717,162 709,167" fill="#fbbf24"/>
+
+  <!-- Animated Signal Packet Moving Along Execution Loop -->
+  <circle r="4.5" fill="#f8fafc" filter="url(#glow)">
+    <animateMotion dur="5s" repeatCount="indefinite" path="M 176 162 L 199 162 M 351 162 L 374 162 M 526 162 L 549 162 M 701 162 L 724 162"/>
+  </circle>
+
+  <!-- Bottom Proportional 75-Minute Timeline Bar -->
+  <text x="24" y="274" class="mono" font-size="10" fill="#94a3b8">TIME BUDGET (75m):</text>
+  <rect x="148" y="264" width="96" height="12" rx="3" fill="#38bdf8" opacity="0.85"/>
+  <rect x="247" y="264" width="96" height="12" rx="3" fill="#a78bfa" opacity="0.85"/>
+  <rect x="346" y="264" width="338" height="12" rx="3" fill="#34d399" opacity="0.9"/>
+  <rect x="687" y="264" width="144" height="12" rx="3" fill="#fbbf24" opacity="0.85"/>
+  <rect x="834" y="264" width="42" height="12" rx="3" fill="#fb7185" opacity="0.85"/>
+
+  <text x="196" y="294" text-anchor="middle" class="mono" font-size="9.5" fill="#38bdf8">0-10m (13%)</text>
+  <text x="295" y="294" text-anchor="middle" class="mono" font-size="9.5" fill="#a78bfa">10-20m (13%)</text>
+  <text x="515" y="294" text-anchor="middle" class="mono" font-size="9.5" fill="#34d399">20-55m (47% Core Implementation)</text>
+  <text x="759" y="294" text-anchor="middle" class="mono" font-size="9.5" fill="#fbbf24">55-70m (20%)</text>
+  <text x="855" y="294" text-anchor="middle" class="mono" font-size="9.5" fill="#fb7185">5m</text>
+</svg>

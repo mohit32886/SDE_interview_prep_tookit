@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="Elevator LOOK Dispatch and Task Scheduler PriorityQueue LLD Architecture">
+  <defs>
+    <style>
+      .bg-card { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .node-box { fill: #0f172a; stroke: #475569; stroke-width: 1.2; rx: 6; }
+      .node-accent-blue { fill: #172554; stroke: #3b82f6; stroke-width: 1.5; rx: 6; }
+      .node-accent-emerald { fill: #064e3b; stroke: #10b981; stroke-width: 1.5; rx: 6; }
+      .node-accent-amber { fill: #451a03; stroke: #f59e0b; stroke-width: 1.5; rx: 6; }
+      .node-accent-violet { fill: #2e1065; stroke: #8b5cf6; stroke-width: 1.5; rx: 6; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #94a3b8; letter-spacing: 0.4px; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10.5px; font-weight: 600; fill: #e2e8f0; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; fill: #cbd5e1; }
+      .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 8.5px; fill: #94a3b8; }
+      .wire { fill: none; stroke: #475569; stroke-width: 1.5; stroke-linecap: round; }
+      .wire-flow { fill: none; stroke: #38bdf8; stroke-width: 1.5; stroke-dasharray: 5 5; animation: dashFlow 1.6s linear infinite; }
+      .wire-flow-amber { fill: none; stroke: #fbbf24; stroke-width: 1.5; stroke-dasharray: 5 5; animation: dashFlow 1.8s linear infinite; }
+      .pulse-emerald { animation: pulseNode 2.4s ease-in-out infinite; }
+      .pulse-blue { animation: pulseNode 2.8s ease-in-out infinite; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes pulseNode {
+        0%, 100% { opacity: 0.78; }
+        50% { opacity: 1; }
+      }
+    </style>
+
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg-card" x="0" y="0" width="900" height="320" rx="12"/>
+
+  <!-- Top Header -->
+  <text class="title" x="20" y="28">Concurrency LLD: Multi-Elevator LOOK Dispatch &amp; Scheduled Task Executor</text>
+  <rect x="695" y="13" width="185" height="22" rx="11" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <circle cx="710" cy="24" r="4" fill="#10b981">
+    <animate attributeName="opacity" values="1;0.35;1" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <text class="mono-sm" x="720" y="27" fill="#cbd5e1">LOCK-SAFE &amp; O(log N)</text>
+
+  <!-- ==================== LEFT PANEL: ELEVATOR DISPATCH ==================== -->
+  <rect class="panel" x="16" y="46" width="426" height="258" rx="10"/>
+  <text class="subtitle" x="30" y="66">1. ELEVATOR LOOK / SCAN DISPATCH</text>
+
+  <!-- External Hall Request -->
+  <rect class="node-accent-blue" x="30" y="82" width="136" height="48" rx="6"/>
+  <text class="label" x="98" y="101" text-anchor="middle">External Hall Request</text>
+  <text class="mono" x="98" y="118" text-anchor="middle" fill="#93c5fd">Floor 7 | Dir: UP</text>
+
+  <!-- DispatchStrategy (LOOK) -->
+  <rect class="node-accent-violet pulse-blue" x="30" y="156" width="136" height="58" rx="6"/>
+  <text class="label" x="98" y="176" text-anchor="middle">DispatchStrategy</text>
+  <text class="mono" x="98" y="191" text-anchor="middle" fill="#c4b5fd">LOOK / Nearest Car</text>
+  <text class="mono-sm" x="98" y="205" text-anchor="middle">min |carFloor - req|</text>
+
+  <!-- TreeSet Stops -->
+  <rect class="node-box" x="30" y="232" width="136" height="56" rx="6"/>
+  <text class="mono" x="40" y="249" fill="#38bdf8">upStops:   [5, 7, 9]</text>
+  <text class="mono" x="40" y="265" fill="#fbbf24">downStops: [3, 1]</text>
+  <text class="mono-sm" x="40" y="280">TreeSet&lt;Integer&gt; O(log N)</text>
+
+  <!-- Wires in Left Panel -->
+  <path id="reqPath" class="wire-flow" d="M 98 130 L 98 156" marker-end="url(#arrow-blue)"/>
+  <path id="dispatchPath" class="wire-flow" d="M 166 185 L 220 185" marker-end="url(#arrow-blue)"/>
+  <path class="wire" d="M 166 260 L 220 260" marker-end="url(#arrow-slate)"/>
+
+  <!-- Animated request packet -->
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="2.2s" repeatCount="indefinite" path="M 98 130 L 98 185 L 220 185"/>
+  </circle>
+
+  <!-- Elevator Shaft & State Machine -->
+  <rect class="node-box" x="224" y="82" width="204" height="206" rx="6"/>
+  <text class="label" x="326" y="100" text-anchor="middle">ElevatorCar State Machine</text>
+
+  <!-- State Badges -->
+  <rect x="236" y="110" width="54" height="20" rx="4" fill="#1e293b" stroke="#475569"/>
+  <text class="mono-sm" x="263" y="123" text-anchor="middle">IDLE</text>
+
+  <rect x="298" y="110" width="54" height="20" rx="4" fill="#064e3b" stroke="#10b981">
+    <animate attributeName="stroke-width" values="1.2;2.2;1.2" dur="2s" repeatCount="indefinite"/>
+  </rect>
+  <text class="mono-sm" x="325" y="123" text-anchor="middle" fill="#6ee7b7">UP</text>
+
+  <rect x="360" y="110" width="54" height="20" rx="4" fill="#1e293b" stroke="#475569"/>
+  <text class="mono-sm" x="387" y="123" text-anchor="middle">DOWN</text>
+
+  <!-- Shaft Track -->
+  <rect x="244" y="142" width="68" height="134" rx="4" fill="#020617" stroke="#334155"/>
+  <line x1="252" y1="162" x2="304" y2="162" stroke="#1e293b" stroke-width="1"/>
+  <line x1="252" y1="188" x2="304" y2="188" stroke="#1e293b" stroke-width="1"/>
+  <line x1="252" y1="214" x2="304" y2="214" stroke="#1e293b" stroke-width="1"/>
+  <line x1="252" y1="240" x2="304" y2="240" stroke="#1e293b" stroke-width="1"/>
+  <text class="mono-sm" x="236" y="165" text-anchor="end">F9</text>
+  <text class="mono-sm" x="236" y="191" text-anchor="end">F7</text>
+  <text class="mono-sm" x="236" y="217" text-anchor="end">F5</text>
+  <text class="mono-sm" x="236" y="243" text-anchor="end">F3</text>
+
+  <!-- Moving Elevator Car -->
+  <g>
+    <rect x="256" y="220" width="44" height="24" rx="4" fill="#0f766e" stroke="#2dd4bf" stroke-width="1.5"/>
+    <text class="mono" x="278" y="236" text-anchor="middle" fill="#f0fdfa">CAR-1</text>
+    <animateTransform attributeName="transform" type="translate" values="0,0; 0,-32; 0,-64; 0,-32; 0,0" dur="5.6s" repeatCount="indefinite"/>
+  </g>
+
+  <!-- Car Metrics -->
+  <rect x="322" y="142" width="94" height="134" rx="4" fill="#0f172a" stroke="#334155"/>
+  <text class="mono-sm" x="330" y="160" fill="#cbd5e1">lock: Reentrant</text>
+  <text class="mono-sm" x="330" y="178" fill="#6ee7b7">door: CLOSED</text>
+  <text class="mono-sm" x="330" y="196" fill="#93c5fd">next: ceil(cur)</text>
+  <text class="mono-sm" x="330" y="214" fill="#cbd5e1">flip on empty</text>
+  <text class="mono-sm" x="330" y="232" fill="#fbbf24">no starvation</text>
+  <text class="mono-sm" x="330" y="256" fill="#94a3b8">step(): O(log N)</text>
+
+  <!-- ==================== RIGHT PANEL: TASK SCHEDULER ==================== -->
+  <rect class="panel" x="458" y="46" width="426" height="258" rx="10"/>
+  <text class="subtitle" x="472" y="66">2. DELAYQUEUE / PRIORITYQUEUE TASK SCHEDULER</text>
+
+  <!-- Submit Producers -->
+  <rect class="node-accent-amber" x="472" y="82" width="122" height="52" rx="6"/>
+  <text class="label" x="533" y="101" text-anchor="middle">schedule(task)</text>
+  <text class="mono" x="533" y="117" text-anchor="middle" fill="#fde68a">one-shot / rate</text>
+
+  <!-- ReentrantLock + Condition -->
+  <rect class="node-box" x="472" y="156" width="122" height="62" rx="6"/>
+  <text class="label" x="533" y="175" text-anchor="middle">ReentrantLock</text>
+  <text class="mono-sm" x="533" y="191" text-anchor="middle" fill="#38bdf8">Condition</text>
+  <text class="mono-sm" x="533" y="206" text-anchor="middle">.awaitNanos(dt)</text>
+
+  <!-- PriorityQueue Min-Heap -->
+  <rect class="node-accent-blue" x="622" y="82" width="132" height="136" rx="6"/>
+  <text class="label" x="688" y="100" text-anchor="middle">PriorityQueue</text>
+  <text class="mono-sm" x="688" y="114" text-anchor="middle">min-heap (nextRunAt)</text>
+
+  <rect x="632" y="124" width="112" height="24" rx="4" fill="#064e3b" stroke="#10b981"/>
+  <text class="mono" x="688" y="139" text-anchor="middle" fill="#6ee7b7">T1 @ +10ms</text>
+
+  <rect x="632" y="154" width="112" height="24" rx="4" fill="#1e293b" stroke="#475569"/>
+  <text class="mono" x="688" y="169" text-anchor="middle">T2 @ +50ms</text>
+
+  <rect x="632" y="184" width="112" height="24" rx="4" fill="#1e293b" stroke="#475569"/>
+  <text class="mono" x="688" y="199" text-anchor="middle">T3 @ +120ms</text>
+
+  <!-- Worker Pool -->
+  <rect class="node-accent-emerald" x="774" y="82" width="96" height="136" rx="6"/>
+  <text class="label" x="822" y="100" text-anchor="middle">Worker Pool</text>
+
+  <rect class="pulse-emerald" x="784" y="114" width="76" height="26" rx="4" fill="#0f172a" stroke="#10b981"/>
+  <text class="mono" x="822" y="131" text-anchor="middle" fill="#6ee7b7">Worker-1</text>
+
+  <rect x="784" y="148" width="76" height="26" rx="4" fill="#0f172a" stroke="#334155"/>
+  <text class="mono" x="822" y="165" text-anchor="middle">Worker-2</text>
+
+  <rect x="784" y="182" width="76" height="26" rx="4" fill="#0f172a" stroke="#334155"/>
+  <text class="mono" x="822" y="199" text-anchor="middle">Worker-3</text>
+
+  <!-- Wires in Right Panel -->
+  <path class="wire-flow-amber" d="M 594 108 L 622 108" marker-end="url(#arrow-amber)"/>
+  <path class="wire" d="M 594 187 L 622 187" marker-end="url(#arrow-slate)"/>
+  <path class="wire-flow" d="M 754 136 L 774 136" marker-end="url(#arrow-blue)"/>
+
+  <!-- Animated task dot -->
+  <circle r="3.5" fill="#fbbf24">
+    <animateMotion dur="2.6s" repeatCount="indefinite" path="M 594 108 L 632 136 L 744 136 L 784 127"/>
+  </circle>
+
+  <!-- Footer Status Bar inside Right Panel -->
+  <rect class="node-box" x="472" y="232" width="398" height="56" rx="6"/>
+  <text class="mono" x="484" y="250" fill="#e2e8f0">1. offer() -&gt; signal() only if new head is earliest</text>
+  <text class="mono" x="484" y="266" fill="#94a3b8">2. poll()  -&gt; awaitNanos(head.nextRunAt - now)</text>
+  <text class="mono" x="484" y="281" fill="#6ee7b7">3. periodic -&gt; reschedule nextRunAt before/after run</text>
+</svg>

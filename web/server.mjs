@@ -74,6 +74,24 @@ const MODULE_META = {
     accent: '#06b6d4',
     description: 'BSON/WiredTiger, Aggregation pipelines, ESR indexing, Replica Sets, and Sharding.',
   },
+  '11-Machine-Coding-and-LLD': {
+    shortTitle: 'Machine Coding & LLD',
+    badge: 'Runnable Java',
+    accent: '#f43f5e',
+    description: '75-minute LLD playbook, Parking Lot, Splitwise, LRU Cache, Rate Limiter, Elevator & Task Scheduler.',
+  },
+  '12-Redis-and-Distributed-Caching': {
+    shortTitle: 'Redis & Caching',
+    badge: 'In-Memory',
+    accent: '#ef4444',
+    description: 'Event loop, SDS/SkipList/HyperLogLog, stampede/avalanche defense, Cluster 16K slots & RDB/AOF.',
+  },
+  '13-Cloud-Kubernetes-and-AI-Backend': {
+    shortTitle: 'Cloud, K8s & AI/RAG',
+    badge: 'Ops & GenAI',
+    accent: '#6366f1',
+    description: 'K8s probes & graceful SIGTERM, AWS SQS/MSK/DynamoDB tradeoffs, and RAG + pgvector + SSE.',
+  },
 };
 
 function slugifyHeading(text) {

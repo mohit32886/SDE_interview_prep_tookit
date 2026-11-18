@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="100%" height="auto" role="img" aria-labelledby="redis-cluster-title redis-cluster-desc">
+  <title id="redis-cluster-title">Redis Cluster 16,384 Hash Slots, Redirection, and Async Replication</title>
+  <desc id="redis-cluster-desc">Animated diagram showing CRC16(key) mod 16384 routing across Shard 1 (0-5460), Shard 2 (5461-10922), and Shard 3 (10923-16383), MOVED/ASK redirection, Primary to Replica async replication, and RDB/AOF persistence.</desc>
+  <style>
+    .bg { fill: #0f172a; }
+    .card { fill: #1e293b; stroke: #334155; stroke-width: 1.4; rx: 10; }
+    .subcard { fill: #0f172a; stroke: #334155; stroke-width: 1.2; rx: 7; }
+    .title { font: 700 16px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #f8fafc; }
+    .label { font: 600 12px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #e2e8f0; }
+    .mono { font: 600 10.5px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #cbd5e1; }
+    .small { font: 500 10px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; fill: #94a3b8; }
+    .slot-text { font: 700 10px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #f8fafc; text-anchor: middle; }
+    .badge-text { font: 700 9px 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; fill: #0f172a; text-anchor: middle; }
+    .wire-warn { fill: none; stroke: #f59e0b; stroke-width: 1.8; stroke-dasharray: 4 3; }
+    .wire-moved { fill: none; stroke: #f87171; stroke-width: 1.8; stroke-dasharray: 4 3; }
+    .wire-ok { fill: none; stroke: #34d399; stroke-width: 2; }
+    .wire-repl { fill: none; stroke: #38bdf8; stroke-width: 1.8; stroke-dasharray: 3 3; }
+    .wire-gossip { fill: none; stroke: #a78bfa; stroke-width: 1.5; stroke-dasharray: 5 4; }
+
+    @keyframes ownerPulse {
+      0%, 40% { stroke: #334155; stroke-width: 1.2; }
+      55%, 85% { stroke: #34d399; stroke-width: 2.2; }
+      100% { stroke: #334155; stroke-width: 1.2; }
+    }
+    @keyframes diskGlow {
+      0%, 50% { opacity: 0.45; }
+      65%, 90% { opacity: 1; }
+      100% { opacity: 0.45; }
+    }
+    @keyframes gossipPulse {
+      0%, 100% { opacity: 0.45; }
+      50% { opacity: 1; }
+    }
+
+    .anim-owner { animation: ownerPulse 6s infinite; }
+    .anim-disk { animation: diskGlow 6s infinite; }
+    .anim-gossip { animation: gossipPulse 3s infinite; }
+  </style>
+
+  <defs>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f87171"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="12"/>
+
+  <!-- Header -->
+  <text class="title" x="24" y="32">Redis Cluster: 16,384 Hash Slots &amp; Async Replication</text>
+  <rect x="612" y="14" width="264" height="24" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+  <text class="mono" x="744" y="30" text-anchor="middle" fill="#38bdf8">slot = CRC16(key) mod 16384</text>
+
+  <!-- Client Card -->
+  <rect class="card" x="24" y="54" width="174" height="130"/>
+  <text class="label" x="36" y="74">Cluster-Aware Client</text>
+  <rect class="subcard" x="34" y="84" width="154" height="36"/>
+  <text class="mono" x="111" y="100" text-anchor="middle" fill="#f8fafc">SET user:{42}:cart</text>
+  <text class="small" x="111" y="114" text-anchor="middle">hash_tag {42} -&gt; slot 8192</text>
+
+  <rect x="34" y="128" width="154" height="44" rx="6" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+  <text class="small" x="42" y="145" fill="#fbbf24">1. Stale map hits Shard 1</text>
+  <text class="small" x="42" y="161" fill="#34d399">3. Cached slot -&gt; Shard 2</text>
+
+  <!-- Redirection & Persistence Legend Card -->
+  <rect class="card" x="24" y="196" width="174" height="66"/>
+  <text class="label" x="36" y="215">Redirection &amp; Disk</text>
+  <text class="small" x="36" y="232" fill="#f87171">MOVED: permanent slot move</text>
+  <text class="small" x="36" y="248" fill="#fbbf24">ASK: one-time migration hop</text>
+
+  <!-- Routing Paths between Client and Shards -->
+  <!-- 1. Client -> Shard 1 (stale) -->
+  <path id="path-stale" class="wire-warn" d="M 198 92 L 266 92" marker-end="url(#arrow-amber)"/>
+  <text class="small" x="232" y="86" text-anchor="middle" fill="#fbbf24">1. SET</text>
+
+  <!-- 2. Shard 1 -> Client (MOVED / ASK) -->
+  <path id="path-moved" class="wire-moved" d="M 266 116 L 198 116" marker-end="url(#arrow-red)"/>
+  <text class="small" x="232" y="130" text-anchor="middle" fill="#f87171">MOVED/ASK</text>
+
+  <!-- 3. Client -> Shard 2 (route below Shard 1 to Shard 2 Primary) -->
+  <path id="path-ok" class="wire-ok" d="M 198 158 L 228 158 L 228 248 L 465 248 L 465 124 L 486 124" marker-end="url(#arrow-green)"/>
+  <text class="small" x="346" y="242" text-anchor="middle" fill="#34d399">3. Route to Owner (slot 8192)</text>
+
+  <!-- Animated Routing Dots (SMIL animateMotion) -->
+  <circle r="3.5" fill="#fbbf24">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.22;1" calcMode="linear">
+      <mpath href="#path-stale"/>
+    </animateMotion>
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.22;0.24;1" dur="6s" repeatCount="indefinite"/>
+  </circle>
+  <circle r="3.5" fill="#f87171">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.24;0.46;1" calcMode="linear">
+      <mpath href="#path-moved"/>
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.23;0.25;0.45;0.47;1" dur="6s" repeatCount="indefinite"/>
+  </circle>
+  <circle r="4" fill="#34d399">
+    <animateMotion dur="6s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.48;0.78;1" calcMode="linear">
+      <mpath href="#path-ok"/>
+    </animateMotion>
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.47;0.49;0.77;0.80;1" dur="6s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- SHARD 1 (0 - 5460) -->
+  <rect class="card" x="270" y="54" width="190" height="182"/>
+  <text class="label" x="282" y="74">Shard 1</text>
+  <rect x="352" y="60" width="96" height="18" rx="4" fill="#1d4ed8"/>
+  <text class="slot-text" x="400" y="72">Slots 0–5460</text>
+
+  <rect class="subcard" x="282" y="88" width="166" height="52"/>
+  <text class="mono" x="292" y="106" fill="#60a5fa">Primary A</text>
+  <rect x="384" y="95" width="54" height="16" rx="4" fill="#38bdf8"/>
+  <text class="badge-text" x="411" y="106">RDB/AOF</text>
+  <text class="small" x="292" y="126">Rejects 8192 -&gt; MOVED</text>
+
+  <path id="repl-1" class="wire-repl" d="M 365 140 L 365 170" marker-end="url(#arrow-blue)"/>
+  <text class="small" x="373" y="159" fill="#38bdf8">Async Repl</text>
+  <circle r="2.8" fill="#38bdf8">
+    <animateMotion dur="2.2s" repeatCount="indefinite">
+      <mpath href="#repl-1"/>
+    </animateMotion>
+  </circle>
+
+  <rect class="subcard" x="282" y="174" width="166" height="48"/>
+  <text class="mono" x="292" y="193" fill="#cbd5e1">Replica A1</text>
+  <text class="small" x="292" y="210">PSYNC2 offset stream</text>
+
+  <!-- SHARD 2 (5461 - 10922) -->
+  <rect class="card" x="478" y="54" width="190" height="182"/>
+  <text class="label" x="490" y="74">Shard 2</text>
+  <rect x="552" y="60" width="104" height="18" rx="4" fill="#059669"/>
+  <text class="slot-text" x="604" y="72">Slots 5461–10922</text>
+
+  <rect class="subcard anim-owner" x="490" y="88" width="166" height="52"/>
+  <text class="mono" x="500" y="106" fill="#34d399">Primary B (Owner)</text>
+  <rect class="anim-disk" x="592" y="116" width="54" height="16" rx="4" fill="#34d399"/>
+  <text class="badge-text" x="619" y="127">RDB/AOF</text>
+  <text class="small" x="500" y="127">Owns slot 8192</text>
+
+  <path id="repl-2" class="wire-repl" d="M 573 140 L 573 170" marker-end="url(#arrow-blue)"/>
+  <text class="small" x="581" y="159" fill="#38bdf8">Async Repl</text>
+  <circle r="2.8" fill="#34d399">
+    <animateMotion dur="1.8s" repeatCount="indefinite">
+      <mpath href="#repl-2"/>
+    </animateMotion>
+  </circle>
+
+  <rect class="subcard" x="490" y="174" width="166" height="48"/>
+  <text class="mono" x="500" y="193" fill="#cbd5e1">Replica B1</text>
+  <text class="small" x="500" y="210">PSYNC2 offset stream</text>
+
+  <!-- SHARD 3 (10923 - 16383) -->
+  <rect class="card" x="686" y="54" width="190" height="182"/>
+  <text class="label" x="698" y="74">Shard 3</text>
+  <rect x="756" y="60" width="108" height="18" rx="4" fill="#7c3aed"/>
+  <text class="slot-text" x="810" y="72">Slots 10923–16383</text>
+
+  <rect class="subcard" x="698" y="88" width="166" height="52"/>
+  <text class="mono" x="708" y="106" fill="#a78bfa">Primary C</text>
+  <rect x="800" y="95" width="54" height="16" rx="4" fill="#a78bfa"/>
+  <text class="badge-text" x="827" y="106">RDB/AOF</text>
+  <text class="small" x="708" y="126">fork() CoW snapshot</text>
+
+  <path id="repl-3" class="wire-repl" d="M 781 140 L 781 170" marker-end="url(#arrow-blue)"/>
+  <text class="small" x="789" y="159" fill="#38bdf8">Async Repl</text>
+  <circle r="2.8" fill="#a78bfa">
+    <animateMotion dur="2.5s" repeatCount="indefinite">
+      <mpath href="#repl-3"/>
+    </animateMotion>
+  </circle>
+
+  <rect class="subcard" x="698" y="174" width="166" height="48"/>
+  <text class="mono" x="708" y="193" fill="#cbd5e1">Replica C1</text>
+  <text class="small" x="708" y="210">PSYNC2 offset stream</text>
+
+  <!-- Cluster Gossip Bus at bottom -->
+  <rect class="card" x="24" y="272" width="852" height="34"/>
+  <line class="wire-gossip anim-gossip" x1="365" y1="236" x2="365" y2="272"/>
+  <line class="wire-gossip anim-gossip" x1="573" y1="236" x2="573" y2="272"/>
+  <line class="wire-gossip anim-gossip" x1="781" y1="236" x2="781" y2="272"/>
+  <text class="mono" x="450" y="293" text-anchor="middle" fill="#c4b5fd">Cluster Gossip Bus (Port +10000): PING / PONG Heartbeats, Epoch, Slot Ownership &amp; Failover Quorum</text>
+</svg>

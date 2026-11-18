@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="Splitwise Expense Sharing and Min-Cash-Flow Debt Simplification Pipeline">
+  <defs>
+    <style>
+      .title { font: 700 13px system-ui, -apple-system, sans-serif; fill: #f8fafc; letter-spacing: 0.6px; }
+      .badge { font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #38bdf8; }
+      .card-title { font: 700 11.5px system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
+      .mono { font: 500 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #cbd5e1; }
+      .mono-sm { font: 500 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #94a3b8; }
+      .pos { font: 700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #34d399; }
+      .neg { font: 700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #f87171; }
+      .warn { font: 700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #fbbf24; }
+      .pill-text { font: 700 9px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #0f172a; }
+      .pill-muted { font: 600 9px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #94a3b8; }
+
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      @keyframes pulseNode {
+        0%, 100% { opacity: 0.72; }
+        50% { opacity: 1; }
+      }
+      @keyframes highlightBox {
+        0%, 100% { stroke-opacity: 0.55; }
+        50% { stroke-opacity: 1; }
+      }
+
+      .flow-line {
+        stroke: #475569;
+        stroke-width: 2;
+        stroke-dasharray: 5 4;
+        fill: none;
+        animation: dashFlow 1.4s linear infinite;
+      }
+      .pulse-card {
+        animation: highlightBox 2.8s ease-in-out infinite;
+      }
+      .pulse-pill {
+        animation: pulseNode 2s ease-in-out infinite;
+      }
+    </style>
+
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399" />
+    </marker>
+
+    <path id="path-1-2" d="M 208 168 L 238 168" />
+    <path id="path-2-3" d="M 428 168 L 458 168" />
+    <path id="path-3-4" d="M 668 168 L 698 168" />
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect x="0" y="0" width="900" height="320" rx="14" fill="#0f172a" stroke="#1e293b" stroke-width="2" />
+
+  <!-- Header Bar -->
+  <rect x="16" y="12" width="868" height="32" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" />
+  <circle cx="32" cy="28" r="4.5" fill="#38bdf8">
+    <animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite" />
+  </circle>
+  <text x="45" y="32" class="title">SPLITWISE EXPENSE &amp; DEBT SIMPLIFICATION PIPELINE</text>
+  <rect x="708" y="18" width="166" height="20" rx="5" fill="#0f172a" stroke="#38bdf8" stroke-width="1" />
+  <text x="720" y="31.5" class="badge">O(N log N) MIN-CASH-FLOW</text>
+
+  <!-- Stage 1: Expense + SplitStrategy -->
+  <rect x="20" y="58" width="188" height="224" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5" class="pulse-card" />
+  <text x="32" y="79" class="card-title">1. Expense + SplitStrategy</text>
+  <line x1="32" y1="88" x2="196" y2="88" stroke="#334155" stroke-width="1" />
+
+  <rect x="32" y="98" width="164" height="44" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1" />
+  <text x="42" y="116" class="mono">Payer: Alice</text>
+  <text x="42" y="133" class="pos">Total: $120.00 (12000¢)</text>
+
+  <text x="32" y="160" class="mono-sm">Strategy Pattern:</text>
+  <rect x="32" y="168" width="48" height="20" rx="4" fill="#38bdf8" class="pulse-pill" />
+  <text x="39" y="181" class="pill-text">EQUAL</text>
+  <rect x="86" y="168" width="50" height="20" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1" />
+  <text x="94" y="181" class="pill-muted">EXACT</text>
+  <rect x="142" y="168" width="54" height="20" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1" />
+  <text x="147" y="181" class="pill-muted">PERCENT</text>
+
+  <rect x="32" y="198" width="164" height="72" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1" />
+  <text x="42" y="216" class="mono-sm">Computed Splits (cents):</text>
+  <text x="42" y="233" class="mono">Alice  : $40.00 (share)</text>
+  <text x="42" y="248" class="mono">Bob    : $40.00 (owes)</text>
+  <text x="42" y="263" class="mono">Charlie: $40.00 (owes)</text>
+
+  <!-- Stage 2: Net Balance Sheet -->
+  <rect x="238" y="58" width="190" height="224" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5" class="pulse-card" />
+  <text x="250" y="79" class="card-title">2. Net Balance Sheet</text>
+  <line x1="250" y1="88" x2="416" y2="88" stroke="#334155" stroke-width="1" />
+
+  <text x="250" y="106" class="mono-sm">Aggregated across expenses:</text>
+
+  <rect x="250" y="116" width="166" height="36" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1" />
+  <text x="260" y="132" class="mono">Alice</text>
+  <text x="355" y="132" class="pos">+$80.00</text>
+  <rect x="260" y="140" width="110" height="4" rx="2" fill="#34d399" />
+
+  <rect x="250" y="160" width="166" height="36" rx="6" fill="#0f172a" stroke="#f87171" stroke-width="1" />
+  <text x="260" y="176" class="mono">Bob</text>
+  <text x="355" y="176" class="neg">-$30.00</text>
+  <rect x="260" y="184" width="45" height="4" rx="2" fill="#f87171" />
+
+  <rect x="250" y="204" width="166" height="36" rx="6" fill="#0f172a" stroke="#f87171" stroke-width="1" />
+  <text x="260" y="220" class="mono">Charlie</text>
+  <text x="355" y="220" class="neg">-$50.00</text>
+  <rect x="260" y="228" width="75" height="4" rx="2" fill="#f87171" />
+
+  <rect x="250" y="248" width="166" height="22" rx="5" fill="#0f172a" stroke="#a78bfa" stroke-width="1" />
+  <text x="266" y="263" class="mono-sm">Zero-Sum Invariant: Σ = $0</text>
+
+  <!-- Stage 3: Min-Cash-Flow Greedy Heap -->
+  <rect x="458" y="58" width="210" height="224" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5" class="pulse-card" />
+  <text x="470" y="79" class="card-title">3. Greedy Two-Heap Match</text>
+  <line x1="470" y1="88" x2="656" y2="88" stroke="#334155" stroke-width="1" />
+
+  <!-- Creditor Heap -->
+  <rect x="470" y="98" width="186" height="52" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1" />
+  <text x="480" y="114" class="pos">Max-Heap Creditors (+)</text>
+  <text x="480" y="131" class="mono">Top: Alice (+$80) → (+$30)</text>
+  <text x="480" y="144" class="mono-sm">Re-pushed until balance == 0</text>
+
+  <!-- Match Operator -->
+  <rect x="488" y="157" width="150" height="24" rx="5" fill="#fbbf24" opacity="0.16" stroke="#fbbf24" stroke-width="1" />
+  <text x="498" y="173" class="warn">settle = min($80, $50)</text>
+
+  <!-- Debtor Heap -->
+  <rect x="470" y="188" width="186" height="58" rx="6" fill="#0f172a" stroke="#f87171" stroke-width="1" />
+  <text x="480" y="204" class="neg">Max-Heap Debtors (-)</text>
+  <text x="480" y="220" class="mono">1. Charlie (-$50) [settled]</text>
+  <text x="480" y="236" class="mono">2. Bob     (-$30) [next]</text>
+
+  <text x="476" y="267" class="mono-sm">Max Creditor ↔ Max Debtor</text>
+
+  <!-- Stage 4: Minimized Settlements -->
+  <rect x="698" y="58" width="182" height="224" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="1.5" class="pulse-card" />
+  <text x="710" y="79" class="card-title">4. Minimized Settlements</text>
+  <line x1="710" y1="88" x2="868" y2="88" stroke="#334155" stroke-width="1" />
+
+  <text x="710" y="108" class="mono-sm">Optimal Transfer Edges:</text>
+
+  <rect x="710" y="120" width="158" height="48" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1.2" />
+  <text x="720" y="139" class="mono">Charlie → Alice</text>
+  <text x="720" y="157" class="pos">Pay $50.00</text>
+
+  <rect x="710" y="178" width="158" height="48" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1.2" />
+  <text x="720" y="197" class="mono">Bob → Alice</text>
+  <text x="720" y="215" class="pos">Pay $30.00</text>
+
+  <rect x="710" y="238" width="158" height="32" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1" />
+  <text x="724" y="258" class="badge">2 Txns (≤ N - 1)</text>
+
+  <!-- Connectors & Animated Packets -->
+  <use href="#path-1-2" class="flow-line" marker-end="url(#arrow-cyan)" />
+  <use href="#path-2-3" class="flow-line" marker-end="url(#arrow-amber)" />
+  <use href="#path-3-4" class="flow-line" marker-end="url(#arrow-green)" />
+
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="1.6s" repeatCount="indefinite">
+      <mpath href="#path-1-2" />
+    </animateMotion>
+  </circle>
+  <circle r="3.5" fill="#fbbf24">
+    <animateMotion dur="1.6s" begin="0.4s" repeatCount="indefinite">
+      <mpath href="#path-2-3" />
+    </animateMotion>
+  </circle>
+  <circle r="3.5" fill="#34d399">
+    <animateMotion dur="1.6s" begin="0.8s" repeatCount="indefinite">
+      <mpath href="#path-3-4" />
+    </animateMotion>
+  </circle>
+
+  <!-- Footer -->
+  <text x="20" y="304" class="mono-sm">Integer cents arithmetic prevents floating-point drift · Immutable Expense Ledger · Per-Group ReentrantLock</text>
+</svg>
