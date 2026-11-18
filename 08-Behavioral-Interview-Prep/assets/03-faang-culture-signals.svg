@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-labelledby="title desc">
+  <title id="title">FAANG Behavioral Rubric and Culture Signals</title>
+  <desc id="desc">Comparison of behavioral interview signals across Google, Meta, Apple, and Microsoft with animated pulse indicators.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 500; fill: #94a3b8; }
+      .co-name { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; fill: #f8fafc; }
+      .co-tag { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; font-weight: 600; }
+      .pill-bg { fill: #0f172a; stroke: #334155; stroke-width: 1; rx: 6; }
+      .pill-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 500; fill: #e2e8f0; }
+      .bar-track { fill: #0f172a; rx: 3; }
+      .footer-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #64748b; }
+      @keyframes pulseGlow {
+        0%, 100% { opacity: 0.45; }
+        50% { opacity: 1; }
+      }
+      .glow-1 { animation: pulseGlow 2.4s ease-in-out infinite; }
+      .glow-2 { animation: pulseGlow 2.4s ease-in-out 0.6s infinite; }
+      .glow-3 { animation: pulseGlow 2.4s ease-in-out 1.2s infinite; }
+      .glow-4 { animation: pulseGlow 2.4s ease-in-out 1.8s infinite; }
+    </style>
+    <linearGradient id="busGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="33%" stop-color="#8b5cf6" />
+      <stop offset="66%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <path id="signalBus" d="M 126 58 L 774 58" />
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="14" />
+
+  <!-- Header -->
+  <text class="title" x="28" y="34">FAANG Behavioral Rubric &amp; Culture Signals</text>
+  <text class="subtitle" x="28" y="51">Adapt one core story to match each company's primary evaluation axis</text>
+
+  <!-- Signal Bus Line + Traveling Pulse -->
+  <line x1="126" y1="58" x2="774" y2="58" stroke="url(#busGrad)" stroke-width="2" stroke-opacity="0.45" />
+  <circle r="3.5" fill="#f8fafc">
+    <animateMotion dur="4.8s" repeatCount="indefinite">
+      <mpath href="#signalBus" />
+    </animateMotion>
+  </circle>
+
+  <!-- Card 1: Google -->
+  <g transform="translate(24, 72)">
+    <rect class="card" x="0" y="0" width="204" height="222" rx="12" />
+    <rect x="0" y="0" width="204" height="4" rx="2" fill="#3b82f6" />
+    <!-- Pulse Dot -->
+    <circle cx="180" cy="24" r="9" fill="#3b82f6" fill-opacity="0.25">
+      <animate attributeName="r" values="5;11;5" dur="2.4s" repeatCount="indefinite" />
+      <animate attributeName="fill-opacity" values="0.5;0.08;0.5" dur="2.4s" repeatCount="indefinite" />
+    </circle>
+    <circle class="glow-1" cx="180" cy="24" r="4.5" fill="#60a5fa" />
+
+    <text class="co-name" x="16" y="28">Google</text>
+    <text class="co-tag" x="16" y="46" fill="#93c5fd">Googleyness &amp; Ambiguity</text>
+
+    <rect class="pill-bg" x="14" y="62" width="176" height="30" rx="6" />
+    <circle cx="26" cy="77" r="3" fill="#3b82f6" />
+    <text class="pill-text" x="36" y="81">Reframe Ambiguity</text>
+
+    <rect class="pill-bg" x="14" y="100" width="176" height="30" rx="6" />
+    <circle cx="26" cy="115" r="3" fill="#3b82f6" />
+    <text class="pill-text" x="36" y="119">10x Scale &amp; Platform</text>
+
+    <rect class="pill-bg" x="14" y="138" width="176" height="30" rx="6" />
+    <circle cx="26" cy="153" r="3" fill="#3b82f6" />
+    <text class="pill-text" x="36" y="157">Data-Driven Rigor</text>
+
+    <text class="footer-text" x="16" y="188">SIGNAL: CURIOSITY</text>
+    <rect class="bar-track" x="16" y="196" width="172" height="6" rx="3" />
+    <rect x="16" y="196" width="152" height="6" rx="3" fill="#3b82f6">
+      <animate attributeName="width" values="120;158;120" dur="3.2s" repeatCount="indefinite" />
+    </rect>
+  </g>
+
+  <!-- Card 2: Meta -->
+  <g transform="translate(240, 72)">
+    <rect class="card" x="0" y="0" width="204" height="222" rx="12" />
+    <rect x="0" y="0" width="204" height="4" rx="2" fill="#8b5cf6" />
+    <!-- Pulse Dot -->
+    <circle cx="180" cy="24" r="9" fill="#8b5cf6" fill-opacity="0.25">
+      <animate attributeName="r" values="5;11;5" dur="2.4s" begin="0.6s" repeatCount="indefinite" />
+      <animate attributeName="fill-opacity" values="0.5;0.08;0.5" dur="2.4s" begin="0.6s" repeatCount="indefinite" />
+    </circle>
+    <circle class="glow-2" cx="180" cy="24" r="4.5" fill="#a78bfa" />
+
+    <text class="co-name" x="16" y="28">Meta</text>
+    <text class="co-tag" x="16" y="46" fill="#c4b5fd">Move Fast &amp; Impact</text>
+
+    <rect class="pill-bg" x="14" y="62" width="176" height="30" rx="6" />
+    <circle cx="26" cy="77" r="3" fill="#8b5cf6" />
+    <text class="pill-text" x="36" y="81">Ship V1 &amp; Iterate</text>
+
+    <rect class="pill-bg" x="14" y="100" width="176" height="30" rx="6" />
+    <circle cx="26" cy="115" r="3" fill="#8b5cf6" />
+    <text class="pill-text" x="36" y="119">Unblock Yourself</text>
+
+    <rect class="pill-bg" x="14" y="138" width="176" height="30" rx="6" />
+    <circle cx="26" cy="153" r="3" fill="#8b5cf6" />
+    <text class="pill-text" x="36" y="157">Measurable Impact</text>
+
+    <text class="footer-text" x="16" y="188">SIGNAL: VELOCITY</text>
+    <rect class="bar-track" x="16" y="196" width="172" height="6" rx="3" />
+    <rect x="16" y="196" width="160" height="6" rx="3" fill="#8b5cf6">
+      <animate attributeName="width" values="130;166;130" dur="2.8s" repeatCount="indefinite" />
+    </rect>
+  </g>
+
+  <!-- Card 3: Apple -->
+  <g transform="translate(456, 72)">
+    <rect class="card" x="0" y="0" width="204" height="222" rx="12" />
+    <rect x="0" y="0" width="204" height="4" rx="2" fill="#10b981" />
+    <!-- Pulse Dot -->
+    <circle cx="180" cy="24" r="9" fill="#10b981" fill-opacity="0.25">
+      <animate attributeName="r" values="5;11;5" dur="2.4s" begin="1.2s" repeatCount="indefinite" />
+      <animate attributeName="fill-opacity" values="0.5;0.08;0.5" dur="2.4s" begin="1.2s" repeatCount="indefinite" />
+    </circle>
+    <circle class="glow-3" cx="180" cy="24" r="4.5" fill="#34d399" />
+
+    <text class="co-name" x="16" y="28">Apple</text>
+    <text class="co-tag" x="16" y="46" fill="#6ee7b7">Craft, Secrecy &amp; Own</text>
+
+    <rect class="pill-bg" x="14" y="62" width="176" height="30" rx="6" />
+    <circle cx="26" cy="77" r="3" fill="#10b981" />
+    <text class="pill-text" x="36" y="81">Quality &gt; Speed</text>
+
+    <rect class="pill-bg" x="14" y="100" width="176" height="30" rx="6" />
+    <circle cx="26" cy="115" r="3" fill="#10b981" />
+    <text class="pill-text" x="36" y="119">Detail &amp; Elegance</text>
+
+    <rect class="pill-bg" x="14" y="138" width="176" height="30" rx="6" />
+    <circle cx="26" cy="153" r="3" fill="#10b981" />
+    <text class="pill-text" x="36" y="157">Secrecy &amp; Ownership</text>
+
+    <text class="footer-text" x="16" y="188">SIGNAL: CRAFTSMANSHIP</text>
+    <rect class="bar-track" x="16" y="196" width="172" height="6" rx="3" />
+    <rect x="16" y="196" width="156" height="6" rx="3" fill="#10b981">
+      <animate attributeName="width" values="126;162;126" dur="3.4s" repeatCount="indefinite" />
+    </rect>
+  </g>
+
+  <!-- Card 4: Microsoft -->
+  <g transform="translate(672, 72)">
+    <rect class="card" x="0" y="0" width="204" height="222" rx="12" />
+    <rect x="0" y="0" width="204" height="4" rx="2" fill="#f59e0b" />
+    <!-- Pulse Dot -->
+    <circle cx="180" cy="24" r="9" fill="#f59e0b" fill-opacity="0.25">
+      <animate attributeName="r" values="5;11;5" dur="2.4s" begin="1.8s" repeatCount="indefinite" />
+      <animate attributeName="fill-opacity" values="0.5;0.08;0.5" dur="2.4s" begin="1.8s" repeatCount="indefinite" />
+    </circle>
+    <circle class="glow-4" cx="180" cy="24" r="4.5" fill="#fbbf24" />
+
+    <text class="co-name" x="16" y="28">Microsoft</text>
+    <text class="co-tag" x="16" y="46" fill="#fcd34d">Growth Mindset</text>
+
+    <rect class="pill-bg" x="14" y="62" width="176" height="30" rx="6" />
+    <circle cx="26" cy="77" r="3" fill="#f59e0b" />
+    <text class="pill-text" x="36" y="81">Learn-It-All Curiosity</text>
+
+    <rect class="pill-bg" x="14" y="100" width="176" height="30" rx="6" />
+    <circle cx="26" cy="115" r="3" fill="#f59e0b" />
+    <text class="pill-text" x="36" y="119">Customer Obsession</text>
+
+    <rect class="pill-bg" x="14" y="138" width="176" height="30" rx="6" />
+    <circle cx="26" cy="153" r="3" fill="#f59e0b" />
+    <text class="pill-text" x="36" y="157">Inclusive One-Team</text>
+
+    <text class="footer-text" x="16" y="188">SIGNAL: GROWTH</text>
+    <rect class="bar-track" x="16" y="196" width="172" height="6" rx="3" />
+    <rect x="16" y="196" width="148" height="6" rx="3" fill="#f59e0b">
+      <animate attributeName="width" values="118;154;118" dur="3.6s" repeatCount="indefinite" />
+    </rect>
+  </g>
+
+  <!-- Bottom Caption -->
+  <text class="footer-text" x="28" y="309">Core Rubric: Same engineering experience, different narrative lens per company</text>
+</svg>

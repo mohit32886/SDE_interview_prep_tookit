@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="100%" height="100%" role="img" aria-labelledby="title desc">
+  <title id="title">5-Minute STAR Interview Pacing Breakdown</title>
+  <desc id="desc">Animated timeline showing 5-minute STAR pacing: Situation 15% (45s), Task 10% (30s), Action 55% (2m45s), and Result plus Reflection 20% (60s).</desc>
+  <defs>
+    <linearGradient id="beamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0" />
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#f8fafc" stop-opacity="1" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <style>
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+      @keyframes pulseS {
+        0%, 15% { stroke: #60a5fa; stroke-width: 2.5; fill-opacity: 1; }
+        16%, 100% { stroke: #334155; stroke-width: 1.2; fill-opacity: 0.72; }
+      }
+      @keyframes pulseT {
+        0%, 14% { stroke: #334155; stroke-width: 1.2; fill-opacity: 0.72; }
+        15%, 25% { stroke: #fbbf24; stroke-width: 2.5; fill-opacity: 1; }
+        26%, 100% { stroke: #334155; stroke-width: 1.2; fill-opacity: 0.72; }
+      }
+      @keyframes pulseA {
+        0%, 24% { stroke: #334155; stroke-width: 1.2; fill-opacity: 0.72; }
+        25%, 80% { stroke: #34d399; stroke-width: 2.5; fill-opacity: 1; }
+        81%, 100% { stroke: #334155; stroke-width: 1.2; fill-opacity: 0.72; }
+      }
+      @keyframes pulseR {
+        0%, 79% { stroke: #334155; stroke-width: 1.2; fill-opacity: 0.72; }
+        80%, 100% { stroke: #c084fc; stroke-width: 2.5; fill-opacity: 1; }
+      }
+
+      .card-s { animation: pulseS 10s linear infinite; }
+      .card-t { animation: pulseT 10s linear infinite; }
+      .card-a { animation: pulseA 10s linear infinite; }
+      .card-r { animation: pulseR 10s linear infinite; }
+    </style>
+  </defs>
+
+  <!-- Background Card -->
+  <rect x="0" y="0" width="900" height="320" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.5" />
+
+  <!-- Header -->
+  <text x="40" y="42" fill="#f8fafc" font-size="18" font-weight="700" class="sans">5-Minute STAR Pacing Breakdown</text>
+  <text x="40" y="62" fill="#94a3b8" font-size="12.5" class="sans">Target time allocation for senior-level behavioral answers (300 seconds total)</text>
+
+  <rect x="706" y="26" width="154" height="30" rx="15" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2" />
+  <text x="783" y="45" fill="#38bdf8" font-size="12" font-weight="700" text-anchor="middle" class="mono">TOTAL: 5:00 (300s)</text>
+
+  <!-- Time Axis Markers -->
+  <text x="40" y="90" fill="#64748b" font-size="11" class="mono">0:00</text>
+  <text x="163" y="90" fill="#64748b" font-size="11" text-anchor="middle" class="mono">0:45</text>
+  <text x="245" y="90" fill="#64748b" font-size="11" text-anchor="middle" class="mono">1:15</text>
+  <text x="696" y="90" fill="#64748b" font-size="11" text-anchor="middle" class="mono">4:00</text>
+  <text x="860" y="90" fill="#64748b" font-size="11" text-anchor="end" class="mono">5:00</text>
+
+  <!-- Timeline Track Base -->
+  <rect x="40" y="98" width="820" height="38" rx="8" fill="#1e293b" />
+
+  <!-- Proportional Segments (Total = 820px) -->
+  <!-- S: 15% = 123px (40..163) -->
+  <rect x="40" y="98" width="123" height="38" rx="6" fill="#2563eb" opacity="0.85" />
+  <text x="101.5" y="122" fill="#eff6ff" font-size="12.5" font-weight="700" text-anchor="middle" class="sans">S · 15%</text>
+
+  <!-- T: 10% = 82px (163..245) -->
+  <rect x="163" y="98" width="82" height="38" fill="#d97706" opacity="0.85" />
+  <text x="204" y="122" fill="#fffbeb" font-size="12" font-weight="700" text-anchor="middle" class="sans">T · 10%</text>
+
+  <!-- A: 55% = 451px (245..696) -->
+  <rect x="245" y="98" width="451" height="38" fill="#059669" opacity="0.9" />
+  <text x="470.5" y="122" fill="#ecfdf5" font-size="13" font-weight="700" text-anchor="middle" class="sans">A · ACTION CORE · 55% (2m 45s)</text>
+
+  <!-- R: 20% = 164px (696..860) -->
+  <rect x="696" y="98" width="164" height="38" rx="6" fill="#9333ea" opacity="0.85" />
+  <text x="778" y="122" fill="#faf5ff" font-size="12.5" font-weight="700" text-anchor="middle" class="sans">R · 20%</text>
+
+  <!-- Segment Dividers -->
+  <line x1="163" y1="98" x2="163" y2="136" stroke="#0f172a" stroke-width="2.5" />
+  <line x1="245" y1="98" x2="245" y2="136" stroke="#0f172a" stroke-width="2.5" />
+  <line x1="696" y1="98" x2="696" y2="136" stroke="#0f172a" stroke-width="2.5" />
+
+  <!-- Animated Progress Beam Overlay -->
+  <rect x="40" y="98" width="0" height="38" rx="6" fill="url(#beamGrad)" opacity="0.35">
+    <animate attributeName="width" from="0" to="820" dur="10s" repeatCount="indefinite" />
+  </rect>
+
+  <!-- Animated Playhead Line -->
+  <g filter="url(#glow)">
+    <line x1="40" y1="94" x2="40" y2="140" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round">
+      <animate attributeName="x1" from="40" to="860" dur="10s" repeatCount="indefinite" />
+      <animate attributeName="x2" from="40" to="860" dur="10s" repeatCount="indefinite" />
+    </line>
+    <circle cx="40" cy="94" r="4" fill="#38bdf8">
+      <animate attributeName="cx" from="40" to="860" dur="10s" repeatCount="indefinite" />
+    </circle>
+  </g>
+
+  <!-- Animated Packets Along Timeline -->
+  <circle r="3.5" fill="#e0f2fe" filter="url(#glow)">
+    <animateMotion dur="5s" repeatCount="indefinite" path="M 40 117 L 860 117" />
+  </circle>
+  <circle r="3" fill="#bae6fd" opacity="0.8">
+    <animateMotion dur="5s" begin="2.5s" repeatCount="indefinite" path="M 40 117 L 860 117" />
+  </circle>
+
+  <!-- Connector Lines from Timeline Midpoints to Cards -->
+  <path d="M 101.5 136 L 101.5 148 L 136.5 148 L 136.5 162" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7" />
+  <path d="M 204 136 L 204 148 L 343.5 148 L 343.5 162" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7" />
+  <path d="M 470.5 136 L 470.5 148 L 550.5 148 L 550.5 162" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7" />
+  <path d="M 778 136 L 778 148 L 760.5 148 L 760.5 162" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7" />
+
+  <!-- Stage Detail Cards -->
+  <!-- Card 1: Situation -->
+  <g>
+    <rect x="40" y="162" width="193" height="106" rx="10" fill="#1e293b" class="card-s" />
+    <rect x="52" y="174" width="26" height="26" rx="6" fill="#1d4ed8" />
+    <text x="65" y="192" fill="#eff6ff" font-size="14" font-weight="700" text-anchor="middle" class="sans">S</text>
+    <text x="88" y="191" fill="#f8fafc" font-size="14" font-weight="700" class="sans">Situation</text>
+    <text x="52" y="216" fill="#60a5fa" font-size="12" font-weight="700" class="mono">15% · 45 sec</text>
+    <text x="52" y="236" fill="#cbd5e1" font-size="11.5" class="sans">Context, scale &amp; urgency.</text>
+    <text x="52" y="253" fill="#94a3b8" font-size="11" class="sans">Rule of 3: Problem, Impact, Why.</text>
+  </g>
+
+  <!-- Card 2: Task -->
+  <g>
+    <rect x="247" y="162" width="193" height="106" rx="10" fill="#1e293b" class="card-t" />
+    <rect x="259" y="174" width="26" height="26" rx="6" fill="#b45309" />
+    <text x="272" y="192" fill="#fffbeb" font-size="14" font-weight="700" text-anchor="middle" class="sans">T</text>
+    <text x="295" y="191" fill="#f8fafc" font-size="14" font-weight="700" class="sans">Task</text>
+    <text x="259" y="216" fill="#fbbf24" font-size="12" font-weight="700" class="mono">10% · 30 sec</text>
+    <text x="259" y="236" fill="#cbd5e1" font-size="11.5" class="sans">Your specific ownership.</text>
+    <text x="259" y="253" fill="#94a3b8" font-size="11" class="sans">Use "I" statements &amp; constraints.</text>
+  </g>
+
+  <!-- Card 3: Action -->
+  <g>
+    <rect x="454" y="162" width="193" height="106" rx="10" fill="#1e293b" class="card-a" />
+    <rect x="466" y="174" width="26" height="26" rx="6" fill="#047857" />
+    <text x="479" y="192" fill="#ecfdf5" font-size="14" font-weight="700" text-anchor="middle" class="sans">A</text>
+    <text x="502" y="191" fill="#f8fafc" font-size="14" font-weight="700" class="sans">Action</text>
+    <text x="466" y="216" fill="#34d399" font-size="12" font-weight="700" class="mono">55% · 2m 45s</text>
+    <text x="466" y="236" fill="#cbd5e1" font-size="11.5" class="sans">Execution, trade-offs &amp; fixes.</text>
+    <text x="466" y="253" fill="#94a3b8" font-size="11" class="sans">First → Then → Finally + hurdles.</text>
+  </g>
+
+  <!-- Card 4: Result + Reflection -->
+  <g>
+    <rect x="661" y="162" width="199" height="106" rx="10" fill="#1e293b" class="card-r" />
+    <rect x="673" y="174" width="26" height="26" rx="6" fill="#7e22ce" />
+    <text x="686" y="192" fill="#faf5ff" font-size="14" font-weight="700" text-anchor="middle" class="sans">R</text>
+    <text x="709" y="191" fill="#f8fafc" font-size="14" font-weight="700" class="sans">Result + Reflect</text>
+    <text x="673" y="216" fill="#c084fc" font-size="12" font-weight="700" class="mono">20% · 60 sec</text>
+    <text x="673" y="236" fill="#cbd5e1" font-size="11.5" class="sans">Quantified business impact.</text>
+    <text x="673" y="253" fill="#94a3b8" font-size="11" class="sans">Lasting value + personal growth.</text>
+  </g>
+
+  <!-- Footer Tip -->
+  <text x="40" y="296" fill="#94a3b8" font-size="12" class="sans">
+    <tspan fill="#34d399" font-weight="700">KEY RULE:</tspan> Spend over half your time in Action ("I" decisions, trade-offs, iteration) — never rush the core.
+  </text>
+</svg>

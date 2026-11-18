@@ -2,20 +2,61 @@
 
 Print this page. Review it the night before. Glance at it 10 minutes before your interview starts.
 
+![Behavioral Execution Loop](./assets/06-behavioral-cheatsheet-hub.svg)
+
 ---
 
 ## The STAR Method (Reminder)
 
-**S: Situation** (20-30 sec) — Set the scene. Context matters, but be brief.
-**T: Task** (10-20 sec) — What was your role? What were you asked to do?
-**A: Action** (45-60 sec) — What did YOU do? (Use "I", not "we")
-**R: Result** (20-30 sec) — Numbers. Impact. What changed?
+```mermaid
+flowchart LR
+    S["Situation (20-30s): Brief Context"] --> T["Task (10-20s): Your Role"]
+    T --> A["Action (45-60s): What I Did"]
+    A --> R["Result (20-30s): Numbers & Impact"]
 
-**Total: 2-2.5 minutes per story**
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class S blue
+    class T purple
+    class A amber
+    class R green
+```
+
+| Phase | Target Time | Focus |
+|-------|-------------|-------|
+| **S: Situation** | 20–30 sec | Set the scene. Context matters, but be brief. |
+| **T: Task** | 10–20 sec | What was your role? What were you asked to do? |
+| **A: Action** | 45–60 sec | What did **YOU** do? (Use "I", not "we") |
+| **R: Result** | 20–30 sec | Numbers. Impact. What changed? |
+
+> [!TIP]
+> **Total: 2–2.5 minutes per story.** Keep Situation and Task tight so over half your time goes to your specific Actions and quantified Results.
 
 ---
 
 ## Your Stories at a Glance
+
+```mermaid
+flowchart LR
+    Bank["7-Story Bank"] --> Arch["Architecture & Scale: Monolith, Spring Boot"]
+    Bank --> Qual["Quality & Standards: JUnit, Sonar Issues"]
+    Bank --> Cust["Customer & Leverage: Data Lake, Delete Utility, Hackathon"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Bank blue
+    class Arch purple
+    class Qual amber
+    class Cust green
+```
 
 | Story | Primary LP | Secondary LP | Key Numbers | Key Phrase |
 |-------|-----------|-------------|------------|-----------|
@@ -27,9 +68,34 @@ Print this page. Review it the night before. Glance at it 10 minutes before your
 | **Delete Utility** | Ownership | Success and Scale Bring Responsibility, Frugality | 60% DBA time reduction, automated compliance | "I eliminated the DBA bottleneck..." |
 | **Hackathon (Ideate 360)** | Invent and Simplify | Bias for Action | 40% audit time reduction, auto-traced requirements | "I built a POC in 2 days..." |
 
+> [!NOTE]
+> Anchor each story to its **Key Numbers** and **Key Phrase** rather than memorizing a word-for-word script.
+
 ---
 
 ## Story-to-Question Mapping (Quick Reference)
+
+```mermaid
+flowchart TD
+    Q["Decode Question Signal"] --> Own["Ownership / Pressure: Monolith A or Spring Boot A"]
+    Q --> Std["High Standards / Quality: Monolith D or JUnit"]
+    Q --> Simp["Simplify / Innovate: Monolith C, Sonar, or Hackathon"]
+    Q --> Team["Cross-Team / Extra Mile: Data Lake A or Monolith B"]
+    Q --> Eff["Frugality / Compliance: Delete Utility A/B or Data Lake B"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Q blue
+    class Own purple
+    class Std amber
+    class Simp green
+    class Team blue
+    class Eff green
+```
 
 When asked this... | Tell this story
 ---|---
@@ -52,6 +118,26 @@ When asked this... | Tell this story
 ---
 
 ## Top 20 Most Common Behavioral Questions
+
+```mermaid
+flowchart LR
+    Top20["Top 20 Questions"] --> Fit["Fit & Pitch: Q1–Q3, Q18–Q20"]
+    Top20 --> Del["Ownership & Delivery: Q4, Q10–Q11, Q13–Q16"]
+    Top20 --> Conf["Conflict & People: Q6–Q9, Q12"]
+    Top20 --> Ref["Failure & Growth: Q5, Q17"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Top20 blue
+    class Fit green
+    class Del purple
+    class Conf amber
+    class Ref red
+```
 
 1. Tell me about yourself.
 2. Why are you leaving [current company]?
@@ -77,6 +163,23 @@ When asked this... | Tell this story
 ---
 
 ## Do's and Don'ts for Behavioral Rounds
+
+```mermaid
+flowchart LR
+    Do["High-Signal Do's: Lead with Impact, Use 'I', Show Data & Tradeoffs"] --> Pass["Strong Hire Signal"]
+    Dont["Low-Signal Don'ts: Ramble, Blame, Use 'We', Skip Results"] --> Fail["Weak / No-Hire Signal"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Do green
+    class Pass blue
+    class Dont red
+    class Fail amber
+```
 
 ### Do's ✓
 
@@ -106,9 +209,31 @@ When asked this... | Tell this story
 - **Don't use filler words**: Um, like, you know, basically—minimize these
 - **Don't speak about things you don't understand**: If asked about something, own that you don't know it
 
+> [!IMPORTANT]
+> Always use **"I"** for decisions you owned and attach **specific numbers** (62%→89%, 400+→0, 70% effort reduction) to every result.
+
 ---
 
 ## Body Language and Communication (Video & In-Person)
+
+```mermaid
+flowchart TD
+    Mode["Interview Format"] --> Video["Video: Eye-Level Camera, Front Light, Ethernet"]
+    Mode --> InPerson["In-Person: Firm Handshake, Eye Contact, Lean Forward"]
+    Video --> Univ["Universal: 3-5s Pause, Answer Prompt, Speak to Impact"]
+    InPerson --> Univ
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Mode blue
+    class Video purple
+    class InPerson amber
+    class Univ green
+```
 
 ### Video Interviews
 
@@ -146,22 +271,67 @@ When asked this... | Tell this story
 
 ## Red Flags Interviewers Watch For
 
-❌ **You blame others**: "My team wasn't good" / "My manager was ineffective"
-❌ **Lack of ownership**: Using "we" when you mean "I" on key decisions
-❌ **Vague impact**: "I improved things" without numbers or context
-❌ **Avoiding difficult topics**: When pressed on conflicts, you deflect or minimize
-❌ **Inconsistent stories**: Your story changes when asked follow-up questions
-❌ **Arrogance**: "I'm the only one who could have done this"
-❌ **Defensiveness**: "That's how we did it at Barclays" instead of explaining reasoning
-❌ **Inability to learn**: "I would do the exact same thing again" with no reflection
-❌ **Lack of curiosity**: You don't ask questions back or show interest in learning
-❌ **Risk-seeking without caution**: "We tried something crazy and it worked" (lucky, not wise)
-❌ **Inability to handle ambiguity**: "I needed all the information before I could move"
-❌ **Speaking negatively about past company**: "Barclays is outdated" sounds bitter
+```mermaid
+flowchart LR
+    RF1["Blame / Negativity / Defensiveness"] --> Sig["Signal: Low Ownership & Culture Risk"]
+    RF2["Vague Impact / Shifting Details"] --> Sig
+    RF3["Arrogance / No Reflection / No Questions"] --> Sig
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class RF1 red
+    class RF2 amber
+    class RF3 purple
+    class Sig blue
+```
+
+- ❌ **You blame others**: "My team wasn't good" / "My manager was ineffective"
+- ❌ **Lack of ownership**: Using "we" when you mean "I" on key decisions
+- ❌ **Vague impact**: "I improved things" without numbers or context
+- ❌ **Avoiding difficult topics**: When pressed on conflicts, you deflect or minimize
+- ❌ **Inconsistent stories**: Your story changes when asked follow-up questions
+- ❌ **Arrogance**: "I'm the only one who could have done this"
+- ❌ **Defensiveness**: "That's how we did it at Barclays" instead of explaining reasoning
+- ❌ **Inability to learn**: "I would do the exact same thing again" with no reflection
+- ❌ **Lack of curiosity**: You don't ask questions back or show interest in learning
+- ❌ **Risk-seeking without caution**: "We tried something crazy and it worked" (lucky, not wise)
+- ❌ **Inability to handle ambiguity**: "I needed all the information before I could move"
+- ❌ **Speaking negatively about past company**: "Barclays is outdated" sounds bitter
+
+> [!WARNING]
+> Never speak negatively about past teammates, managers, or Barclays. Explain constraints and your reasoning objectively.
 
 ---
 
 ## Time Management in Behavioral Rounds
+
+```mermaid
+flowchart LR
+    M0["0-2m: Intro"] --> M2["2-5m: Q1"]
+    M2 --> M5["5-7m: Story 1 + Q&A"]
+    M5 --> M7["7-12m: Q2 + Story 2"]
+    M7 --> M12["12-17m: Q3 + Story 3"]
+    M12 --> M17["17-20m: Why Company / 5y"]
+    M17 --> M20["20-45m: Reverse Qs & Wrap"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class M0 blue
+    class M2 purple
+    class M5 green
+    class M7 green
+    class M12 green
+    class M17 amber
+    class M20 blue
+```
 
 ### Standard 45-Minute Interview
 
@@ -177,6 +347,26 @@ When asked this... | Tell this story
 
 ### Full Interview Loop (4-5 rounds, 3.5-4 hours total)
 
+```mermaid
+flowchart LR
+    R1["Round 1 (45m): Behavioral + Tech Screen"] --> R2["Round 2 (60m): System Design + 1-2 Behavioral"]
+    R2 --> R3["Round 3 (60m): Deep Tech + Behavioral"]
+    R3 --> R4["Round 4 (45m): Leadership / Culture Fit"]
+    R4 --> R5["Round 5 (45m Opt): Senior / Director Strategy"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class R1 blue
+    class R2 purple
+    class R3 amber
+    class R4 green
+    class R5 blue
+```
+
 - **Round 1** (45 min): Behavioral + technical (phone screen often combines these)
 - **Round 2** (60 min): System design + 1-2 behavioral questions
 - **Round 3** (60 min): Deep technical (coding or architecture deep dive) + behavioral
@@ -188,6 +378,24 @@ When asked this... | Tell this story
 ---
 
 ## The Night Before: Checklist
+
+```mermaid
+flowchart LR
+    Rev["Review 7 Stories + Difficult Qs"] --> Res["Check Company News & JD"]
+    Res --> Log["Test Tech, Prep Clothes & Water"]
+    Log --> Slp["Get Good Sleep"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Rev blue
+    class Res purple
+    class Log amber
+    class Slp green
+```
 
 - [ ] Review your 7 stories once. Don't memorize them, but know the flow.
 - [ ] Reread the first page of each story in 04-Your-Story-Bank.md
@@ -204,6 +412,22 @@ When asked this... | Tell this story
 
 ## The 1 Hour Before: Prep
 
+```mermaid
+flowchart LR
+    T60["T-60m: Top 5 Qs + Story Titles"] --> T30["T-30m: Pick 3 Strongest Examples"]
+    T30 --> T10["T-10m: Breathing & Join Early"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class T60 blue
+    class T30 purple
+    class T10 green
+```
+
 - [ ] Review top 5 most likely questions for THIS role
 - [ ] Skim your story bank (just the story titles, not details)
 - [ ] Review the difficult questions guide—just the introductions
@@ -214,6 +438,26 @@ When asked this... | Tell this story
 ---
 
 ## During the Interview: Key Mindset Shifts
+
+```mermaid
+flowchart LR
+    Old1["Hope I Do Well"] --> New1["Two-Way Conversation"]
+    Old2["Need to Impress"] --> New2["Be Authentic & Proud"]
+    Old3["Every Detail Perfect"] --> New3["Clear 2m Story + Follow-Ups"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Old1 red
+    class Old2 red
+    class Old3 red
+    class New1 green
+    class New2 green
+    class New3 green
+```
 
 1. **Shift from "I hope I do well" to "This is a conversation where I show them what I've done"**
    - You have earned the right to be there
@@ -234,29 +478,65 @@ When asked this... | Tell this story
 
 ## If You Get Stuck
 
-**Interviewer asks about something you don't have experience with:**
-- "I haven't done that specifically, but I've done similar work in [related area]. Can you tell me more about what you're looking for?"
+```mermaid
+flowchart TD
+    Stuck["Stuck Moment"] --> NoExp["No Direct Experience → Pivot to Related Work"]
+    Stuck --> Blank["Blank on Story → Breathe & Use Alternate Story"]
+    Stuck --> Detail["Forgot Detail → State Outcome & Clarify"]
+    Stuck --> Regret["Misspoke → Move On or Clarify Briefly"]
+    Stuck --> Face["Blank Face → Stay Steady, They Are Taking Notes"]
 
-**You blank on a story during the interview:**
-- Take a breath. Say: "Let me think of a good example here..."
-- Tell a different story. It's okay if it's not the 'perfect' one you practiced.
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
 
-**Interviewer asks for more detail and you can't remember:**
-- "That's a great question. The specific detail escapes me, but the outcome was [X]."
-- It's fine to not remember every number. Accuracy matters more than perfection.
+    class Stuck red
+    class NoExp blue
+    class Blank green
+    class Detail amber
+    class Regret purple
+    class Face blue
+```
 
-**You say something you regret:**
-- Move on. Don't apologize profusely or try to "fix" it mid-interview.
-- If it's critical, you can circle back: "To clarify what I said earlier..."
-
-**Interviewer seems unimpressed:**
-- Keep going. You don't know what they're thinking.
-- They might be taking notes and not reacting, which is normal.
-- Different interviewers have different styles.
+- **Interviewer asks about something you don't have experience with:**
+  - "I haven't done that specifically, but I've done similar work in [related area]. Can you tell me more about what you're looking for?"
+- **You blank on a story during the interview:**
+  - Take a breath. Say: "Let me think of a good example here..."
+  - Tell a different story. It's okay if it's not the 'perfect' one you practiced.
+- **Interviewer asks for more detail and you can't remember:**
+  - "That's a great question. The specific detail escapes me, but the outcome was [X]."
+  - It's fine to not remember every number. Accuracy matters more than perfection.
+- **You say something you regret:**
+  - Move on. Don't apologize profusely or try to "fix" it mid-interview.
+  - If it's critical, you can circle back: "To clarify what I said earlier..."
+- **Interviewer seems unimpressed:**
+  - Keep going. You don't know what they're thinking.
+  - They might be taking notes and not reacting, which is normal.
+  - Different interviewers have different styles.
 
 ---
 
 ## The Final 5 Minutes: End Strong
+
+```mermaid
+flowchart LR
+    L["Listen to Closing"] --> Q["Ask 1-2 Sharp Questions"]
+    Q --> T["Smile & Thank Them"]
+    T --> R["Reaffirm Genuine Interest"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class L blue
+    class Q purple
+    class T amber
+    class R green
+```
 
 - Listen to the closing from the interviewer
 - Ask 1-2 questions back (not 5+)
@@ -266,6 +546,16 @@ When asked this... | Tell this story
 ---
 
 ## After the Interview
+
+```mermaid
+sequenceDiagram
+    participant C as Candidate
+    participant I as Interviewer
+    Note over C: Within 24 hours
+    C->>I: Brief thank-you email + specific conversation callback + reiterate interest
+    Note over C,I: Do NOT ask for interview performance feedback
+    I-->>C: Next-step response
+```
 
 - Send a thank-you email within 24 hours (brief, not groveling)
 - Mention something specific from the conversation to show you listened
@@ -277,13 +567,35 @@ When asked this... | Tell this story
 
 ## Your Competitive Advantages for Behavioral Interviews
 
-✓ **Banking systems background**: You understand regulated, high-stakes environments
-✓ **5 years at one company**: Shows stability and depth (you learned the business)
-✓ **Clear progression**: IC → technical leader (shows growth trajectory)
-✓ **Quantified impact**: Your numbers are real and substantial
-✓ **Leadership through influence**: You've mentored people, driven cross-team projects
-✓ **Systems thinking**: Banking taught you to think about reliability, compliance, scale
-✓ **IIT education**: Strong technical foundation (mention if relevant, but don't lean on it)
+```mermaid
+flowchart TD
+    P1["Banking Systems & Compliance"] --> Edge["Mohit's Senior Engineering Edge"]
+    P2["5 Years Tenure & Depth"] --> Edge
+    P3["IC → Technical Leader"] --> Edge
+    P4["Quantified Impact & Influence"] --> Edge
+    P5["Systems Thinking & IIT Foundation"] --> Edge
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class P1 blue
+    class P2 purple
+    class P3 amber
+    class P4 green
+    class P5 blue
+    class Edge green
+```
+
+- ✓ **Banking systems background**: You understand regulated, high-stakes environments
+- ✓ **5 years at one company**: Shows stability and depth (you learned the business)
+- ✓ **Clear progression**: IC → technical leader (shows growth trajectory)
+- ✓ **Quantified impact**: Your numbers are real and substantial
+- ✓ **Leadership through influence**: You've mentored people, driven cross-team projects
+- ✓ **Systems thinking**: Banking taught you to think about reliability, compliance, scale
+- ✓ **IIT education**: Strong technical foundation (mention if relevant, but don't lean on it)
 
 **Your story is strong. You've got this.**
 
@@ -291,8 +603,27 @@ When asked this... | Tell this story
 
 ## The Three Most Important Things to Remember
 
+```mermaid
+flowchart LR
+    R1["1. Tell the Truth: Real Work Is Enough"] --> Win["Offer-Ready Signal"]
+    R2["2. Use Numbers: 62%→89%, 400, 70%, 4 Services"] --> Win
+    R3["3. Show 'I' Ownership: How You Drove Outcome"] --> Win
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class R1 blue
+    class R2 amber
+    class R3 purple
+    class Win green
+```
+
 1. **Tell the truth**: Your real accomplishments are good enough. Don't exaggerate.
 2. **Use numbers**: 62%→89%, 400 issues, 70% reduction, 4 services. Numbers stick.
 3. **Show how you influenced the outcome**: Not "the project succeeded" but "I drove the decomposition strategy, which enabled independent deployments."
 
-Good luck. You're ready.
+> [!NOTE]
+> Good luck. You're ready.

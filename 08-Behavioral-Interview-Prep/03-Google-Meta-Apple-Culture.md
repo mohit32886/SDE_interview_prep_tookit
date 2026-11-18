@@ -2,9 +2,41 @@
 
 ## Overview: Why Company Culture Matters
 
-Every FAANG company has a distinct culture that shapes what they value in behavioral interviews. Amazon values *operational excellence and ownership*. Google values *innovation and impact*. Meta values *speed and impact*. Apple values *craftsmanship and secrecy*. Netflix values *context and autonomy*.
+![FAANG Culture Signals Animation](./assets/03-faang-culture-signals.svg)
 
-Your stories need to be adapted to align with what each company values. The same story told differently can be compelling at Google but underwhelming at Apple.
+Every FAANG company evaluates behavioral stories through a distinct cultural lens. The same engineering project can sound compelling at Google and underwhelming at Apple if you emphasize the wrong signal.
+
+| Company | Public / Core Pillar | Primary Behavioral Signal |
+|---------|----------------------|---------------------------|
+| **Amazon** | 16 Leadership Principles | Operational excellence &amp; end-to-end ownership |
+| **Google** | Innovation &amp; Impact | Ambiguity framing, data rigor &amp; scale thinking |
+| **Meta** | Move Fast &amp; Impact | Speed, bias for action &amp; rapid iteration |
+| **Apple** | Simplicity &amp; Craft | Craftsmanship, attention to detail &amp; secrecy |
+| **Netflix** | Freedom &amp; Responsibility | Context-driven autonomy &amp; judgment |
+
+```mermaid
+flowchart LR
+    CORE["Core Engineering Story"] --> AMZ["Amazon: Ownership &amp; High Standards"]
+    CORE --> GOO["Google: Ambiguity &amp; 10x Scale"]
+    CORE --> MET["Meta: Speed &amp; V1 Iteration"]
+    CORE --> APP["Apple: Craft &amp; User Empathy"]
+    CORE --> NFL["Netflix: Context &amp; Autonomy"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class CORE,GOO blue
+    class AMZ amber
+    class MET purple
+    class APP green
+    class NFL red
+```
+
+> [!IMPORTANT]
+> Never deliver the exact same narrative verbatim across companies. Keep the core facts constant, but shift which trade-off, metric, and decision you highlight.
 
 ---
 
@@ -12,157 +44,92 @@ Your stories need to be adapted to align with what each company values. The same
 
 ### What Google Really Values (Beyond the Surface)
 
-**Publicly stated**: Innovation, impact, user-focused thinking
-**What they really want**:
-- **Googleyness**: Can you think like a Googler? Do you ask interesting questions? Are you intellectually curious?
-- **Technical leadership**: Can you drive technical decisions across teams?
-- **Data-driven decision making**: You don't just have opinions; you have data
-- **Long-term thinking**: You're not optimizing for quarterly results; you're thinking about Google's role in the world
-- **Bias toward learners**: You're excited about learning new things, and you teach others
+- **Publicly stated**: Innovation, impact, user-focused thinking.
+- **Googleyness**: Intellectual curiosity, asking insightful questions, and thriving alongside peers from top research backgrounds without intimidation.
+- **Technical leadership**: Driving cross-team technical decisions.
+- **Data-driven decision making**: Backing architectural and product opinions with evidence, not intuition alone.
+- **Long-term thinking**: Optimizing for multi-year platform impact rather than quarterly quick wins.
+- **Bias toward learners**: Excitement for learning new domains and teaching others.
 
 ### How Google's Behavioral Interview Differs
 
-At Google, behavioral interviews focus on:
-- **Dealing with ambiguity**: "You had no clear requirements. What did you do?"
-- **Technical depth + breadth**: "Tell me about a time you worked across different technologies"
-- **Impact at scale**: "Your solution affected millions of users. How did you think about that?"
-- **Culture fit**: "You'd be in a room with PhDs from MIT and Stanford. Can you hold your own? Are you intimidated or inspired?"
+| Focus Area | Typical Interviewer Probe |
+|------------|---------------------------|
+| **Dealing with ambiguity** | "You had no clear requirements. What did you do?" |
+| **Technical depth + breadth** | "Tell me about a time you worked across different technologies." |
+| **Impact at scale** | "Your solution affected millions of users. How did you think about that?" |
+| **Culture fit** | "In a room with PhDs from MIT and Stanford, are you intimidated or inspired?" |
+
+```mermaid
+flowchart TD
+    A["Vague Problem / Ambiguity"] --> B["Interview Stakeholders &amp; Gather Data"]
+    B --> C["Reframe Core Problem"]
+    C --> D["Design Simple, Scalable Platform"]
+    D --> E["Measure Cross-Team Impact &amp; Share Learnings"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+
+    class A amber
+    class B,C blue
+    class D,E green
+```
 
 ### Adapting Your Stories for Google
 
-**Principle**: Google wants to see intellectual curiosity, ambiguity handling, and impact.
+> [!TIP]
+> Lead with intellectual curiosity, how you reframed ambiguity into structure, and how your design scales 10x beyond the initial ask.
 
-#### Story 1: Data Lake Onboarding (Adapted for Google)
+#### Story 1: Data Lake Onboarding (Ambiguity + Impact)
 
-**Tell Google This Version (Emphasis: Ambiguity + Impact)**
+- **Context &amp; Ambiguity**: At Barclays, tasked with onboarding 3 data sources to the data lake while different teams wanted conflicting things from the same data.
+- **Action**: Acted like a PM instead of waiting for clear specs—interviewed 8+ stakeholder teams to uncover unspoken needs (real-time transformations, quality guarantees, audit trails).
+- **Platform Design**: Built an elegant solution (stored procedures + validation layer + automated quality checks) architected to scale to 10+ data sources without structural changes.
+- **Results**: 70% reduction in manual effort, 40% increase in Q1 adoption, zero quality incidents—and aligned diverse stakeholders around one coherent platform.
+- **Google Assessment Signals**: Ambiguity reframing, multi-team impact, intellectual curiosity, platform thinking, data-driven validation.
+- **Follow-up Questions Google Asks**:
+  - "Walk me through one requirement conflict you had to resolve."
+  - "How would this scale to 50 data sources?"
+  - "What would you have done differently if you had more time?"
+  - "Tell me about a time your design assumption was wrong."
 
-"In my role at Barclays, I was tasked with onboarding 3 data sources to our data lake. What made this interesting was that the requirements were incredibly ambiguous—different teams wanted different things from the same data.
+#### Story 2: Decoupling Project (Technical Leadership + Scale)
 
-Instead of waiting for clear requirements, I approached this like a product manager. I interviewed 8+ stakeholder teams to understand their workflows, pain points, and requirements. I discovered that teams needed real-time data transformations, quality guarantees, and audit trails—none of which were in the original ticket.
+- **Context &amp; Bottleneck**: Led refactoring of a 7-year-old Java monolith with undocumented dependencies, tight coupling, and 45-minute deployments requiring full regression testing.
+- **Organizational Insight**: Recognized the real bottleneck was organizational—teams could not ship independently. Decomposed into 4 independent microservices aligned to 4 separate teams.
+- **Controversial Trade-off**: Chose a shared database with service-specific views over "database per service" because distributed transactions in financial services add high risk; backed the choice with industry benchmarks to convince the tech lead.
+- **Results**: Deployment time dropped 45 min → 8 min (5.6x faster), feature velocity rose 40%, and release cadence jumped from 1/week to 4/week.
+- **Google Assessment Signals**: Technical leadership, complexity reduction, data-driven trade-offs, organizational thinking, scalability.
+- **Follow-up Questions Google Asks**:
+  - "Your architecture choice was controversial. Walk me through how you built consensus."
+  - "If you had to redo this, what would you change?"
+  - "How does this scale to 20 services?"
+  - "Tell me about a time your architectural assumption was wrong during implementation."
 
-I then designed a solution that was elegant: simple stored procedures + validation layer + automated quality checks. Nothing fancy, but it solved the real problem.
+### Google's Behavioral Question Bank (L5 Senior Engineer)
 
-Here's the Google angle: I realized that this data lake could be a platform. I designed it to scale to 10+ data sources without architectural changes. We ended up onboarding only 3 initially, but the foundation was laid for exponential growth.
-
-Results: 70% reduction in manual effort, 40% increase in adoption within Q1, zero quality incidents. But more importantly, I identified that the real problem wasn't technical—it was aligning diverse stakeholder needs into a coherent solution."
-
-**What Google is Assessing**:
-- Can you handle ambiguity? (You reframed unclear requirements)
-- Do you think about impact? (Impact on multiple teams)
-- Are you intellectually curious? (You asked why and dug deeper)
-- Platform thinking? (Designed for scale)
-- Data-driven? (You validated with stakeholders before building)
-
-**Follow-up Questions Google Asks**:
-- "Walk me through one requirement conflict you had to resolve."
-- "How would this scale to 50 data sources?"
-- "What would you have done differently if you had more time?"
-- "Tell me about a time your design assumption was wrong."
-
----
-
-#### Story 2: Decoupling Project (Adapted for Google)
-
-**Tell Google This Version (Emphasis: Technical Leadership + Scale)**
-
-"I led an architecture refactoring that broke a monolithic Java application into 4 independent microservices. The challenge was not technical—it was *organizational and strategic*.
-
-The monolith was a 7-year-old codebase with undocumented dependencies, tight coupling, and a deployment time of 45 minutes. This created a bottleneck: any small change required full system regression testing.
-
-Here's what's interesting: I could have just decomposed services based on domain logic. But I realized the *real* bottleneck was organizational. Teams couldn't ship independently because the codebase forced dependency. So I designed the architecture to enable organizational independence: 4 services that could be owned by 4 different teams.
-
-I also had to make a controversial choice: instead of 'database per service' (which is the microservice gospel), I used a shared database with service-specific views. Here's why: we're in financial services; distributed transactions are complex and risky. A simpler solution (shared DB) achieved 95% of the benefits with 1/10th the complexity. I had to convince the tech lead this was right; I showed data from other financial companies doing similar approaches.
-
-Results: deployment time went from 45 minutes to 8 minutes (5.6x faster). Feature velocity improved 40% because teams could now work independently. But the real metric is organizational: we went from 1 deployment per week to 4 deployments per week. Team autonomy increased dramatically."
-
-**What Google is Assessing**:
-- Technical leadership? (You made the tough architectural call)
-- Dealing with complexity? (You simplified a hard problem)
-- Data-driven decisions? (You researched distributed transaction trade-offs)
-- Organizational thinking? (You understood the real bottleneck was organizational, not technical)
-- Scalability thinking? (You designed for growth)
-
-**Follow-up Questions Google Asks**:
-- "Your architecture choice was controversial. Walk me through how you built consensus."
-- "If you had to redo this, what would you change?"
-- "How does this scale to 20 services?"
-- "Tell me about a time your architectural assumption was wrong during implementation."
-
----
-
-### Google's Behavioral Question Bank
-
-Google asks these questions in behavioral interviews for L5 (senior engineer) candidates:
-
-1. **"Tell me about a time you made a decision with incomplete information."**
-   - Google wants to see comfort with ambiguity
-   - Use: Data lake (unclear requirements, you reframed them)
-   - Or: Decoupling (you had to make architectural choices without perfect data)
-
-2. **"Describe a situation where you had to learn something new quickly."**
-   - Google values continuous learning and intellectual curiosity
-   - Use: Spring Boot 2.7 migration (you learned a new version quickly)
-   - Or: Data lake/ETL (you learned Autosys, stored procedures, Unix scripting)
-
-3. **"Tell me about a time you influenced a decision you didn't fully agree with."**
-   - Google wants to see you can navigate complexity and disagreement
-   - Use: Architecture decision (database per service vs. shared DB)
-
-4. **"Give an example of a problem you solved that didn't have a clear right answer."**
-   - Google loves ambiguity and creative problem-solving
-   - Use: Data quality framework (you chose simple over complex)
-   - Or: Data lake stakeholder alignment (different teams wanted different things)
-
-5. **"Tell me about a time you took a risk on a technical decision."**
-   - Google is comfortable with calculated risk
-   - Use: Rapid data source onboarding (shipped MVP instead of perfect design)
-
-6. **"Describe a situation where you had to collaborate across different teams with different priorities."**
-   - Google has lots of cross-functional dependencies
-   - Use: Data lake onboarding (worked across data engineering, ops, compliance)
-
-7. **"Tell me about a time you optimized something for scale."**
-   - Google thinks about billions of users
-   - Use: Decoupling (designed architecture for 10+ services, not just 4)
-
-8. **"How do you approach a problem when requirements are vague?"**
-   - Classic Google ambiguity question
-   - Use: Data lake (reframed requirements through stakeholder interviews)
-
-9. **"Tell me about a time you broke down a complex problem into simpler pieces."**
-   - Google values decomposition and clarity
-   - Use: Decoupling project (broke monolith into 4 independent services)
-   - Or: Data quality (broke validation into schema + statistical + business logic layers)
-
-10. **"Describe a time you pushed back on a decision and how it was resolved."**
-    - Google values intellectual rigor
-    - Use: Architecture decision (pushed back on database per service)
-
-11. **"Tell me about a time you improved a process or system."**
-    - Google thinks about systems-level improvements
-    - Use: Data lake automation (70% effort reduction through process redesign)
-
-12. **"Give an example of when you had to explain a complex technical concept to non-technical people."**
-    - Google values communication
-    - Use: Data quality framework (explained statistical anomaly detection to ops teams)
-
----
+| # | Question | Signal Tested | Recommended Story |
+|---|----------|---------------|-------------------|
+| 1 | "Tell me about a time you made a decision with incomplete information." | Comfort with ambiguity | Data Lake or Decoupling |
+| 2 | "Describe a situation where you had to learn something new quickly." | Continuous learning | Spring Boot 2.7 migration or Data Lake/ETL |
+| 3 | "Tell me about a time you influenced a decision you didn't fully agree with." | Navigating disagreement | Shared DB vs. DB per service |
+| 4 | "Give an example of a problem you solved that didn't have a clear right answer." | Ambiguity &amp; creativity | Data Quality Framework or Data Lake alignment |
+| 5 | "Tell me about a time you took a risk on a technical decision." | Calculated risk | Rapid Data Source Onboarding MVP |
+| 6 | "Describe a situation where you had to collaborate across different teams with different priorities." | Cross-functional alignment | Data Lake (data eng, ops, compliance) |
+| 7 | "Tell me about a time you optimized something for scale." | Platform &amp; scale thinking | Decoupling (architected for 10+ services) |
+| 8 | "How do you approach a problem when requirements are vague?" | Ambiguity decomposition | Data Lake stakeholder interviews |
+| 9 | "Tell me about a time you broke down a complex problem into simpler pieces." | Decomposition &amp; clarity | Decoupling (4 services) or Data Quality layers |
+| 10 | "Describe a time you pushed back on a decision and how it was resolved." | Intellectual rigor | Shared DB pushback |
+| 11 | "Tell me about a time you improved a process or system." | Systems-level thinking | Data Lake automation (70% effort cut) |
+| 12 | "Give an example of when you had to explain a complex technical concept to non-technical people." | Communication | Statistical anomaly detection to ops teams |
 
 ### Google Specific Strategy
 
-**How to Adapt Your Stories for Google**:
+- **Do**: Emphasize curiosity ("I dove deeper..."), ambiguity reframing, 10x scale design, data validation, and explicit learnings.
 
-1. **Emphasize intellectual curiosity**: "I was curious about X, so I dove deeper..."
-2. **Talk about handling ambiguity**: "The requirements were unclear, so I reframed the problem..."
-3. **Highlight scale thinking**: "I designed this to handle 10x growth..."
-4. **Show data-driven decisions**: "I validated this assumption with data..."
-5. **Discuss learnings**: "I learned X, which changed how I approached future projects..."
-
-**What NOT to say at Google**:
-- "We just followed the standard approach"
-- "I wait for clear requirements before starting"
-- "I don't learn new technologies; I stick with what I know"
-- "I'm not comfortable with ambiguity; I need clear instructions"
+> [!WARNING]
+> **What NOT to say at Google**: "We just followed the standard approach," "I wait for clear requirements before starting," "I stick with what I know," or "I'm not comfortable with ambiguity."
 
 ---
 
@@ -170,148 +137,89 @@ Google asks these questions in behavioral interviews for L5 (senior engineer) ca
 
 ### What Meta Really Values
 
-**Publicly stated**: Move Fast, Move Fast and Break Things, Flat Organization
-**What they really want**:
-- **Speed above all**: Can you ship quickly? Are you comfortable with "done is better than perfect"?
-- **Impact and execution**: You don't just plan; you execute and iterate
-- **Bias for action**: You unblock yourself; you don't wait
-- **Low process overhead**: You're uncomfortable with bureaucracy
-- **Iteration mindset**: You're comfortable shipping V1 and improving based on real data
+- **Publicly stated**: Move Fast, Move Fast and Break Things, Flat Organization.
+- **Speed above all**: Shipping quickly and embracing "done is better than perfect."
+- **Impact &amp; execution**: Executing and iterating rather than over-planning.
+- **Bias for action**: Unblocking yourself instead of waiting on others.
+- **Low process overhead**: Discomfort with heavy bureaucracy.
+- **Iteration mindset**: Shipping V1 and improving based on real production data.
 
 ### How Meta's Behavioral Interview Differs
 
-Meta's behavioral interviews focus on:
 - **Speed**: "How quickly can you ship?"
-- **Bias for action**: "Tell me about a time you unblocked yourself"
-- **Iteration**: "Tell me about a time you shipped something and then improved it"
-- **Impact over perfection**: "Tell me about something you shipped that wasn't perfect but had impact"
+- **Bias for action**: "Tell me about a time you unblocked yourself."
+- **Iteration**: "Tell me about a time you shipped something and then improved it."
+- **Impact over perfection**: "Tell me about something you shipped that wasn't perfect but had impact."
+
+```mermaid
+flowchart LR
+    P["Analysis Paralysis"] --> MVP["Ship V1 MVP in 2 Weeks"]
+    MVP --> DATA["Observe Real Production Data"]
+    DATA --> FIX["Discover Edge Cases &amp; Iterate"]
+    FIX --> SCALE["Scale to 10+ Sources"]
+    SCALE --> DATA
+
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+
+    class P red
+    class MVP purple
+    class DATA,FIX blue
+    class SCALE green
+```
 
 ### Adapting Your Stories for Meta
 
-**Principle**: Meta wants to see you moving fast, iterating, and delivering impact quickly.
+> [!TIP]
+> Frame your stories around breaking analysis paralysis, shipping a pragmatic V1 fast, and using real production feedback to iterate.
 
-#### Story 1: Data Source Rapid Onboarding (PERFECT for Meta)
+#### Story 1: Data Source Rapid Onboarding (Speed + Iteration)
 
-**Tell Meta This Version (Emphasis: Speed + Iteration)**
+- **Context**: In Aug 2021, needed to onboard 3 data sources while the team debated the "perfect" ETL architecture for weeks.
+- **Action**: Broke analysis paralysis by proposing a 2-week MVP using simple stored procedures, Unix scripts, and Autosys scheduling—no fancy frameworks.
+- **Weekly Iteration**:
+  - **Week 1**: Built and deployed Source 1 (MVP).
+  - **Week 2**: Real data flowed; uncovered 3 edge cases.
+  - **Week 3**: Added validation rules and improved monitoring.
+  - **Week 4**: Deployed Source 2 using Week 2-3 learnings.
+  - **Weeks 5-6**: Deployed Source 3; system matured and is now extending to 10 more sources.
+- **Meta Assessment Signals**: 2-week MVP velocity, bias toward action, comfort with V1 imperfection, rapid iteration, self-unblocking.
+- **Follow-up Questions Meta Asks**:
+  - "Tell me about one of those 3 edge cases you discovered. How did you handle it?"
+  - "If you had waited and built the 'perfect' system, what would have been different?"
+  - "How did you balance speed with quality?"
+  - "Tell me about a time the simple approach didn't work."
 
-"In Aug 2021, we needed to onboard 3 new data sources to our data lake. The team had been debating the 'perfect' architecture for weeks. I realized we were in analysis paralysis.
+#### Story 2: Test Coverage Acceleration (Iteration + Unblocking)
 
-I proposed a pragmatic approach: 'Let's build an MVP in 2 weeks using stored procedures and basic validation. We'll iterate based on what we learn in production.'
-
-The team was skeptical. ETL architectures are supposed to be sophisticated. But I pushed: 'Let's validate the approach with real data first. If it's wrong, we'll course-correct.'
-
-Here's what happened:
-- **Week 1**: Built and deployed first data source (MVP)
-- **Week 2**: Got real data flowing; discovered 3 edge cases
-- **Week 3**: Iterated: added validation rules, improved monitoring
-- **Week 4**: Deployed second source; learned from first source mistakes
-- **Week 5-6**: Third source deployed; system was now mature
-
-We went from weeks of debate to 3 sources live in 6 weeks. The solution was simple: stored procedures + Unix scripts + Autosys scheduling. No fancy frameworks; no over-engineering.
-
-By the time we thought about optimizing, we already had product-market fit. Now we're extending this to 10 more data sources with the same approach.
-
-The key insight: shipping fast and iterating beats perfect planning."
-
-**What Meta is Assessing**:
-- Can you move fast? (2 weeks for MVP)
-- Do you bias toward action? (You shipped instead of debating)
-- Are you comfortable with imperfection initially? (MVP was simple, not sophisticated)
-- Can you iterate? (Real data led to improvements)
-- Do you unblock yourself? (You didn't wait for perfect design)
-
-**Follow-up Questions Meta Asks**:
-- "Tell me about one of those 3 edge cases you discovered. How did you handle it?"
-- "If you had waited and built the 'perfect' system, what would have been different?"
-- "How did you balance speed with quality?"
-- "Tell me about a time the simple approach didn't work."
-
----
-
-#### Story 2: Test Coverage Acceleration (Adapted for Meta)
-
-**Tell Meta This Version (Emphasis: Iteration + Unblocking)**
-
-"During the Decoupling Project, we had 62% test coverage. We needed 85% to meet our quality gates. Normally, this takes months of incremental work.
-
-But I realized we didn't need to be perfect; we needed to be iterative and fast.
-
-Instead of waiting for the perfect test suite design, I started writing tests immediately on the highest-risk code. I got daily improvements: 1-2 points per day. Fast feedback loop.
-
-I also made a bold decision: implement the 85% coverage gate immediately, even though we weren't there yet. This creates forcing function: developers now *had* to write tests.
-
-Results: reached 85% coverage in 8 weeks instead of the estimated 4-5 months.
-
-Meta approach: don't plan the perfect solution; ship the MVPtest framework, get feedback, iterate."
-
-**What Meta is Assessing**:
-- Velocity? (8 weeks vs. 4-5 months; shipped faster)
-- Iteration? (Daily improvements, fast feedback loop)
-- Forcing function? (Coverage gate created accountability)
-- Pragmatism? (You didn't wait for perfect design)
-
----
+- **Context**: During the Decoupling Project, test coverage sat at 62% vs. the required 85% quality gate—normally a 4-5 month grind.
+- **Action**: Started writing tests immediately on highest-risk code for daily 1-2 point gains, and enabled the 85% coverage gate immediately as a forcing function for team accountability.
+- **Results**: Reached 85% coverage in 8 weeks instead of 4-5 months.
+- **Meta Assessment Signals**: High velocity, daily feedback loops, pragmatic forcing functions.
 
 ### Meta's Behavioral Question Bank
 
-1. **"Tell me about a time you shipped something that wasn't perfect but had impact."**
-   - Meta loves this. Ship > Perfect.
-   - Use: Rapid data source onboarding (simple solution, huge impact)
-
-2. **"Describe a situation where you unblocked yourself instead of waiting."**
-   - Meta hates bottlenecks and waiting
-   - Use: Data source onboarding (didn't wait for perfect design; shipped MVP)
-
-3. **"Give an example of when you moved fast and had to iterate based on learnings."**
-   - Meta values speed + iteration
-   - Use: Data source onboarding (MVP → learn → iterate → scale)
-
-4. **"Tell me about a time you pushed back on process or bureaucracy."**
-   - Meta hates process; values speed
-   - Use: If you can find an example where you cut bureaucracy to move faster
-
-5. **"How do you balance speed with quality?"**
-   - Meta's classic question
-   - Use: Coverage gates story (moved fast, but enforced minimum quality bar)
-
-6. **"Tell me about a time you took a calculated risk."**
-   - Meta is comfortable with reasonable risk for speed
-   - Use: Rapid onboarding (risky to deploy MVP without perfect design, but it worked)
-
-7. **"Describe a time you simplified something complex."**
-   - Meta values simplicity
-   - Use: Data quality framework (simple statistical approach vs. complex ML)
-
-8. **"Tell me about a time you made a decision with limited information."**
-   - Meta comfort with ambiguity
-   - Use: Data source onboarding (shipped without knowing all edge cases)
-
-9. **"How do you decide when something is 'done enough' to ship?"**
-   - Meta values pragmatism
-   - Use: MVP approach (when core functionality works, ship)
-
-10. **"Give an example of when you got feedback and quickly changed direction."**
-    - Meta values responsiveness
-    - Use: Data source issues discovered in production (fixed in 24 hours)
-
----
+| # | Question | Signal Tested | Recommended Story |
+|---|----------|---------------|-------------------|
+| 1 | "Tell me about a time you shipped something that wasn't perfect but had impact." | Ship &gt; Perfect | Rapid Data Source Onboarding |
+| 2 | "Describe a situation where you unblocked yourself instead of waiting." | Bias for action | Data Source Onboarding MVP |
+| 3 | "Give an example of when you moved fast and had to iterate based on learnings." | Speed + iteration | MVP → learn → iterate → scale |
+| 4 | "Tell me about a time you pushed back on process or bureaucracy." | Anti-bureaucracy | Cutting process to ship faster |
+| 5 | "How do you balance speed with quality?" | Pragmatic guardrails | Coverage gates (fast + minimum bar) |
+| 6 | "Tell me about a time you took a calculated risk." | Speed-oriented risk | Deploying MVP without perfect spec |
+| 7 | "Describe a time you simplified something complex." | Simplicity | Statistical Data Quality vs. ML |
+| 8 | "Tell me about a time you made a decision with limited information." | Moving despite unknowns | Shipping without all edge cases |
+| 9 | "How do you decide when something is 'done enough' to ship?" | Pragmatism | Core functionality works → ship |
+| 10 | "Give an example of when you got feedback and quickly changed direction." | Responsiveness | 24-hour production issue fixes |
 
 ### Meta Specific Strategy
 
-**How to Adapt Your Stories for Meta**:
+- **Do**: Quote speed metrics ("X weeks → Y weeks"), V1 → V2 iterations, simple over perfect, self-initiated action, and opportunity capture.
 
-1. **Emphasize speed metrics**: "We went from X weeks to Y weeks"
-2. **Talk about iteration**: "We shipped V1, learned X, shipped V2..."
-3. **Show pragmatism**: "We chose simple over perfect"
-4. **Highlight bias for action**: "I didn't wait for approval; I shipped"
-5. **Discuss impact**: "Speed allowed us to capture market/opportunity"
-
-**What NOT to say at Meta**:
-- "We spent 3 months perfecting the design"
-- "Perfection is important to me; I never ship anything but my best work"
-- "I prefer detailed requirements and planning before starting"
-- "We did extensive analysis before making a decision"
-- "I'm uncomfortable shipping code with known issues"
+> [!WARNING]
+> **What NOT to say at Meta**: "We spent 3 months perfecting the design," "I never ship anything but my best work," "I prefer detailed requirements before starting," or "I'm uncomfortable shipping code with known issues."
 
 ---
 
@@ -319,142 +227,84 @@ Meta approach: don't plan the perfect solution; ship the MVPtest framework, get 
 
 ### What Apple Really Values
 
-**Publicly stated**: Innovation, Simplicity, Design Excellence
-**What they really want**:
-- **Craftsmanship**: You care about the details; you sweat the small stuff
-- **User-centric design**: Every decision is about the end user
-- **Secrecy and discretion**: Can you keep secrets? Can you work on confidential projects?
-- **Quality over speed**: You're willing to delay if quality demands it
-- **Attention to detail**: You notice and fix small things that others miss
+- **Publicly stated**: Innovation, Simplicity, Design Excellence.
+- **Craftsmanship**: Sweating the small details others overlook.
+- **User-centric design**: Every technical choice serves the end user experience.
+- **Secrecy &amp; discretion**: Protecting confidential projects and sensitive data.
+- **Quality over speed**: Willingness to delay a release if quality is not acceptable.
 
 ### How Apple's Behavioral Interview Differs
 
-Apple's behavioral interviews focus on:
-- **Perfectionism**: "Tell me about a time you refused to ship because quality wasn't acceptable"
-- **Attention to detail**: "Tell me about a small thing you fixed that made a big difference"
-- **User empathy**: "Tell me about a time you thought about the end user experience"
-- **Aesthetic sense**: "Tell me about a time you improved the elegance of a solution"
-- **Secrecy/discretion**: "Tell me about a time you kept confidential information secure"
+- **Perfectionism**: "Tell me about a time you refused to ship because quality wasn't acceptable."
+- **Attention to detail**: "Tell me about a small thing you fixed that made a big difference."
+- **User empathy**: "Tell me about a time you thought about the end user experience."
+- **Aesthetic sense**: "Tell me about a time you improved the elegance of a solution."
+- **Secrecy/discretion**: "Tell me about a time you kept confidential information secure."
+
+```mermaid
+flowchart TD
+    D["Good Enough Metric"] --> Q{"Does It Meet Craft &amp; User Bar?"}
+    Q -->|"No"| HOLD["Hold Release &amp; Refine Details"]
+    HOLD --> DOC["Make Code Self-Documenting &amp; Simple"]
+    DOC --> Q
+    Q -->|"Yes"| SHIP["Ship Polished Experience"]
+
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+
+    class D,Q amber
+    class HOLD red
+    class DOC blue
+    class SHIP green
+```
 
 ### Adapting Your Stories for Apple
 
-**Principle**: Apple wants to see you obsessing over quality, details, and user experience.
+> [!IMPORTANT]
+> Emphasize why you refused to settle for "industry standard," how your technical choices protected end users, and the elegance of the final design.
 
-#### Story 1: Code Quality Improvement (Adapted for Apple)
+#### Story 1: Code Quality Improvement (Craftsmanship + Details)
 
-**Tell Apple This Version (Emphasis: Craftsmanship + Details)**
+- **Context &amp; User Empathy**: During the Decoupling Project, 62% coverage was "industry acceptable," but traders and risk managers depended on this software for financial decisions.
+- **Action**: Set 85% as a minimum floor, audited the codebase to identify the critical 20% of paths driving 80% of risk, and refused to merge tests that didn't also serve as clear behavioral documentation.
+- **Results**: New team members onboarded 40% faster due to self-documenting tests, and defect escape rate dropped 45%.
+- **Apple Assessment Signals**: Craftsmanship over metric-chasing, detail orientation, end-user empathy, willingness to take time for quality, code elegance.
+- **Follow-up Questions Apple Asks**:
+  - "Tell me about one test you wrote that you're proud of. Why are you proud of it?"
+  - "You had time pressure. How did you balance that with quality?"
+  - "Tell me about a time a colleague wanted to cut corners on quality. How did you handle it?"
+  - "Show me an example of code you've written that you think is elegant."
 
-"During the Decoupling Project, I had an opportunity to set a higher quality bar for our codebase. We were at 62% test coverage, which was 'acceptable' by industry standards. But I asked: is it acceptable for Apple users?
+#### Story 2: Data Quality Framework (Simplicity + Elegance + User Focus)
 
-Actually, wait—let me reframe. This was internal financial software, but the end users were traders and risk managers. Their decisions depend on this code. That means our code quality directly affects whether traders make good decisions.
-
-I decided to pursue 85% coverage as a minimum, not a target. Here's the key difference: we didn't just measure coverage as a metric; we understood *which* code paths mattered most. I audited the code and identified the 20% of code that handles 80% of risk (trading logic, data validation, risk calculations). I made sure those were covered first, thoroughly.
-
-But here's where craftsmanship came in: I didn't just write tests to hit 85%. I wrote tests that *documented* the code's behavior. When another developer reads a test, they understand not just that a function works, but *why* it works that way. I refused to merge test coverage that wasn't also documentation.
-
-This took longer than just hitting a metric. But the result: new team members could onboard 40% faster because the code was self-documenting. Defect escape rate dropped 45% because the tests caught real bugs.
-
-The real measure of success: I could sleep knowing that traders using our platform had high-quality risk calculations."
-
-**What Apple is Assessing**:
-- Do you care about craftsmanship? (You defined quality as documentation, not just coverage)
-- Are you detail-oriented? (You identified the 20% of code that matters most)
-- Do you think about end users? (Traders depend on this code)
-- Are you willing to take longer for quality? (You didn't just hit a metric; you did it right)
-- Is your work elegant? (Tests document behavior; code is self-explanatory)
-
-**Follow-up Questions Apple Asks**:
-- "Tell me about one test you wrote that you're proud of. Why are you proud of it?"
-- "You had time pressure. How did you balance that with quality?"
-- "Tell me about a time a colleague wanted to cut corners on quality. How did you handle it?"
-- "Show me an example of code you've written that you think is elegant."
-
----
-
-#### Story 2: Data Quality Framework (Adapted for Apple)
-
-**Tell Apple This Version (Emphasis: Simplicity + Elegance + User Focus)**
-
-"When building data quality validations for the data lake, I had a choice: use a sophisticated ML-based anomaly detection framework, or use simple statistical rules.
-
-I chose simplicity. Here's why: operators and data consumers needed to understand why data was flagged as bad. If I used a black-box ML model, they'd have to trust it blindly. That's not user-centric.
-
-Instead, I designed a validation layer based on simple statistical rules (mean ± 3σ). Anyone could understand it. If data was flagged, operators could look at the rule and say, 'Yes, this value is 5 standard deviations from the mean; that's unusual.'
-
-But here's where aesthetics matter: I made the validation framework beautiful. The dashboard showed not just 'data is bad' but visualized *why*. You could see the distribution of values and where the anomalous point sat. It told a story.
-
-Results: 99.8% accuracy with 0.8% false positive rate. Operators loved it because it made sense. Data consumers trusted the data because they could verify the validation logic themselves.
-
-The key lesson: simplicity is the ultimate sophistication. A simple, understandable solution is better than a complex, opaque one."
-
-**What Apple is Assessing**:
-- Do you think about user understanding? (You designed for operator comprehension)
-- Do you choose elegance over complexity? (Simple rules > ML model)
-- Do you sweat details? (You made the dashboard beautiful)
-- Do you think about long-term trust? (Operators could verify the logic)
-
----
+- **Context**: Needed data quality validations for the data lake—could build a complex ML anomaly detector or simple statistical rules.
+- **Action**: Chose transparent statistical rules (`mean ± 3σ`) so operators didn't have to trust a black box, and built a clean dashboard visualizing the value distribution and exact outlier position.
+- **Results**: 99.8% accuracy, 0.8% false positive rate, and high operator trust because users could verify the logic themselves.
+- **Apple Assessment Signals**: User comprehension, elegance over complexity, aesthetic detail, long-term trust.
 
 ### Apple's Behavioral Question Bank
 
-1. **"Tell me about a time you refused to ship because quality wasn't acceptable."**
-   - Apple LOVES this. They value quality over speed.
-   - Use: Coverage gates story (enforced 85% minimum; didn't ship below that)
-
-2. **"Describe a situation where you obsessed over details that others might have missed."**
-   - Apple is famous for obsessing over details
-   - Use: Test documentation story (tests were documentation, not just code coverage)
-
-3. **"Give an example of when you improved something that was 'good enough' but made it great."**
-   - Apple thinks about going from good to great
-   - Use: Code quality improvement (62% → 89% coverage)
-
-4. **"Tell me about a time you chose simplicity over a sophisticated solution."**
-   - Apple values simplicity in design
-   - Use: Data quality framework (statistical rules > ML model)
-
-5. **"How do you think about user experience when making technical decisions?"**
-   - Apple is user-obsessed
-   - Use: Data quality dashboard (designed for operator understanding)
-
-6. **"Tell me about a time you kept confidential information secure."**
-   - Apple cares about security and discretion
-   - Use: Barclays financial data handling (if you have a story about protecting proprietary info)
-
-7. **"Describe a situation where you had to delay shipping to maintain quality."**
-   - Apple comfortable with delays for quality
-   - Use: Coverage gates (took longer to reach 85%, didn't ship below that)
-
-8. **"Give an example of elegant code or design you're proud of."**
-   - Apple values aesthetic quality
-   - Use: Decoupling architecture (clean service boundaries, simple contracts)
-
-9. **"Tell me about a time you noticed a small detail that made a big difference."**
-   - Apple obsesses over small details
-   - Use: Sonar issues (400+ small code quality improvements added up to 45% defect reduction)
-
-10. **"How do you define 'done'?"**
-    - Apple's definition includes quality
-    - Use: Coverage + documentation (code is done when tested and documented)
-
----
+| # | Question | Signal Tested | Recommended Story |
+|---|----------|---------------|-------------------|
+| 1 | "Tell me about a time you refused to ship because quality wasn't acceptable." | Quality &gt; Speed | Coverage gates (85% minimum) |
+| 2 | "Describe a situation where you obsessed over details that others might have missed." | Detail obsession | Self-documenting test suite |
+| 3 | "Give an example of when you improved something that was 'good enough' but made it great." | Good → Great | Code quality (62% → 89% coverage) |
+| 4 | "Tell me about a time you chose simplicity over a sophisticated solution." | Design simplicity | Statistical rules &gt; ML black box |
+| 5 | "How do you think about user experience when making technical decisions?" | User obsession | Operator-friendly quality dashboard |
+| 6 | "Tell me about a time you kept confidential information secure." | Secrecy &amp; discretion | Barclays financial data handling |
+| 7 | "Describe a situation where you had to delay shipping to maintain quality." | Holding the quality bar | Taking time to hit 85% gate |
+| 8 | "Give an example of elegant code or design you're proud of." | Aesthetic quality | Clean Decoupling service boundaries |
+| 9 | "Tell me about a time you noticed a small detail that made a big difference." | Micro-craftsmanship | 400+ Sonar fixes → 45% fewer defects |
+| 10 | "How do you define 'done'?" | Quality definition | Tested + self-documented |
 
 ### Apple Specific Strategy
 
-**How to Adapt Your Stories for Apple**:
+- **Do**: Highlight delaying for quality, small details with big impact, user empathy, solution elegance, and multi-year maintainability.
 
-1. **Emphasize quality over speed**: "I delayed shipping because quality wasn't right"
-2. **Talk about details**: "I noticed X small issue that had big impact"
-3. **Discuss user empathy**: "End users depend on this, so..."
-4. **Highlight craftsmanship**: "I'm proud of the elegance of this solution"
-5. **Show long-term thinking**: "This code will be maintained for years"
-
-**What NOT to say at Apple**:
-- "We shipped it fast, even though quality wasn't perfect"
-- "Good enough is good enough"
-- "Details don't matter; speed matters"
-- "We used the industry standard approach without modification"
-- "I don't think about how this impacts end users"
+> [!WARNING]
+> **What NOT to say at Apple**: "We shipped fast even though quality wasn't perfect," "Good enough is good enough," "Details don't matter; speed matters," or "I don't think about how this impacts end users."
 
 ---
 
@@ -462,136 +312,83 @@ The key lesson: simplicity is the ultimate sophistication. A simple, understanda
 
 ### What Netflix Really Values
 
-**Culture Deck Themes**: Freedom & Responsibility, Context Not Control
-**What they really want**:
-- **Autonomy and ownership**: You don't need permission; you make decisions
-- **Context understanding**: You understand the context and make good decisions within it
-- **Excellence and growth**: You're excellent and always improving
-- **Radical candor**: You give and receive feedback directly and honestly
-- **Judgment and wisdom**: You make good decisions with limited oversight
+- **Culture Deck Themes**: Freedom &amp; Responsibility, Context Not Control.
+- **Autonomy &amp; ownership**: Making decisions without waiting for permission.
+- **Context understanding**: Grasping organizational constraints and aligning decisions to them.
+- **Excellence &amp; growth**: Continuous self-improvement.
+- **Radical candor**: Giving and receiving direct, honest feedback.
+- **Judgment &amp; wisdom**: Making sound calls with minimal oversight.
 
 ### How Netflix's Behavioral Interview Differs
 
-Netflix's behavioral interviews focus on:
-- **Autonomy**: "Tell me about a time you made a decision without asking for approval"
-- **Context understanding**: "Tell me about a time you made a decision because you understood the broader context"
+- **Autonomy**: "Tell me about a time you made a decision without asking for approval."
+- **Context understanding**: "Tell me about a time you made a decision because you understood the broader context."
 - **Excellence**: "What are you working to improve about yourself?"
-- **Candor**: "Tell me about a time you gave difficult feedback"
-- **Judgment**: "Tell me about a decision that turned out differently than expected"
+- **Candor**: "Tell me about a time you gave difficult feedback."
+- **Judgment**: "Tell me about a decision that turned out differently than expected."
+
+```mermaid
+flowchart LR
+    CTX["Understand Business &amp; Org Context"] --> CALL["Make Autonomous Judgment Call"]
+    CALL --> EXEC["Own Outcome Without Committee Bottleneck"]
+    EXEC --> CANDOR["Seek Feedback &amp; Wisdom Early"]
+    CANDOR --> CTX
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+
+    class CTX blue
+    class CALL red
+    class EXEC green
+    class CANDOR amber
+```
 
 ### Adapting Your Stories for Netflix
 
-**Principle**: Netflix wants to see you operating autonomously with good judgment.
+> [!TIP]
+> Show that you don't wait for tickets or manager sign-off—you read the business context, make an informed judgment call, and seek wisdom (not permission) from peers.
 
-#### Story 1: Decoupling Project (Adapted for Netflix)
+#### Story 1: Decoupling Project (Autonomy + Judgment + Context)
 
-**Tell Netflix This Version (Emphasis: Autonomy + Judgment + Context)**
+- **Context &amp; Ownership**: Project wasn't formally assigned. Identified that 45-minute monolith deployments were constraining org growth and took autonomous ownership instead of waiting for assignment.
+- **Contextual Judgment**: Chose a shared database over "database per service" because financial services context makes distributed transactions high-risk.
+- **Results &amp; Reflection**: Achieved 5.6x faster deployments without committee bottlenecks; in hindsight, would seek wisdom from the tech lead earlier (feedback, not permission).
+- **Netflix Assessment Signals**: Autonomous initiative, business context awareness, sound judgment, end-to-end ownership, openness to feedback.
+- **Follow-up Questions Netflix Asks**:
+  - "Did your manager support this, or did you have to convince them afterward?"
+  - "If someone told you your architectural choice was wrong, how would you respond?"
+  - "Tell me about a time your autonomous decision turned out badly."
+  - "How do you balance autonomy with alignment with the team?"
 
-"The Decoupling Project wasn't formally assigned to me. I identified a problem: the monolith was becoming a bottleneck. Deployment took 45 minutes. Teams couldn't ship independently. I could have flagged this to my manager and waited for it to be formally assigned.
+#### Story 2: Datasource Automation Decision (Judgment + Speed + Autonomy)
 
-Instead, I made a judgment call: 'I'm going to own this initiative.' I didn't ask permission; I understood the context (organization was growth-constrained by deployment bottleneck) and I made a decision.
-
-Here's the Netflix principle in action: I had autonomy to make this call because I understood the context. The organization needed faster deployments to scale. I could see a path to 5.6x faster deployments. I trusted my judgment that this was the right investment.
-
-I also made controversial architectural choices: shared database instead of 'database per service' microservices. This was unconventional. But I had context: we're in financial services; distributed transactions are risky. I could have been wrong. But I made the judgment call based on context.
-
-Result: The initiative succeeded. But more importantly, I operated with autonomy and judgment. No committee approval needed. No process bottleneck. Just understanding the context and making a good call.
-
-Netflix would ask: Did you have the autonomy to do this? Yes, because I understood the context and made a judgment call. Would you do it the same way again? I'd probably ask for feedback from the tech lead earlier—not permission, but wisdom-seeking."
-
-**What Netflix is Assessing**:
-- Do you operate autonomously? (You didn't wait for permission)
-- Do you understand context? (You understood the deployment bottleneck problem)
-- Do you make good judgments? (Shared DB vs. microservices decision)
-- Do you own outcomes? (You drove the initiative end-to-end)
-- Are you open to feedback? (You'd ask for wisdom even though you don't need approval)
-
-**Follow-up Questions Netflix Asks**:
-- "Did your manager support this, or did you have to convince them afterward?"
-- "If someone told you your architectural choice was wrong, how would you respond?"
-- "Tell me about a time your autonomous decision turned out badly."
-- "How do you balance autonomy with alignment with the team?"
-
----
-
-#### Story 2: Datasource Automation Decision (Adapted for Netflix)
-
-**Tell Netflix This Version (Emphasis: Judgment + Speed + Autonomy)**
-
-"In the Datasource Project, I had to decide: build a sophisticated ETL framework or keep it simple with stored procedures and Autosys.
-
-The context: we're a financial organization with risk-averse operations teams. They understand SQL and Unix scripting. They're skeptical of 'frameworks.' They need reliability over sophistication.
-
-I made an autonomous judgment call: keep it simple. I didn't need to ask for approval; I understood the context. The ops teams would be more comfortable (and safer) with something they could understand and modify.
-
-This decision was unconventional. Data engineers often advocate for sophisticated frameworks. But I judged that the context (operations team comfort, organization risk aversion) mattered more than the 'right' technical solution.
-
-Result: 70% effort reduction, high adoption, zero quality incidents. The simplicity was the *point*, not a shortcoming.
-
-Netflix principle: I understood the context and made a judgment call autonomously. That's how the organization works."
-
----
+- **Context**: Financial org with risk-averse operations teams who understand SQL and Unix scripting and distrust complex frameworks.
+- **Action**: Made an autonomous judgment call to use stored procedures and Autosys instead of a heavy ETL framework so ops teams could safely understand and maintain it.
+- **Results**: 70% effort reduction, high adoption, zero quality incidents—simplicity was intentional, not a shortcut.
 
 ### Netflix's Behavioral Question Bank
 
-1. **"Tell me about a time you made a decision without asking for permission."**
-   - Netflix loves autonomy
-   - Use: Decoupling Project (not formally assigned; you took ownership)
-
-2. **"Describe a situation where you understood the context and made a decision based on it."**
-   - Netflix values context-based decision-making
-   - Use: Data lake architecture (understood org risk aversion, chose simple approach)
-
-3. **"Give an example of when you made a decision that turned out differently than expected."**
-   - Netflix wants to understand how you handle uncertainty
-   - Use: Any story where initial assumption changed
-
-4. **"Tell me about a time you gave difficult feedback to a colleague."**
-   - Netflix values radical candor
-   - Use: If you pushed back on architectural decisions
-
-5. **"How do you stay excellent? What are you working to improve?"**
-   - Netflix values growth mindset
-   - Use: Spring Boot migration (you learned new version to stay excellent)
-
-6. **"Describe a time you operated with incomplete information and still made a good decision."**
-   - Netflix comfortable with ambiguity
-   - Use: Data source onboarding (shipped MVP without perfect requirements)
-
-7. **"Tell me about a time you collaborated with someone who disagreed with you."**
-   - Netflix values healthy debate
-   - Use: Architecture disagreement (DB per service vs. shared)
-
-8. **"Give an example of when you escalated something vs. solved it autonomously."**
-   - Netflix wants to see good judgment about when to escalate
-   - Use: Spring Boot issues (you handled most independently, escalated critical ones)
-
-9. **"How do you balance autonomy with alignment?"**
-   - Netflix classic question
-   - Use: Autonomous decisions but informed by team context
-
-10. **"Tell me about a time you received feedback that changed your perspective."**
-    - Netflix values growth and openness to feedback
-    - Use: Any learning story where feedback shaped your approach
-
----
+| # | Question | Signal Tested | Recommended Story |
+|---|----------|---------------|-------------------|
+| 1 | "Tell me about a time you made a decision without asking for permission." | Autonomy | Unassigned Decoupling ownership |
+| 2 | "Describe a situation where you understood the context and made a decision based on it." | Context-based decisions | Simple Data Lake for risk-averse ops |
+| 3 | "Give an example of when you made a decision that turned out differently than expected." | Handling uncertainty | Initial assumption pivot |
+| 4 | "Tell me about a time you gave difficult feedback to a colleague." | Radical candor | Architectural pushback |
+| 5 | "How do you stay excellent? What are you working to improve?" | Growth mindset | Spring Boot migration learning |
+| 6 | "Describe a time you operated with incomplete information and still made a good decision." | Judgment under ambiguity | Rapid Data Source MVP |
+| 7 | "Tell me about a time you collaborated with someone who disagreed with you." | Healthy debate | DB per service vs. shared DB |
+| 8 | "Give an example of when you escalated something vs. solved it autonomously." | Escalation judgment | Spring Boot issue triage |
+| 9 | "How do you balance autonomy with alignment?" | Context + alignment | Autonomous work informed by team context |
+| 10 | "Tell me about a time you received feedback that changed your perspective." | Openness to feedback | Learning story shaped by peer input |
 
 ### Netflix Specific Strategy
 
-**How to Adapt Your Stories for Netflix**:
+- **Do**: Highlight self-initiated ownership, broad business context, explicit judgment calls, continuous self-improvement, and evidence-based validation.
 
-1. **Emphasize autonomy**: "I didn't wait for approval; I..."
-2. **Talk about context understanding**: "I understood the broader context, so..."
-3. **Highlight good judgment**: "I made a judgment call that..."
-4. **Show growth mindset**: "I'm always working to improve..."
-5. **Discuss evidence**: "Here's how I validated my decision..."
-
-**What NOT to say at Netflix**:
-- "I waited for my manager to assign this work"
-- "I don't understand the broader business context; I just execute tasks"
-- "I make decisions based on technical purity, not context"
-- "I'm not interested in feedback that contradicts my approach"
-- "I prefer clear rules and process"
+> [!WARNING]
+> **What NOT to say at Netflix**: "I waited for my manager to assign this work," "I just execute tasks without business context," "I make decisions on technical purity alone," or "I prefer clear rules and process."
 
 ---
 
@@ -599,7 +396,7 @@ Netflix principle: I understood the context and made a judgment call autonomousl
 
 | Dimension | Amazon | Google | Meta | Apple | Netflix |
 |-----------|--------|--------|------|-------|---------|
-| **Speed vs. Quality** | Balanced | Quality-focused | Speed-focused | Quality > Speed | Context-dependent |
+| **Speed vs. Quality** | Balanced | Quality-focused | Speed-focused | Quality &gt; Speed | Context-dependent |
 | **Innovation** | Operational | Technical | Execution | Design | Cultural |
 | **Perfection** | High standards (not perfection) | Elegant simplicity | Good enough fast | Craftsmanship obsession | Excellence in role |
 | **Risk Tolerance** | Calculated | Thoughtful | High | Low | High (with judgment) |
@@ -607,57 +404,115 @@ Netflix principle: I understood the context and made a judgment call autonomousl
 | **Process** | Lightweight | Medium | Minimal | Rigorous | Context-based |
 | **Values** | 16 Leadership Principles | Innovation + Impact | Move Fast + Impact | Simplicity + Craft | Freedom + Responsibility |
 
+```mermaid
+flowchart TD
+    M["5-Company Cultural Matrix"] --> S["Speed-First: Meta"]
+    M --> Q["Quality-First: Apple"]
+    M --> A["Ambiguity &amp; Scale: Google"]
+    M --> O["Ownership &amp; Standards: Amazon"]
+    M --> C["Context &amp; Autonomy: Netflix"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class M,A blue
+    class S purple
+    class Q green
+    class O amber
+    class C red
+```
+
 ---
 
 ## How to Adapt a Single Story for Five Companies
 
-Let's use the Decoupling Project and show how to adapt it:
+**Core Facts (Decoupling Project)**: Broke monolith into 4 services | Deployment: 45 min → 8 min | Coverage: 62% → 89% | 400+ Sonar issues fixed | Spring Boot 2.2 → 2.7 | Mentored 2 junior devs.
 
-### Same Story, Five Different Angles
+```mermaid
+flowchart LR
+    FACT["Decoupling Core Facts"] --> F1["Amazon: Ownership &amp; 5.6x Delivery"]
+    FACT --> F2["Google: Ambiguity &amp; Research Trade-off"]
+    FACT --> F3["Meta: Pragmatic Speed &amp; Incremental Ships"]
+    FACT --> F4["Apple: 85% Gate &amp; Self-Doc Tests"]
+    FACT --> F5["Netflix: Unassigned Autonomous Call"]
 
-**Core Facts**:
-- Broke monolith into 4 services
-- Deployment time: 45 min → 8 min
-- Coverage: 62% → 89%
-- 400+ Sonar issues fixed
-- Spring Boot 2.2 → 2.7 migration
-- Mentored 2 junior developers
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
 
-**For Amazon**:
-"I identified a strategic problem (deployment bottleneck) and owned it end-to-end. I set high standards (85% coverage, not 62%). I made a controversial architectural choice (shared DB) and built consensus. I mentored junior developers, raising their standards. I delivered results: 5.6x faster deployments."
+    class FACT,F2 blue
+    class F1 amber
+    class F3 purple
+    class F4 green
+    class F5 red
+```
 
-**For Google**:
-"I faced ambiguity: the architecture wasn't clear. I researched financial companies' approaches to service boundaries. I designed something elegant and scalable. I learned about the trade-offs between microservice patterns. I influenced the tech lead to adopt a simpler approach. Impact: exponential improvement in team velocity."
-
-**For Meta**:
-"The monolith was a bottleneck. I shipped the refactoring faster than expected by being pragmatic with incremental deployments. We didn't wait for the perfect design; we iterated. Deployment time went from 45 min to 8 min—5.6x faster, enabling the team to move faster."
-
-**For Apple**:
-"I obsessed over code quality. I set coverage gates and refused to merge below 85%. I made architectural decisions focused on long-term maintainability. I designed the service boundaries to be clean and elegant. Tests documented behavior. New developers could understand the code in 2 weeks instead of 2 months because of this craftsmanship."
-
-**For Netflix**:
-"This project wasn't formally assigned. I understood the context: our deployment bottleneck was limiting growth. I made an autonomous decision to own this. I made controversial architectural choices based on organizational context (shared DB, not microservices gospel). I operated with high autonomy but delivered results: faster deployments, independent team scaling."
+| Company | Adapted Story Pitch |
+|---------|---------------------|
+| **Amazon** | "I identified a strategic problem (deployment bottleneck) and owned it end-to-end. I set high standards (85% coverage, not 62%), made a controversial architectural choice (shared DB) and built consensus, mentored junior developers, and delivered 5.6x faster deployments." |
+| **Google** | "I faced ambiguity: the architecture wasn't clear. I researched financial companies' approaches to service boundaries, designed something elegant and scalable, influenced the tech lead to adopt a simpler approach, and achieved exponential improvement in team velocity." |
+| **Meta** | "The monolith was a bottleneck. I shipped the refactoring faster than expected with pragmatic incremental deployments instead of waiting for the perfect design. Deployment time dropped from 45 min to 8 min—5.6x faster, unblocking team velocity." |
+| **Apple** | "I obsessed over code quality, set coverage gates, and refused to merge below 85%. I designed clean, elegant service boundaries and self-documenting tests so new developers onboarded in 2 weeks instead of 2 months." |
+| **Netflix** | "This project wasn't formally assigned. I understood the context—our deployment bottleneck limited growth—and autonomously chose to own it, making unconventional choices (shared DB) suited to our financial risk context." |
 
 ---
 
 ## Final Strategy: How to Choose Which Company's Angle to Use
 
-**If you don't know what company you're interviewing at**: Lead with the Amazon version (balanced, well-structured) and adjust based on interviewer cues.
+```mermaid
+flowchart TD
+    START["Interview Prep"] --> KNOW{"Know Target Company?"}
+    KNOW -->|"No"| DEF["Default to Amazon Angle (Balanced)"]
+    KNOW -->|"Yes"| PICK["Select Company-Specific Lens"]
+    DEF --> CUE["Watch Interviewer Follow-up Cues"]
+    PICK --> CUE
+    CUE -->|"Misaligned Signal?"| PIVOT["Pivot Immediately to Match Probe"]
+    CUE -->|"Aligned"| WIN["Reinforce With Metrics"]
 
-**If you know the company**:
-- **Amazon**: Emphasize ownership, high standards, influence
-- **Google**: Emphasize ambiguity handling, data-driven decisions, platform thinking
-- **Meta**: Emphasize speed, iteration, pragmatism
-- **Apple**: Emphasize quality, craftsmanship, user focus
-- **Netflix**: Emphasize autonomy, context understanding, judgment
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
 
-**Red Flag**: If the interviewer is probing a company value and you're emphasizing something different, pivot.
+    class START,KNOW blue
+    class DEF,PICK,CUE amber
+    class PIVOT red
+    class WIN green
+```
 
-Example: If Google interviewer asks "How do you handle ambiguity?" and you say "I wait for clear requirements," that's a red flag. Adjust: "I reframed this ambiguous requirement by talking to stakeholders, and discovered the real problem..."
+- **Unknown company**: Lead with the **Amazon** version (balanced, well-structured) and adjust based on interviewer cues.
+- **Amazon**: Emphasize ownership, high standards, influence.
+- **Google**: Emphasize ambiguity handling, data-driven decisions, platform thinking.
+- **Meta**: Emphasize speed, iteration, pragmatism.
+- **Apple**: Emphasize quality, craftsmanship, user focus.
+- **Netflix**: Emphasize autonomy, context understanding, judgment.
+
+> [!WARNING]
+> **Red Flag Pivot**: If a Google interviewer asks *"How do you handle ambiguity?"* and you start saying *"I wait for clear requirements,"* pivot immediately: *"I reframed this ambiguous requirement by talking to stakeholders, and discovered the real problem..."*
 
 ---
 
 ## Company-Specific Preparation Checklist
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectCompany
+    SelectCompany --> GooglePrep: Ambiguity + Scale + Data
+    SelectCompany --> MetaPrep: Speed + Iteration + Unblock
+    SelectCompany --> ApplePrep: Craft + Quality Gate + UX
+    SelectCompany --> AmazonPrep: LP Ownership + Metrics
+    SelectCompany --> NetflixPrep: Autonomy + Context + Judgment
+    GooglePrep --> [*]
+    MetaPrep --> [*]
+    ApplePrep --> [*]
+    AmazonPrep --> [*]
+    NetflixPrep --> [*]
+```
 
 ### Before a Google Interview
 - [ ] Adapt one story to emphasize ambiguity handling
@@ -688,6 +543,3 @@ Example: If Google interviewer asks "How do you handle ambiguity?" and you say "
 - [ ] Be ready to discuss context understanding
 - [ ] Have examples of good judgment calls
 - [ ] Discuss how you handled ambiguity and still succeeded
-
----
-
