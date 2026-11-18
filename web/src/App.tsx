@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   BookOpen,
   Bookmark,
+  Brain,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -17,13 +19,30 @@ import {
   Sparkles,
   StickyNote,
   Sun,
+  Timer,
   X,
 } from 'lucide-react';
-import type { GuideDetail, ModuleInfo, StudyProgress } from './types';
+import type {
+  ConfidenceLevel,
+  FlashcardRating,
+  GuideDetail,
+  MockSessionRecord,
+  ModuleInfo,
+  StudyProgress,
+} from './types';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { SearchDialog } from './components/SearchDialog';
+import { FlashcardsView } from './components/FlashcardsView';
+import { MockInterviewView } from './components/MockInterviewView';
 
 type ThemePref = 'light dark' | 'light' | 'dark';
+
+interface RouteState {
+  view: 'dashboard' | 'guide' | 'flashcards' | 'mock';
+  moduleId?: string;
+  file?: string;
+  sectionId?: string;
+}
 
 function resolveIsDark(pref: ThemePref): boolean {
   if (pref === 'dark') return true;
@@ -31,25 +50,28 @@ function resolveIsDark(pref: ThemePref): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function parseRoute(): { moduleId?: string; file?: string; sectionId?: string } {
+function parseRoute(): RouteState {
   const hash = window.location.hash.replace(/^#\/?/, '');
-  if (!hash || hash === '/') return {};
+  if (!hash || hash === '/') return { view: 'dashboard' };
   const [pathPart, sectionId] = hash.split('#');
   const parts = pathPart.split('/').filter(Boolean);
+  if (parts[0] === 'flashcards') return { view: 'flashcards' };
+  if (parts[0] === 'mock') return { view: 'mock' };
   if (parts[0] === 'guide' && parts[1]) {
     return {
+      view: 'guide',
       moduleId: decodeURIComponent(parts[1]),
       file: parts[2] ? decodeURIComponent(parts[2]) : 'README.md',
       sectionId,
     };
   }
-  return {};
+  return { view: 'dashboard' };
 }
 
 export function App() {
   const [modules, setModules] = useState<ModuleInfo[]>([]);
   const [loadingModules, setLoadingModules] = useState(true);
-  const [route, setRoute] = useState(parseRoute);
+  const [route, setRoute] = useState<RouteState>(parseRoute);
   const [guide, setGuide] = useState<GuideDetail | null>(null);
   const [loadingGuide, setLoadingGuide] = useState(false);
   const [activeHeading, setActiveHeading] = useState<string>('');
@@ -61,6 +83,9 @@ export function App() {
     completed: [],
     bookmarks: [],
     notes: {},
+    confidence: {},
+    flashcardRatings: {},
+    mockHistory: [],
     lastVisited: null,
   });
 
@@ -92,7 +117,6 @@ export function App() {
     return () => mq.removeEventListener('change', onMqChange);
   }, [themePref]);
 
-  // Cross-tab color-scheme sync
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'color-scheme') {
@@ -104,7 +128,6 @@ export function App() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // Load modules & persisted study progress
   useEffect(() => {
     Promise.all([
       fetch('/api/modules').then((r) => r.json()),
@@ -112,19 +135,27 @@ export function App() {
     ])
       .then(([modData, progData]) => {
         setModules(modData.modules || []);
-        if (progData) setProgress(progData);
+        if (progData) {
+          setProgress({
+            completed: progData.completed || [],
+            bookmarks: progData.bookmarks || [],
+            notes: progData.notes || {},
+            confidence: progData.confidence || {},
+            flashcardRatings: progData.flashcardRatings || {},
+            mockHistory: progData.mockHistory || [],
+            lastVisited: progData.lastVisited || null,
+          });
+        }
       })
       .finally(() => setLoadingModules(false));
   }, []);
 
-  // Hash routing
   useEffect(() => {
     const onHashChange = () => setRoute(parseRoute());
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Global Cmd+K / '/' shortcut for SearchDialog
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -154,9 +185,8 @@ export function App() {
     } catch {}
   }, []);
 
-  // Fetch active guide
   useEffect(() => {
-    if (!route.moduleId || !route.file) {
+    if (route.view !== 'guide' || !route.moduleId || !route.file) {
       setGuide(null);
       return;
     }
@@ -189,17 +219,14 @@ export function App() {
         }
       })
       .finally(() => setLoadingGuide(false));
-  }, [route.moduleId, route.file, route.sectionId]);
+  }, [route.view, route.moduleId, route.file, route.sectionId]);
 
-  // Scroll-spy for TOC
   useEffect(() => {
     if (!guide?.toc?.length) return;
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveHeading(entry.target.id);
-          }
+          if (entry.isIntersecting) setActiveHeading(entry.target.id);
         }
       },
       { rootMargin: '-80px 0px -70% 0px' }
@@ -213,6 +240,11 @@ export function App() {
 
   const navigateHome = () => {
     window.location.hash = '/';
+    setSidebarOpen(false);
+  };
+
+  const navigateMode = (mode: 'flashcards' | 'mock') => {
+    window.location.hash = `/${mode}`;
     setSidebarOpen(false);
   };
 
@@ -250,15 +282,23 @@ export function App() {
   );
 
   const guideKey = guide ? `${guide.moduleId}/${guide.file}` : '';
-  const isCompleted = guideKey ? progress.completed.includes(guideKey) : false;
+  const currentConfidence: ConfidenceLevel | undefined = guideKey
+    ? progress.confidence[guideKey] || (progress.completed.includes(guideKey) ? 'ready' : undefined)
+    : undefined;
   const isBookmarked = guideKey ? progress.bookmarks.includes(guideKey) : false;
 
-  const toggleCompleted = () => {
+  const setGuideConfidence = (level: ConfidenceLevel) => {
     if (!guideKey) return;
-    const completed = isCompleted
-      ? progress.completed.filter((k) => k !== guideKey)
-      : [...progress.completed, guideKey];
-    persistProgress({ ...progress, completed });
+    const nextConfidence = { ...progress.confidence, [guideKey]: level };
+    const nextCompleted =
+      level === 'ready'
+        ? Array.from(new Set([...progress.completed, guideKey]))
+        : progress.completed.filter((k) => k !== guideKey);
+    persistProgress({
+      ...progress,
+      confidence: nextConfidence,
+      completed: nextCompleted,
+    });
   };
 
   const toggleBookmark = () => {
@@ -277,6 +317,34 @@ export function App() {
     });
   };
 
+  const handleFlashcardRate = (cardId: string, rating: FlashcardRating) => {
+    persistProgress({
+      ...progress,
+      flashcardRatings: { ...progress.flashcardRatings, [cardId]: rating },
+    });
+  };
+
+  const handleSaveMock = (record: MockSessionRecord) => {
+    persistProgress({
+      ...progress,
+      mockHistory: [record, ...progress.mockHistory].slice(0, 20),
+    });
+  };
+
+  const revisionQueue = useMemo(() => {
+    const items: Array<{ key: string; level: ConfidenceLevel; title: string; moduleId: string; file: string }> = [];
+    for (const [key, level] of Object.entries(progress.confidence)) {
+      if (level !== 'review' && level !== 'shaky') continue;
+      const [mId, fName] = key.split('/');
+      const mod = modules.find((m) => m.id === mId);
+      const g = mod?.guides.find((item) => item.file === fName);
+      if (mod && g) {
+        items.push({ key, level, title: g.title, moduleId: mId, file: fName });
+      }
+    }
+    return items;
+  }, [progress.confidence, modules]);
+
   const prevNext = useMemo(() => {
     if (!activeModule || !guide) return { prev: null, next: null };
     const idx = activeModule.guides.findIndex((g) => g.file === guide.file);
@@ -290,7 +358,7 @@ export function App() {
     <div className="app-shell">
       <header className="top-nav">
         <div className="nav-left">
-          {route.moduleId && (
+          {route.view === 'guide' && (
             <button
               type="button"
               className="icon-btn mobile-only"
@@ -306,6 +374,30 @@ export function App() {
             </span>
             <span className="brand-text">SDE Prep Studio</span>
           </button>
+
+          <nav className="nav-mode-links" aria-label="Study modes">
+            <button
+              type="button"
+              className={`nav-mode-btn ${route.view === 'dashboard' ? 'active' : ''}`}
+              onClick={navigateHome}
+            >
+              Modules
+            </button>
+            <button
+              type="button"
+              className={`nav-mode-btn ${route.view === 'flashcards' ? 'active' : ''}`}
+              onClick={() => navigateMode('flashcards')}
+            >
+              <Brain size={14} /> Flashcards
+            </button>
+            <button
+              type="button"
+              className={`nav-mode-btn ${route.view === 'mock' ? 'active' : ''}`}
+              onClick={() => navigateMode('mock')}
+            >
+              <Timer size={14} /> Mock Timer
+            </button>
+          </nav>
         </div>
 
         <button type="button" className="search-trigger" onClick={() => setSearchOpen(true)}>
@@ -315,10 +407,10 @@ export function App() {
         </button>
 
         <div className="nav-right">
-          <div className="progress-pill" title="Overall study progress">
+          <div className="progress-pill" title="Guides marked Interview Ready">
             <CheckCircle2 size={14} />
             <span>
-              {progress.completed.length}/{totalStats.guides || 0} done
+              {progress.completed.length}/{totalStats.guides || 0} ready
             </span>
           </div>
           <button
@@ -342,16 +434,30 @@ export function App() {
         </div>
       </header>
 
-      {!route.moduleId ? (
+      {route.view === 'flashcards' ? (
+        <FlashcardsView
+          modules={modules}
+          ratings={progress.flashcardRatings}
+          isDark={isDark}
+          onRate={handleFlashcardRate}
+          onOpenGuide={(mId, fName) => navigateGuide(mId, fName)}
+        />
+      ) : route.view === 'mock' ? (
+        <MockInterviewView
+          modules={modules}
+          history={progress.mockHistory}
+          onSaveSession={handleSaveMock}
+          onOpenGuide={(mId, fName) => navigateGuide(mId, fName)}
+        />
+      ) : route.view === 'dashboard' ? (
         <main className="dashboard-main">
           <section className="hero-banner">
             <div className="hero-content">
-              <div className="hero-eyebrow">10-Module Visual Interview Toolkit</div>
+              <div className="hero-eyebrow">{modules.length || 13}-Module Visual Interview Toolkit</div>
               <h1>Master Backend, System Design &amp; FAANG Interviews Visually</h1>
               <p>
-                Interactive Mermaid architecture diagrams, animated SVG flows, syntax-highlighted
-                production code, and progress tracking—powered directly by your Markdown study
-                repository.
+                Interactive Mermaid architecture diagrams, animated SVG flows, active-recall
+                flashcards, timed mock interviews, and confidence tracking.
               </p>
               <div className="hero-actions">
                 {progress.lastVisited ? (
@@ -377,9 +483,13 @@ export function App() {
                     </button>
                   )
                 )}
-                <button type="button" className="secondary-btn" onClick={() => setSearchOpen(true)}>
-                  <Search size={16} />
-                  Quick Search (⌘K)
+                <button type="button" className="secondary-btn" onClick={() => navigateMode('flashcards')}>
+                  <Brain size={16} />
+                  Flashcard Drill
+                </button>
+                <button type="button" className="secondary-btn" onClick={() => navigateMode('mock')}>
+                  <Timer size={16} />
+                  45m Mock Interview
                 </button>
               </div>
             </div>
@@ -403,6 +513,25 @@ export function App() {
               </div>
             </div>
           </section>
+
+          {revisionQueue.length > 0 && (
+            <section className="bookmarks-strip">
+              <h2>Revision Queue (Needs Review / Shaky)</h2>
+              <div className="bookmark-chips">
+                {revisionQueue.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={`bookmark-chip conf-chip-${item.level}`}
+                    onClick={() => navigateGuide(item.moduleId, item.file)}
+                  >
+                    <AlertTriangle size={13} />
+                    <span>{item.title}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           {progress.bookmarks.length > 0 && (
             <section className="bookmarks-strip">
@@ -435,7 +564,7 @@ export function App() {
             </div>
 
             {loadingModules ? (
-              <div className="loading-grid">Loading 10 modules...</div>
+              <div className="loading-grid">Loading modules...</div>
             ) : (
               <div className="modules-grid">
                 {modules.map((mod) => {
@@ -484,7 +613,7 @@ export function App() {
 
                       <div className="module-card-footer">
                         <span className="progress-text">
-                          {doneCount}/{mod.guides.length} completed
+                          {doneCount}/{mod.guides.length} ready
                         </span>
                         <button
                           type="button"
@@ -508,7 +637,7 @@ export function App() {
           <aside className={`reader-sidebar ${sidebarOpen ? 'open' : ''}`}>
             <div className="sidebar-module-select">
               <button type="button" className="back-home-link" onClick={navigateHome}>
-                <ChevronLeft size={15} /> All 10 Modules
+                <ChevronLeft size={15} /> All {modules.length} Modules
               </button>
               <label htmlFor="module-switcher" className="sr-only">
                 Switch module
@@ -532,7 +661,8 @@ export function App() {
             <nav className="sidebar-guide-list" aria-label="Module guides">
               {activeModule?.guides.map((g) => {
                 const isActive = g.file === route.file;
-                const done = progress.completed.includes(`${activeModule.id}/${g.file}`);
+                const key = `${activeModule.id}/${g.file}`;
+                const conf = progress.confidence[key] || (progress.completed.includes(key) ? 'ready' : undefined);
                 return (
                   <button
                     key={g.file}
@@ -541,7 +671,15 @@ export function App() {
                     onClick={() => navigateGuide(activeModule.id, g.file)}
                   >
                     <span className="guide-status-icon">
-                      {done ? <CheckCircle2 size={15} className="done-icon" /> : <Circle size={15} />}
+                      {conf === 'ready' ? (
+                        <CheckCircle2 size={15} className="done-icon" />
+                      ) : conf === 'shaky' ? (
+                        <Circle size={15} className="shaky-icon" />
+                      ) : conf === 'review' ? (
+                        <AlertTriangle size={15} className="review-icon" />
+                      ) : (
+                        <Circle size={15} />
+                      )}
                     </span>
                     <span className="guide-item-text">
                       <span className="guide-item-title">{g.title}</span>
@@ -575,14 +713,30 @@ export function App() {
                   </div>
 
                   <div className="guide-actions-bar">
-                    <button
-                      type="button"
-                      className={`action-pill ${isCompleted ? 'active-success' : ''}`}
-                      onClick={toggleCompleted}
-                    >
-                      <CheckCircle2 size={15} />
-                      {isCompleted ? 'Completed' : 'Mark Complete'}
-                    </button>
+                    <div className="confidence-group" role="group" aria-label="Confidence rating">
+                      <button
+                        type="button"
+                        className={`conf-btn review ${currentConfidence === 'review' ? 'active' : ''}`}
+                        onClick={() => setGuideConfidence('review')}
+                      >
+                        Needs Review
+                      </button>
+                      <button
+                        type="button"
+                        className={`conf-btn shaky ${currentConfidence === 'shaky' ? 'active' : ''}`}
+                        onClick={() => setGuideConfidence('shaky')}
+                      >
+                        Shaky
+                      </button>
+                      <button
+                        type="button"
+                        className={`conf-btn ready ${currentConfidence === 'ready' ? 'active' : ''}`}
+                        onClick={() => setGuideConfidence('ready')}
+                      >
+                        Interview Ready
+                      </button>
+                    </div>
+
                     <button
                       type="button"
                       className={`action-pill ${isBookmarked ? 'active-accent' : ''}`}

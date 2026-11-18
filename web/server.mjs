@@ -218,9 +218,29 @@ async function getModulesIndex() {
 async function readProgress() {
   try {
     const raw = await fs.readFile(PROGRESS_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return {
+      completed: Array.isArray(parsed.completed) ? parsed.completed : [],
+      bookmarks: Array.isArray(parsed.bookmarks) ? parsed.bookmarks : [],
+      notes: parsed.notes && typeof parsed.notes === 'object' ? parsed.notes : {},
+      confidence: parsed.confidence && typeof parsed.confidence === 'object' ? parsed.confidence : {},
+      flashcardRatings:
+        parsed.flashcardRatings && typeof parsed.flashcardRatings === 'object'
+          ? parsed.flashcardRatings
+          : {},
+      mockHistory: Array.isArray(parsed.mockHistory) ? parsed.mockHistory : [],
+      lastVisited: parsed.lastVisited ?? null,
+    };
   } catch {
-    return { completed: [], bookmarks: [], notes: {}, lastVisited: null };
+    return {
+      completed: [],
+      bookmarks: [],
+      notes: {},
+      confidence: {},
+      flashcardRatings: {},
+      mockHistory: [],
+      lastVisited: null,
+    };
   }
 }
 
@@ -351,6 +371,90 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+function extractFlashcardsFromGuide(moduleInfo, guide, rawContent) {
+  const lines = rawContent.split('\n');
+  const cards = [];
+  let inCode = false;
+  let currentQ = null;
+  let buffer = [];
+
+  const flush = () => {
+    if (!currentQ) return;
+    const answer = buffer
+      .join('\n')
+      .replace(/\.\/assets\/([A-Za-z0-9_.-]+\.svg)/g, (_, asset) =>
+        `/api/assets/${encodeURIComponent(moduleInfo.id)}/${encodeURIComponent(asset)}`
+      )
+      .trim();
+    if (answer.length >= 20 && answer.length <= 4500) {
+      cards.push({
+        id: `${moduleInfo.id}/${guide.file}::${cards.length + 1}`,
+        moduleId: moduleInfo.id,
+        moduleTitle: moduleInfo.shortTitle,
+        accent: moduleInfo.accent,
+        file: guide.file,
+        guideTitle: guide.title,
+        question: currentQ,
+        answer,
+      });
+    }
+    currentQ = null;
+    buffer = [];
+  };
+
+  const qHeadingRe = /^#{3,4}\s+(?:Q\d+[:.)]?\s*|Question\s+\d+[:.)]?\s*|\d+\.\s+)(.+\??)\s*$/i;
+  const qBoldRe = /^\*\*Q\d+[:.)]?\s*(.+?)\*\*\s*$/i;
+
+  for (const line of lines) {
+    if (line.trim().startsWith('```')) {
+      inCode = !inCode;
+      if (currentQ) buffer.push(line);
+      continue;
+    }
+    if (!inCode && line.startsWith('## ')) {
+      flush();
+      continue;
+    }
+    if (!inCode) {
+      const hm = line.match(qHeadingRe);
+      const bm = !hm ? line.match(qBoldRe) : null;
+      const qMatch = hm || bm;
+      if (qMatch) {
+        const qText = qMatch[1].replace(/[`*_]/g, '').trim();
+        if (qText.length > 8 && (qText.endsWith('?') || /^#{3,4}\s+Q\d+/i.test(line) || /^\*\*Q\d+/i.test(line))) {
+          flush();
+          currentQ = qText;
+          continue;
+        }
+      }
+    }
+    if (currentQ) {
+      buffer.push(line);
+    }
+  }
+  flush();
+  return cards;
+}
+
+app.get('/api/flashcards', async (req, res) => {
+  try {
+    const moduleFilter = String(req.query.module || '').trim();
+    const modules = await getModulesIndex();
+    const flashcards = [];
+    for (const mod of modules) {
+      if (moduleFilter && mod.id !== moduleFilter) continue;
+      for (const guide of mod.guides) {
+        const filePath = path.join(REPO_ROOT, mod.id, guide.file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        flashcards.push(...extractFlashcardsFromGuide(mod, guide, content));
+      }
+    }
+    res.json({ flashcards });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/progress', async (_req, res) => {
   const progress = await readProgress();
   res.json(progress);
@@ -364,6 +468,13 @@ app.post('/api/progress', async (req, res) => {
       completed: Array.isArray(body.completed) ? body.completed : current.completed,
       bookmarks: Array.isArray(body.bookmarks) ? body.bookmarks : current.bookmarks,
       notes: body.notes && typeof body.notes === 'object' ? body.notes : current.notes,
+      confidence:
+        body.confidence && typeof body.confidence === 'object' ? body.confidence : current.confidence,
+      flashcardRatings:
+        body.flashcardRatings && typeof body.flashcardRatings === 'object'
+          ? body.flashcardRatings
+          : current.flashcardRatings,
+      mockHistory: Array.isArray(body.mockHistory) ? body.mockHistory : current.mockHistory,
       lastVisited: body.lastVisited !== undefined ? body.lastVisited : current.lastVisited,
     };
     await writeProgress(next);
