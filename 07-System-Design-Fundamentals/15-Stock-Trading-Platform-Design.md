@@ -29,94 +29,61 @@
 
 ### The Business Problem
 
-Design a **stock trading platform** like Zerodha/Robinhood that enables:
-- Retail and institutional investors to place, modify, and cancel orders
-- Real-time matching of buy and sell orders
-- Live market data streaming
-- Portfolio tracking and trade history
-- Sub-10ms order execution latency
-- Handling 100,000+ orders per second during market open
+Design a **stock trading platform** (like Zerodha or Robinhood) supporting retail and institutional investors with:
+- **Order Lifecycle:** Place, modify, and cancel orders in real time
+- **Matching & Execution:** Price-time priority matching in `< 10ms` p99 at `100,000+` orders/sec during market open
+- **Market Data & Portfolio:** Live price feeds, order book depth, holdings, P&L, and regulatory audit trails
 
-**Why This Matters for Your Career:** As someone with Barclays investment banking background, you understand the complexity of financial markets. Trading platforms are THE critical infrastructure — a 100ms delay in order execution can cost millions in algorithmic trading. This design showcases your understanding of both business logic AND systems engineering.
+> [!NOTE]
+> With an investment banking background, emphasize both **financial domain correctness** (price-time priority, self-trade prevention, T+1 settlement) and **systems engineering** (single-threaded matching, zero-GC hot path).
+
+### Architecture Overview: Functional Pillars to NFR Targets
+
+```mermaid
+flowchart LR
+    A["Order Management"] --> F["Sub-10ms p99 Latency"]
+    B["Order Matching"] --> F
+    C["Real-Time Market Data"] --> G["100K+ Orders/sec"]
+    D["Portfolio & Margin"] --> H["99.99% Availability"]
+    E["Audit & Compliance"] --> I["Exactly-Once Execution"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class A,B,C,D,E blue
+    class F,G,H,I green
+```
 
 ### Functional Requirements
 
-1. **Order Management:**
-   - Place new orders (market, limit, stop-loss, stop-limit)
-   - Cancel orders (before execution)
-   - Modify orders (price, quantity)
-   - View order history and current orders
-   - Batch order placement for institutional clients
-
-2. **Order Matching:**
-   - Match buy and sell orders based on price-time priority
-   - Execute orders at best available price
-   - Partial fill handling (order not fully executed, remainder stays in book)
-   - Self-trade prevention (user's buy order shouldn't match their own sell order)
-   - IOC, FOK, GTC order duration types
-
-3. **Real-Time Market Data:**
-   - Live price feeds (bid/ask/last trade price)
-   - OHLCV candles (1-min, 5-min, hourly, daily)
-   - Order book depth (top 5-10 price levels)
-   - Trade stream (every transaction)
-   - Market statistics (52-week high/low, volume, etc.)
-
-4. **Portfolio Management:**
-   - View holdings (quantities, average cost, current value)
-   - View realized/unrealized P&L
-   - Cash balance tracking
-   - Margin utilization
-
-5. **Audit & Compliance:**
-   - Every order/trade logged with timestamp
-   - Trade audit trail for regulatory reporting
-   - User activity history
+- **Order Management:** Place (`MARKET`, `LIMIT`, `STOP_LOSS`, `STOP_LIMIT`), cancel, modify (price/quantity), view active/historical orders, and institutional batch placement.
+- **Order Matching:** Price-time priority (FIFO), best-price execution, partial fills, self-trade prevention, and duration types (`GTC`, `IOC`, `FOK`).
+- **Real-Time Market Data:** Live bid/ask/last price feeds, OHLCV candles (`1m`, `5m`, `1h`, `1d`), Level 2 depth (top 5–10 levels), trade stream, and 52-week stats.
+- **Portfolio Management:** Real-time holdings, average cost, realized/unrealized P&L, cash balance, and margin utilization.
+- **Audit & Compliance:** Timestamped order/trade logs and immutable regulatory audit trails.
 
 ### Non-Functional Requirements
 
 | Requirement | Target | Why It Matters |
 |---|---|---|
-| **Order Matching Latency** | < 10ms (p99) | Faster execution = competitive advantage, attract HFT clients |
-| **Order Throughput** | 100K orders/second | Market open generates massive order volume |
-| **Availability** | 99.99% (market hours) | 52 minutes/year downtime acceptable |
+| **Order Matching Latency** | `< 10ms` (p99) | Faster execution = competitive advantage, attract HFT clients |
+| **Order Throughput** | `100K` orders/second | Market open generates massive order volume |
+| **Availability** | `99.99%` (market hours) | ~52 minutes/year downtime acceptable |
 | **Data Consistency** | Exactly-once execution | No double-fills, no missing orders |
-| **Price Feed Latency** | < 1ms per tick | Lag in price data = stale orders |
-| **Scalability** | Linear with # symbols | Can handle 500+ symbols simultaneously |
+| **Price Feed Latency** | `< 1ms` per tick | Lag in price data = stale orders |
+| **Scalability** | Linear with # symbols | Handle `500+` symbols simultaneously |
 
 ### Back-of-Envelope Calculations
 
-**Order Volume During Market Open (9:30 AM - 4:00 PM):**
-```
-Market hours: 6.5 hours = 23,400 seconds
-Average orders per second: 100,000 (this is peak during opening)
-Total orders per day: ~1-2 billion
-Order book size per symbol: ~10,000 active orders on each side
+| Metric | Assumptions & Math | Daily / Cluster Estimate |
+|---|---|---|
+| **Order Volume** | `6.5 hrs` (`23,400s`), `100K` peak ord/s, `~10K` active orders/side/symbol | `1–2 billion` orders/day |
+| **Order Storage** | `2B orders × 500 bytes` (uncompressed) | `1 TB/day` · `365 TB/yr` (hot) · `2.5 PB/7yr` (S3 cold) |
+| **Market Data Volume** | `10,000` symbols × `1,000+` ticks/s × `100 bytes/tick` | `10M ticks/s` · `1 GB/s` · `86 TB/day` |
+| **Order Book Memory** | `10,000` symbols × `10,000` orders/side × `200 bytes` | `40 GB` minimum in-memory |
+| **Hot Cluster RAM** | `40 GB` order book + `50 GB` recent trades (`~1B/day`) + `1 GB/10s` tick buffer | `~100–150 GB` per matching engine cluster |
 
-Storage for 1 day:
-- 2 billion orders × 500 bytes (order record) = 1 TB (before compression)
-- Keep in hot storage: last 1 year = 365 TB minimum
-- Keep in cold storage: 7 years for regulatory = 2.5 PB (S3 archive)
-```
-
-**Market Data Volume:**
-```
-Stock symbols: 10,000 (assume major markets)
-Ticks per symbol per second: 1000+ (during high volatility)
-Total market data ticks: 10M ticks/second
-Each tick: ~100 bytes
-Data per second: 1 GB/second
-Per day: 86 TB/day
-```
-
-**Memory Footprint (Production Estimate):**
-```
-Order book (in-memory): 10,000 symbols × 10,000 orders per side = 200M orders
-Each order object: ~200 bytes = 40 GB minimum
-Cache for recent trades: ~1 billion trades/day in memory = 50 GB
-Price ticks cache: 10M/sec × 100 bytes = 1 GB per 10 seconds buffer
-Total hot memory: ~100-150 GB per matching engine cluster
-```
+> [!IMPORTANT]
+> **Capacity Key:** `86 TB/day` of market data ticks and `100–150 GB` of hot memory dictate that the matching engine must stay **in-memory** while market data streaming and persistence are **asynchronous**.
 
 ---
 
@@ -124,110 +91,72 @@ Total hot memory: ~100-150 GB per matching engine cluster
 
 ### System Architecture Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          CLIENT LAYER                               │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │  Web Browser     │  │  Mobile App      │  │  Algo Trader     │  │
-│  │  (REST + WS)     │  │  (REST + WS)     │  │  (FIX Protocol)  │  │
-│  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘  │
-│           │                     │                     │             │
-└───────────┼─────────────────────┼─────────────────────┼─────────────┘
-            │                     │                     │
-    ┌───────▼─────────────────────▼─────────────────────▼──────────┐
-    │            API GATEWAY & LOAD BALANCER                        │
-    │  (Nginx/F5, SSL termination, rate limiting, auth)            │
-    └─────────────────────────────┬──────────────────────────────────┘
-                                  │
-    ┌─────────────────────────────▼────────────────────────────────┐
-    │              HOT PATH (Synchronous)                           │
-    │  ┌──────────────────┐  ┌──────────────────────────────────┐  │
-    │  │  ORDER SERVICE   │  │  RISK CHECK SERVICE              │  │
-    │  │  - Parse order   │  │  - Balance check                 │  │
-    │  │  - Validate      │  │  - Position limits               │  │
-    │  │  - Route to      │──│  - Price bands                   │  │
-    │  │    matching      │  │  - Circuit breakers              │  │
-    │  └────────┬─────────┘  │  - Duplicate detection           │  │
-    │           │             └──────────────────────────────────┘  │
-    │  ┌────────▼──────────────────────────────────────────────┐   │
-    │  │        MATCHING ENGINE (Single-Threaded)             │   │
-    │  │  ┌──────────────────────────────────────────────────┐ │   │
-    │  │  │  TreeMap<Price, LinkedList<Order>>              │ │   │
-    │  │  │  - Buy side (bids): Price DESC                  │ │   │
-    │  │  │  - Sell side (asks): Price ASC                  │ │   │
-    │  │  │  - Price-Time Priority matching                 │ │   │
-    │  │  │  - Partial fills, self-trade prevention         │ │   │
-    │  │  └──────────────────────────────────────────────────┘ │   │
-    │  │  Response time: < 10ms (p99)                           │   │
-    │  └────────┬──────────────────────────────────────────────┘   │
-    │           │                                                   │
-    └───────────┼───────────────────────────────────────────────────┘
-                │
-    ┌───────────▼──────────────────────────────────────────────────┐
-    │              COLD PATH (Asynchronous)                        │
-    │  ┌──────────────────────────────────────────────────────┐   │
-    │  │  KAFKA CLUSTER                                       │   │
-    │  │  Topics:                                             │   │
-    │  │  - trades (matched orders)                           │   │
-    │  │  - order-events (NEW, FILLED, CANCELLED)            │   │
-    │  │  - market-data-ticks                                │   │
-    │  └────┬──────────────────┬──────────────────┬───────────┘   │
-    │       │                  │                  │                │
-    │  ┌────▼────┐     ┌───────▼─────┐   ┌──────▼──────┐         │
-    │  │SETTLEMENT│    │MARKET DATA   │   │PORTFOLIO    │         │
-    │  │SERVICE   │    │SERVICE       │   │SERVICE      │         │
-    │  │(T+1 batch)    │(OHLCV,       │   │(Positions,  │         │
-    │  │              │ AGGREGATION)  │   │ P&L)        │         │
-    │  └────┬────┘     └───────┬─────┘   └──────┬──────┘         │
-    │       │                  │                  │                │
-    └───────┼──────────────────┼──────────────────┼────────────────┘
-            │                  │                  │
-    ┌───────▼──────────────────▼──────────────────▼─────────────┐
-    │           PERSISTENCE LAYER                              │
-    │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
-    │  │ PostgreSQL   │  │ TimescaleDB  │  │ S3 / Archive  │  │
-    │  │ (Hot: Trades,│  │ (Time-series │  │ (7-year audit │  │
-    │  │  Positions)  │  │  data, OHLCV)│  │  trail)       │  │
-    │  └──────────────┘  └──────────────┘  └───────────────┘  │
-    │                                                           │
-    │  Write-Ahead Log (WAL):                                 │
-    │  - Matching engine state snapshots every 1 second       │
-    │  - Recovery: replay WAL on standby after primary fails  │
-    └───────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    C1["Web / Mobile (REST + WS)"] --> GW["API Gateway & Load Balancer (SSL, Auth, Rate Limit)"]
+    C2["Algo Trader (FIX Protocol)"] --> GW
 
-    ┌───────────────────────────────────────────────────────────┐
-    │         EXTERNAL DATA SOURCES                            │
-    │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
-    │  │ Stock Exchange│  │ Market Data  │  │ Regulatory   │  │
-    │  │ Feed (FIX)    │  │ Feed (Nasdaq)│  │ Data (SEC)   │  │
-    │  └──────────────┘  └──────────────┘  └───────────────┘  │
-    └───────────────────────────────────────────────────────────┘
+    GW --> OS["Order Service (Parse, Validate, Route)"]
+    OS <--> RS["Risk Check Service (Balance, Limits, Bands)"]
+    OS --> ME["Matching Engine (Single-Threaded, &lt; 10ms p99)"]
+
+    ME -->|"Async Events"| K["Kafka Cluster (trades, order-events, market-data-ticks)"]
+    ME -.->|"1s Snapshots"| WAL["Write-Ahead Log (WAL)"]
+
+    K --> SS["Settlement Service (T+1 Batch)"]
+    K --> MDS["Market Data Service (OHLCV, Aggregation)"]
+    K --> PS["Portfolio Service (Positions, P&amp;L)"]
+
+    SS --> PG["PostgreSQL (Hot: Trades, Positions)"]
+    PS --> PG
+    MDS --> TS["TimescaleDB (Time-Series OHLCV)"]
+    SS --> S3["S3 / Archive (7-Year Audit Trail)"]
+
+    EXT["External Feeds (Exchange FIX, Nasdaq, SEC)"] --> MDS
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    class C1,C2,GW,EXT blue
+    class OS,RS,ME green
+    class K,SS,MDS,PS amber
+    class PG,TS,S3,WAL purple
+```
+
+### Hot Path vs Cold Path Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as API Gateway
+    participant OrderSvc as Order Service
+    participant RiskSvc as Risk Service
+    participant Engine as Matching Engine
+    participant Kafka
+    participant Cold as Settlement / Market Data / Portfolio
+
+    Client->>Gateway: Place Order {Auth Token}
+    Gateway->>OrderSvc: Forward Validated Request
+    OrderSvc->>RiskSvc: Pre-Trade Risk Checks (&lt; 1ms)
+    RiskSvc-->>OrderSvc: APPROVED
+    OrderSvc->>Engine: Route by Symbol (Single-Threaded)
+    Engine-->>Client: Execution Confirmation (&lt; 10ms p99)
+    Engine-)Kafka: Publish TradeEvent &amp; OrderEvent (Async)
+    Kafka-)Cold: Consume for T+1 Settlement, OHLCV, P&amp;L
 ```
 
 ### Why This Architecture?
 
-**1. The Matching Engine is the HEART**
-- Everything else is supporting infrastructure
-- It must be blazingly fast (< 10ms)
-- Single-threaded to avoid locks (counter-intuitive but faster)
-- All other services are non-blocking and async
+| Design Choice | Rationale |
+|---|---|
+| **Matching Engine as the Heart** | Single-threaded per symbol eliminates lock contention and keeps `< 10ms` p99 latency; all other services are non-blocking. |
+| **Hot Path vs Cold Path** | Hot path (Order → Risk → Match) is synchronous; Cold path (Settlement, Audit, Portfolio) runs asynchronously via Kafka because settlement is T+1 anyway. |
+| **Event-Driven with Kafka** | Every trade emits a `TradeEvent` to multiple independent consumers with at-least-once delivery and idempotent processing. |
+| **Partitioning by Symbol** | Each symbol (`RELIANCE`, `TCS`, `INFY`) runs on its own matching engine instance—eliminating cross-symbol locks and scaling horizontally to `100K+` ord/s. |
 
-**2. Hot Path vs Cold Path Separation**
-- **Hot path:** Order placement → Risk checks → Matching (synchronous, must be fast)
-- **Cold path:** Settlement, audit logging, portfolio updates (async via Kafka, can be slow)
-- Client doesn't wait for settlement (T+1 anyway), only waits for order confirmation
-
-**3. Event-Driven with Kafka**
-- Every trade generates events: `TradeEvent` published to Kafka
-- Multiple consumers: settlement service, market data service, portfolio service, audit logging
-- Kafka guarantees: at-least-once delivery (with idempotent processing)
-- Scale independently: if settlement is slow, it doesn't block order matching
-
-**4. Partitioning by Symbol**
-- Each symbol (RELIANCE, TCS, INFY) has its own matching engine instance
-- Eliminates cross-symbol locks
-- Scale horizontally: add more servers for more symbols
-- Single-threaded per symbol is the key to achieving 100K orders/second aggregate throughput
+> [!TIP]
+> **Interview Framing:** Always draw the **Hot Path vs Cold Path** boundary explicitly. Clients wait for order confirmation (`< 10ms`), never for T+1 settlement or database writes.
 
 ---
 
@@ -516,106 +445,95 @@ public class GTCOrder implements Order {
 }
 ```
 
+### Order Types & Duration Summary
+
+| Type / Duration | Trigger / Behavior | In Order Book Initially? |
+|---|---|---|
+| `MARKET` | Executes immediately at best available price | No (matches immediately) |
+| `LIMIT` | Executes only at specified price or better | Yes (if unmatched remainder) |
+| `STOP_LOSS` | Triggers a `MARKET` order when price hits `stopPrice` | No (monitored by Market Data) |
+| `STOP_LIMIT` | Triggers a `LIMIT` order at `limitPrice` when `stopPrice` hits | No (until triggered) |
+| `ICEBERG` | Hides total size; reveals only visible batch at a time | Only visible portion |
+| `GTC` | Good Till Cancelled (persists until cancelled/EOD) | Yes |
+| `IOC` | Immediate or Cancel (fill what's available, cancel rest) | Never rests in book |
+| `FOK` | Fill or Kill (all-or-nothing; cancel entire order if partial) | Never rests in book |
+
+> [!NOTE]
+> **Stop-Loss vs Stop-Limit:** `STOP_LOSS` guarantees execution (as a market order) but not price; `STOP_LIMIT` guarantees price (`limitPrice`) but may go unfilled during a rapid crash.
+
 ### Order State Machine
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ORDER STATE MACHINE                       │
-└─────────────────────────────────────────────────────────────┘
-
-                        ┌──────┐
-                        │ NEW  │ (Just created)
-                        └───┬──┘
-                            │
-                            ▼
-                    ┌──────────────────┐
-                    │ VALIDATED        │ (Passed pre-trade checks)
-                    └───┬──────────────┘
-                        │
-                        ▼
-                    ┌──────────────────┐
-                    │ ACCEPTED         │ (In matching engine)
-                    └───┬──────────────┘
-                        │
-                ┌───────┴───────┬──────────────┐
-                │               │              │
-                ▼               ▼              ▼
-            ┌────────┐   ┌─────────────┐  ┌──────────┐
-            │ FILLED │   │PARTIAL_FILL │  │CANCELLED │
-            │(All 100)   │(50 of 100)  │  │(by user) │
-            └────────┘   └──────┬──────┘  └──────────┘
-                                │
-                                │ (User cancels the remaining 50)
-                                ▼
-                            ┌──────────┐
-                            │CANCELLED │
-                            └──────────┘
-
-             Also possible:
-             NEW → REJECTED (failed validation)
-             ANY STATE → CANCELLED (system error, circuit breaker)
+```mermaid
+stateDiagram-v2
+    [*] --> NEW: Order Created
+    NEW --> VALIDATED: Passed Pre-Trade Checks
+    NEW --> REJECTED: Failed Validation
+    VALIDATED --> ACCEPTED: Routed to Matching Engine
+    ACCEPTED --> FILLED: 100% Matched
+    ACCEPTED --> PARTIAL_FILL: Partially Matched
+    ACCEPTED --> CANCELLED: User / System Cancel
+    PARTIAL_FILL --> FILLED: Remainder Matched
+    PARTIAL_FILL --> CANCELLED: Cancel Remaining Qty
+    REJECTED --> [*]
+    FILLED --> [*]
+    CANCELLED --> [*]
 ```
 
 ---
 
 ## The Order Matching Engine
 
-This is the CORE of the entire system. It must be:
-1. **Fast:** < 10ms to match order against entire order book
-2. **Correct:** Price-time priority strictly enforced
-3. **Reliable:** No double-fills, no lost orders
-4. **Stateful:** Maintains order book state
+This is the **core** of the platform. It must be:
+- **Fast:** `< 10ms` to match an order against the entire book (`< 1ms` typical)
+- **Correct:** Price-time priority (FIFO) strictly enforced
+- **Reliable:** Exactly-once execution (no double-fills, no lost orders)
+- **Stateful:** Maintains the live in-memory order book per symbol
+
+![Order Book & Matching Engine Animation](./assets/15-order-book-matching-engine.svg)
 
 ### Matching Algorithm: Price-Time Priority (FIFO)
 
-The matching algorithm is surprisingly simple:
+```mermaid
+flowchart TD
+    IN["Incoming Order (BUY or SELL)"] --> SIDE{"Order Side?"}
+    SIDE -->|"BUY"| ASK["Inspect Best (Lowest) ASK Price"]
+    SIDE -->|"SELL"| BID["Inspect Best (Highest) BID Price"]
 
-1. **New BUY order arrives:**
-   - Start with best (lowest) ASK price
-   - If buy price >= ask price → MATCH
-   - Fill as much as possible at this price level
-   - If buy quantity remaining, move to next ask price level
-   - If buy price < best ask → Add to BID side (no match)
+    ASK --> MATCH_B{"Buy Price &gt;= Ask Price?"}
+    BID --> MATCH_S{"Sell Price &lt;= Bid Price?"}
 
-2. **New SELL order arrives:**
-   - Start with best (highest) BID price
-   - If sell price <= bid price → MATCH
-   - Fill as much as possible at this price level
-   - If sell quantity remaining, move to next bid price level
-   - If sell price > best bid → Add to ASK side (no match)
+    MATCH_B -->|"Yes"| STP["Self-Trade Check (userId != counterUserId)"]
+    MATCH_S -->|"Yes"| STP
+    MATCH_B -->|"No"| ADD_B["Add Remaining Qty to BID Book"]
+    MATCH_S -->|"No"| ADD_S["Add Remaining Qty to ASK Book"]
 
-### Order Book Data Structure Visualization
+    STP --> FILL["Fill min(incomingQty, restingQty) FIFO"]
+    FILL --> REM{"Remaining Qty &gt; 0?"}
+    REM -->|"Yes"| SIDE
+    REM -->|"No"| DONE["Emit Trade Events to Kafka"]
 
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    class IN,ASK,BID blue
+    class SIDE,MATCH_B,MATCH_S,REM amber
+    class STP,FILL,DONE green
+    class ADD_B,ADD_S purple
 ```
-Current market price for RELIANCE: 2500.45
 
-MATCHING ENGINE ORDER BOOK:
-═════════════════════════════════════════════════════════════
+### Order Book Snapshot (RELIANCE @ Last Trade `2500.45`, Spread `0.35`)
 
-ASK SIDE (Sellers, sorted ASCENDING by price):
-Price      │ Quantity │ Trader   │ Order ID       │ Timestamp
-───────────┼──────────┼──────────┼────────────────┼──────────
- 2500.80   │   300 sh │ Alice    │ O-101          │ 10:30:45.123
- 2500.90   │   200 sh │ Bob      │ O-102          │ 10:30:46.456
- 2501.00   │   500 sh │ Charlie  │ O-103          │ 10:30:47.789
- 2501.50   │   100 sh │ Diana    │ O-104          │ 10:31:12.234
-
-SPREAD = 2500.80 - 2500.45 = 0.35 (tight spread = liquid market)
-
-───────────┼──────────┼──────────┼────────────────┼──────────
- 2500.45   │ LAST TRADE PRICE
-───────────┼──────────┼──────────┼────────────────┼──────────
-
-BID SIDE (Buyers, sorted DESCENDING by price):
-Price      │ Quantity │ Trader   │ Order ID       │ Timestamp
-───────────┼──────────┼──────────┼────────────────┼──────────
- 2500.45   │   100 sh │ Eve      │ O-105          │ 10:31:13.567
- 2500.30   │   400 sh │ Frank    │ O-106          │ 10:31:14.890
- 2500.10   │   200 sh │ Grace    │ O-107          │ 10:31:15.234
- 2499.90   │   600 sh │ Henry    │ O-108          │ 10:31:16.567
-
-═════════════════════════════════════════════════════════════
-```
+| Side | Price | Quantity | Trader | Order ID | Timestamp |
+|---|---|---|---|---|---|
+| **ASK** (ASC) | `2500.80` | `300 sh` | Alice | `O-101` | `10:30:45.123` |
+| **ASK** (ASC) | `2500.90` | `200 sh` | Bob | `O-102` | `10:30:46.456` |
+| **ASK** (ASC) | `2501.00` | `500 sh` | Charlie | `O-103` | `10:30:47.789` |
+| **ASK** (ASC) | `2501.50` | `100 sh` | Diana | `O-104` | `10:31:12.234` |
+| **BID** (DESC) | `2500.45` | `100 sh` | Eve | `O-105` | `10:31:13.567` |
+| **BID** (DESC) | `2500.30` | `400 sh` | Frank | `O-106` | `10:31:14.890` |
+| **BID** (DESC) | `2500.10` | `200 sh` | Grace | `O-107` | `10:31:15.234` |
+| **BID** (DESC) | `2499.90` | `600 sh` | Henry | `O-108` | `10:31:16.567` |
 
 ### Complete Java Implementation
 
@@ -983,119 +901,93 @@ public class OrderBook {
 
 ### Why TreeMap + LinkedList?
 
-**TreeMap Benefits:**
-- O(log n) to find a price level
-- Automatically sorted (best bid/ask is always at firstKey())
-- Efficient iteration through price levels
-- Memory efficient (no full sorting needed)
-
-**LinkedList for same-price FIFO:**
-- O(1) insertion at end
-- O(1) removal from front
-- Enforces arrival time ordering within a price level
-
-**Time Complexity Analysis:**
-```
-Matching 100 orders:
-- For each incoming order: O(log n) to find best price level
-- Match against at most K price levels: O(K * M) where M = orders per level
-- Typical: K=5, M=10 → O(5*10) = O(50) very fast
-- In worst case (thin book): K=100, M=1 → O(100) still fast
-
-Expected latency: < 1ms for typical scenarios
-```
+| Structure | Role | Complexity & Benefit |
+|---|---|---|
+| `TreeMap<BigDecimal, LinkedList<Order>>` | Sorted price levels | `O(log n)` price lookup, `firstKey()` is always best bid/ask |
+| `LinkedList<Order>` | FIFO queue per price level | `O(1)` append at tail, `O(1)` match/remove at head |
+| **Typical Match** | `K=5` levels, `M=10` orders | `O(log n + K × M)` → `~50` ops, `< 1ms` (even thin book `K=100, M=1` is fast) |
 
 ### Single-Threaded Matching: Counter-Intuitive Performance
 
+```mermaid
+flowchart LR
+    subgraph MT["Multi-Threaded (Lock Contention)"]
+        T1["Thread 1: Buy RELIANCE (1ms)"] --> L["Acquire bidSide.lock"]
+        T2["Thread 2: Wait + Context Switch (5ms)"] --> L
+        L --> R1["333 orders/ms"]
+    end
+
+    subgraph ST["Single-Threaded Per Symbol (Lock-Free)"]
+        E1["RELIANCE Engine (Core 1): 0.5ms"] --> R2["2,500 orders/ms (7x Faster)"]
+        E2["TCS Engine (Core 2): 0.3ms"] --> R3["Parallel Across Symbols = 100K ord/ms"]
+    end
+
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class T1,T2,R1 red
+    class L amber
+    class E1,E2,R2,R3 green
 ```
-MYTH: Multi-threaded matching engine would be faster (parallel processing)
 
-REALITY: Single-threaded is MUCH faster for order matching. Here's why:
-
-1. LOCKING OVERHEAD (Multi-threaded):
-   ┌─────────────────────────────────────┐
-   │ Thread 1: Buy 100 RELIANCE @ 2500   │
-   │ Acquires: bidSide.lock              │ ← LOCK CONTENTION
-   │ Matches against askSide             │
-   │ Releases: bidSide.lock              │
-   │ Total time: 1ms (includes waiting)  │
-   └─────────────────────────────────────┘
-
-   ┌─────────────────────────────────────┐
-   │ Thread 2: Sell 50 TCS @ 1800        │
-   │ Waits for bidSide.lock              │ ← WAITING FOR LOCK
-   │ Context switch, cache miss          │
-   │ Finally acquires lock               │
-   │ Total time: 5ms (1ms wait + 1ms actual + 3ms overhead) │
-   └─────────────────────────────────────┘
-
-   Aggregate: 2 orders in 6ms = 333 orders/ms
-
-2. NO LOCKING (Single-threaded):
-   ┌─────────────────────────────────────┐
-   │ Thread 1: Buy 100 RELIANCE @ 2500   │
-   │ Direct access to bidSide            │ ← NO LOCK
-   │ Matches against askSide             │
-   │ Time: 0.5ms                         │
-   └─────────────────────────────────────┘
-
-   ┌─────────────────────────────────────┐
-   │ Thread 1: Sell 50 TCS @ 1800        │
-   │ Direct access to bidSide            │ ← NO WAIT
-   │ Matches against askSide             │
-   │ Time: 0.3ms                         │
-   └─────────────────────────────────────┘
-
-   Aggregate: 2 orders in 0.8ms = 2,500 orders/ms ← 7X FASTER!
-
-THE KEY INSIGHT:
-- Order matching is SEQUENTIAL by nature (one trade per symbol at a time)
-- Matching BUY order A with ASK order B creates a dependency
-- You CANNOT parallelize BUY A and BUY C (they both affect same order book)
-- Locks add overhead (acquire, release, context switch)
-- Single-threaded eliminates locks AND cache misses
-
-SOLUTION: Partition by symbol
-- RELIANCE matching engine: single-threaded, handles all RELIANCE orders
-- TCS matching engine: single-threaded, handles all TCS orders
-- These can run in PARALLEL (different threads) because they don't share data
-- Aggregate throughput: 2,500 orders/ms per symbol × 40 symbols = 100K orders/ms!
-```
+> [!IMPORTANT]
+> **Key Insight:** Order matching for a single symbol is inherently sequential (two buys contend for the same best ask). Eliminating locks avoids context switches and CPU cache misses; partitioning **by symbol** achieves `2,500 orders/ms × 40 symbols = 100K orders/ms` aggregate throughput.
 
 ---
 
 ## Order Book Data Structure
 
-### Depth & Levels Visualization
+### Depth & Levels Overview
 
+| Level | Audience | Contents | Footprint / Scale |
+|---|---|---|---|
+| **Level 1** | 1-click retail trading | Best Ask (`2500.50 × 300`), Best Bid (`2500.35 × 500`), Spread (`0.15`) | Single top-of-book tick |
+| **Level 2** | Active / day traders | Top 5 price levels on both Bid & Ask sides with aggregated quantities | `5–10` levels per side |
+| **Level 3** | Matching Engine (internal) | Every individual resting order in FIFO order (`~10K` asks + `~10K` bids) | `~40 MB` per active book |
+
+**Level 2 Top-5 Book Example:**
+
+| Ask Price | Ask Qty | Bid Price | Bid Qty |
+|---|---|---|---|
+| `2500.50` | `300` | `2500.35` | `500` |
+| `2500.60` | `200` | `2500.25` | `400` |
+| `2500.70` | `150` | `2500.15` | `300` |
+| `2500.80` | `100` | `2500.05` | `250` |
+| `2500.90` | `250` | `2499.95` | `600` |
+
+### Order Book Snapshot & Object Pool Model
+
+```mermaid
+classDiagram
+    class OrderBookSnapshot {
+        -String symbol
+        -long timestamp
+        -List~BookLevel~ bids
+        -List~BookLevel~ asks
+        +getBestBid() BigDecimal
+        +getBestAsk() BigDecimal
+        +getSpread() BigDecimal
+        +getSpreadBps() Double
+        +getMidPrice() BigDecimal
+        +getImbalanceRatio() double
+        +getLiquidityAtPrice(BigDecimal, OrderSide) int
+    }
+    class BookLevel {
+        +BigDecimal price
+        +int totalQuantity
+        +int numberOfOrders
+    }
+    class OrderPool {
+        -Queue~Order~ pool
+        -int poolSize
+        +acquire() Order
+        +release(Order) void
+    }
+    OrderBookSnapshot "1" *-- "many" BookLevel : aggregates
 ```
-LEVEL 1 (Best Bid/Ask) - What users see in "1-click trading"
-┌──────────────────────────────────────────┐
-│ ASK (Sell side)                          │
-│ Best Ask: 2500.50 (300 shares)          │
-├──────────────────────────────────────────┤
-│ SPREAD: 0.15                             │
-├──────────────────────────────────────────┤
-│ BID (Buy side)                           │
-│ Best Bid: 2500.35 (500 shares)          │
-└──────────────────────────────────────────┘
 
-LEVEL 2 (Top 5 Levels) - What serious traders see
-ASKS                      │ BIDS
-Price      Qty            │ Price      Qty
-───────────────────────────────────────────
-2500.50    300            │ 2500.35    500
-2500.60    200            │ 2500.25    400
-2500.70    150            │ 2500.15    300
-2500.80    100            │ 2500.05    250
-2500.90    250            │ 2499.95    600
-
-LEVEL 3 (Full Order Book) - All outstanding orders
-This is what the matching engine maintains internally
-Total asks: ~10,000 orders
-Total bids: ~10,000 orders
-Memory: ~40 MB (for active orders at any time)
-```
+> [!TIP]
+> **Memory Optimization:** Using `OrderPool` pre-allocates and recycles `Order` objects (`acquire()` / `release()`), preventing JVM garbage collection pauses from spiking matching latency.
 
 ### Java: Order Book Interface & Analytics
 
@@ -1251,41 +1143,40 @@ public class OrderPool {
 
 ### Real-Time Price Feed Pipeline
 
-```
-MARKET DATA PIPELINE (Low-latency streaming):
+```mermaid
+flowchart LR
+    ME["Matching Engine (1 Trade Event per Match)"] -->|"Trade Event (symbol, qty, price, ts)"| MDS["Market Data Service (OHLCV, L1/L2/L3 Snapshot)"]
+    MDS -->|"Market Data Tick (bid, ask, mid, vol)"| K["Kafka: market-data-ticks (10 partitions, 100K+ ticks/s, 1h retention)"]
+    K --> WS["WebSocket Clients (Real-Time Updates)"]
+    K --> CS["Chart Service (OHLCV Candles)"]
+    K --> MP["Mobile Push Notifications (Price Alerts)"]
 
-┌─────────────────────────────────────────────────────────┐
-│ Matching Engine (generates trades)                      │
-│ Every matched order = 1 trade event                     │
-└────────────────┬────────────────────────────────────────┘
-                 │ Trade Event (symbol, qty, price, timestamp)
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ Market Data Service (aggregates trades into ticks)     │
-│ - Computes OHLCV (Open, High, Low, Close, Volume)     │
-│ - Generates market data ticks                           │
-│ - Updates level 1/2/3 order book snapshot              │
-└────────────────┬────────────────────────────────────────┘
-                 │ Market Data Tick (bid, ask, mid, volume)
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ Kafka Topic: market-data-ticks (topic with 10 partitions)│
-│ - 100K+ ticks/second during market open                │
-│ - Partitioned by symbol (RELIANCE → partition 1, etc.) │
-│ - Durable: keeps data for 1 hour                       │
-└────────────────┬────────────────────────────────────────┘
-                 │
-          ┌──────┴──────┬────────────────────┐
-          │             │                    │
-          ▼             ▼                    ▼
-    ┌─────────┐  ┌──────────┐      ┌──────────────┐
-    │ WebSocket│  │ Chart    │      │ Mobile App  │
-    │ Clients  │  │ Service  │      │ Push Notif  │
-    │ (Real-   │  │ (OHLCV)  │      │ (Alerts)    │
-    │ time     │  │          │      │             │
-    │ updates) │  │          │      │             │
-    └─────────┘  └──────────┘      └──────────────┘
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class ME green
+    class MDS,K amber
+    class WS,CS,MP blue
 ```
+
+### WebSocket Subscription & Broadcast Flow
+
+```mermaid
+sequenceDiagram
+    participant Client as WebSocket Client
+    participant Handler as MarketDataWebSocketHandler
+    participant Book as OrderBook
+    participant Engine as Matching Engine
+
+    Client->>Handler: handleSubscribe(clientId, "RELIANCE")
+    Handler->>Handler: Add session to symbolSubscriptions["RELIANCE"]
+    Engine->>Handler: broadcastTrade("RELIANCE", price, qty, ts)
+    Handler->>Book: getSnapshot() (bestBid, bestAsk, spread)
+    Handler--)Client: sendMessageAsync(PRICE_UPDATE JSON)
+```
+
+> [!NOTE]
+> **Retention & Ordering:** Partitioning `market-data-ticks` by `symbol` preserves strict per-symbol tick ordering while allowing `100K+` ticks/sec horizontal scaling. `OHLCVService` keeps the last `1,440` 1-minute candles (`24 hours`) in memory per symbol.
 
 ### OHLCV Candle Aggregation
 
@@ -1473,52 +1364,42 @@ public class MarketDataWebSocketHandler {
 
 ## Risk Management & Pre-Trade Checks
 
-### Pre-Trade Risk Check Pipeline
+### Pre-Trade Risk Check Pipeline (`< 1ms` Budget)
 
-Risk checks MUST happen BEFORE the order reaches the matching engine. If an order fails risk checks, it's rejected immediately without consuming matching engine capacity.
+```mermaid
+flowchart TD
+    O["User Places Order"] --> C1["1. Duplicate Detection (1s window)"]
+    C1 --> C2["2. Balance Check (10% buy buffer / share ownership)"]
+    C2 --> C3["3. Position Limit Check (e.g., max 100K shares)"]
+    C3 --> C4["4. Price Band / Circuit Breaker (20% daily band)"]
+    C4 --> C5["5. Fat-Finger Check (&gt; 10x ADV or &gt; 50% price diff)"]
+    C5 --> C6["6. Margin Requirement (150% for short selling)"]
 
+    C6 -->|"PASS ALL"| ME["Send to Matching Engine"]
+    C1 & C2 & C3 & C4 & C6 -->|"FAIL"| REJ["REJECTED (Return Error)"]
+    C5 -->|"SUSPICIOUS"| REV["REVIEW_REQUIRED"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class O blue
+    class C1,C2,C3,C4,C5,C6 amber
+    class ME green
+    class REJ,REV red
 ```
-USER PLACES ORDER
-       │
-       ▼
-┌─────────────────────────────────────────────────┐
-│ RISK CHECK PIPELINE (Must complete in < 1ms)   │
-├─────────────────────────────────────────────────┤
-│ 1. DUPLICATE ORDER DETECTION                    │
-│    - Check if user just placed same order       │
-│    - Prevent accidental duplicate orders        │
-│    - Window: last 1 second                      │
-├─────────────────────────────────────────────────┤
-│ 2. BALANCE CHECK                                │
-│    - Buy order: user has sufficient cash?       │
-│    - Sell order: user owns the shares?          │
-│    - Account must have margin buffer            │
-├─────────────────────────────────────────────────┤
-│ 3. POSITION LIMIT CHECK                         │
-│    - User cannot buy more than max position     │
-│    - Example: max 100,000 shares of RELIANCE    │
-│    - Prevent concentration risk                 │
-├─────────────────────────────────────────────────┤
-│ 4. PRICE BAND CHECK (Circuit Breaker)           │
-│    - Stock can't move > 20% in a day            │
-│    - Prevents flash crashes                     │
-│    - Trading halt if violated                   │
-├─────────────────────────────────────────────────┤
-│ 5. FAT-FINGER CHECK (Sanity Checks)             │
-│    - Price too high/low for this stock?         │
-│    - Order size too large?                      │
-│    - Example: Can't buy 1M shares when average  │
-│      daily volume is 10K                        │
-├─────────────────────────────────────────────────┤
-│ 6. MARGIN REQUIREMENT CHECK                     │
-│    - Short selling requires 150% margin         │
-│    - Does user have enough margin?              │
-└─────────────────────────────────────────────────┘
-       │
-       ├─ PASS ALL CHECKS ──▶ Send to Matching Engine
-       │
-       └─ FAIL ANY CHECK ──▶ REJECT ORDER (return error to user)
-```
+
+| Check | Rule / Threshold | Failure Outcome |
+|---|---|---|
+| **1. Duplicate Order** | Same user, symbol, side, qty, price (`&lt; 0.01`) within `1s` | `REJECTED` |
+| **2. Balance Check** | Buy: `price × qty × 1.1` cash; Sell: sufficient shares | `REJECTED` |
+| **3. Position Limit** | `currentPosition + qty <= maxPosition` (default `100,000`) | `REJECTED` |
+| **4. Price Band** | Outside `[0.80 × 52wLow, 1.20 × 52wHigh]` (`20%` circuit breaker) | `REJECTED` |
+| **5. Fat-Finger** | `qty > 10 × ADV` or `> 50%` away from last trade price | `REVIEW_REQUIRED` |
+| **6. Short Margin** | Short sale (`qty > currentPosition`) needs `150%` margin | `REJECTED` |
+
+> [!WARNING]
+> **Gatekeeper Rule:** Risk checks MUST execute **before** the matching engine. Rejecting invalid or fat-finger orders early protects single-threaded matching capacity from wasted work.
 
 ### Java: Risk Check Service
 
@@ -1785,39 +1666,35 @@ public class RiskCheckService {
 
 ## Low-Latency Architecture
 
-### The Latency Problem
+### The Latency Problem & `10ms (p99)` Budget
 
-```
-TRADING: Every 1ms of latency = Lost opportunities
+Every `1ms` of latency is lost opportunity (e.g., on a `0.2%` move from `2500` to `2505`, a `100ms` firm sees `1,000+` trades pass and fills at `2504.50`, while a `1ms` firm captures the full move).
 
-Example: Stock goes from 2500 to 2505 (0.2% move)
-A hedge fund with 100ms latency:
-- By the time they see the price, 1000+ other trades happened
-- Their 0.2% profit opportunity disappears
-- They might be forced to trade at 2504.50 instead of 2500
+```mermaid
+flowchart LR
+    A["API → Order Service (0.5ms)"] --> B["Risk Checks (1.0ms)"]
+    B --> C["Matching Engine p99 (0.5ms)"]
+    C --> D["Response to Client (0.5ms)"]
+    D --> E["Spike Buffer (7.5ms)"]
+    E --> F["Total p99 Budget: 10.0ms"]
 
-A firm with 1ms latency:
-- Sees the opportunity first
-- Executes before market adjusts
-- Captures the full 0.2% profit
-
-Latency budget for order-to-execution: 10ms (p99)
-This includes:
-- API → Order Service: 0.5ms
-- Risk checks: 1ms
-- Matching engine: 0.5ms (p99)
-- Response back to client: 0.5ms
-- Buffer: 7.5ms (for unexpected spikes)
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class A,B,C,D blue
+    class E amber
+    class F green
 ```
 
 ### Sub-10ms Latency Techniques
 
 #### 1. Single-Threaded Matching (Already Covered)
-- No locks = no contention
-- No context switches = cache stays warm
-- Throughput: 100K orders/second per symbol
+- No locks = no contention; no context switches = warm CPU cache; `100K` orders/sec per symbol.
 
-#### 2. Object Pooling (Pre-allocated Memory)
+#### 2. Object Pooling & Memory-Mapped Order Log
+
+> [!TIP]
+> **Eliminating GC & Disk Syscalls:** Pre-allocating objects (`OrderObjectPool`) avoids `10–100ms` GC pauses, and `MappedByteBuffer` (`MemoryMappedOrderLog`) keeps WAL writes in memory while the OS flushes asynchronously.
 
 ```java
 /**
@@ -2068,38 +1945,27 @@ java -server \
 
 #### 5. Kernel Bypass Networking (DPDK/Solarflare)
 
-For truly extreme latency requirements (< 1ms), some firms use:
+For extreme `< 1ms` HFT requirements, kernel bypass eliminates the OS TCP/IP context switch:
 
+```mermaid
+flowchart LR
+    subgraph TRAD["Traditional TCP/IP Stack (10–100μs)"]
+        T1["App / JVM"] --> T2["Kernel TCP/IP Stack (Context Switch)"] --> T3["NIC Driver"] --> T4["Network Card"]
+    end
+
+    subgraph DPDK["Kernel Bypass with DPDK (1–10μs)"]
+        D1["App / JVM (Userspace)"] --> D2["DPDK Library (No Context Switch)"] --> D3["Network Card"]
+    end
+
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    class T1,D1 blue
+    class T2,T3,T4 red
+    class D2,D3 green
 ```
-Traditional TCP/IP Stack:
-┌──────────────┐
-│ Application  │
-├──────────────┤
-│  Java/JVM    │
-├──────────────┤
-│ TCP/IP Stack │ (Kernel mode, context switch)
-├──────────────┤
-│ NIC Driver   │
-├──────────────┤
-│ Network Card │
-└──────────────┘
-Latency: 10-100μs (microseconds)
 
-Kernel Bypass (DPDK):
-┌──────────────┐
-│ Application  │ (Userspace, no context switch)
-├──────────────┤
-│  Java/JVM    │
-├──────────────┤
-│ DPDK Library │ (Userspace networking)
-├──────────────┤
-│ Network Card │
-└──────────────┘
-Latency: 1-10μs (microseconds)
-
-Cost: Expensive hardware + complex configuration
-Benefit: For HFT firms, can be worth millions in extra profits
-```
+- **Trade-off:** Expensive specialized NIC hardware + complex configuration, justified for HFT firms where microseconds equal millions.
 
 ---
 
@@ -2107,30 +1973,48 @@ Benefit: For HFT firms, can be worth millions in extra profits
 
 ### T+1 Settlement Cycle
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Engine as Matching Engine
+    participant Kafka
+    participant Settle as Settlement Service
+    participant Depository as Depository / DB
+
+    Note over User,Engine: Day 1 (Trade Date) - 9:30 AM
+    User->>Engine: Buy 100 shares @ 2500
+    Engine-->>User: Order FILLED (shown in portfolio, not yet settled)
+    Engine-)Kafka: Emit TradeEvent
+    Kafka-)Settle: Queue trade for T+1 settlement
+
+    Note over Settle,Depository: Day 2 (Settlement Date T+1) - EOD 4:30 PM
+    Settle->>Settle: 1. Netting (aggregate buys/sells per user &amp; symbol)
+    Settle->>Settle: 2. Validate net positions
+    Settle->>Depository: 3. Transfer net shares &amp; cash
+    Settle->>Depository: 4. Update custody &amp; audit trail
+    Depository-->>User: Official ownership &amp; cash settled
 ```
-DAY 1 (Trade Date):
-9:30 AM    User buys 100 shares @ 2500
-           → Matching engine matches the trade instantly
-           → User's order status: FILLED
-           → User sees 100 shares in portfolio (but not yet owned)
 
-5:00 PM    Market closes
-           → All trades from today go to settlement queue
+### Netting Engine Flow
 
-DAY 2 (Settlement Date T+1):
-EOD        Settlement batch job runs:
-           1. Netting: aggregate all buys/sells per user
-           2. Calculate net cash/shares to transfer
-           3. Transfer shares to buyer's account
-           4. Transfer cash from buyer to seller
-           5. Update depository records
-           6. Audit trail verification
+```mermaid
+flowchart LR
+    T["All Day-1 Trades (from Kafka)"] --> N["Netting Engine (Group by User &amp; Symbol)"]
+    N --> V["Validate Net Positions"]
+    V --> DB["PostgreSQL: Update Holdings &amp; Cash Flow"]
+    V --> DEP["Depository API: Update Securities Custody"]
+    DB & DEP --> AUD["Create Settlement Audit Trail"]
 
-AFTER EOD  Settlement complete
-           → Shares are now officially in buyer's account
-           → Cash is officially in seller's account
-           → Both users' net worth updated
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class T blue
+    class N,V amber
+    class DB,DEP,AUD green
 ```
+
+> [!NOTE]
+> **Why Netting Matters:** If User A buys `100` shares at `2500` and sells `50` shares at `2505` in the same day, netting settles a single `+50` share transfer and net cash outflow (`~77,725`) instead of two separate custody movements.
 
 ### Settlement Service Architecture
 
@@ -2320,22 +2204,78 @@ public class SettlementService {
 
 ### Data Tiers & Retention
 
-```
-HOT TIER (Last 24 hours):
-├─ Orders (in-memory + Redis)
-├─ Active positions (in-memory)
-└─ Recent trades (PostgreSQL)
+```mermaid
+flowchart LR
+    HOT["Hot Tier (Last 24h): In-Memory, Redis, PostgreSQL"] --> WARM["Warm Tier (Last 3m): PostgreSQL, TimescaleDB"]
+    WARM --> COLD["Cold Tier (1–7 yrs): S3 Parquet, Glacier Audit Trail"]
 
-WARM TIER (Last 3 months):
-├─ All completed trades (PostgreSQL)
-├─ Daily positions (PostgreSQL)
-└─ OHLCV candles (TimescaleDB)
-
-COLD TIER (1-7 years):
-├─ Full audit trail (S3 + Glacier)
-├─ Regulatory filings (S3)
-└─ Historical market data (S3 Parquet)
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    class HOT red
+    class WARM amber
+    class COLD blue
 ```
+
+| Tier | Retention | Data Stored | Storage Engine |
+|---|---|---|---|
+| **Hot** | Last `24 hours` | Active orders, positions, recent trades | In-Memory + Redis + PostgreSQL |
+| **Warm** | Last `3 months` | Completed trades, daily positions, OHLCV candles | PostgreSQL + TimescaleDB |
+| **Cold** | `1–7 years` | Full regulatory audit trail, SEC filings, historical ticks | S3 (Parquet) + Glacier |
+
+### Core Relational Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    USERS ||--o{ ACCOUNTS : owns
+    USERS ||--o{ ORDERS : places
+    USERS ||--o{ POSITIONS : holds
+    USERS ||--o{ TRADES : participates
+    ORDERS ||--o{ TRADES : generates
+
+    USERS {
+        uuid user_id PK
+        varchar email
+        varchar kyc_status
+    }
+    ACCOUNTS {
+        uuid account_id PK
+        uuid user_id FK
+        numeric cash_balance
+        numeric available_margin
+    }
+    ORDERS {
+        uuid order_id PK
+        uuid user_id FK
+        varchar symbol
+        varchar side
+        varchar order_type
+        numeric price
+        int quantity
+        int filled_quantity
+        varchar status
+    }
+    TRADES {
+        uuid trade_id PK
+        varchar symbol
+        uuid buyer_id FK
+        uuid seller_id FK
+        int quantity
+        numeric price
+        numeric trade_value
+    }
+    POSITIONS {
+        uuid position_id PK
+        uuid user_id FK
+        varchar symbol
+        int quantity
+        numeric average_cost
+        numeric unrealized_pnl
+    }
+```
+
+> [!IMPORTANT]
+> **Durability Guarantee:** Every incoming order is appended to the memory-mapped **Write-Ahead Log (`WALManager`)** *before* matching. On crash recovery, replaying the WAL deterministically reconstructs the exact in-memory order book.
 
 ### PostgreSQL Schema
 
@@ -2543,90 +2483,53 @@ public class WALManager {
 
 ### Symbol-Based Partitioning
 
+```mermaid
+flowchart TD
+    subgraph BEFORE["Before: Single Monolithic Engine"]
+        S1["Single Matching Engine (All 4,000+ Symbols) — Ceiling: 100K ord/sec"]
+    end
+
+    subgraph AFTER["After: Partitioned by Symbol (Dedicated CPU Cores)"]
+        E1["Engine 1: RELIANCE (100K ord/s)"]
+        E2["Engine 2: TCS (100K ord/s)"]
+        E3["Engine 3: INFY (100K ord/s)"]
+        E1 & E2 & E3 --> AGG["Aggregate Throughput: 300K+ ord/s (Linear Horizontal Scale)"]
+    end
+
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    class S1 red
+    class E1,E2,E3 blue
+    class AGG green
 ```
-SCALING STRATEGY: Partition matching engines by symbol
 
-Before (single matching engine):
-┌────────────────────────────────┐
-│ Matching Engine (All symbols)  │
-│ - RELIANCE orders              │
-│ - TCS orders                   │
-│ - INFY orders                  │
-│ - ... 4,000 more symbols       │
-│                                │
-│ Single-threaded: 100K ord/sec  │
-└────────────────────────────────┘
-
-Problem: Can't scale beyond 100K orders/sec aggregate
-
-After (partitioned by symbol):
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ Engine 1        │  │ Engine 2        │  │ Engine 3        │
-│ RELIANCE orders │  │ TCS orders      │  │ INFY orders     │
-│                 │  │                 │  │                 │
-│ 100K ord/sec    │  │ 100K ord/sec    │  │ 100K ord/sec    │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-        │                    │                     │
-        └────────┬───────────┴──────────┬──────────┘
-                 │                      │
-        ┌────────▼──────────────────────▼────────┐
-        │  Aggregate throughput: 300K+ ord/sec   │
-        │  (Can scale to 10+ engines)            │
-        └────────────────────────────────────────┘
-
-Each engine:
-- Single-threaded (no locks)
-- Own order book (no shared state)
-- Separate thread (runs on dedicated CPU core)
-- Can be on different machines
-
-Horizontal scaling: Add more servers for more symbols
-```
+- Each engine is **single-threaded** (no locks), owns its **isolated order book** (no shared state), and is pinned to a **dedicated CPU core** across machines.
 
 ### High Availability: Active-Passive Failover
 
-```
-PRODUCTION SETUP:
-┌─────────────────────────────────────────────────────┐
-│ PRIMARY DATA CENTER (Active)                        │
-│                                                     │
-│ ┌──────────────────────────────────┐              │
-│ │ Matching Engine (RELIANCE)       │              │
-│ │ - Processes orders               │              │
-│ │ - Generates trades               │              │
-│ │ - Streams WAL to Kafka           │              │
-│ └──────────────────────────────────┘              │
-│              │                                     │
-│              ▼ (Async replication)                │
-│         ┌─────────────┐                          │
-│         │ Kafka Topic │                          │
-│         │ "wal-reliance"                        │
-│         └─────────────┘                          │
-└─────────────────────────────────────────────────────┘
-              │
-              │ (Real-time sync across data centers)
-              ▼
-┌─────────────────────────────────────────────────────┐
-│ STANDBY DATA CENTER (Passive)                       │
-│                                                     │
-│ ┌──────────────────────────────────┐              │
-│ │ Matching Engine (RELIANCE)       │              │
-│ │ - Replaying WAL in real-time     │              │
-│ │ - Maintains exact copy of        │              │
-│ │   primary's order book           │              │
-│ │ - NOT processing new orders      │              │
-│ └──────────────────────────────────┘              │
-│                                                     │
-│ Status: WARM STANDBY (can take over in < 1 sec)  │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph PDC["Primary Data Center (Active)"]
+        PE["Primary Engine (RELIANCE)"] -->|"Async WAL Stream"| K["Kafka Topic: wal-reliance"]
+    end
 
-FAILOVER SCENARIO:
-Primary fails → Standby detects (no heartbeat for 100ms)
-              → Takes over immediately
-              → Starts accepting orders
-              → Lost orders: ~0-100ms worth
-              → Recovered by using WAL
+    subgraph SDC["Standby Data Center (Warm Standby)"]
+        K -->|"Real-Time Replay"| SE["Standby Engine (Exact Book Copy)"]
+    end
+
+    ZK["ZooKeeper Leader Election (100ms Heartbeat)"] -.->|"Failover &lt; 1s"| SE
+
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    class PE green
+    class K,ZK amber
+    class SE purple
 ```
+
+> [!WARNING]
+> **Failover Window:** If the primary misses heartbeats (`100ms`), ZooKeeper triggers leadership resignation and the warm standby promotes in `< 1 second`. Up to `0–100ms` of in-flight orders are recovered by replaying the WAL.
 
 ### Failover Implementation
 
@@ -2742,17 +2645,28 @@ public class MatchingEngineCluster {
 
 ## Senior vs Mid-Level Comparison
 
-| Aspect | Mid-Level (Your Goal) | Senior Engineer |
-|--------|----------------------|-----------------|
-| **Order Matching Engine** | Understands TreeMap + LinkedList, can implement basic matching | Optimizes for cache locality, understands mechanical sympathy, considers LMAX Disruptor |
-| **Latency Analysis** | Knows single-threaded is faster than multi-threaded (why?) | Calculates exact latency: L1 cache hit = 4ns, memory hit = 100ns, disk = 100μs |
-| **Scaling** | Proposes symbol-based partitioning | Proposes symbol-based + hash-based partitioning on user ID for portfolio service |
-| **Fault Tolerance** | Active-passive failover with WAL | Active-passive + cross-datacenter geo-replication, Byzantine fault tolerance |
-| **Database Design** | PostgreSQL for ACID, TimescaleDB for OHLCV | Proposes immutable event log (event sourcing), snapshots every 1000 events |
-| **Risk Management** | Lists all risk checks | Proposes machine learning for anomaly detection, circuit breaker patterns |
-| **Interview Confidence** | "I know HOW to build it" | "I can EXPLAIN WHY each piece exists and trade-offs" |
+```mermaid
+flowchart LR
+    M["Mid-Level Focus: HOW to Build (TreeMap, Single-Thread, Symbol Partition, WAL, Postgres)"] --> S["Senior Focus: WHY &amp; Trade-Offs (Mechanical Sympathy, L1 Cache 4ns, Event Sourcing, Geo-Replication)"]
 
-Your goal: Move from "how" to "why and trade-offs"
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class M blue
+    class S green
+```
+
+| Aspect | Mid-Level (Your Goal) | Senior Engineer |
+|---|---|---|
+| **Order Matching Engine** | Understands `TreeMap + LinkedList`, can implement basic matching | Optimizes for cache locality, mechanical sympathy, considers LMAX Disruptor |
+| **Latency Analysis** | Knows single-threaded is faster than multi-threaded (why?) | Calculates exact latency: L1 cache hit = `4ns`, memory hit = `100ns`, disk = `100μs` |
+| **Scaling** | Proposes symbol-based partitioning | Proposes symbol-based + hash-based partitioning on `user_id` for portfolio service |
+| **Fault Tolerance** | Active-passive failover with WAL | Active-passive + cross-datacenter geo-replication, Byzantine fault tolerance |
+| **Database Design** | PostgreSQL for ACID, TimescaleDB for OHLCV | Proposes immutable event log (event sourcing), snapshots every `1,000` events |
+| **Risk Management** | Lists all risk checks | Proposes ML anomaly detection, multi-tier circuit breaker patterns |
+| **Interview Confidence** | "I know HOW to build it" | "I can EXPLAIN WHY each piece exists and its trade-offs" |
+
+> [!TIP]
+> **Interview Goal:** Move from *"how to implement"* to *"why this data structure / isolation boundary exists and what trade-offs it buys."*
 
 ---
 
@@ -2760,80 +2674,39 @@ Your goal: Move from "how" to "why and trade-offs"
 
 ### Q1: "How do you handle a flash crash?"
 
-**Situation:** Market drops 10% in 1 second due to algorithm gone wrong.
+**Situation:** Market drops `10%` in `1` second due to a runaway algorithm.
+- **Mid-Level Answer:** "We have circuit breakers and halt trading when price moves `> 20%` in a day."
+- **Senior Answer:** Flash crashes are driven by **correlation cascades** (Fund A sells → price drops → Fund B's stop-loss triggers → Fund C's stop-loss triggers). Defend with multi-tier circuit breakers and liquidity guardrails:
 
-**Mid-Level Answer:**
-"We have circuit breakers. We stop trading when price moves > 20% in a day."
+```mermaid
+flowchart TD
+    O["Incoming Order / Price Move"] --> L1["Level 1: Order-Level (10ms) — Fat-finger reject &gt; 50% from last trade"]
+    L1 --> L2["Level 2: Stock-Level (1s) — Halt if stock moves &gt; 5% in 1 second"]
+    L2 --> L3["Level 3: Market-Level (1m) — Exchange-wide halt if index drops &gt; 7%"]
+    L3 --> DEF["Defenses: Dynamic Sliding Bands, Mandatory MM Quotes, Order-to-Cancel Limits, VWAP, 5-Min Cooling Off"]
 
-**Senior Answer:**
-"Circuit breakers happen at multiple levels:
-
-1. **Order-level (10ms):** Fat-finger check rejects orders >50% away from last trade
-2. **Stock-level (1 second):** Trading halt if stock moves >5% in 1 second
-3. **Market-level (1 minute):** Exchange-wide trading halt if index drops >7%
-
-But flash crashes are caused by correlation cascades:
-- Fund A sells → price drops → Fund B's stop-loss triggers
-- Fund B sells → price drops more → Fund C's stop-loss triggers
-- Cascade continues until market finds equilibrium
-
-Our defenses:
-- Sliding windows (price band is dynamic, not fixed 20%)
-- Mandatory minimum quotes (market makers must provide liquidity at all times)
-- Order-to-cancel ratio limits (can't spam orders then cancel)
-- Volume-weighted average price (VWAP) orders for algo traders
-- Trading halts with 'cooling off' period (5 minutes no trading to reset)"
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class O amber
+    class L1,L2,L3 red
+    class DEF green
+```
 
 ---
 
 ### Q2: "Why is single-threaded matching faster than multi-threaded?"
 
-**Common Wrong Answer:**
-"Because there's no lock contention, so no waiting."
+**Common Wrong Answer:** "Because there's no lock contention."
+**Correct Answer:** It's **CPU cache locality and mechanical sympathy**, not just locks:
 
-**Correct Answer:**
-"It's not just about locks. It's about CPU cache locality and mechanical sympathy:
+| Execution Model | Step-by-Step CPU Cost | Total Latency |
+|---|---|---|
+| **Multi-Threaded** | Thread 1 L1 hit (`4` cycles) → lock → context switch (`1,000` cycles) → Thread 2 L1 cache miss (`100+` cycles) → lock overhead | `1,100+ CPU cycles` |
+| **Single-Threaded** | Order 1 L1 hit (`4` cycles) → Order 2 L1 hit (`4` cycles), warm branch predictor & prefetcher, zero atomic cache flushes | `8 CPU cycles` (`100–1000x` faster) |
 
-With multi-threaded matching:
-```
-Thread 1: Reads price level 2500
-          - Data loaded into L1 cache (4 cycles)
-          - Acquires lock
-          - Finds matching order
-          → Context switch (1,000 cycles to save/restore state)
-
-Thread 2: Wakes up
-          - Data NOT in L1 cache anymore
-          - Cache miss (100+ cycles to fetch from main memory)
-          - Acquires lock
-          - Processes order
-          → Context switch
-
-Total latency = 4 + 1000 + 100 + lock overhead = 1,100+ CPU cycles
-```
-
-With single-threaded matching:
-```
-Order 1: Reads price level 2500
-         - Data loaded into L1 cache (4 cycles)
-         - Finds matching order
-         - Processes immediately
-
-Order 2: Wakes up
-         - Data STILL in L1 cache (4 cycles)
-         - Finds matching order
-         - Processes immediately
-
-Total latency = 4 + 4 = 8 CPU cycles
-```
-
-**Why the difference?**
-- CPU prefetcher optimizes cache hits
-- No context switches = warm cache
-- No lock acquisitions = no atomic operations (which flush cache)
-- Branch prediction stays warm
-
-This is 100-1000x latency difference in practice!"
+> [!IMPORTANT]
+> **Mechanical Sympathy:** No context switches keep the L1 cache and branch predictor warm, and zero lock acquisitions avoid atomic instructions that flush CPU cache lines.
 
 ---
 
@@ -2953,14 +2826,20 @@ public class IcebergOrderMatching implements OrderMatchingStrategy {
 
 ### Q5: "How do you handle order modification while matching is in progress?"
 
+**Scenario:** User places `Buy 100 @ 2500`; while matching is in progress, user modifies to `Buy 150 @ 2510`.
+**Solution:** Version-based optimistic locking using atomic `compareAndSwapLong` (`CAS`).
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Order as OrderWithVersion (v0)
+    participant Engine as Matching Engine
+
+    User->>Order: tryModify(Buy 150 @ 2510), expectedVersion = 0
+    Engine->>Order: Match &amp; bump version (0 to 1)
+    Order-->>User: CAS(expected=0, new=1) FAILS (version is now 1)
+    User->>Order: Retry or Reject Modification Safely
 ```
-SCENARIO:
-User places: Buy 100 @ 2500
-While matching is happening, user modifies: Buy 150 @ 2510
-
-How to prevent race condition?
-
-SOLUTION: Version-based optimistic locking
 
 ```java
 public class OrderWithVersion {

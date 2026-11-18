@@ -181,6 +181,19 @@ flowchart LR
 
 ## 📅 Study Plans, Practice Projects & Resources
 
+```mermaid
+flowchart LR
+    R["Read Core 01-03 (15-20h)"]:::blue --> D["Case Studies 08-17 (10-15h)"]:::green
+    D --> M["Timed Mocks (5-10h)"]:::amber
+    M --> C["Hands-On Builds (5-10h)"]:::purple
+    C --> I["Interview Ready"]:::green
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+```
+
 ### Study Schedules (35–55 Hours Total · 5–8 Weeks at 1 hr/day)
 
 | Track | Schedule | Target Materials |

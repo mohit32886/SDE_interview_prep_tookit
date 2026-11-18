@@ -2546,178 +2546,109 @@ rate-limit.circuit-breaker-window-seconds=60
 
 ## 7. Interview Follow-ups & Discussion
 
+```mermaid
+flowchart TD
+    Req["Incoming API Request"] --> T1["Tier 1: Client Library (Local Pre-Check)"]
+    T1 -->|"Passes client limit"| T2{"Tier 2: API Gateway (Redis Sliding Counter)"}
+    T1 -->|"Exceeds client limit"| R429["HTTP 429 Too Many Requests"]
+    T2 -->|"Redis Healthy and Allowed (99% accuracy, ~1ms)"| T3["Tier 3: Service Local Token Bucket"]
+    T2 -->|"Exceeds Gateway Limit"| R429
+    T2 -->|"Redis Down (Circuit Breaker)"| FailOpen["Fail Open: Local 80% Allow / 20% Drop"]
+    FailOpen --> T3
+    T2 -.->|"Kafka / Pulsar Async Sync (every 100ms)"| MultiDC["Other Data Centers (Eventual Consistency)"]
+    T3 -->|"Allowed (Burst Absorbed)"| Backend["Backend Service"]
+    T3 -->|"Cascading Load"| R429
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+    class Req,T1 blue
+    class T2,MultiDC purple
+    class FailOpen,T3 amber
+    class Backend green
+    class R429 red
+```
+
 ### Question 1: "How would you rate limit across multiple data centers?"
 
-**Mid-Level Answer:**
-"We'd replicate the Redis instance across data centers and use each local copy. But that could be inconsistent."
+- **Mid-Level Answer:** "We'd replicate the Redis instance across data centers and use each local copy. But that could be inconsistent."
+- **Senior Answer — Trade-offs:**
 
-**Senior Answer:**
-"There are trade-offs:
+| Approach | Mechanism | Latency | Pros | Cons |
+|---|---|---|---|---|
+| **1. Global Redis (Strong Consistency)** | Single Redis with cross-region replication (e.g., AWS ElastiCache) | ~100ms cross-region writes | Perfect accuracy | Latency spike, single point of failure |
+| **2. Local Rate Limiter + Distributed Sync (Eventual Consistency)** | Local Redis/in-memory per DC; exchange counters every 100ms via message queue | `<1ms` | No SPOF, scales to any DC count | Users can slightly exceed limit during sync window |
+| **3. Token Bucket with NTP Sync (Hybrid)** | Local token bucket per DC; NTP-synchronized clocks for uniform refill rates | `<1ms` | Very low overhead, distributed-friendly | Clock drift bounds accuracy |
 
-1. **Global Redis (Strong Consistency)**
-   - Single Redis instance with replication (e.g., AWS ElastiCache with cross-region)
-   - Add latency: ~100ms for cross-region writes
-   - Pros: Perfect accuracy; Cons: latency spike, single point of failure
+> [!TIP]
+> **FAANG Recommendation:** Option 2 (**Local + Async Sync** via Apache Kafka or Pulsar every 100ms) gives ~99% accuracy, `<2ms` latency, and no single point of failure. Lost sync messages are self-healing on the next batch, keeping over-limit leakage `<1%`.
 
-2. **Local Rate Limiter + Distributed Sync (Eventual Consistency)**
-   - Each DC has local rate limiter (Redis or in-memory)
-   - Periodic sync (every 100ms): exchange counters via message queue
-   - Pros: <1ms latency, no single point of failure
-   - Cons: Users might slightly exceed limit during sync window
-
-3. **Token Bucket with NTP Sync (Hybrid)**
-   - Each DC runs token bucket locally
-   - Synchronize clock via NTP (ensures they refill at same rate)
-   - Very low overhead
-   - Works well for distributed systems
-
-**For most FAANG use cases**: Option 2 (local + sync) provides the best balance. Here's why:
-- Acceptable accuracy (~99%)
-- Minimal latency (<2ms)
-- No single point of failure
-- Scales to any number of DCs
-
-**Implementation**: Use Apache Kafka or Pulsar to sync rate limit state every 100ms. If sync message is lost, acceptable because:
-- They'll resync in next batch
-- Over-limit rate is < 1%
-"
+---
 
 ### Question 2: "How do you handle burst traffic from legitimate users?"
 
-**Mid-Level Answer:**
-"Um, we could increase the limit during peak hours?"
+- **Mid-Level Answer:** "Um, we could increase the limit during peak hours?"
+- **Senior Answer:** Bursts are a **design requirement**, not a bug:
+  1. **Token Bucket (Natural Burst Absorption):** Set average rate to `100 requests/minute` with `bucket capacity = 500 tokens`. Legitimate bursts up to 500 requests pass immediately, then smooth back to `100/min`.
+  2. **Graduated Backoff (Graceful Degradation):**
+     - First `120` requests (20% over limit): allowed
+     - Next `50` requests: `50%` allowed (random drop)
+     - Beyond that: all rejected
+  3. **Premium Burst Quota:** Track monthly usage; allow bursts while well below quota, enforce strict sliding window near quota:
+     ```java
+     if (monthlyRequests < monthlyLimit * 0.8) {
+         // Under quota, allow burst
+         return tokenBucket.allowRequest();
+     } else {
+         // Near quota, strict limiting
+         return slidingWindowCounter.allowRequest();
+     }
+     ```
+  4. **Adaptive Rate Limiting:** Monitor downstream error rates—increase limits (up to max) when backends are healthy, and decrease limits if error rate exceeds `5%` for self-healing under varying load.
 
-**Senior Answer:**
-"Bursts are actually a design requirement, not a bug. Here's the approach:
+> [!NOTE]
+> **Best Practice:** Combine **Token Bucket** (handles legitimate bursts smoothly) with **periodic audits** (detects sustained abuse).
 
-1. **Token Bucket is Natural for Bursts**
-   ```
-   Limit: 100 requests/minute (average)
-   But: Bucket capacity = 500 tokens
-
-   This allows legitimate bursts up to 500 requests,
-   then smooths back to 100/min rate
-   ```
-
-2. **Graduated Backoff (User-Friendly)**
-   - First 120 requests: allowed (20% over limit)
-   - Next 50 requests: 50% allowed (random drop)
-   - Beyond that: all rejected
-   - Users don't get hard block; they degrade gracefully
-
-3. **Premium Burst Quota**
-   - Track monthly requests
-   - If under monthly limit: allow burst
-   - If over: apply strict per-minute limit
-   ```java
-   if (monthlyRequests < monthlyLimit * 0.8) {
-       // Under quota, allow burst
-       return tokenBucket.allowRequest();
-   } else {
-       // Near quota, strict limiting
-       return slidingWindowCounter.allowRequest();
-   }
-   ```
-
-4. **Adaptive Rate Limiting**
-   - Monitor error rates downstream
-   - If backends healthy: increase limit (up to max)
-   - If error rate > 5%: decrease limit
-   - Self-healing under varying load
-
-**Best Practice**: Combine token bucket (handles bursts) with periodic audits (detect abuse).
-"
+---
 
 ### Question 3: "What's the trade-off between accuracy and performance?"
 
-**Mid-Level Answer:**
-"Accurate limiting is slower because it requires more processing?"
+- **Mid-Level Answer:** "Accurate limiting is slower because it requires more processing?"
+- **Senior Answer — Algorithm Comparison:**
 
-**Senior Answer:**
-"Let me compare the algorithms:
+| Algorithm | Accuracy | Latency | Memory | Production Use |
+|---|---|---|---|---|
+| **Token Bucket** | 95% | 0.5ms | `O(1)` | Common |
+| **Fixed Window** | 80% | 0.1ms | `O(1)` | Avoid |
+| **Sliding Log** | 100% | 5ms | `O(n)` | Small limits only |
+| **Sliding Counter** | 99%+ | 1ms | `O(1)` | Standard |
 
-```
-Algorithm             Accuracy    Latency    Memory    Production Use
-─────────────────────────────────────────────────────────────────────
-Token Bucket          95%         0.5ms      O(1)      ✓ Common
-Fixed Window          80%         0.1ms      O(1)      ✗ Avoid
-Sliding Log           100%        5ms        O(n)      ✓ Small limits
-Sliding Counter       99%+        1ms        O(1)      ✓ Standard
-```
+- **Why Perfect Accuracy is Impossible in Distributed Systems:**
+  - Network latency means decisions rely on slightly stale state; 2-phase commit is too slow.
+  - Per the **CAP theorem**, distributed rate limiters choose **Availability + Partition-tolerance (AP)** over strict Consistency.
+- **Practical Trade-off Formula (`A * L`, where `A` = Accuracy %, `L` = Latency ms — minimize):**
+  - **Token Bucket:** `95% * 0.5ms = 47.5` (best for most APIs & DDoS protection; `<0.5ms` via client-side or local Redis)
+  - **Sliding Counter:** `99% * 1ms = 99` (best for strict SLAs, billing, & monetization; `<1ms` / `99.5%` accuracy with 100ms Redis-to-local cache sync)
+  - **Sliding Log:** `100% * 5ms = 500` (compliance-only)
+  - **Fixed Window:** `80%` accuracy / `<0.1ms` latency (loose limits & monitoring only)
 
-**The Key Insight**: For distributed systems, we ACCEPT < 100% accuracy:
+> [!IMPORTANT]
+> **Scale Reality Check:** At 100k requests, 1% inaccuracy equals 1,000 requests over limit—an acceptable trade-off for sub-millisecond latency.
 
-1. **Why Perfect Accuracy is Impossible in Distributed Systems**
-   - Network latency means decisions are based on stale data
-   - Synchronizing to perfect accuracy requires 2-phase commit (slow)
-   - CAP theorem: choose 2 of (Consistency, Availability, Partition-tolerance)
-   - Rate limiting chooses: Availability + Partition-tolerance
-
-2. **Practical Trade-off Formula**
-   ```
-   Let A = Accuracy %, L = Latency (ms)
-
-   For rate limiting: A * L should be minimized
-
-   Token Bucket:      95% * 0.5ms = 47.5  ← Best for most cases
-   Sliding Counter:   99% * 1ms = 99      ← Best for strict SLAs
-   Sliding Log:       100% * 5ms = 500    ← Only for compliance
-   ```
-
-3. **When to Use Each**
-   - **99%+ Accuracy Needed**: Sliding Window Counter + Local Cache
-     - Use case: API monetization, billing-critical limits
-     - Implement: Sync every 100ms from Redis to local cache
-     - Latency: <1ms, Accuracy: 99.5%
-
-   - **95% Accuracy OK**: Token Bucket
-     - Use case: Most APIs, DDoS protection
-     - Implement: Pure client-side or local Redis
-     - Latency: <0.5ms, Accuracy: 95%
-
-   - **80% Accuracy Acceptable**: Fixed Window with burst allowance
-     - Use case: Loose limits, monitoring only
-     - Implement: Simple counter
-     - Latency: <0.1ms, Accuracy: 80%
-
-**Real Example**: At scale, 1% inaccuracy = 1000 requests over limit per 100k requests. Magnitude: acceptable.
-"
+---
 
 ### Question 4: "Design a rate limiter for a new API. Walk me through your decisions."
 
-**Structured Answer:**
-
-1. **Clarify Requirements (5 min)**
-   ```
-   - Expected load: 100k requests/sec? 1M/sec?
-   - Accuracy requirements: Billing-critical or DDoS-protection?
-   - Multi-region deployment?
-   - User tiers: free/premium or flat?
-   - Burst allowance needed?
-   ```
-
-2. **High-Level Design (10 min)**
-   ```
-   For 100k req/sec with 3-tier system:
-
-   Tier 1 (Client): Client-side rate limiting (library)
-   → Saves round trips, prevents obvious abuse
-
-   Tier 2 (Gateway): Sliding Window Counter with Redis
-   → Catches coordinated attacks
-   → 1ms latency, 99% accuracy
-
-   Tier 3 (Service): Local token bucket
-   → Circuit breaker for backend protection
-   → Rejects if cascading
-
-   Why 3 tiers?
-   - Client side: saves latency cost
-   - Gateway: distributed enforcement
-   - Service: last-mile protection
-   ```
-
-3. **Data Model**
+1. **Clarify Requirements (5 min):**
+   - Expected load (`100k req/sec` vs `1M/sec`), accuracy needs (billing-critical vs DDoS protection), multi-region deployment, user tiers (free/premium vs flat), and burst allowance.
+2. **High-Level Design (10 min) — 3-Tier Architecture for 100k req/sec:**
+   - **Tier 1 (Client):** Client-side rate-limiting library — saves round trips and blocks obvious abuse.
+   - **Tier 2 (Gateway):** Sliding Window Counter with Redis (`~1ms` latency, `99%` accuracy) — catches coordinated attacks across distributed clients.
+   - **Tier 3 (Service):** Local token bucket — acts as a last-mile circuit breaker to prevent cascading backend failures.
+3. **Data Model:**
    ```java
    Key: "rate_limit:{limitKey}"
    Value: {
@@ -2726,13 +2657,12 @@ Sliding Counter       99%+        1ms        O(1)      ✓ Standard
        tier: string        // "free" or "premium"
    }
 
-   Example keys:
-   - rate_limit:user:123456
-   - rate_limit:ip:192.168.1.1
-   - rate_limit:api_key:sk_live_123456
+   // Example keys:
+   // - rate_limit:user:123456
+   // - rate_limit:ip:192.168.1.1
+   // - rate_limit:api_key:sk_live_123456
    ```
-
-4. **Configuration**
+4. **Configuration:**
    ```yaml
    limits:
      free_user:
@@ -2753,61 +2683,44 @@ Sliding Counter       99%+        1ms        O(1)      ✓ Standard
        per_minute: 1000
        per_hour: 50000
    ```
+5. **Failure Scenarios:**
 
-5. **Failure Scenarios**
-   ```
-   Scenario 1: Redis down
-   → Fail open with local circuit breaker
-   → Allow 80% of requests (random drop)
-   → Prevents complete outage
+| Scenario | Mitigation | Outcome |
+|---|---|---|
+| **Redis down** | Fail open with local circuit breaker (allow 80%, random drop 20%) | Prevents complete outage |
+| **Rate limit too strict (misconfig)** | Monitor `429` rate; auto-adjust if `> 10%` of traffic | Self-recovers from bad config |
+| **Sudden traffic spike** | Token bucket absorbs burst up to capacity, then enforces hard limit | Protects without dropping valid bursts |
+| **DDoS attack** | Tighten IP-level limits; keep customer tiers unaffected; alert security | Isolates attack blast radius |
 
-   Scenario 2: Rate limit too strict (misconfiguration)
-   → Monitor 429 rate
-   → Auto-adjust if > 10% of traffic
-
-   Scenario 3: Sudden traffic spike
-   → Token bucket naturally handles (burst up to capacity)
-   → If sustained, hit hard limit
-
-   Scenario 4: DDoS attack
-   → Increase IP-level limits
-   → Customer tiers unaffected
-   → Send alert to security team
-   ```
-
-6. **Monitoring & Alerts**
-   ```
-   Metrics:
-   - rate_limit.rejected (tagged by rule)
-   - rate_limit.redis.latency (p50, p95, p99)
-   - rate_limit.redis.errors
-
-   Alerts:
-   - 429 rate > 5% of traffic → misconfiguration
-   - Redis latency p99 > 10ms → redis performance issue
-   - Redis connection failures → failover or scaling
-   - One IP causing > 50% of 429s → DDoS detection
-   ```
-
-7. **Estimated Costs**
-   ```
-   For 100k req/sec with 1 year of data retention:
-
-   Redis Memory:
-   - 1000 concurrent users × 10 keys each × 100 bytes = 1MB
-   - Manageable with standard Redis (2GB instance)
-
-   Network:
-   - INCR + EXPIRE per request = 2 Redis commands
-   - 100k req/sec × 2 commands = 200k commands/sec
-   - AWS ElastiCache (cache.m5.large) handles 200k ops/sec ✓
-
-   Cost: ~$0.50/day for rate limiter infrastructure
-   ```
+6. **Monitoring & Alerts:**
+   - **Metrics:** `rate_limit.rejected` (tagged by rule), `rate_limit.redis.latency` (`p50`, `p95`, `p99`), `rate_limit.redis.errors`.
+   - **Alerts:** `429` rate `> 5%` of traffic (misconfiguration) • Redis `p99 > 10ms` (performance issue) • Redis connection failures (failover/scaling) • Single IP causing `> 50%` of `429`s (DDoS detection).
+7. **Estimated Costs (100k req/sec, 1-year retention):**
+   - **Redis Memory:** `1,000` concurrent users × `10` keys × `100` bytes = `1 MB` (fits easily in a standard `2 GB` Redis instance).
+   - **Network & Throughput:** `INCR` + `EXPIRE` = `2` commands/req → `200k commands/sec`, handled by AWS ElastiCache (`cache.m5.large`) at **~$0.50/day**.
 
 ---
 
 ## Senior vs Mid-Level Comparison
+
+```mermaid
+flowchart LR
+    subgraph Mid["Mid-Level Mindset"]
+        M1["Single Counter in Redis"] --> M2["Fail Closed on Outage"]
+        M2 --> M3["Hardcoded Limits &amp; Logs"]
+    end
+
+    subgraph Senior["Senior Mindset"]
+        S1["Token Bucket + Sliding Window"] --> S2["Fail Open + Circuit Breaker"]
+        S2 --> S3["Dynamic Rules + Metrics + Multi-Tier"]
+    end
+
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#7f1d1d
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+
+    class M1,M2,M3 red
+    class S1,S2,S3 green
+```
 
 | Aspect | Mid-Level | Senior |
 |---|---|---|
@@ -2820,36 +2733,80 @@ Sliding Counter       99%+        1ms        O(1)      ✓ Standard
 | **Monitoring** | "Check error logs" | "Detailed metrics, auto-scaling rules, anomaly detection" |
 | **Multi-tier** | "One rate limit per user" | "Per-user, per-IP, per-API-key, per-endpoint, global" |
 
+> [!IMPORTANT]
+> **Interview Differentiator:** Senior candidates proactively trade 1% accuracy for sub-millisecond latency, design for Redis outages with fail-open circuit breakers, and layer limits across user, IP, API key, endpoint, and global scopes.
+
 ---
 
 ## Key Takeaways
 
+```mermaid
+flowchart LR
+    K1["1. Clarify Scale &amp; SLAs"] --> K2["2. Pick Algorithm (Token Bucket / Sliding Counter)"]
+    K2 --> K3["3. Layer Multi-Tier + Lua/Redis"]
+    K3 --> K4["4. Plan Fail-Open &amp; Dynamic Config"]
+    K4 --> K5["5. Emit Headers &amp; Anomaly Alerts"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+
+    class K1 blue
+    class K2,K3 purple
+    class K4 amber
+    class K5 green
+```
+
 ### For Interviews
 
-1. **Start with Requirements**: Ask clarifying questions about scale, consistency, failure modes
-2. **Choose Appropriate Algorithm**: Token Bucket (simple), Sliding Window Counter (accurate), Lua+Redis (distributed)
-3. **Handle Distributed Complexity**: Local caching, eventual consistency, graceful degradation
-4. **Plan for Failures**: What if Redis is down? Circuit breaker, fail open with limits
-5. **Think About Operations**: Monitoring, alerting, easy configuration changes
-6. **Discuss Trade-offs**: Accuracy vs latency, consistency vs availability
+1. **Start with Requirements:** Ask clarifying questions about scale, consistency, and failure modes.
+2. **Choose Appropriate Algorithm:** Token Bucket (simple, burst-friendly), Sliding Window Counter (accurate), Lua + Redis (atomic distributed execution).
+3. **Handle Distributed Complexity:** Local caching, eventual consistency, and graceful degradation.
+4. **Plan for Failures:** When Redis goes down, use a circuit breaker and fail open with local limits.
+5. **Think About Operations:** Monitoring, alerting, and zero-downtime configuration changes.
+6. **Discuss Trade-offs:** Accuracy vs. latency, consistency vs. availability.
 
 ### For Implementation
 
-1. Use **Sliding Window Counter** with local Redis for 99%+ accuracy
-2. Implement **multi-level limiting** (per-user, per-IP, per-API-key)
-3. Make limits **configurable** without code changes
-4. Always return **rate limit headers** (Retry-After, X-RateLimit-*)
-5. Handle **Redis failures** gracefully (fail open with local limits)
-6. Monitor everything and set up **alerts** for anomalies
+1. Use **Sliding Window Counter** with local Redis for `99%+` accuracy.
+2. Implement **multi-level limiting** (per-user, per-IP, per-API-key).
+3. Make limits **configurable** without code changes or redeploys.
+4. Always return **rate limit headers** (`Retry-After`, `X-RateLimit-*`).
+5. Handle **Redis failures** gracefully (fail open with local fallback limits).
+6. Monitor everything and configure **alerts** for traffic and latency anomalies.
+
+> [!TIP]
+> **Default Production Stack:** Gateway **Sliding Window Counter** (atomic Lua in Redis) + local fallback **Token Bucket** + standard `Retry-After` / `X-RateLimit-*` headers covers 90% of real-world APIs.
 
 ---
 
 ## Additional Resources
 
-- **Papers**: "Token Bucket Filter" by Sally Floyd and Van Jacobson
-- **Cloud Providers**: AWS API Gateway rate limiting, Google Cloud quota management
-- **OSS Libraries**: Bucket4j (Java), go-rate (Go), PyRate (Python)
-- **Benchmarking**: Load test with Apache JMeter or Gatling
+```mermaid
+flowchart TD
+    Root["Rate Limiter Deep-Dive Resources"] --> P["Foundational Papers (Token Bucket Filter)"]
+    Root --> C["Cloud Managed (AWS API Gateway &amp; GCP Quota)"]
+    Root --> L["OSS Libraries (Bucket4j, go-rate, PyRate)"]
+    Root --> B["Load Testing (Apache JMeter &amp; Gatling)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+
+    class Root blue
+    class P purple
+    class C,L green
+    class B amber
+```
+
+| Category | Resources |
+|---|---|
+| **Papers** | "Token Bucket Filter" by Sally Floyd and Van Jacobson |
+| **Cloud Providers** | AWS API Gateway rate limiting • Google Cloud quota management |
+| **OSS Libraries** | `Bucket4j` (Java) • `go-rate` (Go) • `PyRate` (Python) |
+| **Benchmarking** | Load test with Apache JMeter or Gatling |
 
 ---
 

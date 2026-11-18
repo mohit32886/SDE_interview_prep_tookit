@@ -49,7 +49,7 @@ Design a URL shortening service like TinyURL. Users can shorten long URLs, and o
 ### High-Level Architecture
 
 ```mermaid
-flowchart TB
+flowchart TD
     C["Client: POST /shorten or GET /short_code"]
     CDN["DNS &amp; CDN: Edge Redirect Cache"]
     LB1["Load Balancer: US-EAST"]
@@ -534,7 +534,7 @@ Design a distributed key-value store like DynamoDB or Cassandra.
 ### Partitioned & Replicated Architecture
 
 ```mermaid
-flowchart TB
+flowchart TD
     Client["Client: get('user:123') or put(key, val)"]
     Coord["Coordinator Node: Consistent Hash Router"]
     S1["Shard 1: Ring 0-6"]

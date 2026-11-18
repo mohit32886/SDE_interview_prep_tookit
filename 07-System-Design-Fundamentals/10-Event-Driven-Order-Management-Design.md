@@ -1500,28 +1500,35 @@ sequenceDiagram
 
 ### Reservation Pattern
 
-Orders go through reservation stages to prevent overselling:
+Orders go through three reservation stages to prevent overselling and align with physical warehouse fulfillment:
 
+```mermaid
+flowchart LR
+    Avail["Available Stock (total - soft - hard)"] -->|"1. Order Placed (10m TTL)"| Soft["Soft Reserve (Temporary Hold)"]
+    Soft -->|"TTL Expired / Payment Failed"| Avail
+    Soft -->|"2. Payment Succeeded"| Hard["Hard Reserve (Committed)"]
+    Hard -->|"Order Cancelled"| Avail
+    Hard -->|"3. Shipment Initiated"| Deduct["Deducted (Removed from Warehouse)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Avail blue
+    class Soft amber
+    class Hard green
+    class Deduct purple
 ```
-1. Soft Reserve (hold stock without committing)
-   └─> Customer places order
-       └─> "We're holding X units for you for 10 minutes"
-       └─> If payment fails, auto-release
 
-2. Hard Reserve (commit stock)
-   └─> Payment succeeded
-       └─> "Stock is yours, locked in"
-       └─> Cannot be released
+| Stage | Trigger | Releasable? | Purpose |
+|-------|---------|-------------|---------|
+| **1. Soft Reserve** | Customer places order | Yes (10-min TTL or payment failure) | Handles abandoned carts and payment latency without blocking stock forever |
+| **2. Hard Reserve** | Payment succeeded | Only on order cancellation | Locks stock for confirmed orders |
+| **3. Deduction** | Shipment initiated | No (physical removal) | Creates audit trail and syncs with warehouse inventory |
 
-3. Deduction (remove from total inventory)
-   └─> Shipment initiated
-       └─> Stock physically removed from warehouse
-```
-
-**Why three stages?**
-- Soft reserve: handle abandoned carts (customer pays but inventory is held temporarily)
-- Hard reserve: payment confirmed, won't release unless order cancelled
-- Deduction: creates audit trail and aligns with warehouse system
+> [!TIP]
+> Use **optimistic locking** (`@Version` + retry loop) instead of `SELECT ... FOR UPDATE` for inventory updates. It avoids row-lock contention during flash sales while preventing overselling.
 
 ### Java: Inventory Service with Locking
 
@@ -1730,60 +1737,48 @@ Event sourcing makes writes efficient (append-only), but queries are slow:
 List<Order> orders = orderStore.loadAndReplay(orderIds);  // 5 seconds!
 ```
 
-**CQRS** = **Command Query Responsibility Segregation**:
+**CQRS** (**Command Query Responsibility Segregation**) separates writes and reads:
 - **Write model:** Event store (authoritative, append-only)
 - **Read model:** Materialized views (fast queries, eventually consistent)
 
+> [!NOTE]
+> Read models may lag behind the event store by a few milliseconds to seconds, but they are **eventually accurate** and can be completely rebuilt from the event store if corrupted.
+
 ### Architecture
 
+```mermaid
+flowchart TD
+    subgraph WritePath["Write Path (Commands)"]
+        OS["Order Service (Commands)"] -->|"Creates events"| ES["Event Store (order_events, append-only)"]
+        ES -->|"Publishes to Kafka"| K["Kafka: order-events"]
+    end
+
+    subgraph ReadPath["Read Path (Queries)"]
+        K -->|"Consumed by ReadModelBuilder"| RM["Materialized Read Models"]
+        RM --> V1["order_view (by order_id)"]
+        RM --> V2["order_list_view (by customer_id)"]
+        RM --> V3["order_status_aggregation (dashboard)"]
+        RM --> V4["late_shipments_view (unshipped &gt; 3d)"]
+        QS["Query Service (REST Endpoints)"] -->|"Fast queries (&lt;1ms)"| RM
+    end
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class OS,QS blue
+    class ES,K purple
+    class RM amber
+    class V1,V2,V3,V4 green
 ```
-┌──────────────┐
-│ Order Service│
-│ (commands)   │
-└──────┬───────┘
-       │
-    Creates events
-       │
-       ▼
-┌──────────────────────┐
-│  Event Store         │ ◄──── Source of truth
-│  (order_events)      │       Append-only
-└──────┬───────────────┘
-       │
-    Publishes to Kafka
-       │
-       ▼
-┌──────────────────────┐
-│ Kafka: order-events  │
-└──────┬───────────────┘
-       │
-       │  Consumed by Read Model Builder
-       │
-       ▼
-┌──────────────────────────────────────┐
-│ Materialized Read Models             │
-│                                      │
-│  - order_view                        │
-│    (fast lookup by order_id)        │
-│                                      │
-│  - order_list_view                   │
-│    (fast list by customer_id)        │
-│                                      │
-│  - order_status_aggregation          │
-│    (dashboard: count by status)      │
-│                                      │
-│  - late_shipments_view               │
-│    (orders not shipped in 3 days)    │
-└──────────────────────────────────────┘
-       ▲
-       │
-    Fast queries
-       │
-┌──────┴──────────┐
-│ Query Service   │
-│ (REST endpoints)│
-└─────────────────┘
-```
+
+| Read Model View | Primary Lookup | Purpose |
+|-----------------|----------------|---------|
+| `order_view` | `order_id` | Fast single-order detail lookup |
+| `order_list_view` | `customer_id` | Paginated customer order history |
+| `order_status_aggregation` | `status` | Admin dashboard counts by status |
+| `late_shipments_view` | `created_at` / `status` | Operational alert for orders not shipped in 3 days |
 
 ### Java: Read Model Builder
 
@@ -2068,9 +2063,33 @@ public class ReadModelRebuildService {
 
 ## Production Concerns
 
+```mermaid
+flowchart LR
+    In["Kafka: order-events"] -->|"Upcast v1 → v2"| Up["EventUpcaster"]
+    Up --> Cons["Order Event Consumer"]
+    Cons -->|"Success"| Met["Metrics: Lag, Latency, Saga Rate"]
+    Cons -->|"Failed after Retries"| DLQ["order-events-dlq (30d retention)"]
+    DLQ -->|"DLQMonitor (&gt; 100 msgs)"| Alert["PagerDuty / Alerting"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class In purple
+    class Up,Cons blue
+    class Met green
+    class DLQ amber
+    class Alert red
+```
+
 ### 1. Dead Letter Queue (DLQ) for Failed Events
 
-Events that fail to process after retries go to DLQ for investigation:
+Events that fail to process after retries go to a DLQ for investigation and replay:
+
+> [!WARNING]
+> Never silently drop failed Kafka events. Route them to a DLQ with error context and alert when unprocessed DLQ messages exceed your threshold (e.g., `> 100`).
 
 ```yaml
 # Kafka topic configuration
@@ -2158,11 +2177,14 @@ public class KafkaMetricsCollector {
 ```
 
 **Key metrics to monitor:**
-- Consumer lag (should be < 100ms)
-- Event processing latency (p99 < 1s)
-- Saga completion rate (target 99%+)
-- DLQ message count (should be ~0)
-- Kafka broker replication lag (< 10ms)
+
+| Metric | Target | Why It Matters |
+|--------|--------|----------------|
+| **Consumer lag** | `< 100ms` | Detects consumers falling behind event production |
+| **Event processing latency** | `p99 < 1s` | Catches slow DB queries or downstream stalls |
+| **Saga completion rate** | `99%+` | Measures end-to-end order workflow health |
+| **DLQ message count** | `~0` | Surfaces poison pills and schema/logic bugs |
+| **Kafka broker replication lag** | `< 10ms` | Ensures durability and HA failover readiness |
 
 ### 3. Schema Evolution
 
@@ -2326,301 +2348,233 @@ Using **Testcontainers** for integration tests:
 
 ## Interview Follow-ups & Answers
 
+```mermaid
+flowchart TD
+    Q["Common Interview Follow-ups"] --> T["Payment Timeout (Q1)"]
+    Q --> F["Flash Sale Oversell (Q2)"]
+    Q --> D["Stuck Saga Debug (Q4)"]
+
+    T --> T1["30s Step Timer → Exponential Backoff (3x) → Compensate / DLQ"]
+    F --> F1["Optimistic Lock (@Version) + 10m Soft TTL + FIFO Waitlist"]
+    D --> D1["Event Store → Saga State → Kafka Lag → Logs → Manual Recovery"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Q blue
+    class T,F,D purple
+    class T1,F1 amber
+    class D1 green
+```
+
 ### Q1: "How do you handle a payment timeout mid-saga?"
 
 **Scenario:** Saga sent payment command to Payment Service, but service is slow and doesn't respond for 5 minutes.
 
 **Answer:**
+1. **Timeout Detection:** Saga maintains a timeout on each step (e.g., `30 seconds`). If no event arrives in 30s, trigger compensation.
+2. **Implementation:**
 
+```java
+@KafkaListener(topics = "order-events")
+public void handleOrderCreated(OrderCreated event) {
+    scheduledExecutor.schedule(() -> {
+        if (sagaStates.get(event.orderId).currentStep ==
+            SagaStep.PROCESSING_PAYMENT) {
+            // Still waiting; timeout!
+            handlePaymentTimeout(event.orderId);
+        }
+    }, 30, TimeUnit.SECONDS);
+}
 ```
-1. Timeout Detection:
-   - Saga maintains timeout on each step (e.g., 30 seconds)
-   - If no event received after 30s, move to compensation
 
-2. Implementation:
-   @KafkaListener(topics = "order-events")
-   public void handleOrderCreated(OrderCreated event) {
-       scheduledExecutor.schedule(() -> {
-           if (sagaStates.get(event.orderId).currentStep ==
-               SagaStep.PROCESSING_PAYMENT) {
-               // Still waiting; timeout!
-               handlePaymentTimeout(event.orderId);
-           }
-       }, 30, TimeUnit.SECONDS);
-   }
-
-3. Compensation:
+3. **Compensation:**
    - Cancel inventory reservation
-   - Notify customer: "Payment processing delayed, please retry"
-   - Store in pending-retries for manual processing
-
-4. Retry Strategy (exponential backoff):
-   - 1st try: immediate
-   - 2nd try: +30 seconds
-   - 3rd try: +5 minutes
-   - Max retries: 3 attempts
-   - After max: manual review (DLQ)
-```
+   - Notify customer: `"Payment processing delayed, please retry"`
+   - Store in `pending-retries` for manual processing
+4. **Retry Strategy (exponential backoff):**
+   - **1st try:** immediate → **2nd try:** `+30 seconds` → **3rd try:** `+5 minutes`
+   - **Max retries:** `3 attempts` → after max, route to **DLQ** for manual review
 
 ### Q2: "How do you ensure inventory doesn't oversell during flash sales?"
 
 **Scenario:** 10,000 orders placed simultaneously, all trying to reserve the same product with only 5,000 units.
 
 **Answer:**
+1. **Optimistic Locking Strategy:** Database `version` field prevents overselling; if update fails due to version mismatch, retry.
 
+```java
+Inventory inv = inventoryRepository.findById(productId);
+inv.setSoftReservedStock(inv.getSoftReservedStock() + needed);
+
+int rows = inventoryRepository.updateWithVersion(
+    productId, inv.getVersion(), inv
+);
+
+if (rows == 0) {
+    // Version conflict: another transaction updated it
+    throw InsufficientStockException();
+}
 ```
-1. Optimistic Locking Strategy:
-   - Database version field prevents overselling
-   - If update fails due to version mismatch, retry
 
-2. Implementation:
-   Inventory inv = inventoryRepository.findById(productId);
-   inv.setSoftReservedStock(inv.getSoftReservedStock() + needed);
+2. **Soft Reserve with TTL:** Hold for `10 minutes` only; auto-release if unconfirmed to free stock for other orders.
+3. **Queue if Insufficient:** Don't reject immediately — add to waitlist (`"Notifying you when back in stock"`). Notify customers in FIFO order when inventory is released.
+4. **Monitoring:** Alert if oversold (`stock < 0` → DB corruption); track `soft-reserve + hard-reserve + deducted` and real-time `available stock`.
 
-   int rows = inventoryRepository.updateWithVersion(
-       productId, inv.getVersion(), inv
-   );
-
-   if (rows == 0) {
-       // Version conflict: another transaction updated it
-       throw InsufficientStockException();
-   }
-
-3. Soft Reserve with TTL:
-   - Reserve for 10 minutes only
-   - Auto-release if not confirmed with payment
-   - Makes more inventory available for other orders
-
-4. Queue if Insufficient:
-   - Don't reject order immediately
-   - Add to waitlist: "Notifying you when back in stock"
-   - If inventory released, notify customer
-   - Guaranteed FIFO fairness
-
-5. Monitoring:
-   - Alert if oversold (stock < 0) → database corruption
-   - Track soft-reserve + hard-reserve + deducted
-   - Monitor "available stock" in real-time
-
-Alternative (Pessimistic Locking - not recommended for flash sales):
-   SELECT * FROM inventory WHERE product_id = ? FOR UPDATE;
-   -- Locks row, causes contention at scale
-```
+> [!NOTE]
+> **Alternative (Pessimistic Locking — not recommended for flash sales):** `SELECT * FROM inventory WHERE product_id = ? FOR UPDATE;` locks the row and causes severe contention at scale.
 
 ### Q3: "How would you add a new step to the saga (e.g., fraud check)?"
 
-**Before:** Order Created → Reserve Inventory → Process Payment → Ship
-
-**After:** Order Created → Fraud Check → Reserve Inventory → Process Payment → Ship
+- **Before:** `Order Created → Reserve Inventory → Process Payment → Ship`
+- **After:** `Order Created → Fraud Check → Reserve Inventory → Process Payment → Ship`
 
 **Answer:**
+1. **Update Event Model:** Add `FraudCheckRequested`, `FraudCheckPassed` / `FraudCheckFailed` events, and `FRAUD_CHECKING` to `OrderStatus`.
+2. **Update Saga State Machine:**
 
+```java
+enum SagaStep {
+    CHECKING_FRAUD,          // NEW
+    RESERVING_INVENTORY,
+    PROCESSING_PAYMENT,
+    PROCESSING_SHIPPING,
+    COMPLETED
+}
 ```
-1. Update Event Model:
-   - Add FraudCheckRequested event
-   - Add FraudCheckPassed / FraudCheckFailed events
-   - Update OrderStatus enum: add FRAUD_CHECKING state
 
-2. Update Saga State Machine:
-   enum SagaStep {
-       CHECKING_FRAUD,          // NEW
-       RESERVING_INVENTORY,
-       PROCESSING_PAYMENT,
-       PROCESSING_SHIPPING,
-       COMPLETED
-   }
+3. **Update Saga Orchestrator:**
 
-3. Update Saga Orchestrator:
-   @KafkaListener(topics = "order-events")
-   public void handleOrderCreated(OrderCreated event) {
-       SagaState state = new SagaState(
-           event.orderId,
-           SagaStep.CHECKING_FRAUD,  // NEW: start with fraud check
-           clock.instant()
-       );
-       sagaStates.put(event.orderId, state);
+```java
+@KafkaListener(topics = "order-events")
+public void handleOrderCreated(OrderCreated event) {
+    SagaState state = new SagaState(
+        event.orderId,
+        SagaStep.CHECKING_FRAUD,  // NEW: start with fraud check
+        clock.instant()
+    );
+    sagaStates.put(event.orderId, state);
 
-       // Command fraud service
-       FraudCheckCommand cmd = new FraudCheckCommand(
-           event.orderId,
-           event.customerId,
-           event.totalAmount,
-           event.shippingAddress
-       );
-       publishCommand(cmd, "fraud-commands");
-   }
-
-4. Handle Fraud Check Results:
-   @KafkaListener(topics = "fraud-events")
-   public void handleFraudCheckPassed(FraudCheckPassed event) {
-       SagaState state = sagaStates.get(event.orderId);
-       if (state.currentStep != SagaStep.CHECKING_FRAUD) {
-           return;  // Unexpected
-       }
-
-       // Move to next step: inventory reservation
-       state.currentStep = SagaStep.RESERVING_INVENTORY;
-       InventoryReservationCommand cmd = new InventoryReservationCommand(...);
-       publishCommand(cmd, "inventory-commands");
-   }
-
-   @KafkaListener(topics = "fraud-events")
-   public void handleFraudCheckFailed(FraudCheckFailed event) {
-       // No compensation needed (no previous steps)
-       // Just mark order as blocked
-       OrderAggregate order = orderRepository.loadOrder(event.orderId);
-       order.blockDueToFraud(event.reason);
-       orderRepository.save(order);
-
-       notificationService.sendEmail(
-           order.getCustomerId(),
-           "Order blocked for security review"
-       );
-   }
-
-5. Database Changes:
-   -- No changes needed! Saga state is in-memory/stored in sagaStateRepository
-   -- New events appended to order_events automatically
-   -- New read models created by event consumers
+    // Command fraud service
+    FraudCheckCommand cmd = new FraudCheckCommand(
+        event.orderId,
+        event.customerId,
+        event.totalAmount,
+        event.shippingAddress
+    );
+    publishCommand(cmd, "fraud-commands");
+}
 ```
+
+4. **Handle Fraud Check Results:**
+
+```java
+@KafkaListener(topics = "fraud-events")
+public void handleFraudCheckPassed(FraudCheckPassed event) {
+    SagaState state = sagaStates.get(event.orderId);
+    if (state.currentStep != SagaStep.CHECKING_FRAUD) {
+        return;  // Unexpected
+    }
+
+    // Move to next step: inventory reservation
+    state.currentStep = SagaStep.RESERVING_INVENTORY;
+    InventoryReservationCommand cmd = new InventoryReservationCommand(...);
+    publishCommand(cmd, "inventory-commands");
+}
+
+@KafkaListener(topics = "fraud-events")
+public void handleFraudCheckFailed(FraudCheckFailed event) {
+    // No compensation needed (no previous steps)
+    // Just mark order as blocked
+    OrderAggregate order = orderRepository.loadOrder(event.orderId);
+    order.blockDueToFraud(event.reason);
+    orderRepository.save(order);
+
+    notificationService.sendEmail(
+        order.getCustomerId(),
+        "Order blocked for security review"
+    );
+}
+```
+
+5. **Database Changes:** None needed! Saga state lives in `sagaStateRepository`, new events append to `order_events` automatically, and read models are updated by event consumers.
 
 ### Q4: "How do you debug issues in event-driven systems?"
 
-**Scenario:** Order is stuck in PAYMENT_PROCESSING state for 24 hours.
+**Scenario:** Order is stuck in `PAYMENT_PROCESSING` state for 24 hours.
 
 **Answer:**
 
+1. **Check Event Store:**
+```sql
+SELECT * FROM order_events WHERE order_id = ?
+ORDER BY aggregate_version ASC;
+
+-- Expected sequence:
+-- 1. OrderCreated
+-- 2. InventoryReserved
+-- 3. PaymentProcessingCommand sent (logged? check logs)
+-- 4. PaymentProcessed (missing?)
 ```
-1. Check Event Store:
-   SELECT * FROM order_events WHERE order_id = ?
-   ORDER BY aggregate_version ASC;
 
-   -- Expected sequence:
-   -- 1. OrderCreated
-   -- 2. InventoryReserved
-   -- 3. PaymentProcessingCommand sent (logged? check logs)
-   -- 4. PaymentProcessed (missing?)
-
-2. Check Saga State:
-   SELECT * FROM saga_states WHERE order_id = ?;
-   -- Is it stuck in PROCESSING_PAYMENT?
-   -- How long? (check created_at)
-
-3. Check Kafka:
-   kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
-       --group order-saga --describe
-
-   -- Consumer lag high? (not processing events)
-   -- Consumer error rate high?
-
-4. Check Logs:
-   - Search for order UUID in logs
-   - Look for exception stacktraces
-   - Check Saga service logs specifically
-
-   Example log trail:
-   [OrderCreated event] → creates saga state
-   [InventoryReserved event] → moves to PROCESSING_PAYMENT
-   [Timeout detected at 30s mark] → should see compensation logs
-
-   If missing:
-   - Saga pod crashed?
-   - Consumer not consuming?
-   - Event not published to Kafka?
-
-5. Manual Recovery:
-   a) If inventory reserved but payment failed:
-      - Manually publish PaymentFailed event
-      - Saga should compensate
-
-   b) If stuck for too long:
-      - Query DLQ: are there failed events?
-      - If yes, fix root cause and replay
-
-   c) Kill stuck saga:
-      - DELETE FROM saga_states WHERE order_id = ?;
-      - Saga won't timeout again
-      - Admin manually resolve order
-
-6. Prevent Future Issues:
-   - Add structured logging with order_id + saga_step
-   - Add metrics: saga_stuck_duration_seconds
-   - Alert if saga > 10 minutes without progress
-   - Distributed tracing: Jaeger/Zipkin to follow order through all services
+2. **Check Saga State:**
+```sql
+SELECT * FROM saga_states WHERE order_id = ?;
+-- Is it stuck in PROCESSING_PAYMENT? Check created_at.
 ```
+
+3. **Check Kafka Consumer Lag:**
+```bash
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --group order-saga --describe
+-- Consumer lag high? Consumer error rate high?
+```
+
+4. **Check Logs:** Search by order `UUID` for exception stacktraces and Saga service logs:
+   - `[OrderCreated event]` → creates saga state
+   - `[InventoryReserved event]` → moves to `PROCESSING_PAYMENT`
+   - `[Timeout detected at 30s mark]` → should see compensation logs (if missing: saga pod crashed, consumer not consuming, or event not published to Kafka)
+5. **Manual Recovery:**
+   - **Inventory reserved, payment failed:** Manually publish `PaymentFailed` event so Saga compensates
+   - **Stuck too long:** Query DLQ for failed events, fix root cause, and replay
+   - **Kill stuck saga:** `DELETE FROM saga_states WHERE order_id = ?;` (stops timeout loop) and resolve order manually
+6. **Prevent Future Issues:**
+   - Structured logging with `order_id` + `saga_step`
+   - Metric `saga_stuck_duration_seconds` + alert if saga `> 10 minutes` without progress
+   - Distributed tracing (**Jaeger/Zipkin**) to follow an order across all services
 
 ### Q5: "What's the latency impact of event sourcing?"
 
 **Answer:**
 
-```
-Write Latency:
-  - Append to event store: ~2ms (sequential disk write)
-  - Publish to Kafka: ~5ms
-  - Total: ~7ms (fast!)
-  - (Compare to: multiple RPC calls in choreography)
+| Operation | Latency | Notes |
+|-----------|---------|-------|
+| **Write (Event Store + Kafka)** | `~7ms` | `~2ms` sequential append + `~5ms` Kafka publish (vs multiple sync RPCs) |
+| **Read (1,000 events, no snapshot)** | `~50ms` | Full event replay |
+| **Read (with snapshots every 100 events)** | `~5ms` | Load snapshot (`~1ms`) + replay 10 events |
+| **Read Model (CQRS)** | `<1ms` | Index lookup on denormalized view |
 
-Read Latency (without snapshots):
-  - Load order (1000 events): ~50ms (replay all)
-  - With snapshots (10 events): ~5ms (load snapshot + 10 events)
-  - Read model (CQRS): <1ms (index lookup)
-
-Optimization:
-  1. Use snapshots every 100 events:
-     - Reduce replay from 1000 events → 10 events
-     - Snapshot overhead: 1ms (write) + 1ms (read)
-     - Total: 2ms faster than full replay
-
-  2. Use CQRS for queries:
-     - Event store: write-optimized (append-only)
-     - Read model: query-optimized (denormalized)
-     - <1ms for order list queries (index + cache)
-
-  3. Kafka consumers: lazy update read model
-     - Synchronous path: write to event store (2ms)
-     - Asynchronous: update read models (eventually consistent)
-     - No blocking on read model updates
-```
+**Optimizations:**
+1. **Snapshots every 100 events:** Reduces replay from 1,000 → 10 events (`1ms` write + `1ms` read overhead).
+2. **CQRS for queries:** Write-optimized event store + query-optimized denormalized read model (`<1ms` with index + cache).
+3. **Async Kafka consumers:** Sync path only writes to event store (`2ms`); read models update asynchronously with zero blocking.
 
 ### Q6: "How do you handle distributed transactions reliably?"
 
-**Answer:**
+**The Challenge:** Step A succeeds, Step B fails → A must be undone, with no shared database transaction.
 
-```
-The Challenge:
-  Step A succeeds, Step B fails → A must be undone
-  But we have no shared database transaction!
+**Solution: Compensating Transactions (Sagas)**
 
-Solution: Compensating Transactions (Sagas)
+| Path | Execution Flow |
+|------|----------------|
+| **Happy Path** | `Order ✓ → Reserve Inventory ✓ → Charge Payment ✓ → Ship ✓` |
+| **Payment Declined** | `Order → Reserve Inventory → Charge Payment ✗` → **Compensate:** `Cancel Inventory` / `Refund` |
+| **Shipping Unavailable** | `Order → Reserve Inventory → Charge Payment → Ship ✗` → **Compensate:** `Refund Payment` → `Cancel Inventory` |
 
-1. Happy Path:
-   Order → Reserve Inventory → Charge Payment → Ship
-   ✓    ✓               ✓          ✓        ✓
-
-2. Failure Path (payment declined):
-   Order → Reserve Inventory → Charge Payment ✗
-           ↓
-           Refund (compensation)
-
-3. Failure Path (shipping unavailable):
-   Order → Reserve Inventory → Charge Payment → Ship ✗
-           ↓
-           Refund Payment (compensation 2)
-           ↓
-           Cancel Inventory (compensation 1)
-
-Guarantees:
-  - Atomicity: All or nothing (compensations ensure all/nothing)
-  - Consistency: Final state is consistent
-  - Isolation: Each saga isolated (events are immutable)
-  - Durability: Events stored in database (replicated)
-
-Trade-offs:
-  - Not instant (lag between steps)
-  - Not ACID (eventually consistent)
-  - Requires compensating logic (extra code)
-  - Idempotency required (handle retries)
-```
+- **Guarantees:** **Atomicity** (compensations ensure all-or-nothing), **Consistency** (consistent final state), **Isolation** (immutable events per saga), **Durability** (replicated DB event store).
+- **Trade-offs:** Not instant (lag between steps), not ACID (eventually consistent), requires compensating logic (extra code) and idempotency (handle retries).
 
 ### Q7: Mid-Level vs Senior-Level Comparison
 
@@ -2640,16 +2594,30 @@ Trade-offs:
 
 ## Quick Reference & Tips
 
-### Tips for Interview
+### 60-Minute Interview Pacing & Strategy
+
+```mermaid
+flowchart LR
+    P1["10m: Architecture (Write/Read + NFRs)"] --> P2["30m: Design & Code (Saga + Outbox + CQRS)"]
+    P2 --> P3["20m: Follow-ups (Failures + Monitoring + Trade-offs)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class P1 blue
+    class P2 purple
+    class P3 green
+```
 
 1. **Start with write-path (command flow)**, then read-path (queries)
 2. **Draw the architecture first**, then code key components
 3. **Mention non-functional requirements early**: exactly-once, fault tolerance
-4. **Prepare 1-2 failure scenarios** you've thought through
+4. **Prepare 1–2 failure scenarios** you've thought through
 5. **Be honest about trade-offs**: event sourcing is powerful but adds complexity
 6. **Code the saga orchestrator**: it's the heart of the system
 7. **Mention monitoring**: interviewer wants to see you think about production
-8. **Time management**: 60 min = 10 min arch, 30 min design/code, 20 min follow-ups
+8. **Time management**: `60 min = 10 min arch + 30 min design/code + 20 min follow-ups`
 
 ### Kafka Configurations for Production
 
@@ -2723,6 +2691,24 @@ ALTER TABLE order_events SET (autovacuum_analyze_scale_factor = 0.05);
 
 ## Final Checklist Before Interview
 
+```mermaid
+flowchart LR
+    D["Distributed Systems (Consistency + Compensation)"] --> R["FAANG 5-YOE Ready"]
+    P["Production Awareness (Monitoring + DLQ + Testing)"] --> R
+    C["Code Ability (Java + Spring Boot + Kafka + SQL)"] --> R
+    T["Trade-off Analysis (Why &gt; How)"] --> R
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+
+    class D blue
+    class P amber
+    class C purple
+    class T,R green
+```
+
 - [ ] Can explain event sourcing benefits/trade-offs without notes
 - [ ] Can draw saga orchestration state diagram from memory
 - [ ] Understand exactly-once processing: idempotency + deduplication
@@ -2732,14 +2718,5 @@ ALTER TABLE order_events SET (autovacuum_analyze_scale_factor = 0.05);
 - [ ] Time management: architecture → design → code → follow-ups
 - [ ] Ready to pivot: "What if we needed real-time consistency?" etc.
 
----
-
-**Good luck with your interview!**
-
-For a 5 YOE engineer targeting FAANG, this system demonstrates:
-- Distributed systems thinking (eventual consistency, compensation)
-- Production awareness (monitoring, fault tolerance, testing)
-- Code ability (Java, Spring Boot, Kafka, SQL)
-- Problem-solving (trade-offs, failure scenarios)
-
-Focus on **explaining the "why"** (business constraints drive design) not just the "how."
+> [!TIP]
+> **Good luck with your interview!** For a 5 YOE engineer targeting FAANG, focus on **explaining the "why"** (business constraints drive design) not just the "how."

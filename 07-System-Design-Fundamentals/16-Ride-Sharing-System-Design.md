@@ -636,7 +636,31 @@ public class H3DriverMatcher {
 
 ## 7. Redis GEO Commands: The Implementation
 
-While H3 is great for understanding, Redis **GEO commands** (GEOADD, GEORADIUS) provide production-ready geospatial indexing.
+While H3 is great for understanding, Redis **GEO commands** (`GEOADD`, `GEORADIUS`) provide production-ready geospatial indexing.
+
+```mermaid
+flowchart LR
+    A["RideRequest (lat, lng)"] --> B["GEORADIUS 2km (limit 100)"]
+    B --> C{"Drivers found?"}
+    C -- "Yes" --> E["Filter & Enrich (DriverService)"]
+    C -- "No" --> D["Expand Search to 15km"]
+    D --> E
+    E --> F["Score: exp(-0.5*dist) * rating * accept + dirBonus"]
+    F --> G["Sort & Return Top 5 Drivers"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class A,B blue
+    class C,D amber
+    class E,F purple
+    class G green
+```
+
+> [!TIP]
+> Under the hood, Redis GEO stores coordinates in a **Sorted Set (`ZSET`)** using a 52-bit geohash score, giving `O(N + log M)` range queries where `M` is total drivers and `N` is drivers inside the bounding box.
 
 ### Redis GEO Commands Reference
 
@@ -850,58 +874,40 @@ public class RideMatchingService {
 
 ## 8. Real-Time Location Tracking
 
-Drivers update location every 3-5 seconds. This generates massive load.
+Drivers update location every **3-5 seconds**, generating massive write throughput.
 
-### Location Update Architecture
+```mermaid
+flowchart TD
+    A["Driver App (Every 4s: POST /api/driver/location)"] --> B["API Gateway"]
+    B --> C["Redis GEO (GEOADD drivers:geo)"]
+    B --> D["Kafka Topic: driver_location_updates"]
+    B --> E["Return 200 OK (Latency-Critical)"]
+    D --> F["Kafka Consumer"]
+    F --> G["Cassandra (driver_locations table)"]
+    F --> H["Update H3 Cell Assignment"]
+    F --> I["WebSocket Broadcast to Rider Map"]
 
-```
-Driver phone (location service running)
-          │
-          │ Every 4 seconds:
-          │ POST /api/driver/location
-          │ { lat: 19.076, lng: 72.877 }
-          │
-          ▼
-    API Gateway
-          │
-          ├─→ Update Redis GEO (GEOADD drivers:geo)
-          │   (fast, in-memory)
-          │
-          ├─→ Publish to Kafka topic "driver_location_updates"
-          │
-          └─→ Return 200 OK to driver (latency-critical)
-                   │
-                   ▼
-          Update rider's real-time map
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
 
-Kafka consumer:
-          │
-          ├─→ Persist to Cassandra (eventually consistent)
-          │   driver_locations table
-          │
-          └─→ Update driver's H3 cell assignment
-              (move from old H3 to new H3 if crossed boundary)
+    class A,B blue
+    class C,E green
+    class D,F amber
+    class G,H,I purple
 ```
 
-### Which protocol: WebSocket vs HTTP Polling vs Server-Sent Events?
+### Protocol Comparison: WebSocket vs. HTTP Polling vs. SSE
 
-```
-Protocol             Driver→Server  Server→Rider  Latency  Complexity
-────────────────────────────────────────────────────────────────────
-HTTP Polling         Every 4s       Every 2-5s    2-10s    Simple
-  (rider polls)      POST to REST   GET location
+| Protocol | Driver → Server | Server → Rider | Latency | Complexity |
+|----------|-----------------|----------------|---------|------------|
+| **HTTP Polling** | `POST` every 4s | `GET` every 2-5s | 2-10s | Simple |
+| **Server-Sent Events** | `POST` every 4s | `EventSource` stream | 1-5s | Medium (better UX) |
+| **WebSocket** | Bidirectional real-time | Bidirectional real-time | &lt; 1s | Complex (heavyweight) |
 
-Server-Sent Events   Every 4s       Streaming     1-5s     Medium
-  (server pushes)    POST to REST   EventSource   (better UX)
-
-WebSocket            Every 4s       Bidirectional <1s     Complex
-  (both sides)       Real-time      Real-time    (but heavyweight)
-```
-
-**For ride-sharing:** Use **HTTP Polling for driver location updates** + **Server-Sent Events or WebSocket for rider tracking**
-
-- Driver → Server: HTTP POST every 4 seconds (one-way, driver doesn't need updates)
-- Server → Rider: WebSocket (rider needs low-latency driver position)
+> [!IMPORTANT]
+> **Recommended Hybrid Split:** Use **HTTP `POST` every 4 seconds** for Driver → Server (one-way, stateless, no persistent connection needed) and **WebSocket** (or SSE) for Server → Rider (low-latency live map updates).
 
 ### Java Implementation: Location Service
 
@@ -1070,24 +1076,32 @@ for (RideRequest request : newRequests) {
 
 ### Better: Batched Global Matching (✓ Production-Grade)
 
+```mermaid
+flowchart TD
+    A["0ms: Collect Ride Requests in Queue"] --> B["1000ms: Batch (~16,700 requests / 10s window)"]
+    B --> C["1001ms: Collect Available Drivers"]
+    C --> D["1002ms: Bipartite Graph Max Weighted Matching (Weight = Score)"]
+    D --> E["1500ms: Send Offers to Top 5 Drivers per Request"]
+    E --> F["1510ms: Wait 10s for Accept / Decline"]
+    F --> G{"Accepted?"}
+    G -- "Yes" --> H["2000ms: Assign First Accepter"]
+    G -- "No / Expired" --> I["Re-offer to Next Driver in Cycle"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class A,B,C blue
+    class D,E purple
+    class F,G amber
+    class H green
+    class I red
 ```
-Time 0ms:     Collect all ride requests in queue
-              ↓
-Time 1000ms:  Batch = 16,700 new requests (10 seconds of requests)
-              ↓
-Time 1001ms:  Collect all available drivers
-              ↓
-Time 1002ms:  Run global optimization:
-              - Build bipartite graph: requests ↔ drivers
-              - Find maximum weighted matching
-              - Weight = desirability score
-              ↓
-Time 1500ms:  Send offers to top 5 drivers per request
-              ↓
-Time 1510ms:  Wait for responses (accept/decline)
-              ↓
-Time 2000ms:  Assign first accepters, re-offer remainder
-```
+
+> [!TIP]
+> **Why Batching Beats Greedy:** Greedy per-request matching lets early requests steal optimal drivers from later requests. Batching every **2 seconds** trades a 2s delay for global bipartite optimization and **10x higher throughput**.
 
 ### Java Implementation: Batched Matching Engine
 
@@ -1316,22 +1330,39 @@ public class RidePoolingService {
 
 ## 10. Surge Pricing: Supply-Demand Economics
 
-Dynamic pricing where demand > supply multiplies base fare.
+Dynamic pricing multiplies the base fare when **demand &gt; supply**, recalculated every **30 seconds** per geohash cell.
 
-### How Surge Pricing Works
+```mermaid
+flowchart LR
+    A["Supply (supply:count:geohash)"] --> C["Ratio = Demand / Supply"]
+    B["Demand (demand:queue:geohash)"] --> C
+    C --> D["Curve: 1 + (ratio - 1)^1.2"]
+    D --> E["Clamp [1.0x, 5.0x]"]
+    E --> F["Fairness Filter (Max ±20% Change)"]
+    F --> G["Redis: surge:multiplier:geohash (2m TTL)"]
 
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class A,B blue
+    class C,D purple
+    class E,F amber
+    class G green
 ```
-Normal demand:     Supply = 100 drivers, Demand = 80 riders
-                   Multiplier = 1.0x
 
-Spike demand:      Supply = 100 drivers, Demand = 200 riders
-                   Multiplier = 2.0x (200/100)
+### Surge Pricing Scenarios
 
-Extreme demand:    Supply = 100 drivers, Demand = 600 riders
-                   Multiplier = 5.0x (capped at 5x)
+| Scenario | Supply (Drivers) | Demand (Riders) | Multiplier | Notes |
+|----------|------------------|-----------------|------------|-------|
+| **Normal Demand** | 100 | 80 | `1.0x` | Base fare |
+| **Spike Demand** | 100 | 200 | `2.0x` | `200 / 100` |
+| **Extreme Demand** | 100 | 600 | `5.0x` | Capped at `5.0x` |
+| **Recalculation** | Per geohash cell | Per geohash cell | Every 30s | 2-minute Redis TTL |
 
-Real-time:         Recalculate every 30 seconds per geohash cell
-```
+> [!NOTE]
+> **Fairness &amp; Smoothing:** Sudden price shocks hurt trust. `applyFairnessConstraints` limits multiplier changes to **±20% per 30-second cycle**, and the engine caps surge at **5.0x**.
 
 ### Java Implementation: Surge Pricing Engine
 
@@ -1503,29 +1534,46 @@ public class SurgePricingEngine {
 
 ## 11. Fare Calculation
 
-Base fare + distance-based + time-based + surge multiplier.
+`Total Fare = (Base Fare + Distance Fee + Time Fee) × Surge Multiplier`
 
-### Fare Formula
+```mermaid
+flowchart TD
+    A["Upfront: Pickup + Dropoff"] --> B["Routing API (Distance &amp; ETA)"]
+    B --> C["Fetch Surge Multiplier"]
+    C --> D["max(MIN_FARE, Base + Dist + Time) * Surge"]
+    D --> E["Cap at MAX_FARE ($500) → FareEstimate"]
+    F["Post-Ride: GPS Trace"] --> G["Actual Distance &amp; Duration"]
+    G --> H["Recalculate Final Fare"]
+    H --> I{"Actual &gt; 1.2x Estimate?"}
+    I -- "No" --> J["Finalize Total Fare"]
+    I -- "Yes" --> K["Cap at 1.1x Estimate &amp; Flag Admin Review"]
 
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class A,B,C blue
+    class D,G,H purple
+    class E,J green
+    class I amber
+    class K red
 ```
-Total Fare = (Base Fare + Distance Fee + Time Fee) × Surge Multiplier
 
-Where:
-  Base Fare             = $2.00 (flat)
-  Distance Fee          = (distance km) × $0.75 per km
-  Time Fee              = (duration min) × $0.25 per min
-  Surge Multiplier      = f(supply, demand) [1.0 to 5.0]
+### Fare Formula &amp; Example
 
-Example:
-  Distance: 5 km
-  Time: 15 minutes
-  Surge: 1.5x
+| Component | Rate / Rule | Example (`5 km`, `15 min`, `1.5x` surge) |
+|-----------|-------------|------------------------------------------|
+| **Base Fare** | `$2.00` flat (min `$3.00` total base) | `$2.00` |
+| **Distance Fee** | `$0.75` per km | `5 × $0.75 = $3.75` |
+| **Time Fee** | `$0.25` per min | `15 × $0.25 = $3.75` |
+| **Subtotal** | `Base + Distance + Time` | `$9.50` |
+| **Surge Multiplier** | `f(supply, demand)` `[1.0x – 5.0x]` | `× 1.5` |
+| **Total Fare** | `Subtotal × Surge` (capped at `$500`) | **`$14.25`** |
 
-  Total = ($2.00 + 5×$0.75 + 15×$0.25) × 1.5
-        = ($2.00 + $3.75 + $3.75) × 1.5
-        = $9.50 × 1.5
-        = $14.25
-```
+> [!IMPORTANT]
+> **Fare Reconciliation Guardrail:** If actual GPS-traced fare exceeds the upfront estimate by **&gt; 20%**, `calculateFinalFare` caps the charge at **1.1x the estimate** (`+10%`) and flags the ride for admin review.
 
 ### Java Implementation: Fare Calculation
 
@@ -1701,33 +1749,38 @@ public class FareEstimate {
 
 ## 12. Payment Processing
 
-Two-phase commit: authorize at ride start, capture at ride end.
+Two-phase commit: **authorize** at ride start, **capture** at ride end.
 
-### Payment Flow
+```mermaid
+sequenceDiagram
+    participant Rider
+    participant PaymentService
+    participant Gateway as PaymentGateway (Stripe/Razorpay)
+    participant Settlement as SettlementService
 
+    Note over Rider,Settlement: Phase 1 — Pickup (Authorize)
+    Rider->>PaymentService: Request Ride (Card / Wallet / UPI)
+    PaymentService->>Gateway: authorize(estimatedFare) [Idempotent]
+    Gateway-->>PaymentService: authorizationId (AUTHORIZED)
+    PaymentService-->>Rider: Show Estimated Fare (₹250–300)
+
+    Note over Rider,Settlement: Phase 2 — Dropoff (Capture)
+    Rider->>PaymentService: Ride Completed → Calculate Final Fare
+    PaymentService->>Gateway: capture(authorizationId, finalFare)
+    alt Capture Succeeds
+        Gateway-->>PaymentService: captureId (SUCCESS)
+        PaymentService->>Settlement: queueForSettlement(85% Driver / 15% Platform)
+    else Capture Fails
+        Gateway-->>PaymentService: PaymentException
+        PaymentService->>Gateway: void(authorizationId)
+    end
+
+    Note over Rider,Settlement: Weekly Settlement (Monday 00:00)
+    Settlement->>Settlement: Batch Pending Records → Bank Transfer
 ```
-Rider clicks "REQUEST RIDE"
-          │
-          ├─→ Collect payment method
-          │   (card, wallet, UPI)
-          │
-          ├─→ Authorize amount at pickup
-          │   (payment gateway holds the amount)
-          │
-          └─→ Show estimated fare
-              "This ride should cost ₹250-300"
 
-Ride completed at dropoff
-          │
-          ├─→ Calculate final fare
-          │   (may differ from estimate)
-          │
-          ├─→ Capture authorized amount
-          │   (transfer funds to platform)
-          │
-          └─→ Settlement: 85% to driver, 15% to platform
-              (next Monday via bank transfer)
-```
+> [!WARNING]
+> **Idempotency &amp; Two-Phase Commit:** Authorization at pickup guarantees funds exist without charging upfront; `authorizePayment` checks for an existing `AUTHORIZED` record so retries never double-hold a rider's card. If capture fails, the authorization is voided.
 
 ### Java Implementation: Payment Service
 
@@ -1986,6 +2039,52 @@ public class SettlementService {
 
 ## 13. Database Design
 
+Polyglot persistence splits transactional state (**PostgreSQL**), write-heavy GPS trails (**Cassandra**), and sub-millisecond hot lookups (**Redis**).
+
+```mermaid
+erDiagram
+    USERS ||--o{ RIDES : "requests"
+    DRIVERS ||--o{ RIDES : "fulfills"
+    RIDES ||--|| PAYMENTS : "settles"
+    USERS ||--o{ PAYMENTS : "pays"
+
+    USERS {
+        uuid id PK
+        varchar phone_number UK
+        decimal rating
+        varchar payment_method_id
+        decimal wallet_balance
+    }
+    DRIVERS {
+        uuid id PK
+        varchar license_number UK
+        varchar vehicle_number UK
+        varchar status
+        decimal acceptance_rate
+    }
+    RIDES {
+        uuid id PK
+        uuid rider_id FK
+        uuid driver_id FK
+        varchar status
+        decimal estimated_fare
+        decimal final_fare
+        decimal surge_multiplier
+    }
+    PAYMENTS {
+        uuid id PK
+        uuid ride_id FK
+        uuid user_id FK
+        varchar payment_type
+        varchar authorization_status
+        varchar capture_status
+        decimal amount
+    }
+```
+
+> [!NOTE]
+> **Storage Split:** Use **PostgreSQL** for ACID transactions (`users`, `drivers`, `rides`, `payments`), **Cassandra** for high-throughput time-series GPS trails (24h TTL for driver locations, 30d TTL for ride history), and **Redis** for sub-ms geo/surge/queue state.
+
 ### PostgreSQL: Rides, Users, Drivers, Payments
 
 ```sql
@@ -2183,52 +2282,42 @@ Active Ride Sessions:
 
 ## 14. Handling Failures & Edge Cases
 
-### What if Location Service Goes Down?
+```mermaid
+flowchart TD
+    A["Failure / Edge Case"] --> B["Location Service Down"]
+    A --> C["Payment Gateway Fails"]
+    A --> D["Client Retry Timeout"]
+    A --> E["Driver Crash In-Ride"]
+    A --> F["Concurrent Offer Race"]
 
-```
-Fallback strategy:
-  1. Use last-known location from cache (up to 2 min old)
-  2. Assume driver is still on current route
-  3. Offer to rider with note: "Driver location may be slightly delayed"
-  4. Re-route driver assignment if service is down for > 5 min
-```
+    B --> B1["Use 2m cache + delayed notice; re-route if &gt; 5m"]
+    C --> C1["3x backoff (30s) → async queue → cash fallback → cancel/refund"]
+    D --> D1["idempotency_key DB lookup → return existing ride"]
+    E --> E1["30s silent detect → push Reconnect → 5m cancel/refund"]
+    F --> F1["@Transactional + Optimistic Locking (version field)"]
 
-### What if Payment Gateway Fails?
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
 
-```
-Option 1: Retry with exponential backoff (3 attempts over 30 sec)
-Option 2: Queue for async settlement (settle later)
-Option 3: Fall back to cash payment at driver request
-Option 4: Cancel ride and refund any authorization
-```
-
-### Prevent Double-Booking of Rides
-
-```
-Idempotent ride creation:
-  if a client receives timeout, they retry POST /api/rides
-
-Use unique request ID:
-  POST /api/rides?idempotency_key=abc123
-
-Check if ride already exists:
-  SELECT * FROM rides WHERE idempotency_key = 'abc123'
-  IF exists: return existing ride
-  ELSE: create new
+    class A red
+    class B,C,D,E,F amber
+    class B1,C1,D1,E1,F1 green
 ```
 
-### Driver Crashes During Ride
+### Failure Playbook
 
-```
-Detect:
-  - Driver location not updated for 30 seconds (while in-ride)
-  - Driver app crashes
+| Failure Mode | Detection / Trigger | Recovery Strategy |
+|--------------|---------------------|-------------------|
+| **Location Service Down** | Cache stale / service unreachable | 1. Serve last-known cached location (up to 2 min old)<br>2. Assume driver remains on current route<br>3. Show rider: *"Driver location may be slightly delayed"*<br>4. Re-route driver assignment if down &gt; 5 min |
+| **Payment Gateway Fails** | Gateway timeout / `PaymentException` | 1. Retry with exponential backoff (3 attempts over 30s)<br>2. Queue for async settlement<br>3. Fall back to cash payment at driver request<br>4. Cancel ride and void/refund authorization |
+| **Double-Booking on Retry** | Client timeout retries `POST /api/rides` | Pass `idempotency_key=abc123`; check `SELECT * FROM rides WHERE idempotency_key = 'abc123'` — return existing ride if present, else create new |
+| **Driver Crashes In-Ride** | No location update for 30s while in-ride | 1. Show rider: *"Driver lost connection, we're notifying them"*<br>2. Send push notification to driver: *"Reconnect"*<br>3. After 5 min without reconnect: allow rider to cancel (refund) |
 
-Fallback:
-  - Show rider: "Driver lost connection, we're notifying them"
-  - Send push notification to driver app: "Reconnect"
-  - After 5 minutes without reconnect: allow rider to cancel (refund)
-```
+> [!TIP]
+> **Interview Must-Haves:** Always pair **idempotency keys** (for client retries) with **optimistic locking** (`version` column) to guarantee at-most-once ride assignment under concurrent offer acceptance.
 
 ### Guarantee At-Most-Once Offer Assignment
 
@@ -2257,41 +2346,69 @@ public void assignRide(String rideId, String driverId) {
 
 ## 15. Senior-Level Talking Points
 
+```mermaid
+flowchart LR
+    A["Senior-Level Design Pillars"] --> B["Scale &amp; Latency"]
+    A --> C["Consistency &amp; Ethics"]
+    A --> D["Privacy &amp; Economics"]
+
+    B --> B1["1. Geo Trade-offs (H3 vs Redis GEO vs Quadtree)"]
+    B --> B2["3. 2s Batching (10x throughput)"]
+
+    C --> C1["2. AP Matching vs 2PC Payments"]
+    C --> C2["4. Acceptance Rate Filtering (&lt; 70%)"]
+    C --> C3["5. Surge Ethics (5x cap, smooth, audit)"]
+
+    D --> D1["6. Location Privacy (24h TTL, anonymize &gt; 6m)"]
+    D --> D2["7. Driver Churn &amp; Surge Bonuses"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class A purple
+    class B,C,D blue
+    class B1,B2,C1,C2,C3,D1,D2 green
+```
+
+> [!IMPORTANT]
+> **CAP Theorem Split:** Ride matching is **AP** (it's fine if a driver receives 2–3 offers or surge metrics lag 30s). Payments are **CP / 2PC** (never charge without authorization).
+
 1. **Geo-Spatial Indexing Trade-offs**
    - Geohashing: simple, language-agnostic, but rectangular cells
    - H3: uniform cells, better for mapping, but Uber-specific library
    - Quadtree: theoretically optimal, but complex to implement
-   - For production: use H3 if you own stack, Redis GEO if using PaaS
+   - Production choice: use **H3** if you own the stack, **Redis GEO** if using PaaS
 
-2. **Consistency vs Availability for Matching**
-   - Ride matching is AP (Available + Partition-tolerant), not strongly consistent
-   - It's okay if a driver gets 2-3 ride offers (they'll decline extras)
-   - It's okay if demand/supply metrics lag by 30 seconds (smooth pricing)
-   - It's NOT okay if rider is charged without authorization (use 2-phase)
+2. **Consistency vs. Availability for Matching**
+   - Ride matching is **AP** (Available + Partition-tolerant), not strongly consistent
+   - Okay if a driver gets 2–3 ride offers (they'll decline extras) or demand/supply metrics lag by 30s (smooth pricing)
+   - **NOT** okay if rider is charged without authorization (use 2-phase commit)
 
 3. **Batching for Efficiency**
    - Matching every ride immediately = resource waste
    - Batching rides for 2 seconds = higher overall throughput
-   - Trade-off: 2-3 second delay for matching, but 10x higher scalability
+   - Trade-off: 2–3 second delay for matching, but **10x higher scalability**
 
 4. **Driver Acceptance Rate Matters**
-   - A driver who declines 50% of offers wastes system resources
+   - Drivers who decline 50% of offers waste system resources
    - Solution: lower offer frequency for high-decline drivers
-   - Fairness: drivers with < 70% acceptance rate -> no new offers
+   - Fairness: drivers with `&lt; 70%` acceptance rate → no new offers
 
 5. **Surge Pricing Ethics**
-   - Cap surge at 5x (prevents extreme gouging)
+   - Cap surge at **5x** (prevents extreme gouging)
    - Smooth transitions (don't jump from 1x to 3x instantly)
-   - Show rider estimated fare BEFORE they commit to ride
+   - Show rider estimated fare **before** they commit to ride
    - Log all surge multipliers for regulatory audits
 
 6. **Location Privacy**
    - Don't store raw GPS data forever (privacy concern)
-   - TTL: GPS history = 24 hours, then delete
+   - TTL: GPS history = **24 hours**, then delete
    - Aggregate location data for analytics (no individual tracking)
-   - Anonymize location trails after ride is > 6 months old
+   - Anonymize location trails after ride is `&gt; 6 months` old
 
-7. **Driver Churn & Incentives**
+7. **Driver Churn &amp; Incentives**
    - High-rating drivers earn bonuses during surge → they come online faster
    - Low acceptance rate → lower dispatch priority
    - Seasonal patterns: more drivers on weekends, fewer weekdays
@@ -2300,6 +2417,31 @@ public void assignRide(String rideId, String driverId) {
 ---
 
 ## 16. Interview Cheat Sheet
+
+```mermaid
+flowchart TD
+    A["Clients (Driver HTTP / Rider WebSocket)"] --> B["API Gateway"]
+    B --> C["Redis GEO / H3 (O(log N) Lookup)"]
+    B --> D["Kafka Stream (Async Location Updates)"]
+    B --> E["Matching Engine (2s Batch)"]
+    B --> F["Surge Engine (30s Window)"]
+    D --> G["Cassandra (24h GPS TTL)"]
+    E --> H["PostgreSQL (ACID Rides &amp; Users)"]
+    E --> I["Payment Gateway (2-Phase Commit + Idempotency)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class A,B blue
+    class C,E,F purple
+    class D,G amber
+    class H,I green
+```
+
+> [!TIP]
+> **Last-5-Minute Review:** Memorize the **Component → Technology → Reason** row pairings below—each maps directly to a classic L4/L5 follow-up question.
 
 | Component | Technology | Reason |
 |-----------|-----------|--------|
@@ -2318,6 +2460,29 @@ public void assignRide(String rideId, String driverId) {
 ---
 
 ## 17. Follow-Up Questions
+
+```mermaid
+flowchart TD
+    Q["Common Follow-Up Probes"] --> Q1["Ride Pooling (UberPool)"]
+    Q --> Q2["Peak-Only Driver Hoarding"]
+    Q --> Q3["Decline Gaming for Surge"]
+    Q --> Q4["Driver No-Show After Accept"]
+    Q --> Q5["Inefficient Routing / Detours"]
+
+    Q1 --> A1["&lt;= 20% detour, 5m pickup, 70%/50% split"]
+    Q2 --> A2["12h+ 10% boost, &lt; 70% penalty, min guarantee"]
+    Q3 --> A3["Zone-level surge, 10+ declines/30m → suspension"]
+    Q4 --> A4["5m no-show → re-offer, &gt; 10% cancel → 24h ban"]
+    Q5 --> A5["&gt; 2km deviation alert, rider-only detour recalc"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+
+    class Q blue
+    class Q1,Q2,Q3,Q4,Q5 amber
+    class A1,A2,A3,A4,A5 green
+```
 
 **Q: How would you handle ride pooling (UberPool)?**
 
@@ -2367,6 +2532,29 @@ A:
 
 ## Summary: The 60-Second Interview Pitch
 
+```mermaid
+flowchart LR
+    P1["1. Geo Matching (Redis GEO + 2s Batch)"] --> P2["2. Tracking (4s HTTP + Kafka + WS)"]
+    P2 --> P3["3. Surge (30s Window, 5x Cap)"]
+    P3 --> P4["4. Scoring &amp; 10s Offer Expiry"]
+    P4 --> P5["5. 2PC Payments (85/15 Split)"]
+    P5 --> P6["6. Polyglot DB (PG + Cassandra + Redis)"]
+    P6 --> P7["7. Resilience (Idempotency + Fallbacks)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class P1,P2 blue
+    class P3,P4 amber
+    class P5,P6 purple
+    class P7 green
+```
+
+> [!TIP]
+> **Pacing:** Spend ~8 seconds per pillar so the interviewer hears the complete end-to-end architecture before diving into your strongest deep dive.
+
 > "I'd design Uber as a **microservice architecture** with:
 >
 > 1. **Geospatial matching at core:** Use Redis GEO commands to find nearest drivers in < 100ms. Batch matching every 2 seconds for optimal throughput.
@@ -2388,6 +2576,29 @@ A:
 ---
 
 ## References & Deep Dives
+
+```mermaid
+flowchart LR
+    R["Deep-Dive Tracks"] --> G["Geospatial Indexing"]
+    R --> S["Streaming &amp; Scale"]
+    R --> D["Storage &amp; Compliance"]
+
+    G --> G1["Uber H3 Hexagonal Grid"]
+    G --> G2["Redis GEO (GEOADD / GEORADIUS)"]
+    S --> S1["WebSocket Scaling (API GW + Lambda)"]
+    S --> S2["Load Testing (10K Drivers + 100K Riders)"]
+    D --> D1["Cassandra TTL (Location Privacy)"]
+    D --> D2["Payment Reconciliation (PCI &amp; Idempotency)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class R purple
+    class G,S,D blue
+    class G1,G2,S1,S2,D1,D2 green
+```
 
 - **Uber's H3 Geohashing Library:** https://h3geo.org/ (resolving spatial queries with hexagons)
 - **Redis GEO:** https://redis.io/commands/geoadd (in-memory geospatial indexing)

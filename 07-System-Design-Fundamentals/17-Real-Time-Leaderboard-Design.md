@@ -776,79 +776,41 @@ Python-like pseudocode:
 
 ## 8. Real-Time Updates via WebSocket
 
-### Architecture
+### Architecture & Event Flow
 
-```
-Score Update Flow:
-  1. Player A submits score
-  2. Redis ZADD → updates rank
-  3. Rank change event published to Kafka
-  4. Event processor picks it up
-  5. WebSocket server broadcasts rank change to connected clients
-  6. Client receives update in real-time (< 2s)
+```mermaid
+flowchart LR
+    Player["Player A (Browser)"] -->|"1. Submit score 5000"| ScoreSvc["Score Service"]
+    ScoreSvc -->|"2. ZADD leaderboard 5000"| RedisZ[("Redis ZSET")]
+    ScoreSvc -->|"3. RankChangedEvent"| Kafka["Kafka: rank-changes (100K msg/s)"]
+    Kafka -->|"4. Consume"| Throttler["Event Processor (1s Batch Throttler)"]
+    Throttler -->|"Rank unchanged"| Drop["Drop Push (Save Bandwidth)"]
+    Throttler -->|"5. Rank changed → Publish"| PubSub["Redis Pub/Sub (user_A_rank_ch)"]
+    PubSub -->|"6. Deliver"| WS["WebSocket Server Pool"]
+    WS -->|"7. Live Push (&lt; 2s)"| Player
 
-┌──────────────┐
-│ Player A     │ Submits score 5000
-└──────┬───────┘
-       │
-       ▼
-┌──────────────────────┐
-│ Score Service        │
-│ ZADD leaderboard 5000│
-└──────┬───────────────┘
-       │
-       ▼
-┌──────────────────────────────────────┐
-│ Rank Changed Event                   │
-│ {userId: A, newRank: 23, newScore: 50│
-│  oldRank: 47, window: all-time}      │
-└──────┬───────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────┐
-│ Kafka Topic: rank-changes    │
-│ (100K messages/sec)          │
-└──────┬───────────────────────┘
-       │
-       ▼
-┌──────────────────────────────┐
-│ Event Processor              │
-│ (Throttle: batch every 1s)   │
-└──────┬───────────────────────┘
-       │
-       ▼
-┌──────────────────────────────┐
-│ Redis Pub/Sub: user_A_rank_ch│
-│ Publish {userId:A, rank: 23} │
-└──────┬───────────────────────┘
-       │
-       ▼
-┌──────────────────────────────┐
-│ WebSocket Server             │
-│ (Connected client listening) │
-└──────┬───────────────────────┘
-       │
-       ▼
-┌──────────────────────────────┐
-│ Player A's Browser           │
-│ Rank Updated: 23 → 22        │
-└──────────────────────────────┘
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Player,WS blue
+    class ScoreSvc,Throttler green
+    class RedisZ,PubSub amber
+    class Drop red
+    class Kafka purple
 ```
 
-### Don't Push Every Single Score Change
+### Why Throttle Instead of Pushing Every Score Change?
 
-```
-If we push every score change:
-  - 100K score updates/sec
-  - Each generates 1 push event
-  - That's 100K WebSocket messages/sec
-  - Network saturated, clients overloaded
+| Strategy | 100K Score Updates/sec Impact | Outcome |
+|----------|-------------------------------|---------|
+| **Unthrottled Push** | 100K WebSocket messages/sec | Network saturated, clients overloaded |
+| **1–2s Batch Throttling** | Coalesce updates per `userId`, push only if rank changed | Dramatic bandwidth reduction, `&lt; 2s` UX preserved |
 
-Solution: Throttle updates
-  - Batch score changes every 1-2 seconds
-  - Only push if rank changed
-  - Example: User gains 50 points but rank unchanged → no push
-```
+> [!TIP]
+> If a user gains 50 points but their rank does not change, skip the WebSocket push entirely. Only broadcast when `newRank != oldRank`.
 
 ### Implementation with Redis Pub/Sub
 
@@ -939,18 +901,33 @@ public class RankChangeThrottler {
 
 ## 9. Leaderboard Around Me
 
-### Query Pattern
+### Query Flow
 
-```
-Player A wants to see:
-  - 5 players ranked higher
-  - Player A's rank
-  - 5 players ranked lower
+```mermaid
+flowchart LR
+    Client["Player A (e.g., Rank 100)"] -->|"GET /around-me/userA"| LBSvc["Leaderboard Service"]
+    LBSvc -->|"1. ZREVRANK leaderboard:all-time userA"| Redis1[("Redis Replica")]
+    Redis1 -->|"rank = 99 (0-indexed)"| Bounds["Compute Window: max(0, rank - 5) to rank + 5"]
+    Bounds -->|"2. ZREVRANGE 94..104 WITHSCORES"| Redis2[("Redis Replica")]
+    Redis2 -->|"11 member IDs + scores"| UserSvc["User Service (Hydrate name &amp; avatar)"]
+    UserSvc -->|"3. Return 11 entries + userRank"| Client
 
-If Player A is rank 100:
-  - Fetch ranks 95-105 (11 players total)
-  - Include name, score, avatar
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Client blue
+    class LBSvc,Bounds green
+    class Redis1,Redis2 amber
+    class UserSvc purple
 ```
+
+- **Goal:** Show 5 players ranked higher, Player A's rank, and 5 players ranked lower (e.g., ranks 95–105 = 11 players total when Player A is rank 100).
+- **Hydration:** Enrich each ZSET `(userId, score)` tuple with `name` and `avatarUrl` from `UserService`.
+
+> [!NOTE]
+> Redis `ZREVRANK` is **0-indexed**, so add `+ 1` when returning 1-indexed display ranks (`currentRank + 1`) and clamp `start = Math.max(0, rank - 5)` for top-5 players.
 
 ### Redis Command
 
@@ -1058,23 +1035,58 @@ public class LeaderboardEntry {
 
 ## 10. Database Design: Redis + PostgreSQL
 
-### Redis Schema
+### Entity-Relationship Diagram (PostgreSQL)
 
+```mermaid
+erDiagram
+    PLAYERS ||--o{ SCORE_SUBMISSIONS : "submits"
+    PLAYERS ||--o{ BEST_SCORES : "achieves"
+    PLAYERS ||--o{ LEADERBOARD_SNAPSHOTS : "archived in"
+
+    PLAYERS {
+        bigint id PK
+        varchar username UK
+        varchar email UK
+        varchar avatar_url
+        varchar country_code
+        timestamp created_at
+    }
+    SCORE_SUBMISSIONS {
+        bigint id PK
+        bigint player_id FK
+        bigint score_value
+        varchar game_mode
+        timestamp submitted_at
+        boolean is_valid
+    }
+    BEST_SCORES {
+        bigint id PK
+        bigint player_id FK
+        varchar leaderboard_window
+        bigint best_score
+        timestamp achieved_at
+        int rank_at_time
+    }
+    LEADERBOARD_SNAPSHOTS {
+        bigint id PK
+        varchar window_type
+        varchar window_key
+        bigint player_id FK
+        bigint score
+        int rank
+        decimal percentile
+    }
 ```
-Keys:
-  leaderboard:all-time                    → ZSET
-  leaderboard:daily:YYYY-MM-DD            → ZSET (expires)
-  leaderboard:weekly:YYYY-Www             → ZSET (expires)
-  leaderboard:monthly:YYYY-MM             → ZSET (expires)
 
-  user:profile:{userId}                   → HASH
-  user:session:{userId}                   → STRING (WebSocket session)
+### Redis Keyspace &amp; Pub/Sub Channels
 
-Pub/Sub Channels:
-  rank-change:{userId}                    → Score/rank changes
-  batch-rank-changes                      → Batched updates
-  leaderboard-reset                       → Admin resets
-```
+| Category | Key / Channel Pattern | Data Type | Purpose |
+|----------|-----------------------|-----------|---------|
+| **All-Time Board** | `leaderboard:all-time` | `ZSET` | Permanent global rankings |
+| **Windowed Boards** | `leaderboard:daily:YYYY-MM-DD`, `weekly:YYYY-Www`, `monthly:YYYY-MM` | `ZSET` | Time-boxed boards with TTL |
+| **User Metadata** | `user:profile:{userId}` | `HASH` | Cached username &amp; avatar |
+| **WS Session** | `user:session:{userId}` | `STRING` | Active WebSocket session mapping |
+| **Pub/Sub** | `rank-change:{userId}`, `batch-rank-changes`, `leaderboard-reset` | Channel | Real-time rank pushes &amp; admin resets |
 
 ### PostgreSQL Schema
 
@@ -1204,195 +1216,179 @@ public class ScoreServiceWithPersistence {
 }
 ```
 
-**Advantages of Write-Behind:**
-- ✓ Fast response to client (update Redis, return)
-- ✓ DB writes don't block score submission
-- ✓ Survives temporary DB outages
-- ✓ Can batch DB writes
+| Aspect | Write-Behind Tradeoff |
+|--------|-----------------------|
+| **Advantages** | Fast client response (update Redis, return immediately); DB writes never block score submission; survives temporary DB outages; enables batched DB writes |
+| **Disadvantages** | Brief window where Redis and DB are out of sync; pending async writes can be lost on service crash |
 
-**Disadvantages:**
-- ✗ Brief window where Redis and DB are out of sync
-- ✗ If service crashes, pending writes are lost (mitigate with persistent queue)
+> [!WARNING]
+> To prevent losing pending write-behind updates if the `ScoreService` pod crashes, back the async executor with a persistent queue (such as Kafka) rather than an in-memory thread pool alone.
 
 ---
 
 ## 11. Scalability Patterns
 
+```mermaid
+flowchart TD
+    Traffic["High-Scale Traffic (100K+ QPS / 1B+ Players)"] --> P1["Pattern 1: Read Replicas"]
+    Traffic --> P2["Pattern 2: Write Coalescing"]
+    Traffic --> P3["Pattern 3: Approximate Ranking (HLL)"]
+    Traffic --> P4["Pattern 4: Segment Leaderboards"]
+
+    P1 --> P1D["Primary (ZADD) → Replicas 1 &amp; 2 (ZREVRANK / ZREVRANGE, 50K QPS each)"]
+    P2 --> P2D["Redis Pipeline: Batch multiple ZADDs in 1 network round-trip"]
+    P3 --> P3D["HyperLogLog (PFADD) → O(1) memory &amp; query, ~1-2% percentile error"]
+    P4 --> P4D["Split ZSETs by region, country, friend-group, or level"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Traffic blue
+    class P1,P2,P3,P4 green
+    class P1D,P2D amber
+    class P3D,P4D purple
+```
+
 ### Pattern 1: Read Replicas for Query Distribution
 
-```
-                    ┌─────────────────────────────────┐
-                    │  Redis Primary (write)           │
-                    │  leaderboard:all-time (write)   │
-                    │  leaderboard:daily:* (write)    │
-                    └────────────────┬─────────────────┘
-                                     │ replication
-                    ┌────────────────┴────────────────┐
-                    ▼                                 ▼
-        ┌──────────────────────┐      ┌──────────────────────┐
-        │ Redis Replica 1      │      │ Redis Replica 2      │
-        │ (read-only)          │      │ (read-only)          │
-        │ Rank queries         │      │ Top-K queries        │
-        │ 50K QPS              │      │ 50K QPS              │
-        └──────────────────────┘      └──────────────────────┘
-
-Write Path: Score Service → Primary (ZADD)
-Read Path: Leaderboard Service → Replica 1 or 2 (ZREVRANK, ZREVRANGE)
-```
+- **Write Path:** `Score Service → Redis Primary` (`ZADD` to `leaderboard:all-time` and `leaderboard:daily:*`)
+- **Read Path:** `Leaderboard Service → Redis Replica 1 or 2` (`ZREVRANK`, `ZREVRANGE`, 50K QPS each) via async replication
 
 ### Pattern 2: Write Coalescing (Batch Updates)
 
-```
-Instead of:
-  ZADD leaderboard:all-time 5000 user_a
-  ZADD leaderboard:all-time 4950 user_b
-  ZADD leaderboard:all-time 4900 user_c
-  (3 separate network round-trips)
+Instead of 3 separate network round-trips for individual `ZADD` commands, batch them into a single Redis pipeline:
 
-Do:
-  pipeline.zadd(leaderboard:all-time, 5000, user_a)
-  pipeline.zadd(leaderboard:all-time, 4950, user_b)
-  pipeline.zadd(leaderboard:all-time, 4900, user_c)
-  pipeline.execute()  // Single network round-trip
+```java
+pipeline.zadd("leaderboard:all-time", 5000, "user_a");
+pipeline.zadd("leaderboard:all-time", 4950, "user_b");
+pipeline.zadd("leaderboard:all-time", 4900, "user_c");
+pipeline.execute();  // Single network round-trip
 ```
 
 ### Pattern 3: Approximate Ranking (For 1B+ Players)
 
-```
-For massive scale, exact rank becomes expensive:
-  - 1 billion players
-  - Each rank query = O(log N) = O(30) comparisons
-  - 100K QPS = 3 million comparisons/sec (still fast, but...)
+- **Challenge:** At 1B players, exact rank takes `O(log N) ≈ 30` comparisons (`100K QPS = 3M comparisons/sec`) and large memory across many boards.
+- **Probabilistic Solution (HyperLogLog + Sampling):** Store score percentiles in HLL to return `"You are in top 5%"` instead of an exact rank — `O(1)` memory, `O(1)` query time, ~1–2% error margin.
 
-Probabilistic Solution: HyperLogLog + Sampling
-  - Store score percentiles in separate HLL
-  - "You are in top 5%" instead of exact rank
-  - O(1) memory, O(1) query time
-  - Error margin: ~1-2%
-
-Implementation:
-  PFADD leaderboard:percentile:user_a 5000
-  // Later: estimate percentile from HLL
+```redis
+PFADD leaderboard:percentile:user_a 5000
 ```
 
 ### Pattern 4: Segment Leaderboards
 
-Instead of single global leaderboard:
+| Segment Type | Key Pattern | Benefit |
+|--------------|-------------|---------|
+| **Regional** | `leaderboard:all-time:us`, `:eu`, `:apac` | Smaller ZSETs, faster queries |
+| **Country-level** | `leaderboard:all-time:us:california`, `:texas` | Localized competition |
+| **Friend group** | `leaderboard:friend-group:{groupId}` | Higher player engagement |
+| **Level-based** | `leaderboard:level-1:all-time`, `leaderboard:level-5:all-time` | Fair skill-matched rankings |
 
-```
-1. Regional leaderboards:
-   leaderboard:all-time:us
-   leaderboard:all-time:eu
-   leaderboard:all-time:apac
-
-2. Country-level:
-   leaderboard:all-time:us:california
-   leaderboard:all-time:us:texas
-
-3. Friend group:
-   leaderboard:friend-group:{groupId}
-
-4. Level-based:
-   leaderboard:level-1:all-time
-   leaderboard:level-5:all-time
-
-Benefit: Smaller ZSETs (faster queries), more engaging for players
-```
+> [!TIP]
+> Combining **Segment Leaderboards** with **Read Replicas** immediately shrinks `N` per ZSET while horizontally scaling read QPS.
 
 ---
 
 ## 12. Fault Tolerance and Recovery
 
-### Redis Persistence
+```mermaid
+flowchart TD
+    Req["Score Request + idempotencyKey"] --> AntiCheat["1. Anti-Cheat Validation (Max, Delta, Rate, Sequence)"]
+    AntiCheat -->|"Invalid"| Reject["Reject Request"]
+    AntiCheat -->|"Valid"| Idem{"2. Idempotency Key Seen?"}
+    Idem -->|"Yes"| Cached["Return Cached Response"]
+    Idem -->|"No"| RedisWrite["3. Write to Redis (RDB + AOF everysec)"]
+    RedisWrite -->|"Node Crash"| Rebuild["4. Rebuild ZSET from PostgreSQL best_scores"]
+    Rebuild --> Verify["Compare ZCARD(Redis) vs COUNT(PostgreSQL) → Gradual Switchover"]
 
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Req,Cached blue
+    class AntiCheat,Verify green
+    class Idem,RedisWrite amber
+    class Reject,Rebuild red
 ```
-Two persistence strategies:
 
-1. RDB (Redis Database): Point-in-time snapshots
-   - BGSAVE: Background save (non-blocking)
-   - Save every 60 seconds
-   - If crash: lose last 60 seconds of data
+### Redis Persistence (RDB + AOF)
 
-2. AOF (Append-Only File): Write every command to disk
-   - fsync every 1 second
-   - More durable, slightly slower
+| Strategy | Mechanism | Tradeoff |
+|----------|-----------|----------|
+| **RDB (Point-in-time)** | `BGSAVE` non-blocking snapshot every 60s | Fast restarts; up to 60s data loss on crash |
+| **AOF (Append-Only File)** | Logs every write command; `appendfsync everysec` | Max 1s data loss; slightly larger disk footprint |
 
-Best practice: Use both!
-   save 60 1000  # Save if 1000 keys changed in 60 seconds
-   appendonly yes
-   appendfsync everysec
+Best practice is to enable both:
+
+```ini
+save 60 1000        # Save if 1000 keys changed in 60 seconds
+appendonly yes
+appendfsync everysec
 ```
 
 ### Recovery from Redis Crash
 
+1. **Identify** the missing node or failed shard.
+2. **Rebuild ZSET** from PostgreSQL `best_scores` in the background:
+
+```sql
+-- Stream into Redis via ZADD leaderboard:all-time <best_score> <player_id>
+SELECT player_id, best_score
+FROM best_scores
+WHERE leaderboard_window = 'all-time';
 ```
-Scenario: Redis node with leaderboard:all-time crashes
 
-1. Identify missing node
-2. Rebuild ZSET from PostgreSQL best_scores table:
+3. **Verify integrity:** Compare `ZCARD(leaderboard:all-time)` in Redis against `COUNT(*)` in PostgreSQL.
+4. **Gradual switchover:** Shift read/write traffic back once the rebuilt node catches up.
 
-   for row in SELECT player_id, best_score FROM best_scores
-              WHERE leaderboard_window = 'all-time':
-       ZADD leaderboard:all-time row.best_score row.player_id
-
-3. Verify integrity:
-   - Compare ZCARD(Redis) vs count(PostgreSQL)
-   - If different, investigate
-
-4. Gradual switchover:
-   - Rebuild in background
-   - Once caught up, switch traffic gradually
-```
+> [!IMPORTANT]
+> Never serve live traffic from a partially rebuilt Redis node—players will see artificially inflated ranks until all rows are loaded.
 
 ### Idempotent Score Updates
 
+Network retries on timeouts can accidentally submit the same score twice. Attach a client-generated UUID `idempotencyKey` to every request:
+
+```json
+{
+  "userId": "user_1001",
+  "score": 5000,
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000"
+}
 ```
-Problem: Network retry on timeout
-  - Client sends score update
-  - Network timeout
-  - Client retries (thinks it failed)
-  - Score submitted twice by accident
 
-Solution: Idempotency keys
+```sql
+CREATE TABLE idempotency_log (
+    key VARCHAR(36) PRIMARY KEY,
+    response_json TEXT,
+    created_at TIMESTAMP
+);
+```
 
-  Each score submission gets UUID:
-    {
-      "userId": "user_1001",
-      "score": 5000,
-      "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000"
+```java
+@PostMapping("/submit-score")
+public ScoreResponse submitScore(@RequestBody ScoreRequest req) {
+
+    // Check if already processed
+    Optional<String> cachedResponse =
+        idempotencyRepo.findResponseByKey(req.getIdempotencyKey());
+    if (cachedResponse.isPresent()) {
+        return deserialize(cachedResponse.get());
     }
 
-  Server stores: idempotency_key → response
-  If duplicate idempotency_key arrives → return cached response
+    // Process score
+    ScoreResponse response = processScore(req);
 
-Implementation:
-  CREATE TABLE idempotency_log (
-      key VARCHAR(36) PRIMARY KEY,
-      response_json TEXT,
-      created_at TIMESTAMP
-  );
+    // Cache response
+    idempotencyRepo.save(new IdempotencyLog(
+        req.getIdempotencyKey(),
+        serialize(response)
+    ));
 
-  @PostMapping("/submit-score")
-  public ScoreResponse submitScore(@RequestBody ScoreRequest req) {
-
-      // Check if already processed
-      Optional<String> cachedResponse =
-          idempotencyRepo.findResponseByKey(req.getIdempotencyKey());
-      if (cachedResponse.isPresent()) {
-          return deserialize(cachedResponse.get());
-      }
-
-      // Process score
-      ScoreResponse response = processScore(req);
-
-      // Cache response
-      idempotencyRepo.save(new IdempotencyLog(
-          req.getIdempotencyKey(),
-          serialize(response)
-      ));
-
-      return response;
-  }
+    return response;
+}
 ```
 
 ### Anti-Cheat: Score Validation
@@ -1431,6 +1427,49 @@ public boolean isValidScore(long score, String userId) {
 ---
 
 ## 13. Complete Java Implementation
+
+### Spring Boot Component Architecture
+
+```mermaid
+classDiagram
+    class LeaderboardController {
+        +submitScore(userId, score) ScoreSubmissionResponse
+        +getRank(userId, leaderboard) RankResponse
+        +getTopK(k, leaderboard) List~LeaderboardEntry~
+        +getAroundMe(userId, leaderboard, radius) LeaderboardAroundMeResponse
+    }
+    class LeaderboardService {
+        -StringRedisTemplate redisTemplate
+        -PlayerRepository playerRepository
+        -ScoreSubmissionRepository scoreRepository
+        -RankChangePublisher rankChangePublisher
+        +submitScore(userId, score) ScoreSubmissionResponse
+        +getUserRank(userId, leaderboard) RankResponse
+        +getTopK(leaderboard, k) List~LeaderboardEntry~
+        +getAroundMe(userId, leaderboard, radius) LeaderboardAroundMeResponse
+    }
+    class RankChangePublisher {
+        -KafkaTemplate kafkaTemplate
+        +publishRankChange(userId, score, newRank) void
+    }
+    class RankChangeEventListener {
+        -WebSocketNotificationService wsService
+        +handleRankChange(event) void
+    }
+    class RedisConfig {
+        +redisConnectionFactory() LettuceConnectionFactory
+        +redisTemplate() StringRedisTemplate
+        +objectRedisTemplate() RedisTemplate
+    }
+
+    LeaderboardController --> LeaderboardService : delegates
+    LeaderboardService --> RankChangePublisher : publishes events
+    LeaderboardService ..> RedisConfig : uses REPLICA_PREFERRED
+    RankChangePublisher --> RankChangeEventListener : Kafka rank-changes
+```
+
+> [!NOTE]
+> `RedisConfig` configures `ReadFrom.REPLICA_PREFERRED` on `LettuceConnectionFactory` so read-heavy `ZREVRANK` and `ZREVRANGE` calls automatically route to Redis replicas.
 
 ### Project Setup
 
@@ -2061,6 +2100,32 @@ public class RankChangeEvent {
 
 ## 14. Comparison with Alternatives
 
+```mermaid
+flowchart LR
+    Req["100K Writes/s + &lt;50ms Rank Query"] --> MySQL["MySQL ORDER BY"]
+    Req --> TreeMap["In-Memory TreeMap"]
+    Req --> Cass["Cassandra / DynamoDB"]
+    Req --> Redis["Redis ZSET + PostgreSQL"]
+
+    MySQL -->|"Fails"| MySQLOut["500ms-5s latency, table lock contention"]
+    TreeMap -->|"Fails"| TreeOut["No durability, single-JVM SPOF"]
+    Cass -->|"Suboptimal"| CassOut["10-100ms reads, partition scans for rank"]
+    Redis -->|"Optimal"| RedisOut["&lt;1ms O(log N) rank + async durable audit"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class Req blue
+    class Redis,RedisOut green
+    class Cass,CassOut amber
+    class MySQL,MySQLOut,TreeMap,TreeOut red
+```
+
+> [!NOTE]
+> Redis ZSETs uniquely combine **O(log N)** rank lookups, **atomic in-memory writes**, and **built-in replication/cluster failover**, whereas disk-backed databases struggle with global rank queries and single-node `TreeMap`s lack durability.
+
 ### Alternative 1: MySQL with ORDER BY
 
 ```sql
@@ -2157,115 +2222,101 @@ CREATE TABLE leaderboard (
 
 | Operation | Time | Command |
 |-----------|------|---------|
-| Add/Update score | O(log N) | ZADD leaderboard:all-time score user_id |
-| Get rank | O(log N) | ZREVRANK leaderboard:all-time user_id |
-| Get top-K | O(log N + K) | ZREVRANGE leaderboard:all-time 0 K-1 |
-| Get around me | O(log N + K) | ZREVRANGE leaderboard:all-time rank-5 rank+5 |
-| Count players | O(1) | ZCARD leaderboard:all-time |
-| Remove player | O(log N) | ZREM leaderboard:all-time user_id |
+| Add/Update score | O(log N) | `ZADD leaderboard:all-time score user_id` |
+| Get rank | O(log N) | `ZREVRANK leaderboard:all-time user_id` |
+| Get top-K | O(log N + K) | `ZREVRANGE leaderboard:all-time 0 K-1` |
+| Get around me | O(log N + K) | `ZREVRANGE leaderboard:all-time rank-5 rank+5` |
+| Count players | O(1) | `ZCARD leaderboard:all-time` |
+| Remove player | O(log N) | `ZREM leaderboard:all-time user_id` |
 
 ### Sharding Decision Tree
 
-```
-Number of players?
+```mermaid
+flowchart TD
+    Q{"Number of Players?"} -->|"&lt; 25M"| S1["Single Redis ZSET"]
+    Q -->|"25M - 100M"| S2["Hash-Based Sharding (8-16 Shards)"]
+    Q -->|"&gt; 100M"| S3["Hybrid Sharding + Read Replicas + HLL"]
 
-  < 25M
-    └─ Single Redis ZSET
-       ✓ Simple
-       ✓ Fast
-       ✗ No redundancy
+    S1 --> S1N["Simple &amp; Fast; No redundancy"]
+    S2 --> S2N["Even distribution via consistent hashing; Top-K requires k-way merge"]
+    S3 --> S3N["Distributed &amp; High Availability; Higher operational complexity"]
 
-  25M - 100M
-    └─ Hash-based sharding (8-16 shards)
-       ✓ Even distribution
-       ✓ Easy consistent hashing
-       ✗ Top-K requires merge
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
 
-  > 100M
-    └─ Hybrid + read replicas
-       ✓ Distributed
-       ✓ High availability
-       ✗ Complex operations
+    class Q blue
+    class S1,S1N green
+    class S2,S2N amber
+    class S3,S3N purple
 ```
 
 ### Time Complexity Cheat Sheet
 
-```
-Query Type                    Complexity
-─────────────────────────────────────────
-Get user's rank               O(log N)
-Get top-K players             O(log N + K)
-Get percentile rank           O(log N)
-Get users around me (±5)      O(log N)
-Count total players           O(1)
-Range query (score 1000-2000) O(log N + K)
-Submit score                  O(log N) per window
-```
+| Query Type | Complexity |
+|------------|------------|
+| Get user's rank | `O(log N)` |
+| Get top-K players | `O(log N + K)` |
+| Get percentile rank | `O(log N)` |
+| Get users around me (±5) | `O(log N)` |
+| Count total players | `O(1)` |
+| Range query (score 1000–2000) | `O(log N + K)` |
+| Submit score | `O(log N)` per window |
 
 ---
 
 ## 16. Common Follow-Up Questions
 
+```mermaid
+flowchart TD
+    FQ["Common Interview Follow-Ups"] --> Q1["Q1: 1B Players"]
+    FQ --> Q2["Q2: Cheaters &amp; Invalid Scores"]
+    FQ --> Q3["Q3: Percentile Rank"]
+    FQ --> Q4["Q4: Daily/Weekly Reset"]
+    FQ --> Q5["Q5: Friend Leaderboards"]
+    FQ --> Q6["Q6: Redis 1h Outage"]
+    FQ --> Q7["Q7: Seasonal Leaderboards"]
+
+    Q1 --> A1["Hierarchical sharding + HyperLogLog"]
+    Q2 --> A2["HMAC signature + Rate limits + ML review"]
+    Q3 --> A3["(rank + 1) / ZCARD * 100"]
+    Q4 --> A4["TTL expiration + DB snapshot cron"]
+    Q5 --> A5["Dynamic MGET + app-side sort"]
+    Q6 --> A6["Kafka/DB fallback + Sentinel failover"]
+    Q7 --> A7["30-day rotating keys + archive job"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class FQ blue
+    class Q1,Q2,Q3,Q4,Q5,Q6,Q7 amber
+    class A1,A2,A3,A4,A5,A6,A7 green
+```
+
 ### Q1: "What if you have 1 billion players?"
 
-**Answer:**
-
-```
-Challenge: 1B players, 100 ZSET (one per region/level/game-mode)
-  - Memory: 1B * 100 bytes * 100 = 10TB
-  - Single Redis node can't hold it
-
-Solution 1: Hierarchical sharding
-  - Shard 1: Users 0-50M (50 shards internally)
-  - Shard 2: Users 50M-100M
-  - etc.
-
-Solution 2: Approximate ranking (HyperLogLog)
-  - "You are in top 5%" instead of exact rank
-  - O(1) memory, O(1) query
-
-Solution 3: Probabilistic leaderboards
-  - Only track top 1000, middle 10%, bottom 10%
-  - Exact rank for top 1000, percentile for others
-
-Trade-off: Exact rank vs memory usage
-```
+- **Challenge:** `1B players × 100 bytes × 100 ZSETs ≈ 10TB` — exceeds a single Redis node.
+- **Solution 1 — Hierarchical Sharding:** Shard 1 holds users `0–50M` (with 50 internal shards), Shard 2 holds `50M–100M`, etc.
+- **Solution 2 — Approximate Ranking (HyperLogLog):** Return `"You are in top 5%"` instead of exact rank (`O(1)` memory, `O(1)` query, ~1–2% error).
+- **Solution 3 — Probabilistic Leaderboards:** Exact rank for top 1,000; percentile buckets for middle 10% and bottom 10%.
+- **Trade-off:** Exact rank accuracy vs. RAM footprint.
 
 ---
 
 ### Q2: "How do you handle cheaters and invalid scores?"
 
-**Answer:**
+| Layer | Validation Mechanism |
+|-------|----------------------|
+| **1. Client-side** | Impossible value checks, replay protection via idempotency keys |
+| **2. Server-side** | Max score cap, reasonable score delta, per-player rate limiting, min time between submits |
+| **3. Behavioral / ML** | Anomaly detection model flags suspicious accounts for review |
+| **4. Game Server HMAC** | Game server signs `(userId, score, timestamp)` with HMAC; API verifies signature |
+| **5. Manual Review** | Moderators review flagged scores, ban repeat offenders, roll back fraud |
 
-```
-Multi-layer validation:
-
-1. Client-side validation
-   - Impossible score values detected
-   - Replay protection (idempotency keys)
-
-2. Server-side validation
-   - Score < max possible in game
-   - Score increase is reasonable
-   - Rate limiting per player
-   - Time between submissions
-
-3. Behavioral analysis
-   - Detect unusual patterns
-   - Machine learning model scores submission
-   - Flag suspicious accounts
-
-4. Game server verification
-   - Game server signs score with HMAC
-   - Server verifies signature before accepting
-   - Timestamp tied to game session
-
-5. Manual review
-   - Flagged scores reviewed by moderators
-   - Repeat offenders banned
-   - Scores rolled back if fraud detected
-
-Implementation:
+```java
 @Transactional
 public void submitScore(String userId, long score, String signature) {
 
@@ -2296,259 +2347,197 @@ public void submitScore(String userId, long score, String signature) {
 
 ### Q3: "How do you compute percentile rank?"
 
-**Answer:**
+- **Formula:** `Percentile = (rank + 1) / total_players * 100` (where `rank` is 0-indexed from `ZREVRANK`).
+- **Example:** Player A at rank `5` (6th place) out of `100` players → `(5 + 1) / 100 * 100 = 6%` (top 6%, better than 94% of players).
 
-```
-Percentile = (# players ranked lower) / total * 100
+```java
+Long rank = redis.zrevrank("leaderboard:all-time", userId);
+Long total = redis.zcard("leaderboard:all-time");
 
-Implementation:
-  1. Get player's rank (0-indexed)
-  2. Percentile = (rank + 1) / total_players * 100
-
-Example:
-  - Player A: rank 5 (6th place)
-  - Total players: 100
-  - Percentile = (5 + 1) / 100 * 100 = 6%
-  - Meaning: A is in top 6%, better than 94% of players
-
-Code:
-  Long rank = redis.zrevrank("leaderboard:all-time", userId);
-  Long total = redis.zcard("leaderboard:all-time");
-
-  double percentile = ((rank + 1.0) / total) * 100;
-  String percentileStr = String.format("top %.1f%%", percentile);
+double percentile = ((rank + 1.0) / total) * 100;
+String percentileStr = String.format("top %.1f%%", percentile);
 ```
 
 ---
 
 ### Q4: "How do you reset daily/weekly leaderboards?"
 
-**Answer:**
+1. **Scheduled job at exact reset time (00:00 UTC):**
 
+```java
+@Scheduled(cron = "0 0 0 * * ?")  // Every day at 00:00 UTC
+public void resetDailyLeaderboard() {
+    String today = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+    String key = "leaderboard:daily:" + today;
+
+    // Leaderboard will auto-expire due to TTL
+    // But we can force deletion:
+    redisTemplate.delete(key);
+
+    // Optionally: snapshot to database
+    snapshotLeaderboardToDB("daily", yesterday);
+}
 ```
-Automated Reset:
 
-1. Scheduled job at exact reset time:
+2. **TTL-based automatic expiration:**
 
-   @Scheduled(cron = "0 0 0 * * ?")  // Every day at 00:00 UTC
-   public void resetDailyLeaderboard() {
-       String today = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
-       String key = "leaderboard:daily:" + today;
-
-       // Leaderboard will auto-expire due to TTL
-       // But we can force deletion:
-       redisTemplate.delete(key);
-
-       // Optionally: snapshot to database
-       snapshotLeaderboardToDB("daily", yesterday);
-   }
-
-2. TTL-based expiration (automatic):
-   ZADD leaderboard:daily:2026-02-10 5000 user_a
-   EXPIRE leaderboard:daily:2026-02-10 86400  // 24 hours
-
-   // Automatically deleted after 24 hours
-
-3. Leaderboard snapshot (archive):
-   Before deleting daily leaderboard:
-   - Save top 100 to best_scores table
-   - Track rank and percentile at time of reset
-   - Users can view historical rankings
+```redis
+ZADD leaderboard:daily:2026-02-10 5000 user_a
+EXPIRE leaderboard:daily:2026-02-10 86400  # 24 hours
 ```
+
+3. **Archive snapshot:** Save top 100 (rank + percentile) to `best_scores` / `leaderboard_snapshots` before deletion so users can view historical rankings.
 
 ---
 
 ### Q5: "How would you add friend leaderboards?"
 
-**Answer:**
+- **Option 1 — Separate ZSET per friend group (`leaderboard:friends:{userId}`):** Updating one score requires `O(friends)` `ZADD` writes across every friend's board:
 
+```java
+@PostScore
+public void updateFriendLeaderboards(String userId, long score) {
+    List<String> friends = getFriends(userId);
+
+    for (String friendId : friends) {
+        String friendLBKey = "leaderboard:friends:" + friendId;
+        redis.zadd(friendLBKey, score, userId);
+    }
+}
 ```
-Friend leaderboards show ranking among your friends only.
 
-Data Model:
-  - Users have friend_list (stored in user service)
-  - Leaderboard is subset of all players
+- **Option 2 — Dynamic scoring (Recommended):** Fetch friends' scores via `MGET` and sort in-memory (simple, no per-user ZSET duplication, fast for `< 5000` friends):
 
-Implementation Option 1: Separate ZSETs per friend group
-  Key: leaderboard:friends:{userId}
-  Members: all friends of userId with their scores
+```java
+public List<FriendLeaderboardEntry> getFriendLeaderboard(String userId) {
+    List<String> friends = getFriends(userId);
 
-  Problem: O(friends) to update when one friend scores
+    // Get scores for all friends
+    Map<String, Long> scores = redis.mget(friends);
 
-  @PostScore
-  public void updateFriendLeaderboards(String userId, long score) {
-      List<String> friends = getFriends(userId);
-
-      for (String friendId : friends) {
-          String friendLBKey = "leaderboard:friends:" + friendId;
-          redis.zadd(friendLBKey, score, userId);
-      }
-  }
-
-Implementation Option 2: Dynamic scoring
-  Query all friends, compute leaderboard on-demand
-
-  public List<FriendLeaderboardEntry> getFriendLeaderboard(String userId) {
-      List<String> friends = getFriends(userId);
-
-      // Get scores for all friends
-      Map<String, Long> scores = redis.mget(friends);
-
-      // Sort locally
-      scores.entrySet().stream()
-          .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
-          .collect(toList());
-  }
-
-Recommendation: Option 2 (dynamic)
-  ✓ Simpler implementation
-  ✓ No separate data structure per user
-  ✗ Requires sorting in app (usually OK for < 5000 friends)
+    // Sort locally
+    return scores.entrySet().stream()
+        .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
+        .collect(toList());
+}
 ```
 
 ---
 
 ### Q6: "What if Redis goes down for 1 hour?"
 
-**Answer:**
+- **Impact:** Score submissions to Redis and rank queries fail, **but** scores remain safely persisted in PostgreSQL.
+- **Recovery Option 1 — DB/Kafka Fallback:** Route writes directly to PostgreSQL + Kafka `pending-scores` topic during the outage:
 
+```java
+if (redis.isDown()) {
+    scoreRepository.save(submission);  // DB write
+    kafkaTemplate.send("pending-scores", submission);
+}
 ```
-Scenario: Primary Redis node crashes, failover takes 1 hour (worst case)
 
-Impact:
-  ✗ Can't submit scores to Redis
-  ✗ Rank queries fail
-  ✓ But: scores are still persisted to database
+- **Recovery Option 2 — Rebuild from DB:** Keep Redis read-only until `ZADD` rebuild finishes from `SELECT player_id, MAX(score) FROM scores GROUP BY player_id`.
+- **Recovery Option 3 — Redis Sentinel / Cluster:** Automatic failover to a replica in `< 30 seconds`:
 
-Recovery options:
-
-1. Write to database directly (fallback)
-   - During Redis outage, route score updates to DB
-   - Queue them with Kafka
-   - Client waits longer but doesn't lose score
-
-   if (redis.isDown()) {
-       scoreRepository.save(submission);  // DB write
-       kafkaTemplate.send("pending-scores", submission);
-   }
-
-2. Rebuild from database
-   - Once Redis recovers, rebuild ZSETs from DB
-   - Redis is read-only until rebuild complete
-
-   for row in SELECT player_id, MAX(score) FROM scores
-             GROUP BY player_id:
-       redis.zadd("leaderboard:all-time", row.max_score, row.player_id)
-
-3. Use Redis Sentinel / Redis Cluster
-   - Automatic failover to replica (< 30 seconds)
-   - No manual intervention needed
-
-   sentinel.conf:
-     sentinel monitor mymaster 127.0.0.1 6379 1
-     sentinel down-after-milliseconds mymaster 5000
-     sentinel parallel-syncs mymaster 1
-
-Lesson: Always have a fallback for critical paths
+```ini
+sentinel monitor mymaster 127.0.0.1 6379 1
+sentinel down-after-milliseconds mymaster 5000
+sentinel parallel-syncs mymaster 1
 ```
+
+> [!TIP]
+> Always keep a fallback write path (PostgreSQL + Kafka) for critical score submissions so players never lose progress during cache outages.
 
 ---
 
 ### Q7: "How would you implement seasonal leaderboards?"
 
-**Answer:**
+- **Design:** Create 30-day rotating keys (`leaderboard:season-2026-02`) with `EXPIRE` set to `2592000` seconds (30 days).
 
+```java
+String season = "season-2026-02";  // Feb 2026
+String key = "leaderboard:" + season;
+
+// ZADD leaderboard:season-2026-02 5000 user_a
+// EXPIRE leaderboard:season-2026-02 2592000  (30 days)
 ```
-Seasonal leaderboard = 30-day rotating window
 
-Implementation:
-  1. Create season-specific key
-  2. Set TTL = 30 days
-  3. Rotate automatically
+- **Archiving:** Run a daily `@Scheduled(fixedDelay = 86400000)` job to snapshot expired season keys to PostgreSQL before cleanup:
 
-Code:
-  String season = "season-2026-02";  // Feb 2026
-  String key = "leaderboard:" + season;
+```java
+@PostConstruct
+@Scheduled(fixedDelay = 86400000)  // Check daily
+public void archiveExpiredSeasons() {
+    List<String> expiredKeys = redis.keys("leaderboard:season-*");
 
-  ZADD leaderboard:season-2026-02 5000 user_a
-  EXPIRE leaderboard:season-2026-02 2592000  // 30 days
-
-  // Next season automatically becomes current
-  // This one auto-expires and is archived to DB
-
-Archiving:
-  @PostConstruct
-  @Scheduled(fixedDelay = 86400000)  // Check daily
-  public void archiveExpiredSeasons() {
-      List<String> expiredKeys = redis.keys("leaderboard:season-*");
-
-      for (String key : expiredKeys) {
-          if (redis.ttl(key) < 0) {  // Already expired
-              snapshotSeasonToDB(key);
-              redis.delete(key);
-          }
-      }
-  }
+    for (String key : expiredKeys) {
+        if (redis.ttl(key) < 0) {  // Already expired
+            snapshotSeasonToDB(key);
+            redis.delete(key);
+        }
+    }
+}
 ```
 
 ---
 
 ## Final Interview Summary
 
+```mermaid
+flowchart LR
+    Recap["Requirements (1M DAU, 100K QPS, &lt;50ms)"] --> Core["Core Engine: Redis ZSET + Tie-Break Encoding"]
+    Core --> RT["Real-Time: Kafka + 1s Throttle + Pub/Sub + WS"]
+    Core --> Scale["Scale: Read Replicas + Sharding + HLL"]
+    Core --> Fault["Resilience: RDB/AOF + Async PG + Idempotency"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Recap blue
+    class Core green
+    class RT,Scale amber
+    class Fault purple
+```
+
 ### Problem Recap
 
 Design a real-time leaderboard supporting:
-- 1M concurrent players
-- 100K score updates/sec
-- < 50ms rank query latency
+- **1M** concurrent players &amp; **100K** score updates/sec
+- **`&lt; 50ms`** rank query latency
 - Multiple time windows (daily, weekly, all-time)
 - Real-time rank push updates
 
 ### Solution Architecture
 
-1. **Data Structure:** Redis Sorted Set (ZSET)
-   - O(log N) rank lookup
-   - O(log N + K) top-K query
-   - Handles 25M+ players per node
-
-2. **High-Level Design:**
-   - Score Service (write path) → Redis + async DB
-   - Leaderboard Query Service (read path) → Redis replicas
-   - WebSocket server → push rank changes
-   - Kafka → distribute events
-
-3. **Scalability:**
-   - Hash-based sharding for 500M+ players
-   - Read replicas for query distribution
-   - Approximate ranking for 1B+ players
-
-4. **Fault Tolerance:**
-   - Redis persistence (RDB + AOF)
-   - Write-behind pattern (async DB)
-   - Idempotency keys for retries
-   - Anti-cheat validation layer
+1. **Data Structure:** Redis Sorted Set (`ZSET`) — `O(log N)` rank lookup, `O(log N + K)` top-K query, handles 25M+ players per node.
+2. **High-Level Design:** Score Service (write path → Redis + async DB), Leaderboard Query Service (read path → Redis replicas), Kafka + WebSocket server for throttled rank pushes.
+3. **Scalability:** Hash-based sharding for 500M+ players, read replicas for query distribution, approximate ranking (HyperLogLog) for 1B+ players.
+4. **Fault Tolerance:** Redis persistence (`RDB + AOF`), write-behind pattern (async PostgreSQL), idempotency keys for retries, and anti-cheat validation layer.
 
 ### Why This Approach
 
 | Requirement | Solution | Why |
 |-------------|----------|-----|
-| < 50ms rank query | Redis ZSET | O(log N) in-memory |
-| 100K updates/sec | Pipeline batching | Reduce round trips |
+| `&lt; 50ms` rank query | Redis `ZSET` | `O(log N)` in-memory |
+| 100K updates/sec | Pipeline batching | Reduce network round-trips |
 | Real-time updates | Pub/Sub + WebSocket | Push instead of poll |
-| No data loss | Async DB + RDB | Survive crashes |
-| 1B players | Sharding + approximation | Distribute load |
+| No data loss | Async DB + RDB/AOF | Survive node crashes |
+| 1B players | Sharding + approximation | Distribute load &amp; memory |
 
 ### Complexity Tradeoffs
 
 | Aspect | Simple (25M) | Complex (500M+) |
 |--------|-------------|-----------------|
-| Implementation | Single ZSET | Hash sharding |
-| Latency | O(log N) | O(log N) + merge |
+| Implementation | Single `ZSET` | Hash sharding |
+| Latency | `O(log N)` | `O(log N)` + merge |
 | Operations | Simple | More moving parts |
-| Testing | Easy | Need test harness |
+| Testing | Easy | Needs distributed test harness |
 | Debugging | Straightforward | Distributed debugging |
 
-**Best approach for interview:** Start simple (single ZSET), then discuss how you'd scale to handle 500M players.
+> [!TIP]
+> **Best approach for interviews:** Start simple with a single Redis `ZSET` + PostgreSQL write-behind, nail the tie-breaking and time-window details, and then progressively layer in sharding, read replicas, and HyperLogLog approximation for 500M–1B+ players.
 
 ---
 

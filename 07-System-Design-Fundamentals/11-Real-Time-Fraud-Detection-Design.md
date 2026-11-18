@@ -1222,6 +1222,31 @@ public class TrainingExample {
 
 ### Why Kafka Streams?
 
+```mermaid
+flowchart LR
+    T["transactions.raw (partitioned by cardId)"] --> J["Left Join (30s window)"]
+    UP["KTable: user-profiles"] --> J
+    T --> W["TimeWindows (1h + 5m grace)"]
+    W -.-> RS["RocksDB: velocity-count-1h"]
+    UP -.-> US["RocksDB: user-profiles-store"]
+    J --> RE["RuleEngine.evaluateRules()"]
+    RE --> ML["MLModelScorer.score()"]
+    ML --> DE["DecisionEngine.makeDecision()"]
+    DE --> O1["fraud-decisions (Auth Service)"]
+    DE -->|"REVIEW only"| O2["fraud-cases-for-review (Analysts)"]
+    DE --> O3["fraud-decision-metrics (Monitoring)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+
+    class T,UP,O1,O3 blue
+    class J,W,RE,ML purple
+    class RS,US,O2 amber
+    class DE green
+```
+
 | Aspect | Kafka Streams | Spark Streaming | Flink |
 |--------|--------------|-----------------|-------|
 | **Latency** | <100ms | ~2s | ~100ms |
@@ -1230,11 +1255,14 @@ public class TrainingExample {
 | **Complexity** | Low | Medium | Medium |
 | **Exactly-once** | Yes | Yes | Yes |
 
-**For fraud detection, Kafka Streams is ideal** because:
-1. Sub-100ms latency
-2. Stateful operations (windowing, KTable joins)
-3. Exactly-once guarantees (no duplicate processing)
-4. No external cluster needed
+**Why Kafka Streams fits fraud detection**:
+- **Sub-100ms latency**: Event-by-event processing without micro-batch overhead.
+- **Stateful operations**: Native windowing (`TimeWindows`) and `KTable` joins backed by RocksDB.
+- **Exactly-once (`EXACTLY_ONCE_V2`)**: Prevents duplicate scoring or double-counting velocity.
+- **Zero external cluster**: Embedded directly inside application pods for simpler ops.
+
+> [!TIP]
+> Pin `RocksDB` state stores to fast local SSDs (`STATE_DIR_CONFIG`) and enable `EXACTLY_ONCE_V2` with `read_committed` consumers so pod restarts never skew 1-hour velocity windows.
 
 ### Fraud Detection Topology
 
@@ -1462,7 +1490,40 @@ public class KafkaStreamsConfig {
 
 ## Decision Engine
 
-### Decision Logic
+### Decision Logic & Thresholds
+
+```mermaid
+flowchart TD
+    S["Inputs: ruleScore (0.6) + mlScore (0.4)"] --> C["finalScore = ruleScore * 0.6 + mlScore * 0.4"]
+    C -->|"finalScore &gt;= 0.90"| B["BLOCK: Auto-reject"]
+    C -->|"0.50 &lt;= finalScore &lt; 0.90"| R["REVIEW: Create analyst case"]
+    C -->|"finalScore &lt; 0.50"| CH{"isNewDevice &amp; !isHighRiskMerchant?"}
+    CH -->|Yes| OTP["CHALLENGE: OTP / 3D Secure"]
+    CH -->|No| A["ALLOW: Approve transaction"]
+    M["Hourly DynamicThresholdAdjustment"] -.->|"FP &gt; 2% (+0.05) / FN &gt; 1% (-0.03)"| C
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#7f1d1d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+
+    class S,C blue
+    class B red
+    class R,M amber
+    class CH,OTP purple
+    class A green
+```
+
+| Decision | Condition | Action | Customer Friction |
+|----------|-----------|--------|-------------------|
+| `BLOCK` | `finalScore >= 0.90` | Automatically reject & log audit trail | High (declined) |
+| `REVIEW` | `0.50 <= finalScore < 0.90` | Create analyst case via `CaseManagementService` | Medium (delayed) |
+| `CHALLENGE` | `finalScore < 0.50` + `isNewDevice && !isHighRiskMerchant` | Trigger OTP / 3D Secure verification | Low (self-service) |
+| `ALLOW` | `finalScore < 0.50` (no challenge trigger) | Approve transaction immediately | None |
+
+> [!NOTE]
+> Rules carry a **0.6 weight** because they encode explicit, auditable business logic, while ML carries **0.4** for learned patterns. `DynamicThresholdAdjustment` runs hourly, raising `blockThreshold` by `+0.05` if false positives exceed `2%` and lowering it by `-0.03` if false negatives exceed `1%`.
 
 ```java
 @Component
@@ -1613,64 +1674,43 @@ public class DynamicThresholdAdjustment {
 
 ## Production Concerns
 
-### Latency Budget Breakdown
+### Latency Budget Breakdown (Target: &lt;100ms P99)
 
-```
-Target: <100ms P99
-
-Transaction Ingestion (Kafka) ........... 1ms
-├─ Network latency
-└─ Partition assignment
-
-Rule Engine Evaluation ................. 25-30ms
-├─ Redis lookups for velocity ......... 5-10ms
-├─ Rule execution ..................... 15-20ms
-└─ Blacklist check
-
-Feature Enrichment ..................... 10-15ms
-├─ Kafka Streams join with profile .... 5ms
-├─ Batch feature lookup (Redis cache) . 5-10ms
-
-ML Model Inference ..................... 15-25ms
-├─ ONNX model invocation .............. 10-15ms
-├─ Feature vector preparation ......... 3-5ms
-└─ Fallback logic ..................... 2-5ms (worst case)
-
-Decision Engine ........................ 5-10ms
-├─ Combine scores ..................... 1ms
-└─ Create audit record ................ 4-9ms
-
-Kafka output & serialization ........... 5-10ms
-
-Total: ~71-110ms (95th percentile)
-Margin: 10-30ms for network jitter
-```
+| Stage | Budget | Breakdown & Hot Path |
+|-------|--------|----------------------|
+| **Transaction Ingestion (Kafka)** | `1ms` | Network latency + partition assignment |
+| **Rule Engine Evaluation** | `25-30ms` | Redis velocity lookups (`5-10ms`) + rule execution (`15-20ms`) + blacklist check |
+| **Feature Enrichment** | `10-15ms` | Kafka Streams profile join (`5ms`) + Redis batch feature cache (`5-10ms`) |
+| **ML Model Inference** | `15-25ms` | Feature vector prep (`3-5ms`) + ONNX invocation (`10-15ms`) + fallback (`2-5ms` worst case) |
+| **Decision Engine** | `5-10ms` | Score combination (`1ms`) + audit record creation (`4-9ms`) |
+| **Kafka Output & Serialization** | `5-10ms` | Serialize `FraudDecision` & produce to output topics |
+| **Total (P95)** | **`71-110ms`** | Leaves **`10-30ms`** margin for network jitter |
 
 **Latency Optimization Tactics**:
-1. **Pre-compute batch features nightly** (already cached in Redis)
-2. **Use RocksDB for state stores** (sub-ms access)
-3. **Batch feature serialization** (serialize once, use many times)
-4. **Model quantization** (reduce model size, faster inference)
-5. **Async enrichment** where possible (though fraud detection must be synchronous)
+- **Pre-compute batch features nightly**: Cache in Redis to avoid cold DB reads.
+- **RocksDB state stores**: Sub-millisecond local state lookups in Kafka Streams.
+- **Batch feature serialization**: Serialize feature vectors once and reuse across stages.
+- **Model quantization**: Shrink ONNX model size for faster CPU inference.
+- **Async enrichment**: Offload non-blocking side effects while keeping scoring synchronous.
 
 ### Handling Spikes (Black Friday, Holidays)
 
-#### Auto-Scaling Architecture
-```
-        ┌─────────────────────────────────┐
-        │  Kafka Topic: transactions.raw  │
-        │  10K msgs/sec (baseline)        │
-        │  → 100K msgs/sec (Black Friday) │
-        └──────────────┬──────────────────┘
-                       │
-        ┌──────────────▼──────────────┐
-        │  Fraud Detection Pod Cluster │
-        │  • Baseline: 10 pods         │
-        │  • Black Friday: 100 pods    │
-        │  • HPA: Scale based on lag   │
-        └──────────────┬──────────────┘
-                       │
-                    10K→100K msgs/sec
+```mermaid
+flowchart LR
+    K["transactions.raw: 10K → 100K msgs/sec"] --> HPA["HPA Cluster: 10 → 100 pods (CPU &gt; 70% or lag &gt; 1000)"]
+    HPA -->|"Blocked / Reviewed"| AN["Analyst Review (24-48h)"]
+    AN --> AL["Update AuditLog with true label"]
+    AL --> RT["Daily Retraining: Collect → Features → Train → Eval → Deploy"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+
+    class K blue
+    class HPA purple
+    class AN,AL amber
+    class RT green
 ```
 
 **Configuration**:
@@ -1714,11 +1754,8 @@ spec:
 
 ### False Positive Management
 
-**Impact of False Positives**:
-- **Declining Transactions**: Customer's transaction is blocked
-- **Customer Frustration**: "Why was I blocked? I didn't do anything suspicious"
-- **Support Tickets**: Increased contact center load
-- **Revenue Loss**: Customer uses competitor's card instead
+> [!WARNING]
+> False positives directly cause declined legitimate transactions, customer frustration, higher support ticket volume, and lost revenue when customers switch to a competitor's card.
 
 **Mitigation Strategies**:
 
@@ -1805,7 +1842,8 @@ public class FalsePositiveMonitoring {
 
 ### Audit Trail & Explainability
 
-Every decision must be traceable and explainable (regulatory requirement).
+> [!IMPORTANT]
+> Every decision must be traceable and explainable for regulatory compliance (PCI-DSS, GDPR) and customer dispute resolution.
 
 ```java
 @Entity
@@ -1929,33 +1967,9 @@ public class ColdStartHandler {
 
 ### Feedback Loop: From Analyst Review to Model Improvement
 
-```
-Transaction blocked/reviewed
-         │
-         ▼
-┌─────────────────────────────────┐
-│ Analyst reviews in 24-48 hours  │
-│ - Confirms fraud?               │
-│ - False positive?               │
-│ - Uncertain?                    │
-└────────────┬────────────────────┘
-             │
-             ▼
-      ┌──────────────────┐
-      │ Update AuditLog  │
-      │ with true label  │
-      └────────┬─────────┘
-               │
-               ▼
-    ┌──────────────────────────────┐
-    │ Daily retraining pipeline:   │
-    │ 1. Collect labeled txns      │
-    │ 2. Compute features          │
-    │ 3. Train new model           │
-    │ 4. Evaluate performance      │
-    │ 5. If better, deploy         │
-    └──────────────────────────────┘
-```
+1. **Triage (24–48h)**: Blocked/reviewed transactions go to analysts (`CONFIRMED_FRAUD`, `FALSE_POSITIVE`, or `UNCERTAIN`).
+2. **Labeling**: `AuditLog` is updated with the verified ground-truth label.
+3. **Daily Retraining Pipeline**: Collect labeled transactions → compute features → train candidate model → evaluate against baseline → deploy if metrics improve.
 
 ### Monitoring & Alerting
 
@@ -2036,148 +2050,98 @@ public class FraudDetectionMetricsCollector {
 
 ## Interview Follow-ups & Expected Answers
 
+```mermaid
+flowchart LR
+    M["Minutes: Instant Blacklist Rule (no deploy)"] --> H["Hours: Rules UI (e.g. &gt;10x avg + new country)"]
+    H --> D["Days: Daily ML Retrain + 5% Canary"]
+    D --> W["Weeks: Feature / Architecture Update"]
+    S["Safety Net: Anomaly Detection Layer (100x spend in 1h)"] -.->|"Flags edge cases"| AN["Immediate Analyst Review"]
+
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#7f1d1d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+    class M red
+    class H amber
+    class D blue
+    class W green
+    class S,AN purple
+```
+
 ### Follow-up 1: "How do you handle a new type of fraud the system hasn't seen before?"
 
-**Expected Answer Framework**:
-
-1. **Rules-based detection first**: If fraud has a deterministic pattern (e.g., known mule accounts, specific merchant abuse), add a rule before rules-only scoring detects it
-2. **Model improvement**: Retrain model daily; new fraud patterns will eventually show up in historical data as analyst labels
-3. **Analyst alerting**: Anomaly detection layer (isolated transactions with unusual features) flags edge cases for review
-4. **Manual overrides**: Analysts can instantly block patterns; rules updated within hours
-
-**Detailed Response**:
-
-> "Good question. Fraud evolves. Here's how we'd handle a novel fraud pattern:
->
-> **Immediate (minutes)**: Our rule-based engine acts first. If analysts see a pattern (e.g., 100 transactions from a new merchant in 5 minutes), they can instantly add a blacklist rule without code deployment.
->
-> **Short-term (hours)**: Analysts create a new rule through our rules management UI. Example: 'Block if transaction amount > 10x average AND from new country.' Rules are evaluated within the next batch cycle.
->
-> **Medium-term (days)**: We run our daily retraining job. New fraud instances from the last 24 hours are labeled by analysts. The ML model retrains and picks up the pattern. Once validated, we canary deploy to 5% of traffic.
->
-> **Longer-term (weeks)**: If the fraud pattern persists, we adjust our feature engineering or model architecture to explicitly capture it.
->
-> **Safety net**: We have an anomaly detection layer that flags transactions with statistically unusual features (e.g., account suddenly spending 100x their average in a 1-hour window). These go to analysts immediately, regardless of the primary model score."
+- **Immediate (minutes)**: Add a deterministic **blacklist rule** in the rule-based engine without code deployment (e.g., 100 transactions from a new merchant in 5 minutes).
+- **Short-term (hours)**: Analysts author a dynamic rule via the **Rules Management UI** (e.g., `amount > 10x average AND new country`), evaluated on the next cycle.
+- **Medium-term (days)**: Analysts label the past 24 hours of fraud; the **daily ML retraining job** learns the pattern and rolls out via a **5% canary**.
+- **Longer-term (weeks)**: Update **feature engineering** or model architecture if the pattern persists.
+- **Safety net**: An **anomaly detection layer** flags statistically unusual features (e.g., `100x` average spend in 1 hour) directly to analysts regardless of primary model score.
 
 ### Follow-up 2: "How do you reduce false positives without increasing fraud?"
 
-**Expected Answer Framework**:
-
-1. **Threshold tuning**: Adjust block/review thresholds based on true positive vs. false positive trade-off
-2. **Whitelist trusted patterns**: VIP customers, merchants, high-confidence repeats
-3. **Challenge instead of block**: Use 3D Secure/OTP for gray-area transactions
-4. **Feature improvement**: Better features = better predictions = fewer errors
-5. **Model ensemble**: Multiple models voting reduces outliers
-
-**Detailed Response**:
-
-> "This is the classic fraud detection trade-off. High sensitivity catches fraud but hurts customer experience; low sensitivity is customer-friendly but misses fraud.
->
-> **Our approach**:
->
-> **1. Threshold management**: We calculate the ROC curve daily. Plot false positive rate vs. true positive rate. Our business says 'we can tolerate 1% false positives but need to catch 95% of fraud.' We set the threshold accordingly.
->
-> **2. Tiered decisions**: Don't just ALLOW or BLOCK. We have CHALLENGE (send OTP, require 3D Secure) for gray-area transactions (60-80% fraud score). Users with correct OTP are approved; we don't block them. This is customer-friendly while catching fraud.
->
-> **3. Whitelist trusted patterns**: If a customer has successfully purchased from Amazon 100 times, don't block just because they bought a $500 laptop. The rule contributes 0.3 to fraud score, but the whitelist overrides it: ALLOW if merchant is highly trusted.
->
-> **4. Better features**: Most false positives come from bad features. Example: we thought 'large purchase = fraud,' but really it's 'large purchase FROM NEW DEVICE = fraud.' So we add device age as a feature. Precision improves.
->
-> **5. A/B testing models**: We deploy new models to 5% of traffic (canary), monitor FP/FN rates. If better, increase to 100%.
->
-> **6. Analyst feedback loop**: When an analyst marks a blocked transaction as 'false positive,' we send it to a ML retraining queue. Over time, the model learns to avoid those patterns."
+- **Threshold tuning (ROC curve)**: Calculate ROC daily and pick operating points matching business SLAs (e.g., tolerate `1%` false positives while catching `95%` of fraud).
+- **Tiered decisions (`CHALLENGE`)**: Send OTP / 3D Secure for gray-area scores (`60-80%`) instead of hard-blocking legitimate users.
+- **Whitelist trusted patterns**: Override rules (e.g., `+0.3` score) for VIPs or repeat trusted merchants (e.g., 100+ prior Amazon purchases).
+- **Better features**: Disambiguate benign spikes from fraud (e.g., combine `large purchase` + `new device age` instead of flagging `large purchase` alone).
+- **Canary A/B testing & feedback loop**: Test new models on `5%` traffic, monitor FP/FN rates, and feed analyst-confirmed false positives into the ML retraining queue.
 
 ### Follow-up 3: "How do you explain to a customer why their transaction was blocked?"
 
-**Expected Answer Framework**:
-
-1. **Audit log captures decision**: Which rules triggered, what was the model score
-2. **Customer-friendly explanation**: Translate technical rules into plain language
-3. **Appeal process**: Customer can contact support; analyst reviews the decision
-4. **Transparency without revealing exploits**: Don't say "we detected a geographic impossibility" (fraudsters will then disguise location changes), but do say "unusual account activity"
-
-**Detailed Response**:
-
-> "Transparency is important, but we can't reveal our detection logic (fraudsters would adapt). Here's our approach:
->
-> **Step 1: Immediate notification**:
-> *'Your transaction was temporarily blocked. Please call us at 1-800-BANK or chat with support for more details.'*
->
-> **Step 2: Support conversation**:
-> The support agent looks up the audit log. If the block was due to:
-> - **Geographic impossibility**: 'Your account showed activity in India 2 hours ago, then New York now. We wanted to verify it was you.'
-> - **New device**: 'We detected a purchase from a new device. Standard verification for your security.'
-> - **Velocity check**: 'Multiple transactions in short time. We need to confirm you authorized them.'
-> - **Amount anomaly**: 'This purchase is larger than your typical spending. Is this expected?'
->
-> **Step 3: Resolution**:
-> - If customer confirms (yes, I authorized it), unblock and add to whitelist
-> - If uncertain, require 3D Secure
-> - If customer says 'I did not do this,' open fraud case
->
-> **Step 4: Appeal**:
-> If customer contests the block, it goes to an analyst. We have SLA: resolve within 24 hours.
->
-> **No rule details revealed**: We never say 'rule X triggered with score Y' because fraudsters optimize for it. We explain the business reason instead."
+- **Step 1 — Immediate notification**: Prompt the customer to contact support (`1-800-BANK` or chat) without exposing internal rule scores.
+- **Step 2 — Plain-language translation (Audit Log)**: Support translates triggered rules into user-friendly reasons:
+  - *Geographic impossibility*: "Activity in India 2 hours ago and New York now."
+  - *New device*: "Purchase from an unrecognized device."
+  - *Velocity check*: "Multiple transactions in a short window."
+  - *Amount anomaly*: "Purchase larger than typical spending."
+- **Step 3 — Resolution & Appeal**: Unblock and whitelist if confirmed legitimate, require 3D Secure if uncertain, or open a fraud case if unauthorized (with a **24-hour SLA** on appeals).
+- **Security boundary**: Never expose `"rule X triggered with score Y"` so fraudsters cannot reverse-engineer thresholds.
 
 ### Follow-up 4: "How do you test a fraud detection system?"
 
-**Expected Answer Framework**:
+> [!TIP]
+> **Shadow mode** is critical before any production rollout: run the candidate model alongside the active model for 1 week without affecting live decisions, comparing FP/FN rates before moving to a 5% → 25% → 100% canary.
 
-1. **Unit tests**: Individual rules in isolation
-2. **Integration tests**: Full pipeline with synthetic transactions
-3. **Simulation**: Replay historical transactions, measure metrics
-4. **A/B testing**: Shadow mode (new model runs but doesn't affect decisions)
-5. **Chaos engineering**: Inject failures, ensure system is resilient
+- **Unit tests**: Verify individual rules in isolation:
 
-**Detailed Response**:
+```java
+@Test
+public void testVelocityRule() {
+    Transaction txn1 = createTransaction(cardId, amount=100, time=1000);
+    Transaction txn2 = createTransaction(cardId, amount=100, time=1005);
+    // ... 5 more transactions within 60 seconds
 
-> "Testing fraud detection is tricky because we deal with real money. Here's our multi-layered approach:
->
-> **1. Unit tests**:
-> ```java
-> @Test
-> public void testVelocityRule() {
->     Transaction txn1 = createTransaction(cardId, amount=100, time=1000);
->     Transaction txn2 = createTransaction(cardId, amount=100, time=1005);
->     // ... 5 more transactions within 60 seconds
->
->     FraudScoreResult result = ruleEngine.evaluateRules(txn8, profile);
->     assertTrue(result.ruleScore >= 0.4);  // Velocity triggered
-> }
-> ```
->
-> **2. Integration tests**: Full pipeline with synthetic data
->
-> **3. Replay testing**: Extract historical transactions (anonymized), replay through new model:
-> - Measure: Did it catch the frauds analysts caught?
-> - Measure: Did it avoid false positives on approved transactions?
->
-> **4. Shadow mode (critical!)**:
-> - Run new model alongside old model for 1 week
-> - Don't use new model's decisions (keep using old)
-> - Compare metrics: new model FP rate vs. old
-> - Only deploy if new is better
->
-> **5. Canary deployment**:
-> - Deploy to 5% of production traffic
-> - Monitor false positive rate
-> - If good, increase to 25%, then 100%
->
-> **6. Chaos testing**:
-> - Kafka down: Does system gracefully degrade?
-> - Redis down: Fall back to rules-only
-> - Model server down: Use rules-only until recovery
-> - High latency: Measure P99 latency with delays
->
-> **7. Business validation**:
-> - Compare false positive rate to SLA (<1%)
-> - Compare fraud catch rate to target (>95%)
-> - Monitor customer complaints, support tickets"
+    FraudScoreResult result = ruleEngine.evaluateRules(txn8, profile);
+    assertTrue(result.ruleScore >= 0.4);  // Velocity triggered
+}
+```
+
+- **Integration & Replay testing**: Run synthetic pipelines and replay anonymized historical transactions to verify fraud catch rate (`>95%`) and false positive SLA (`<1%`).
+- **Shadow mode & Canary**: 1-week shadow comparison, followed by `5% → 25% → 100%` canary rollout.
+- **Chaos testing & Business validation**: Simulate Kafka down (graceful degradation), Redis down (rules-only fallback), model server down (rules-only fallback), and injected latency while tracking P99 and support ticket volume.
 
 ---
 
 ## Mid-Level vs. Senior Comparison
+
+```mermaid
+flowchart TD
+    Q["Senior Discovery Before Designing"] --> Q1["Fraud loss rate? (Accuracy target)"]
+    Q --> Q2["Customer base? (5M vs 500M scale)"]
+    Q --> Q3["Analyst team? (Manual REVIEW capacity)"]
+    Q --> Q4["Cost &amp; infra? (Kafka Streams vs Spark/Flink)"]
+    Q --> Q5["Compliance? (PCI-DSS / GDPR audit trail)"]
+    Q --> Q6["Current bottleneck? (Latency vs FP rate)"]
+    Q1 & Q2 & Q3 & Q4 & Q5 & Q6 --> A["Tailored Production Architecture"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+
+    class Q blue
+    class Q1,Q2,Q3,Q4,Q5,Q6 purple
+    class A green
+```
 
 | Aspect | Mid-Level (5 YOE) | Senior (8+ YOE) |
 |--------|-------------------|-----------------|
@@ -2189,20 +2153,46 @@ public class FraudDetectionMetricsCollector {
 | **Scalability** | Horizontal scaling with more pods | Understands partition strategy, state store limits, coordination complexity at scale |
 | **Follow-ups** | Answers directly | Asks clarifying questions: "What's our fraud loss rate today?" "How many analysts do we have?" |
 
-**Senior Response to "Design Fraud Detection"**:
-> "Before I architect this, let me ask:
-> 1. What's your current fraud loss rate? (determines accuracy requirements)
-> 2. What's your customer base? (5M users → different scaling than 500M)
-> 3. Do you have analysts today? (if not, can't do reviewed cases)
-> 4. What's your cost structure? (affects Kafka vs. Spark choice)
-> 5. Regulatory constraints? (PCI-DSS, GDPR impact audit trail design)
-> 6. What's currently broken about the system? (Maybe latency, maybe false positives)
->
-> Given these constraints, here's my approach..."
+> [!IMPORTANT]
+> **Senior Framing**: Lead with 6 scoping questions—current fraud loss rate, user scale (`5M` vs `500M`), analyst headcount for `REVIEW` queues, cost structure, regulatory constraints (`PCI-DSS`, `GDPR`), and the primary pain point (latency vs. false positives)—before committing to an architecture.
 
 ---
 
 ## Appendix: Complete Code Examples
+
+```mermaid
+classDiagram
+    class Transaction {
+        +String transactionId
+        +String userId
+        +String cardId
+        +BigDecimal amount
+        +Geolocation currentGeolocation
+        +long timestamp
+    }
+    class Geolocation {
+        +double latitude
+        +double longitude
+        +String country
+        +distanceTo(Geolocation other) double
+    }
+    class TransactionSerde {
+        +serializer() Serializer
+        +deserializer() Deserializer
+    }
+    class FraudDetectionService {
+        +initialize() void
+        +processSynchronous(Transaction, UserProfile) FraudDecision
+    }
+
+    Transaction *-- Geolocation
+    TransactionSerde ..> Transaction : serializes
+    FraudDetectionService --> FraudDetectionTopology
+    FraudDetectionService --> RuleEngine
+    FraudDetectionService --> MLModelScorer
+    FraudDetectionService --> DecisionEngine
+    FraudDetectionService --> AuditTrailService
+```
 
 ### Transaction Model & Serialization
 
@@ -2331,7 +2321,28 @@ public class FraudDetectionService {
 
 ## Summary
 
-This real-time fraud detection system design covers:
+```mermaid
+flowchart LR
+    A["1. Kafka Ingest"] --> B["2. Rule Engine (Deterministic)"]
+    B --> C["3. Features (Redis + Batch)"]
+    C --> D["4. Embedded ONNX + Fallback"]
+    D --> E["5. Kafka Streams (Windowed)"]
+    E --> F["6. Decision Engine (Thresholds)"]
+    F --> G["7. Production (Scale + Audit)"]
+    G --> H["8. Testing (Shadow + Canary)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+
+    class A,E blue
+    class B,C,D purple
+    class G,H amber
+    class F green
+```
+
+### Core Design Pillars
 
 1. **Architecture**: Kafka → Rule Engine → ML Model → Decision Engine → Output
 2. **Rules**: Deterministic, configurable, explainable
@@ -2342,17 +2353,15 @@ This real-time fraud detection system design covers:
 7. **Production**: Latency budget, scaling, false positives, audit trail
 8. **Testing**: Unit, integration, replay, shadow, canary modes
 
-**Key Metrics to Monitor**:
-- **Latency**: P50, P95, P99 (target <100ms)
-- **Throughput**: Transactions/second processed
-- **Accuracy**: False positive rate, false negative rate
-- **System Health**: Kafka consumer lag, model inference time, rule evaluation time
-- **Business Impact**: Fraud loss rate, customer complaints
+### Key Metrics to Monitor
 
----
+| Category | Metrics | Target / Purpose |
+|----------|---------|------------------|
+| **Latency** | P50, P95, P99 | `<100ms` P99 end-to-end |
+| **Throughput** | Transactions/sec processed | Baseline `10K` → Peak `100K` TPS |
+| **Accuracy** | False positive rate, false negative rate | `FP < 1-2%`, `FN < 1%` |
+| **System Health** | Kafka consumer lag, model inference time, rule evaluation time | Trigger HPA & fallback alerts |
+| **Business Impact** | Fraud loss rate, customer complaints | Balance fraud catch vs. UX |
 
-**Recommended Further Reading**:
-- Kafka Streams documentation: state stores, exactly-once semantics
-- ONNX Runtime for Java: model inference performance
-- GDPR & PCI-DSS audit trail requirements
-- Online learning for concept drift (fraud patterns evolve daily)
+> [!TIP]
+> **Recommended Further Reading**: Kafka Streams state stores & `EXACTLY_ONCE_V2`, ONNX Runtime for Java inference tuning, GDPR & PCI-DSS audit trail requirements, and online learning for concept drift.
