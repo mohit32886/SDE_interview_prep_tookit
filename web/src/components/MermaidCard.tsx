@@ -20,21 +20,25 @@ export function MermaidCard({ code, isDark }: MermaidCardProps) {
   useEffect(() => {
     let cancelled = false;
     const renderDiagram = async () => {
+      const id = `mmd-${++renderCounter}`;
       try {
         mermaid.initialize({
           startOnLoad: false,
           theme: isDark ? 'dark' : 'default',
           securityLevel: 'loose',
+          suppressErrorRendering: true,
           fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
           flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
         });
-        const id = `mmd-${++renderCounter}`;
+        await mermaid.parse(code);
         const { svg } = await mermaid.render(id, code);
         if (!cancelled) {
           setSvgHtml(svg);
           setError(null);
         }
       } catch (err) {
+        document.getElementById(`d${id}`)?.remove();
+        document.getElementById(id)?.remove();
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to render diagram');
         }
