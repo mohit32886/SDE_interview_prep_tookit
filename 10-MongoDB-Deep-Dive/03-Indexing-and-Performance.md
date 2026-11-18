@@ -7,27 +7,61 @@
 4. [Covered Queries](#covered-queries)
 5. [explain() Deep Dive](#explain-deep-dive)
 6. [Query Optimization](#query-optimization)
-7. [Storage Engine](#storage-engine)
-8. [Profiler](#profiler)
-9. [Common Interview Questions](#common-interview-questions)
+7. [Read and Write Concerns](#read-and-write-concerns)
+8. [WiredTiger Storage Engine](#wiredtiger-storage-engine)
+9. [Profiler](#profiler)
+10. [Common Interview Questions](#common-interview-questions)
 
 ---
 
 ## Index Types
 
+MongoDB provides specialized index types tailored to different data shapes and query patterns.
+
+| Index Type | Target Data / Use Case | Key Constraint / Behavior |
+| :--- | :--- | :--- |
+| **Single Field** | Scalar fields (`age`, `email`) | Ascending (`1`) or descending (`-1`) |
+| **Compound** | Multi-field filters & sorts | Left-prefix rule applies; order matters |
+| **Multikey** | Array fields (`tags`) | Indexes each array element separately |
+| **Text** | Full-text search (`$text`) | Supports weights & `textScore` sorting |
+| **Geospatial** | GeoJSON (`2dsphere`) | Supports `$near`, `$geoWithin` |
+| **Hashed** | Shard keys (`"hashed"`) | Even distribution; no range queries or compound use |
+| **Wildcard** | Dynamic subdocuments (`$**`) | Flexible schema queries; higher write overhead |
+| **TTL** | Time-series / sessions | Auto-deletes docs after `expireAfterSeconds` |
+
+```mermaid
+flowchart TD
+    Q["Incoming Query Pattern"] --> S{"Field Shape?"}
+    S -->|"Scalar Field"| SF["Single / Compound Index"]
+    S -->|"Array Elements"| MK["Multikey Index"]
+    S -->|"Full-Text Search"| TX["Text Index"]
+    S -->|"GeoJSON Coordinates"| GS["2dsphere Geospatial Index"]
+    S -->|"Dynamic Keys"| WC["Wildcard Index ($**)"]
+    S -->|"Auto-Expiring Docs"| TL["TTL Index"]
+    S -->|"Even Shard Distribution"| HS["Hashed Index"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+
+    class Q,S blue;
+    class SF,MK green;
+    class TX,GS amber;
+    class WC,TL purple;
+    class HS red;
+```
+
 ### 1. Single Field Index
 
 ```javascript
-// Create ascending index on age field
+// Create ascending / descending indexes
 db.users.createIndex({ age: 1 })
-
-// Create descending index
 db.users.createIndex({ email: -1 })
 
-// Drop index
+// Drop specific index or all indexes (except _id)
 db.users.dropIndex({ age: 1 })
-
-// Drop all indexes (except _id)
 db.users.dropIndexes()
 ```
 
@@ -47,7 +81,7 @@ public class User {
     private String name;
 }
 
-// Or explicit index creation
+// Explicit index creation
 @Configuration
 public class MongoConfig {
     @Bean
@@ -63,24 +97,24 @@ public class MongoConfig {
 
 ### 2. Compound Index
 
-Index on multiple fields.
+An index on multiple fields. Queries must include the **leading prefix** to use the index efficiently.
 
 ```javascript
-// Create compound index: age ascending, then name ascending
+// Compound index: age ascending, then name ascending
 db.users.createIndex({ age: 1, name: 1 })
 
-// Compound index with mixed directions
+// Mixed directions
 db.users.createIndex({ age: -1, createdAt: 1 })
 
-// This index helps queries that:
-// 1. Filter by age
-// 2. Filter by age AND name
-// 3. Filter by age, sort by name
-// 4. Filter by age AND name, sort by createdAt
+// ✅ Uses index:
+// - Filter by age
+// - Filter by age AND name
+// - Filter by age, sort by name
+// - Filter by age AND name, sort by createdAt
 
-// BUT does NOT help queries that:
-// db.users.find({ name: "John" })  // Missing first field (age)
-// db.users.find({ createdAt: ... }) // Missing prefix fields
+// ❌ Does NOT use index (missing prefix):
+// db.users.find({ name: "John" })
+// db.users.find({ createdAt: ... })
 ```
 
 **Spring Data MongoDB:**
@@ -99,13 +133,12 @@ public class Order {
     private BigDecimal total;
     private LocalDateTime createdAt;
 }
-
-// This creates compound index on (customerId, status)
+// Creates compound index on (customerId, status)
 ```
 
 ### 3. Multikey Index (Arrays)
 
-Index on array fields - creates separate index entry for each array element.
+Creates a separate index entry for every element in an array field.
 
 ```javascript
 db.posts.insertOne({
@@ -114,38 +147,29 @@ db.posts.insertOne({
   tags: ["mongodb", "database", "nosql"]
 })
 
-// Create index on tags array
 db.posts.createIndex({ tags: 1 })
 
-// Query benefits from index
-db.posts.find({ tags: "mongodb" })      // Uses index
-db.posts.find({ tags: { $in: ["mongodb", "java"] } })  // Uses index
+db.posts.find({ tags: "mongodb" })                       // Uses index
+db.posts.find({ tags: { $in: ["mongodb", "java"] } })    // Uses index
 ```
 
 ### 4. Text Index
-
-For full-text search capabilities.
 
 ```javascript
 // Create text index on multiple fields
 db.articles.createIndex({ title: "text", body: "text" })
 
-// Query using text search
+// Basic, phrase, and exclusion searches
 db.articles.find({ $text: { $search: "mongodb" } })
-
-// Phrase search
 db.articles.find({ $text: { $search: "\"mongodb tutorial\"" } })
-
-// Exclude words
 db.articles.find({ $text: { $search: "mongodb -advanced" } })
 
-// Text index with weights (title more important than body)
+// Weighted text index & textScore projection
 db.articles.createIndex(
   { title: "text", body: "text" },
   { weights: { title: 10, body: 5 } }
 )
 
-// Include textScore in projection
 db.articles.find(
   { $text: { $search: "mongodb" } },
   { score: { $meta: "textScore" } }
@@ -154,10 +178,8 @@ db.articles.find(
 
 ### 5. Geospatial Index
 
-For geographic queries.
-
 ```javascript
-// 2dsphere index for spherical (latitude/longitude) data
+// 2dsphere index for spherical (longitude, latitude) data
 db.restaurants.createIndex({ location: "2dsphere" })
 
 db.restaurants.insertOne({
@@ -168,20 +190,17 @@ db.restaurants.insertOne({
   }
 })
 
-// Find restaurants within 5km
+// Proximity query (within 5km)
 db.restaurants.find({
   location: {
     $near: {
-      $geometry: {
-        type: "Point",
-        coordinates: [-74.0000, 40.7000]
-      },
-      $maxDistance: 5000  // 5km in meters
+      $geometry: { type: "Point", coordinates: [-74.0000, 40.7000] },
+      $maxDistance: 5000
     }
   }
 })
 
-// Polygon query (restaurants in area)
+// Polygon containment query
 db.restaurants.find({
   location: {
     $geoWithin: {
@@ -202,56 +221,43 @@ db.restaurants.find({
 
 ### 6. Hashed Index
 
-For shard key hashing (creates evenly distributed buckets).
-
 ```javascript
 db.users.createIndex({ email: "hashed" })
-
-// Hashed indexes have limitations:
-// - Cannot support range queries
-// - Must be used alone (no compound with hashed)
-// - Good for sharding with high-cardinality keys
 ```
+
+> [!NOTE]
+> Hashed indexes distribute shard keys evenly across buckets, but **cannot** support range queries and **cannot** be part of a compound index.
 
 ### 7. Wildcard Index
 
-Match all fields in a subdocument or all fields.
-
 ```javascript
-// Index all fields in user_metadata
+// Index all fields inside user_metadata
 db.users.createIndex({ "user_metadata.$**": 1 })
 
-// Helps queries like:
 db.users.find({ "user_metadata.preferences.theme": "dark" })
 db.users.find({ "user_metadata.profile.bio": { $regex: "engineer" } })
 
-// Index ALL fields (less common)
+// Index ALL fields in collection (use sparingly)
 db.users.createIndex({ "$**": 1 })
 ```
 
 ### 8. TTL Index
 
-Automatically delete documents after specified time.
+Automatically purges documents once `ISODate("now") - createdAt > expireAfterSeconds`.
 
 ```javascript
-// Delete documents 24 hours after createdAt
+// Delete sessions 24 hours (86400s) after createdAt
 db.sessions.createIndex(
   { createdAt: 1 },
-  { expireAfterSeconds: 86400 }  // 24 hours in seconds
+  { expireAfterSeconds: 86400 }
 )
 
-// MongoDB automatically removes documents where:
-// ISODate("now") - ISODate(createdAt) > 24 hours
-
-// Practical: Session storage that auto-expires
 db.sessions.insertOne({
   _id: "session123",
   userId: "USER-001",
-  sessionData: { ... },
+  sessionData: { role: "admin" },
   createdAt: ISODate()
 })
-
-// After 24 hours, document is automatically deleted
 ```
 
 **Spring Data MongoDB:**
@@ -260,12 +266,10 @@ db.sessions.insertOne({
 public class UserSession {
     @Id
     private String id;
-
     private String userId;
-
     private Map<String, Object> sessionData;
 
-    @Indexed(expireAfterSeconds = 86400)  // Auto-delete after 24 hours
+    @Indexed(expireAfterSeconds = 86400)
     private LocalDateTime createdAt;
 }
 ```
@@ -274,29 +278,38 @@ public class UserSession {
 
 ## Compound Indexes and ESR Rule
 
-ESR Rule = **Equality, Sort, Range**
+![ESR Rule & B-Tree Index Scan](./assets/03-esr-index-btree-scan.svg)
 
-This is the optimal order of fields in a compound index for best performance.
+**ESR Rule = Equality → Sort → Range.** Ordering compound index fields in this exact sequence minimizes scanned keys and eliminates expensive in-memory `SORT` stages.
+
+```mermaid
+flowchart LR
+    E["1. Equality (Exact Match)"] --> S["2. Sort (Pre-Sorted Order)"]
+    S --> R["3. Range (Bounded Scan)"]
+    R --> IX["IXSCAN Without In-Memory SORT"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+
+    class E blue;
+    class S purple;
+    class R amber;
+    class IX green;
+```
 
 ```javascript
 // Query: Find active users, sort by age, filter by age range
 // db.users.find({ status: "active", age: { $gt: 25, $lt: 65 } }).sort({ age: 1 })
 
-// Optimal index order (ESR):
-db.users.createIndex({
-  status: 1,      // Equality: exact match, filters first
-  age: 1,         // Sort: then sort by this
-  age: 1          // Range: then range filter
-})
-// Simplified (age used for both sort and range):
+// ✅ Optimal index (age serves both Sort and Range):
 db.users.createIndex({ status: 1, age: 1 })
 
-// ❌ Wrong order (Range, Sort, Equality):
+// ❌ Wrong order (Range/Sort before Equality):
 db.users.createIndex({ age: 1, status: 1 })
-// MongoDB can use index for age but not status due to order
 
-// More complex example:
-// Query: Find orders by customer (equality), in date range (range), sort by total (sort)
+// Complex example: Filter by customerId (E), orderDate range (R), sort by total (S)
 db.orders.aggregate([
   {
     $match: {
@@ -307,275 +320,177 @@ db.orders.aggregate([
   { $sort: { total: -1 } }
 ])
 
-// ESR order:
+// ✅ Optimal ESR index:
 db.orders.createIndex({
-  customerId: 1,      // Equality
-  total: -1,          // Sort (descending)
-  orderDate: 1        // Range
+  customerId: 1,  // Equality
+  total: -1,      // Sort (descending)
+  orderDate: 1    // Range
 })
 ```
 
-### Compound Index Usage Rules
+### Compound Index Prefix Rules
 
-```javascript
-// Index: { age: 1, name: 1, email: 1 }
-// Helps queries using prefix:
+Given index `{ age: 1, name: 1, email: 1 }`:
 
-db.users.find({ age: 25 })                    // ✅ Uses full index
-db.users.find({ age: 25, name: "John" })      // ✅ Uses full index
-db.users.find({ age: 25, name: "John", email: "john@example.com" }) // ✅ Uses full index
+| Query / Sort | Index Usage | Reason |
+| :--- | :--- | :--- |
+| `find({ age: 25 })` | ✅ Full prefix | Matches leading field |
+| `find({ age: 25, name: "John" })` | ✅ Full prefix | Matches `(age, name)` |
+| `find({ age: 25, name: "John", email: "john@example.com" })` | ✅ Full index | Matches all 3 fields |
+| `find({ age: 25, email: "john@example.com" })` | ⚠️ Partial `(age)` | Skips `name` in prefix |
+| `find({ name: "John" })` | ❌ `COLLSCAN` | Missing leading `age` |
+| `find({ age: 25 }).sort({ name: 1 })` | ✅ No `SORT` stage | `name` is already sorted under `age` |
+| `find({ age: 25 }).sort({ email: 1 })` | ❌ In-memory `SORT` | Cannot skip `name` to sort by `email` |
 
-db.users.find({ age: 25, email: "john@example.com" })  // ⚠️ Uses only (age) part
-db.users.find({ name: "John" })               // ❌ Cannot use index (missing prefix)
-db.users.find({ email: "john@example.com" })  // ❌ Cannot use index
-
-// Sort benefit:
-db.users.find({ age: 25 }).sort({ name: 1 }) // ✅ No SORT stage (already sorted)
-db.users.find({ age: 25, name: "John" }).sort({ email: 1 }) // ✅ No SORT stage
-db.users.find({ age: 25 }).sort({ email: 1 }) // ❌ Requires SORT stage (can't skip to email)
-```
+> [!TIP]
+> Placing a **Range** field before a **Sort** field forces MongoDB to sort results in memory because range matches span multiple index subtrees.
 
 ---
 
 ## Index Internals
 
-### B-Tree Structure
+MongoDB stores indexes as **B-Trees (Balanced Trees)** so every leaf sits at the same depth, guaranteeing logarithmic lookup time.
 
-MongoDB indexes use B-Tree (Balanced Tree) structure for efficiency.
+```mermaid
+flowchart TD
+    Root["Root Node: Keys (25, 50)"] --> L1["Leaf: Keys (1–24)"]
+    Root --> L2["Leaf: Keys (25–49)"]
+    Root --> L3["Leaf: Keys (50–100)"]
+    L1 --> D1["Document Pointers"]
+    L2 --> D2["Document Pointers"]
+    L3 --> D3["Document Pointers"]
 
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+
+    class Root blue;
+    class L1,L2,L3 amber;
+    class D1,D2,D3 green;
 ```
-Level 0 (Root):
-        [25, 50]
-       /    |    \
-      /     |     \
-   L1     L2     L3
-  [1-24] [25-49] [50-100]
-   |       |       |
-  Docs   Docs    Docs
-```
 
-**Why B-Tree?**
-- Balanced: All leaf nodes at same depth
-- Logarithmic lookup: O(log N) complexity
-- Range queries: Can traverse range of keys
-- Disk efficient: Minimizes I/O operations
+- **Balanced depth**: All leaf nodes sit at equal depth for predictable latency.
+- **Lookup complexity**: `O(log N)` vs `O(N)` for `COLLSCAN`; index creation takes `O(N log N)`.
+- **Range traversal**: Sequential leaf links allow fast range scans.
+- **RAM & Disk footprint**: Rule of thumb is `Index Size ≈ 0.1–0.2 × Indexed Field Size`. Hot indexes should fit in RAM to avoid disk thrashing.
 
 ```javascript
-// Building an index takes time proportional to data size
-db.users.createIndex({ email: 1 })
-// Time: O(N log N) where N = number of documents
-
-// BUT once built:
-db.users.find({ email: "john@example.com" })
-// Time: O(log N) instead of O(N) for collection scan
-
-// Index size example:
+// Check index sizes in bytes
 db.users.stats()
-// Shows totalIndexSize in bytes
-// Indexes take disk space!
+// Returns: { indexSizes: { _id_: 45000, email_1: 32000 }, totalIndexSize: 77000 }
+
+// Monitor which indexes are actually used
+db.users.aggregate([{ $indexStats: {} }])
 ```
 
-### Index Size Considerations
-
-```javascript
-// Check index size and usage
-db.users.stats()
-// Returns: { indexSizes: { _id_: 45000, email_1: 32000 } }
-
-// Indexes can grow large:
-// - Index size depends on indexed field values
-// - MongoDB keeps index in memory (RAM) for hot queries
-// - Large indexes can reduce available RAM for data
-
-// Rule of thumb:
-// Index size ≈ 0.1-0.2 × Indexed field size
-
-// Monitor index usage:
-db.users.aggregate([
-  { $indexStats: {} }  // Which indexes are used
-])
-```
+> [!WARNING]
+> Every additional index slows down writes (`insert`, `update`, `delete`) and consumes WiredTiger cache RAM. Audit unused indexes with `$indexStats`.
 
 ---
 
 ## Covered Queries
 
-A **covered query** is answered entirely from the index without examining any documents.
+A **covered query** is satisfied **entirely from the index** without fetching any documents from the collection (`totalDocsExamined: 0`).
+
+```mermaid
+flowchart LR
+    Q["Query + Projection"] --> Check{"All Projected Fields in Index AND _id Excluded?"}
+    Check -->|"Yes"| Cov["IXSCAN Only (0 Docs Fetched • 2–10x Faster)"]
+    Check -->|"No"| Fetch["IXSCAN + FETCH (Reads Full Documents)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+
+    class Q,Check blue;
+    class Cov green;
+    class Fetch red;
+```
 
 ```javascript
-// Index: { email: 1, age: 1 }
 db.users.createIndex({ email: 1, age: 1 })
 
-// ✅ Covered query (only returns indexed fields)
-db.users.find(
-  { email: "john@example.com" },
-  { email: 1, age: 1, _id: 0 }  // Only indexed fields + exclude _id
-)
-// MongoDB only scans index, never touches collection
-
-// ❌ NOT covered (returns field not in index)
-db.users.find(
-  { email: "john@example.com" },
-  { email: 1, age: 1, name: 1 }  // name not in index
-)
-// MongoDB must fetch document for 'name' field
-
-// ❌ NOT covered (includes _id)
-db.users.find(
-  { email: "john@example.com" },
-  { email: 1, age: 1 }  // _id included by default
-)
-
-// ✅ COVERED (explicit _id exclusion)
+// ✅ Covered query: only indexed fields, _id explicitly excluded
 db.users.find(
   { email: "john@example.com" },
   { email: 1, age: 1, _id: 0 }
 )
 
-// Real-world scenario: Caching lookup
-// Index on (customerId, status)
-db.orders.createIndex({ customerId: 1, status: 1 })
+// ❌ NOT covered: 'name' is not in the index
+db.users.find(
+  { email: "john@example.com" },
+  { email: 1, age: 1, name: 1 }
+)
 
-// Check if customer has any pending orders (covered)
+// ❌ NOT covered: '_id' is included by default
+db.users.find(
+  { email: "john@example.com" },
+  { email: 1, age: 1 }
+)
+
+// Real-world lookup: check if customer has pending orders
+db.orders.createIndex({ customerId: 1, status: 1 })
 db.orders.findOne(
   { customerId: "C123", status: "pending" },
   { customerId: 1, status: 1, _id: 0 }
 )
-// Instant lookup from index, no document reads
 ```
 
-**Performance benefit:**
-```javascript
-// Without covered query
-db.users.find({ email: "john@example.com" })
-// 1. Index lookup: O(log N)
-// 2. Fetch document: O(1)
-// Total: Index scan + Document read
-
-// With covered query
-db.users.find({ email: "john@example.com" }, { email: 1, _id: 0 })
-// 1. Index lookup: O(log N)
-// 2. Return from index: O(1)
-// Total: Index scan only (2-10x faster for large documents)
-```
+> [!IMPORTANT]
+> `_id` is returned by default in MongoDB projections. You **must** set `_id: 0` (unless `_id` is part of the index) for a query to be covered.
 
 ---
 
 ## explain() Deep Dive
 
-The `explain()` method reveals how MongoDB executes your query.
+Use `.explain("executionStats")` to inspect the winning query plan, execution stages, and document/key scan ratios.
 
-```javascript
-db.users.find({ age: { $gt: 25 } }).explain("executionStats")
+```mermaid
+flowchart LR
+    IX["IXSCAN (B-Tree Lookup)"] --> FT["FETCH (Read Docs)"]
+    FT --> SR["SORT (If Not Index-Sorted)"]
+    SR --> PR["PROJECT (Shape Output)"]
 
-// Output structure:
-{
-  "executionStats": {
-    "executionStages": {
-      "stage": "COLLSCAN",  // or IXSCAN, FETCH, etc.
-      "nReturned": 42,      // Documents returned
-      "executionTimeMillis": 125,  // Time taken
-      "totalDocsExamined": 10000,  // Documents scanned
-      "totalKeysExamined": 0,      // Index entries scanned
-      "executionStages": {
-        // Detailed execution plan...
-      }
-    },
-    "executionStats": {
-      "nReturned": 42,
-      "executionStages": {
-        "stage": "IXSCAN",   // Using index
-        "totalKeysExamined": 50,     // Index entries
-        "totalDocsExamined": 42,     // Docs fetched
-      }
-    }
-  }
-}
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
 
-// Key metrics:
-// - totalDocsExamined / nReturned = SELECTIVITY
-//   Lower is better. Ratio close to 1 is ideal.
+    class IX green;
+    class FT blue;
+    class SR amber;
+    class PR purple;
 ```
 
-### Execution Stages
+### Key Metrics & Execution Stages
+
+| Metric / Stage | Meaning | Healthy Target |
+| :--- | :--- | :--- |
+| `stage: "IXSCAN"` | Index B-Tree scan (`O(log N)`) | Desired for selective queries |
+| `stage: "COLLSCAN"` | Full collection scan (`O(N)`) | Red flag on large collections |
+| `stage: "FETCH"` | Retrieves full doc after `IXSCAN` | `0` docs examined if covered |
+| `stage: "SORT"` | In-memory sort stage | Avoid via ESR index ordering |
+| `stage: "PROJECT"` | Shapes returned fields | Push early in pipelines |
+| `nReturned` | Documents returned to client | Baseline for selectivity |
+| `totalKeysExamined` | Index entries scanned | Close to `nReturned` |
+| `totalDocsExamined` | Collection documents scanned | `totalDocsExamined / nReturned ≈ 1` (or `0` if covered) |
+| `executionTimeMillis` | Total execution time (ms) | Low & stable |
 
 ```javascript
-// COLLSCAN: Collection scan (worst case, no index)
-db.users.find({ name: "John" })  // No index on name
-// Explanation: O(N) - scans all documents
-
-// IXSCAN: Index scan (good, uses index)
-db.users.find({ email: "john@example.com" })  // Index on email
-// Explanation: O(log N) - navigates B-tree
-
-// FETCH: Retrieve document after index
-db.users.find({ email: "john@example.com" })
-// Stages: FETCH → IXSCAN
-
-// PROJECT: Include/exclude fields
-db.users.find({ email: "john@example.com" }, { name: 1 })
-// Stages: PROJECT → FETCH → IXSCAN
-
-// SORT: Sort results (can be in-memory or index)
-db.users.find({ age: { $gt: 25 } }).sort({ age: -1 })
-// If sorted by index: no separate SORT stage
-// If not sorted by index: SORT stage added (expensive)
-
-// MATCH: Filter documents (equivalent to WHERE in SQL)
-db.users.aggregate([
-  { $match: { age: { $gt: 25 } } }
-])
-// Stage: COLLSCAN or IXSCAN depending on index
-
-// $group, $unwind, etc. have their own stages
-```
-
-### Analyzing explain() Output
-
-```javascript
-// Create indexes
-db.users.createIndex({ age: 1 })
-db.users.createIndex({ email: 1 })
-
-// ✅ GOOD: Efficient query
+// ✅ Efficient indexed query
 db.users.find({ email: "john@example.com" }).explain("executionStats")
-// {
-//   "executionStats": {
-//     "nReturned": 1,
-//     "totalDocsExamined": 1,
-//     "totalKeysExamined": 1,
-//     "executionStages": {
-//       "stage": "FETCH",
-//       "nReturned": 1,
-//       "executionStages": {
-//         "stage": "IXSCAN",
-//         "keyPattern": { "email": 1 }
-//       }
-//     }
-//   }
-// }
+// nReturned: 1, totalDocsExamined: 1, totalKeysExamined: 1, stage: FETCH → IXSCAN
 
-// ❌ BAD: Collection scan (no index used)
+// ❌ Collection scan (no index on name)
 db.users.find({ name: "John" }).explain("executionStats")
-// {
-//   "executionStats": {
-//     "nReturned": 10,
-//     "totalDocsExamined": 10000,  // Scanned 10K to find 10
-//     "executionStages": {
-//       "stage": "COLLSCAN"  // Collection scan!
-//     }
-//   }
-// }
+// nReturned: 10, totalDocsExamined: 10000, stage: COLLSCAN
 
-// ❌ BAD: Inefficient sort
+// ❌ Inefficient in-memory sort (index on age, sort on name)
 db.users.find({ age: { $gt: 25 } }).sort({ name: 1 }).explain("executionStats")
-// Index on age, but sort by name (different field)
-// MongoDB must sort in memory after filtering
 ```
 
 **Spring Data MongoDB:**
 ```java
-// Execute query and get explain
 @Service
 public class UserService {
     @Autowired
@@ -595,31 +510,34 @@ public class UserService {
 
 ## Query Optimization
 
-### 1. Index Creation Strategy
+Combine selective indexing, query-shape discipline, and connection pooling to keep latency predictable under load.
+
+```mermaid
+flowchart TD
+    O1["1. Match Selectivity & ESR"] --> O2["2. Anchor $regex (^prefix)"]
+    O2 --> O3["3. Cap Large $in Lists"]
+    O3 --> O4["4. Project Early"]
+    O4 --> O5["5. Tune Connection Pool"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+
+    class O1,O2 blue;
+    class O3,O4 amber;
+    class O5 green;
+```
+
+### 1. Index Creation Strategy (EES Pattern)
 
 ```javascript
-// Step 1: Analyze current queries
-// Step 2: Identify missing indexes
-// Step 3: Create indexes carefully (don't over-index)
-
-// Common patterns to index:
-// - Filter fields (WHERE clauses)
-// - Sort fields
-// - Fields used in lookups/joins
-
-// Example: Order search page
-// Users search by: status, customerId, date range
-// Results sorted by: date (descending)
-
+// Order search: filter by customerId & status (Equality), sort by orderDate (Sort)
 db.orders.createIndex({
-  customerId: 1,  // Filter (equality)
-  status: 1,      // Filter (equality)
-  orderDate: -1   // Sort (descending)
+  customerId: 1,
+  status: 1,
+  orderDate: -1
 })
-// ESR violated? No - it's more like EES (two equalities, then sort)
-// This is acceptable for common patterns
 
-// Query:
 db.orders.find({
   customerId: "C123",
   status: "completed",
@@ -629,90 +547,50 @@ db.orders.find({
 
 ### 2. Selectivity
 
-**Selectivity** = nReturned / totalDocsExamined
+- **High selectivity** (`email: "john@example.com"` → `1 / 1 = 1.0`): Ideal for indexing.
+- **Medium selectivity** (`age: { $gt: 25 }` → `8000 / 10000 = 0.8`): Acceptable with compound filters.
+- **Low selectivity** (`active: true` → `9000 / 10000 = 0.9`): Poor standalone index; pair with a selective field first.
 
-Lower is better (ideally close to 1.0).
-
-```javascript
-// ✅ HIGH selectivity (efficient)
-db.users.find({ email: "john@example.com" })
-// Selectivity: 1/1 = 1.0 (perfect!)
-
-// ⚠️ MEDIUM selectivity (acceptable)
-db.users.find({ age: { $gt: 25 } })
-// Selectivity: 8000/10000 = 0.8
-
-// ❌ LOW selectivity (inefficient)
-db.users.find({ active: true })
-// Selectivity: 9000/10000 = 0.9
-// Problem: Active = true is too broad, need more selective filter
-
-// Solution: Filter by more selective field first
-db.users.find({
-  active: true,
-  email: { $regex: "gmail.com$" }  // More selective
-})
-```
-
-### 3. Avoid $regex Without Anchors
+### 3. Avoid Unanchored `$regex`
 
 ```javascript
-// ❌ SLOW: Regex without anchor
+// ❌ SLOW: Scans all index/doc values
 db.users.find({ email: { $regex: "gmail" } })
-// Must scan all values, cannot use index efficiently
 
-// ✅ FASTER: Regex with anchor
+// ✅ FASTER: Left-anchored regex uses B-Tree range
 db.users.find({ email: { $regex: "^john" } })
-// Index can narrow search space
 
-// ✅ BEST: Equality/range instead of regex
+// ✅ BEST: Exact equality / $in
 db.users.find({ email: { $in: ["john@gmail.com", "john@yahoo.com"] } })
-// Much faster, uses index effectively
 ```
 
-### 4. Avoid Large $in Lists
+### 4. Avoid Large `$in` Lists
 
 ```javascript
-// ❌ SLOW: Large $in list (100+ items)
-db.users.find({
-  userId: { $in: [id1, id2, id3, ..., id1000] }
-})
-// MongoDB creates large index union, degrades performance
+// ❌ SLOW: 100+ items cause large index unions
+db.users.find({ userId: { $in: [id1, id2, /* ..., */ id1000] } })
 
-// ✅ BETTER: Multiple OR conditions (up to 10)
+// ✅ BETTER: Split into smaller $or batches or use $nin when excluding few IDs
 db.users.find({
   $or: [
-    { userId: { $in: [id1, id2, ..., id10] } },
-    { userId: { $in: [id11, id12, ..., id20] } },
-    // etc.
+    { userId: { $in: [id1, /* ..., */ id10] } },
+    { userId: { $in: [id11, /* ..., */ id20] } }
   ]
 })
 
-// ✅ BEST: Use $nin with exclusion if applicable
-db.users.find({
-  userId: { $nin: [excludedId1, excludedId2] }
-})
+db.users.find({ userId: { $nin: [excludedId1, excludedId2] } })
 ```
 
-### 5. Project Early to Limit Fields
+### 5. Project Early & Limit Fields
 
 ```javascript
-// ❌ Fetch all fields, filter in application
-db.users.find({ age: { $gt: 25 } })
-// Returns entire documents with all fields
-
-// ✅ Fetch only needed fields
-db.users.find(
-  { age: { $gt: 25 } },
-  { name: 1, email: 1 }
-)
-// Reduces network transfer and memory usage
+// ✅ Fetch only needed fields to cut network & memory overhead
+db.users.find({ age: { $gt: 25 } }, { name: 1, email: 1 })
 ```
 
-### 6. Connection Pooling
+### 6. Connection Pooling (Spring Data MongoDB)
 
 ```java
-// Spring Data MongoDB configuration
 @Configuration
 public class MongoConfig {
     @Bean
@@ -721,47 +599,56 @@ public class MongoConfig {
             MongoClientSettings.builder()
                 .applyConnectionString(new ConnectionString(
                     "mongodb://localhost:27017/" +
-                    "?maxPoolSize=50&" +
-                    "minPoolSize=10&" +
-                    "waitQueueTimeoutMS=5000"
+                    "?maxPoolSize=50&minPoolSize=10&waitQueueTimeoutMS=5000"
                 ))
                 .build()
         );
     }
 }
-
-// Connection pool settings:
-// maxPoolSize: 50 (max concurrent connections)
-// minPoolSize: 10 (maintain baseline connections)
-// waitQueueTimeoutMS: 5000 (timeout waiting for connection)
 ```
 
 ---
 
 ## Read and Write Concerns
 
-### Write Concern
+Tune durability, consistency, and replica-set routing per operation.
 
-Specifies level of acknowledgment for write operations.
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Pri as Primary Node
+    participant Sec as Secondary Nodes
+
+    App->>Pri: Write (w: "majority", j: true)
+    Pri->>Pri: Write to Journal
+    Pri->>Sec: Replicate Oplog
+    Sec-->>Pri: Majority Acknowledged
+    Pri-->>App: Write Confirmed
+
+    App->>Sec: Read (readPreference: "secondary")
+    Sec-->>App: Return Analytics Data
+```
+
+| Setting | Options | Trade-off |
+| :--- | :--- | :--- |
+| **Write Concern** | `w: 1` (primary only), `w: "majority"`, `j: true` (journal) | `majority` + `j: true` = highest durability, higher latency |
+| **Read Concern** | `local` (default), `available`, `majority`, `linearizable` | `majority` avoids dirty reads; `linearizable` is slowest/safest |
+| **Read Preference** | `primary`, `primaryPreferred`, `secondary`, `secondaryPreferred`, `nearest` | `secondary` offloads analytics but may see replication lag |
 
 ```javascript
-// MongoDB write concerns
-// w: majority - Wait for majority of replica set (safest)
-// w: 1 - Wait for primary only (faster, less safe)
-// j: true - Wait for journal write (durability)
-
-// Insert with write concern
+// Write concern
 db.users.insertOne(
   { name: "John" },
   { writeConcern: { w: "majority", j: true } }
 )
 
-// Update with write concern
-db.users.updateOne(
-  { _id: ObjectId() },
-  { $set: { age: 29 } },
-  { writeConcern: { w: "majority" } }
-)
+// Read concern & Read preference
+db.users.find({ age: { $gt: 25 } })
+  .readConcern("majority")
+  .readPreference("secondary")
+
+// Transaction read concern
+db.session.startTransaction({ readConcern: { level: "majority" } })
 ```
 
 **Spring Data MongoDB:**
@@ -776,66 +663,12 @@ public class MongoConfig {
     }
 }
 
-// Or at method level
-@Service
-public class UserService {
-    @Autowired
-    private MongoTemplate mongoTemplate;
-
-    public void createUser(User user) {
-        mongoTemplate.withWriteConcern(WriteConcern.MAJORITY)
-            .insert(user);
-    }
-}
-```
-
-### Read Concern
-
-Specifies level of consistency for read operations.
-
-```javascript
-// Read concern levels
-// local - Default, fastest (may see uncommitted writes)
-// available - Like local (for replica sets)
-// majority - Read only committed writes (slower, safer)
-// linearizable - Sequential consistency (slowest, safest)
-
-// Find with read concern
-db.users.find({ age: { $gt: 25 } })
-    .readConcern("majority")
-
-// In transaction
-db.session.startTransaction({
-  readConcern: { level: "majority" }
-})
-```
-
-### Read Preference
-
-Specifies which replica set member to read from.
-
-```javascript
-// primary - Read from primary only (default, consistent)
-// primaryPreferred - Primary, fall back to secondary
-// secondary - Read from secondary only (may lag)
-// secondaryPreferred - Secondary, fall back to primary
-// nearest - Lowest latency (primary or secondary)
-
-db.users.find({ age: { $gt: 25 } })
-    .readPreference("secondary")  // Read from secondary
-
-// Use case: Analytics queries on secondary (don't impact primary)
-```
-
-**Spring Data MongoDB:**
-```java
 @Service
 public class AnalyticsService {
     @Autowired
     private MongoTemplate mongoTemplate;
 
     public List<UserStats> generateReport() {
-        // Read from secondary for analytics
         return mongoTemplate.withReadPreference(ReadPreference.secondary())
             .find(new Query(), UserStats.class);
     }
@@ -846,34 +679,36 @@ public class AnalyticsService {
 
 ## WiredTiger Storage Engine
 
-MongoDB default storage engine (3.2+).
+WiredTiger is MongoDB's default storage engine (since 3.2), engineered for high-concurrency workloads.
 
-### Features
+```mermaid
+flowchart LR
+    Ops["Concurrent Writes"] --> Lock["Document-Level Locking"]
+    Lock --> Cache["WiredTiger RAM Cache (Working Set)"]
+    Cache --> Comp["Snappy Compression (50–80% Disk Savings)"]
+    Comp --> Snap["Point-in-Time Snapshots (Lock-Free Backups)"]
 
-```javascript
-// Document-level locking (not collection-level)
-// Allows concurrent writes to different documents in same collection
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
 
-// Compression (default: snappy)
-// Reduces disk usage by 50-80%
-
-// Cache management
-// Configurable working set
-
-// Point-in-time snapshots
-// Enables backups without locks
+    class Ops,Lock blue;
+    class Cache,Comp green;
+    class Snap purple;
 ```
 
-### Configuration
+- **Document-level locking**: Concurrent writes to different documents in the same collection do not block each other.
+- **Compression**: Default `snappy` compression reduces disk usage by **50–80%**.
+- **Cache management**: Configurable working-set RAM cache (`cache_size`).
+- **Point-in-time snapshots**: Enables consistent backups without global locks.
 
 ```javascript
-// Set cache size (percent of RAM)
+// Runtime cache & compression configuration
 db.adminCommand({
   setParameter: 1,
   wiredTigerEngineRuntimeConfig: "cache_size=5G"
 })
 
-// Compression level
 db.adminCommand({
   setParameter: 1,
   wiredTigerCompressionLevel: 9  // 1-9, default 6
@@ -884,36 +719,44 @@ db.adminCommand({
 
 ## Profiler
 
-MongoDB profiler logs slow queries to `system.profile` collection.
+The Database Profiler captures slow operations into the capped `system.profile` collection for root-cause analysis.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Level0_OFF
+    Level0_OFF --> Level1_SlowOps: "setProfilingLevel(1, { slowms: 100 })"
+    Level1_SlowOps --> Level2_AllOps: "setProfilingLevel(2)"
+    Level2_AllOps --> Level0_OFF: "setProfilingLevel(0)"
+    Level1_SlowOps --> Level0_OFF: "setProfilingLevel(0)"
+```
+
+| Level | Behavior | Production Suitability |
+| :--- | :--- | :--- |
+| `0` | Profiler **OFF** | Default |
+| `1` | Logs operations slower than `slowms` (default `100ms`) | Safe for targeted diagnostics |
+| `2` | Logs **all** operations | Debug only (high overhead) |
 
 ```javascript
-// Enable profiling
-// Level 0: OFF
-// Level 1: Log slow operations (> 100ms by default)
-// Level 2: Log all operations
-
+// Enable slow-query logging (> 100ms)
 db.setProfilingLevel(1, { slowms: 100 })
 
-// Query slow operations
+// Inspect recent slow queries
 db.system.profile.find({ millis: { $gt: 100 } })
-    .sort({ ts: -1 })
-    .limit(10)
+  .sort({ ts: -1 })
+  .limit(10)
 
-// Find slowest queries
+// Aggregate slowest query patterns
 db.system.profile.aggregate([
   { $group: {
       _id: "$command",
       count: { $sum: 1 },
       avgTime: { $avg: "$millis" }
-    }
-  },
+  }},
   { $sort: { avgTime: -1 } }
 ])
 
-// Check profiling level
+// Check & disable
 db.getProfilingLevel()
-
-// Disable profiling
 db.setProfilingLevel(0)
 ```
 
@@ -939,108 +782,63 @@ public class ProfilerConfig {
 
 ## Common Interview Questions
 
-### Q1: Why is index order important in compound indexes?
+```mermaid
+flowchart LR
+    IQ["Interview Focus"] --> Q1["Compound Order & ESR"]
+    IQ --> Q2["explain() IXSCAN vs COLLSCAN"]
+    IQ --> Q3["When NOT to Index"]
+    IQ --> Q4["Covered Queries (_id: 0)"]
+    IQ --> Q5["Pipeline Optimization ($match First)"]
 
-**Answer:**
-MongoDB uses the first field in a compound index to navigate the B-tree. Fields that follow must match the query pattern.
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+
+    class IQ blue;
+    class Q1,Q2,Q4 green;
+    class Q3,Q5 amber;
+```
+
+### Q1: Why is index order important in compound indexes?
+MongoDB navigates the B-Tree starting from the **leading field**. Queries missing the prefix cannot use the index, and following the **ESR rule (Equality → Sort → Range)** avoids in-memory sorts.
 
 ```javascript
 // Index: { age: 1, name: 1 }
+db.users.find({ age: 25 })                    // ✅ Uses index
+db.users.find({ age: 25, name: "John" })      // ✅ Uses index
+db.users.find({ name: "John" })               // ❌ Missing prefix
 
-// ✅ Uses full index
-db.users.find({ age: 25 })
-db.users.find({ age: 25, name: "John" })
-
-// ❌ Cannot use index (missing first field)
-db.users.find({ name: "John" })
-
-// ESR rule (Equality, Sort, Range):
+// ESR example:
 db.users.find({ status: "active", age: { $gt: 25 } }).sort({ age: 1 })
-// Best index: { status: 1, age: 1 }
-// status (equality), then age (sort and range)
+// Optimal: { status: 1, age: 1 }
 ```
 
 ### Q2: How do you identify if a query is using an index?
-
-**Answer:**
-Use `explain("executionStats")`:
-
-```javascript
-db.users.find({ email: "john@example.com" }).explain("executionStats")
-// If stage is IXSCAN → using index
-// If stage is COLLSCAN → NOT using index
-
-// Better metric: totalKeysExamined vs totalDocsExamined
-// If totalKeysExamined << totalDocsExamined → index helping
-// If totalKeysExamined ≈ totalDocsExamined → collection scan
-```
+Run `.explain("executionStats")`:
+- `stage: "IXSCAN"` → using index; `stage: "COLLSCAN"` → full collection scan.
+- Compare `totalKeysExamined` and `totalDocsExamined` against `nReturned` (closer to `1:1` is healthier).
 
 ### Q3: When should you NOT create an index?
-
-**Answer:**
-- Field queried rarely (low selectivity)
-- Collection too small (< 100 documents)
-- Index larger than available RAM
-- Write-heavy operations (indexes slow writes)
-- Complex index on low-cardinality field (e.g., status with 5 values)
-
-```javascript
-// ❌ Bad index (low cardinality)
-db.users.createIndex({ status: 1 })
-// Only 3 values: "active", "inactive", "pending"
-// Not selective enough to justify index overhead
-
-// ✅ Good index
-db.users.createIndex({ email: 1 })
-// High cardinality (unique), frequently queried
-```
+- **Low selectivity / low cardinality** (e.g., `status` with 3 values)
+- **Small collections** (&lt; 100 documents)
+- **Index exceeds available RAM**
+- **Write-heavy workloads** (indexes add overhead to every insert/update/delete)
 
 ### Q4: Explain covered queries and when they're useful.
-
-**Answer:**
-Covered query returns results entirely from index without fetching documents.
-
-```javascript
-// Create index on fields you'll query
-db.users.createIndex({ email: 1, age: 1 })
-
-// ✅ Covered query (all fields in index)
-db.users.find(
-  { email: "john@example.com" },
-  { email: 1, age: 1, _id: 0 }  // Must exclude _id
-)
-// Returns from index, no document fetches
-
-// Use case: Frequent lookups of small fields
-db.users.find(
-  { userId: "USER-123" },
-  { email: 1, _id: 0 }
-)
-// Million times/day: saves massive I/O
-```
+A covered query returns results solely from the index without touching collection documents (`totalDocsExamined: 0`). You must project **only indexed fields** and explicitly set `_id: 0`. Ideal for high-frequency lookups of small fields.
 
 ### Q5: How do you optimize aggregation pipelines?
-
-**Answer:**
-1. Place `$match` early to reduce documents
-2. Use indexed fields in `$match`
-3. Project fields early to limit data
-4. Avoid `$lookup` before `$match`
-5. Use `$limit` to stop processing early
+1. Place `$match` **first** to filter early using indexes.
+2. Project only needed fields early (`$project`).
+3. Avoid `$lookup` before `$match`.
+4. Use `$limit` to stop processing early.
 
 ```javascript
-// ❌ Inefficient
-db.orders.aggregate([
-  { $lookup: { ... } },           // Join first (expensive)
-  { $match: { status: "completed" } },  // Filter late
-  { $sort: { total: -1 } }
-])
-
-// ✅ Efficient
+// ✅ Efficient pipeline
 db.orders.aggregate([
   { $match: { status: "completed" } },  // Filter early (uses index)
-  { $lookup: { ... } },            // Join smaller result set
+  { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
   { $sort: { total: -1 } },
-  { $limit: 10 }                   // Stop early
+  { $limit: 10 }
 ])
 ```

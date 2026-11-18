@@ -4,7 +4,7 @@
 1. [CRUD Operations](#crud-operations)
 2. [Query Operators](#query-operators)
 3. [Update Operators](#update-operators)
-4. [Array Operations](#array-operations)
+4. [Array Operations Examples](#array-operations-examples)
 5. [Projection and Cursors](#projection-and-cursors)
 6. [Aggregation Pipeline](#aggregation-pipeline)
 7. [Spring Data MongoDB](#spring-data-mongodb)
@@ -13,6 +13,45 @@
 ---
 
 ## CRUD Operations
+
+MongoDB CRUD operations map directly between the Mongo Shell (MQL) and Spring Data MongoDB (`MongoTemplate` / `MongoRepository`).
+
+```mermaid
+flowchart LR
+  App["Application / MQL"] --> C["Create: insertOne / insertMany"]
+  App --> R["Read: find / findOne"]
+  App --> U["Update: updateOne / updateMany / replaceOne"]
+  App --> D["Delete: deleteOne / deleteMany"]
+
+  C --> C1["ordered: false continues on error"]
+  U --> U1["$set updates fields; replaceOne swaps whole doc"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+  classDef red fill:#fee2e2,stroke:#991b1b,color:#7f1d1d
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class App purple
+  class C,C1 green
+  class R blue
+  class U,U1 amber
+  class D red
+```
+
+| Operation | Mongo Shell (MQL) | `MongoTemplate` | `MongoRepository` |
+| :--- | :--- | :--- | :--- |
+| **Insert One** | `insertOne(doc)` | `insert(entity)` | `save(entity)` |
+| **Insert Many** | `insertMany(docs, opts)` | `insertAll(entities)` | `saveAll(entities)` |
+| **Read Many** | `find(filter, proj)` | `find(query, Class)` | `findBy...(...)` |
+| **Read One** | `findOne(filter, proj)` | `findOne(query, Class)` | `findBy...(...)` |
+| **Update One** | `updateOne(filter, update)` | `updateFirst(query, update, Class)` | `@Query` / `save` |
+| **Update Many** | `updateMany(filter, update)` | `updateMulti(query, update, Class)` | Custom `@Query` |
+| **Replace One** | `replaceOne(filter, doc)` | `save(entity)` | `save(entity)` |
+| **Delete One / Many** | `deleteOne` / `deleteMany` | `remove(query, Class)` | `deleteById` / `deleteAll` |
+
+> [!TIP]
+> Use `{ ordered: false }` in `insertMany` for bulk ingestion so a single duplicate key error does not abort the remaining inserts. Use `updateOne` with `$set` for partial updates, and `replaceOne` only when intentionally overwriting the entire document (excluding `_id`).
 
 ### Create (Insert)
 
@@ -297,6 +336,41 @@ public void deleteInactiveUsers() {
 
 ## Query Operators
 
+Query operators filter documents across scalar values, boolean combinations, BSON types, regex patterns, and nested arrays.
+
+```mermaid
+flowchart TD
+  Q["MongoDB Query Operators"] --> Comp["Comparison: $eq, $ne, $gt, $gte, $lt, $lte, $in, $nin"]
+  Q --> Log["Logical: $and, $or, $nor, $not"]
+  Q --> Elem["Element: $exists, $type"]
+  Q --> Str["String: $regex, $options"]
+  Q --> Arr["Array: $elemMatch, $size, $all"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+  classDef red fill:#fee2e2,stroke:#991b1b,color:#7f1d1d
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class Q purple
+  class Comp blue
+  class Log green
+  class Elem amber
+  class Str red
+  class Arr blue
+```
+
+| Category | Operators | Key Behavior |
+| :--- | :--- | :--- |
+| **Comparison** | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin` | Range and set membership checks; implicit `$eq` for `{ field: value }` |
+| **Logical** | `$and`, `$or`, `$nor`, `$not` | Implicit `$and` when listing multiple fields in one filter object |
+| **Element** | `$exists`, `$type` | Checks field presence or BSON type (`"int"`, `"date"`, `"string"`, etc.) |
+| **String** | `$regex`, `$options` | Anchored prefixes (`^Alice`) can use B-tree indexes; unanchored cannot |
+| **Array** | `$elemMatch`, `$size`, `$all` | `$elemMatch` requires a *single* element to satisfy all criteria |
+
+> [!NOTE]
+> Use `$elemMatch` whenever querying an array of embedded documents on multiple fields. Without `$elemMatch`, MongoDB matches if *one* element satisfies condition A and a *different* element satisfies condition B.
+
 ### Comparison Operators
 
 ```javascript
@@ -521,6 +595,42 @@ List<User> tagged = mongoTemplate.find(
 
 ## Update Operators
 
+Update operators mutate documents atomically in place without requiring a read-modify-write round trip from the application.
+
+```mermaid
+flowchart LR
+  U["Update Operators"] --> F["Field Modifiers"]
+  U --> A["Array Modifiers"]
+
+  F --> F1["Set / Remove: $set, $unset, $rename"]
+  F --> F2["Numeric / Date: $inc, $mul, $min, $max, $currentDate"]
+  A --> A1["Add: $push, $each, $sort, $slice, $addToSet"]
+  A --> A2["Remove / Positional: $pull, $pop, $, $[]"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class U purple
+  class F,F1,F2 blue
+  class A,A1 green
+  class A2 amber
+```
+
+| Operator | Target | Behavior |
+| :--- | :--- | :--- |
+| `$set` / `$unset` | Field | Assigns a field value or removes the field completely |
+| `$inc` / `$mul` | Numeric | Atomically increments or multiplies a numeric field |
+| `$min` / `$max` | Field | Updates only if the new value is strictly less / greater |
+| `$rename` / `$currentDate` | Field | Renames a field or sets it to the server's current date |
+| `$push` / `$addToSet` | Array | Appends element(s); `$addToSet` enforces uniqueness |
+| `$pull` / `$pop` | Array | Removes elements matching criteria (`$pull`) or first/last (`$pop`) |
+| `$` / `$[]` | Array | Updates the first matched element (`$`) or all elements (`$[]`) |
+
+> [!IMPORTANT]
+> Single-document updates in MongoDB are **atomic** at the document level. When using positional `$` updates in Spring Data MongoDB, `Update` does not provide a high-level fluent helper for `$`—use `mongoTemplate.updateMulti` or raw `BasicUpdate` / `Update.set("items.$.quantity", 5)`.
+
 ### Field Update Operators
 
 ```javascript
@@ -706,6 +816,29 @@ mongoTemplate.updateFirst(query, update, User.class);
 
 ## Array Operations Examples
 
+Managing embedded arrays (like blog comments) requires balancing fast single-document reads against document size limits.
+
+```mermaid
+flowchart LR
+  Post["Post Document"] --> Push["$push + $each + $sort + $slice"]
+  Post --> Pull["$pull by author"]
+  Post --> Pos["Match + $ positional update"]
+  Push --> Cap["Caps array at latest 100 comments"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class Post purple
+  class Push,Cap green
+  class Pull amber
+  class Pos blue
+```
+
+> [!WARNING]
+> Unbounded embedded arrays can eventually exceed MongoDB's **16 MB BSON document limit** and cause expensive document relocations and multikey index updates. Always cap growing arrays with `$slice` or move them to a separate referenced collection.
+
 ```javascript
 // Practical: Comments on a blog post (unbounded array)
 db.posts.insertOne({
@@ -761,6 +894,41 @@ db.posts.updateOne(
 ---
 
 ## Projection and Cursors
+
+Projections reduce network payload by returning only needed fields, while cursor modifiers control ordering and pagination on the server before documents are streamed to the client.
+
+```mermaid
+sequenceDiagram
+  participant App as Application
+  participant DB as MongoDB Server
+  App->>DB: find(filter, projection)
+  Note over DB: 1. Filter matching docs
+  Note over DB: 2. sort() orders result set
+  Note over DB: 3. skip() discards offset docs
+  Note over DB: 4. limit() caps returned count
+  Note over DB: 5. Apply field / $slice projection
+  DB-->>App: Stream cursor batches
+```
+
+```mermaid
+flowchart LR
+  Proj["Projection Modes"] --> Inc["Inclusion: { name: 1, _id: 0 }"]
+  Proj --> Exc["Exclusion: { password: 0 }"]
+  Proj --> ArrP["Array Projection: $slice / $elemMatch"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class Proj purple
+  class Inc green
+  class Exc amber
+  class ArrP blue
+```
+
+> [!TIP]
+> You cannot mix inclusion (`1`) and exclusion (`0`) in the same projection, **except** for explicitly excluding `_id` (`_id: 0`) alongside included fields. Regardless of how you chain `.limit()`, `.skip()`, and `.sort()`, MongoDB always applies `sort` → `skip` → `limit`.
 
 ### Projection - Select Fields
 
@@ -878,23 +1046,42 @@ public class UserService {
 
 ## Aggregation Pipeline
 
-The aggregation pipeline processes data through multiple stages, transforming documents as they pass through.
+![MongoDB Aggregation Pipeline Flow](./assets/02-aggregation-pipeline-flow.svg)
 
+The aggregation pipeline processes documents sequentially through stages, transforming and summarizing the working set as it flows from collection scan to output.
+
+```mermaid
+flowchart TD
+  Agg["Aggregation Stages"] --> FS["Filter & Shape: $match, $project, $unwind"]
+  Agg --> AG["Group & Bucket: $group, $bucket, $bucketAuto, $setWindowFields"]
+  Agg --> JB["Join & Branch: $lookup, $graphLookup, $facet"]
+  Agg --> OL["Order & Paginate: $sort, $skip, $limit"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class Agg purple
+  class FS green
+  class AG amber
+  class JB,OL blue
 ```
-Input Documents
-    ↓
-[$match]  - Filter documents
-    ↓
-[$group]  - Group by field, calculate aggregations
-    ↓
-[$project] - Reshape documents, include/exclude fields
-    ↓
-[$sort]   - Order results
-    ↓
-[$limit]  - Limit output
-    ↓
-Output Documents
-```
+
+| Stage | Purpose | Performance / Index Note |
+| :--- | :--- | :--- |
+| `$match` | Filter documents | Place first to use collection B-tree indexes |
+| `$project` | Reshape / compute fields | Drop unused fields early to reduce memory |
+| `$unwind` | Flatten array into N docs | Increases doc count; filter before unwinding |
+| `$group` | Group & accumulate (`$sum`, `$avg`) | Blocking stage; 100 MB RAM cap without `allowDiskUse` |
+| `$sort` / `$limit` | Order & cap results | Coalesced into Top-N heap when `$limit` follows `$sort` |
+| `$lookup` | Left outer join | Index `foreignField` in the target collection |
+| `$facet` | Parallel sub-pipelines | Runs multiple aggregations in one pass |
+| `$bucket` / `$bucketAuto` | Histogram bucketing | Fixed boundaries vs auto-balanced buckets |
+| `$graphLookup` | Recursive traversal | Walks hierarchies/trees within a collection |
+
+> [!IMPORTANT]
+> Always place `$match` and `$sort` at the beginning of the pipeline when possible so MongoDB can use indexes. Individual blocking stages (`$group`, `$sort`) have a **100 MB memory limit** unless `{ allowDiskUse: true }` is enabled.
 
 ### Stage 1: $match - Filter Documents
 
@@ -1425,19 +1612,56 @@ db.products.aggregate([
 
 ## Spring Data MongoDB
 
+Spring Data MongoDB offers two complementary abstractions: `MongoRepository` for declarative CRUD/derived queries and `MongoTemplate` for dynamic queries, partial updates, and complex aggregations.
+
+```mermaid
+classDiagram
+  class UserService {
+    -MongoTemplate mongoTemplate
+    -UserRepository userRepository
+    +findActiveUsers() List
+    +updateUserStats() void
+    +getAdminUsers() Page
+  }
+  class MongoTemplate {
+    +find(Query, Class)
+    +updateFirst(Query, Update, Class)
+    +aggregate(Aggregation, String, Class)
+  }
+  class UserRepository {
+    +findByAgeGreaterThan(age)
+    +findByEmail(email)
+    +findByRoles(roles, Pageable)
+  }
+  UserService --> MongoTemplate
+  UserService --> UserRepository
+```
+
+```mermaid
+flowchart LR
+  Need["Data Access Need"] -->|"Standard CRUD / Derived Queries"| Repo["MongoRepository"]
+  Need -->|"Dynamic Criteria / Partial Update / Aggregation"| Tpl["MongoTemplate"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class Need purple
+  class Repo green
+  class Tpl blue
+```
+
 ### MongoTemplate vs MongoRepository
 
-**MongoTemplate:**
-- Lower-level API
-- Complete control over queries
-- More verbose but flexible
-- Best for complex queries
+| Dimension | `MongoTemplate` | `MongoRepository` |
+| :--- | :--- | :--- |
+| **Abstraction** | Lower-level, imperative API | Higher-level, convention-based interface |
+| **Flexibility** | Full control over `Query`, `Update`, `Aggregation` | Method-name derivation + `@Query` annotations |
+| **Boilerplate** | More verbose | Minimal code, fast to read |
+| **Best For** | Dynamic filters, partial `$set`/`$inc`, pipelines | Standard CRUD, pagination, simple lookups |
 
-**MongoRepository:**
-- Higher-level API with query methods
-- Convention-based queries (method names)
-- Less code, easier to read
-- Best for standard CRUD operations
+> [!TIP]
+> Inject both `UserRepository` and `MongoTemplate` into the same service when needed—use `MongoRepository` for standard CRUD and `MongoTemplate` for partial updates and multi-stage aggregations.
 
 ```java
 // MongoTemplate Example
@@ -1513,11 +1737,33 @@ public class UserServiceRepository {
 
 ## Common Interview Questions
 
+```mermaid
+flowchart TD
+  IQ["MongoDB Design & Tuning"] --> DM["Schema: Embed vs Reference"]
+  IQ --> PG["Pagination: Range Query vs skip()"]
+  IQ --> OP["Pipeline: Early $match + $project"]
+
+  DM -->|"Bounded &lt; 1000, read together"| Embed["Denormalize / Embed"]
+  DM -->|"Unbounded, shared, independent writes"| Ref["Normalize / Reference"]
+
+  classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+  classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+
+  class IQ purple
+  class DM,PG,OP blue
+  class Embed green
+  class Ref amber
+```
+
+> [!NOTE]
+> Interviewers test three core instincts in MongoDB: (1) preventing unbounded array growth, (2) replacing deep `skip()` pagination with indexed range queries, and (3) ordering `$match` and `$project` ahead of `$group` and `$lookup`.
+
 ### Q1: What's the difference between $push and $addToSet?
 
-**Answer:**
-- `$push`: Always adds element, allows duplicates
-- `$addToSet`: Adds element only if not present, prevents duplicates
+- **`$push`**: Always appends the element, allowing duplicates.
+- **`$addToSet`**: Appends the element only if it is not already present (set semantics).
 
 ```javascript
 // $push example
@@ -1537,8 +1783,7 @@ db.users.updateOne(
 
 ### Q2: How do you paginate results efficiently?
 
-**Answer:**
-Use skip() and limit() or, better yet, use range queries:
+Use `skip()` and `limit()` for shallow pages, or indexed **range (keyset) queries** for deep pagination to avoid scanning and discarding skipped documents:
 
 ```javascript
 // Less efficient (scans and skips)
@@ -1552,9 +1797,8 @@ db.users.find({ _id: { $gt: lastSeenId } })
 
 ### Q3: What's the difference between $unwind and $lookup?
 
-**Answer:**
-- `$unwind`: Splits array field into multiple documents
-- `$lookup`: Joins with another collection (like SQL JOIN)
+- **`$unwind`**: Splits an array field inside each document into multiple documents (1-to-N expansion).
+- **`$lookup`**: Performs a left outer join with another collection (like SQL `LEFT JOIN`).
 
 ```javascript
 // $unwind - deconstructs array
@@ -1578,12 +1822,11 @@ db.orders.aggregate([
 
 ### Q4: How do you optimize aggregation pipeline?
 
-**Answer:**
-1. Place `$match` early to filter documents
-2. Use `$project` to exclude unnecessary fields
-3. Place `$limit` after grouping if possible
-4. Avoid `$lookup` before `$match` on large collections
-5. Use indexed fields in `$match` and `$group`
+1. Place `$match` early to filter documents using indexes.
+2. Use `$project` early to drop unnecessary fields and shrink memory usage.
+3. Place `$limit` after `$sort` / `$group` whenever possible.
+4. Avoid `$lookup` before `$match` on large collections.
+5. Index fields used in `$match`, `$sort`, and `$lookup.foreignField`.
 
 ```javascript
 // Optimal order
@@ -1605,15 +1848,7 @@ db.orders.aggregate([
 
 ### Q5: When should you denormalize vs normalize data?
 
-**Answer:**
-**Denormalize (embed) when:**
-- Data accessed together frequently
-- Array size is bounded (< 1000 items)
-- One-to-one relationships
-- Atomicity across related data needed
-
-**Normalize (reference) when:**
-- Arrays grow unbounded
-- Data updated independently
-- Data shared across multiple documents
-- Reduces duplication is critical
+| Strategy | When to Use |
+| :--- | :--- |
+| **Denormalize (Embed)** | Data accessed together frequently; bounded arrays (< 1000 items); one-to-one relationships; single-document atomicity needed |
+| **Normalize (Reference)** | Arrays grow unbounded; data updated independently; data shared across many documents; minimizing duplication is critical |

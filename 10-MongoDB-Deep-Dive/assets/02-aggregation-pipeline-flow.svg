@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="MongoDB Aggregation Pipeline Flow">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card-border { fill: none; stroke: #334155; stroke-width: 1.5; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 16px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 11.5px; fill: #94a3b8; }
+      .stage-box { fill: #1e293b; stroke-width: 1.75; rx: 10; }
+      .stage-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; font-weight: 700; fill: #f1f5f9; text-anchor: middle; }
+      .stage-sub { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 10px; fill: #94a3b8; text-anchor: middle; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; font-weight: 600; text-anchor: middle; }
+      .flow-line { fill: none; stroke: #475569; stroke-width: 2; stroke-dasharray: 5 5; animation: dashFlow 1.4s linear infinite; }
+      .funnel-label { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 10.5px; fill: #cbd5e1; }
+      .pulse-ring { fill: none; stroke-width: 1.5; opacity: 0.55; animation: pulseFade 2.6s ease-in-out infinite; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes pulseFade {
+        0%, 100% { opacity: 0.25; }
+        50% { opacity: 0.75; }
+      }
+    </style>
+
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+    </marker>
+
+    <linearGradient id="funnelGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#64748b" stop-opacity="0.35" />
+      <stop offset="22%" stop-color="#38bdf8" stop-opacity="0.35" />
+      <stop offset="44%" stop-color="#a855f7" stop-opacity="0.35" />
+      <stop offset="66%" stop-color="#f59e0b" stop-opacity="0.35" />
+      <stop offset="85%" stop-color="#10b981" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#22c55e" stop-opacity="0.45" />
+    </linearGradient>
+
+    <path id="packetTrack" d="M 80 140 L 822 140" />
+  </defs>
+
+  <!-- Card Background -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="14" />
+  <rect class="card-border" x="1" y="1" width="898" height="318" rx="14" />
+
+  <!-- Header -->
+  <text class="title" x="28" y="34">MongoDB Aggregation Pipeline — Stage Flow &amp; Data Reduction</text>
+  <text class="subtitle" x="28" y="53">Place $match early to leverage indexes and shrink the working set before $unwind, $group, and $sort</text>
+
+  <!-- Working Set Funnel Backdrop -->
+  <polygon points="36,225 866,252 866,266 36,286" fill="url(#funnelGrad)" />
+  <text class="funnel-label" x="36" y="216">Working Set Volume:</text>
+
+  <!-- Connecting Flow Lines -->
+  <line class="flow-line" x1="136" y1="140" x2="162" y2="140" marker-end="url(#arrow)" />
+  <line class="flow-line" x1="288" y1="140" x2="314" y2="140" marker-end="url(#arrow)" />
+  <line class="flow-line" x1="430" y1="140" x2="456" y2="140" marker-end="url(#arrow)" />
+  <line class="flow-line" x1="582" y1="140" x2="608" y2="140" marker-end="url(#arrow)" />
+  <line class="flow-line" x1="738" y1="140" x2="764" y2="140" marker-end="url(#arrow)" />
+
+  <!-- Stage 1: Collection -->
+  <g>
+    <rect class="stage-box" x="24" y="102" width="112" height="76" stroke="#64748b" />
+    <text class="stage-title" x="80" y="132">Collection</text>
+    <text class="stage-sub" x="80" y="150">Raw Documents</text>
+    <rect x="44" y="160" width="72" height="14" rx="4" fill="#334155" />
+    <text class="badge-text" x="80" y="170" fill="#cbd5e1">100% Docs</text>
+  </g>
+
+  <!-- Stage 2: $match -->
+  <g>
+    <rect class="pulse-ring" x="163" y="99" width="128" height="82" rx="12" stroke="#38bdf8" />
+    <rect class="stage-box" x="166" y="102" width="122" height="76" stroke="#38bdf8" />
+    <text class="stage-title" x="227" y="132" style="fill:#7dd3fc;">$match</text>
+    <text class="stage-sub" x="227" y="150">Index Filter</text>
+    <rect x="183" y="160" width="88" height="14" rx="4" fill="#0c4a6e" />
+    <text class="badge-text" x="227" y="170" fill="#7dd3fc">Uses B-Tree</text>
+  </g>
+
+  <!-- Stage 3: $unwind -->
+  <g>
+    <rect class="stage-box" x="318" y="102" width="112" height="76" stroke="#a855f7" />
+    <text class="stage-title" x="374" y="132" style="fill:#d8b4fe;">$unwind</text>
+    <text class="stage-sub" x="374" y="150">Split Arrays</text>
+    <rect x="334" y="160" width="80" height="14" rx="4" fill="#3b0764" />
+    <text class="badge-text" x="374" y="170" fill="#e9d5ff">1 Doc → N</text>
+  </g>
+
+  <!-- Stage 4: $group -->
+  <g>
+    <rect class="stage-box" x="460" y="102" width="122" height="76" stroke="#f59e0b" />
+    <text class="stage-title" x="521" y="132" style="fill:#fcd34d;">$group</text>
+    <text class="stage-sub" x="521" y="150">Accumulator</text>
+    <rect x="477" y="160" width="88" height="14" rx="4" fill="#451a03" />
+    <text class="badge-text" x="521" y="170" fill="#fde68a">$sum / $avg</text>
+  </g>
+
+  <!-- Stage 5: $sort + $limit -->
+  <g>
+    <rect class="stage-box" x="612" y="102" width="126" height="76" stroke="#10b981" />
+    <text class="stage-title" x="675" y="132" style="fill:#6ee7b7;">$sort + $limit</text>
+    <text class="stage-sub" x="675" y="150">Top-N Coalesced</text>
+    <rect x="631" y="160" width="88" height="14" rx="4" fill="#064e3b" />
+    <text class="badge-text" x="675" y="170" fill="#a7f3d0">100 MB Cap</text>
+  </g>
+
+  <!-- Stage 6: $project -->
+  <g>
+    <rect class="stage-box" x="768" y="102" width="108" height="76" stroke="#22c55e" />
+    <text class="stage-title" x="822" y="132" style="fill:#86efac;">$project</text>
+    <text class="stage-sub" x="822" y="150">Output Shape</text>
+    <rect x="782" y="160" width="80" height="14" rx="4" fill="#052e16" />
+    <text class="badge-text" x="822" y="170" fill="#bbf7d0">Lean JSON</text>
+  </g>
+
+  <!-- Animated Document Packets Shrinking Along Pipeline -->
+  <g>
+    <rect x="-11" y="-8" width="22" height="16" rx="3" fill="#38bdf8" stroke="#e0f2fe" stroke-width="1">
+      <animateMotion dur="4.2s" repeatCount="indefinite" begin="0s">
+        <mpath href="#packetTrack" />
+      </animateMotion>
+      <animate attributeName="width" values="24;18;20;14;10;8" keyTimes="0;0.22;0.42;0.62;0.82;1" dur="4.2s" repeatCount="indefinite" begin="0s" />
+      <animate attributeName="height" values="16;13;14;11;9;7" keyTimes="0;0.22;0.42;0.62;0.82;1" dur="4.2s" repeatCount="indefinite" begin="0s" />
+      <animate attributeName="fill" values="#94a3b8;#38bdf8;#a855f7;#f59e0b;#10b981;#22c55e" keyTimes="0;0.2;0.4;0.6;0.8;1" dur="4.2s" repeatCount="indefinite" begin="0s" />
+      <animate attributeName="opacity" values="0;1;1;1;1;0" keyTimes="0;0.08;0.3;0.7;0.92;1" dur="4.2s" repeatCount="indefinite" begin="0s" />
+    </rect>
+  </g>
+
+  <g>
+    <rect x="-11" y="-8" width="22" height="16" rx="3" fill="#38bdf8" stroke="#e0f2fe" stroke-width="1">
+      <animateMotion dur="4.2s" repeatCount="indefinite" begin="1.4s">
+        <mpath href="#packetTrack" />
+      </animateMotion>
+      <animate attributeName="width" values="24;18;20;14;10;8" keyTimes="0;0.22;0.42;0.62;0.82;1" dur="4.2s" repeatCount="indefinite" begin="1.4s" />
+      <animate attributeName="height" values="16;13;14;11;9;7" keyTimes="0;0.22;0.42;0.62;0.82;1" dur="4.2s" repeatCount="indefinite" begin="1.4s" />
+      <animate attributeName="fill" values="#94a3b8;#38bdf8;#a855f7;#f59e0b;#10b981;#22c55e" keyTimes="0;0.2;0.4;0.6;0.8;1" dur="4.2s" repeatCount="indefinite" begin="1.4s" />
+      <animate attributeName="opacity" values="0;1;1;1;1;0" keyTimes="0;0.08;0.3;0.7;0.92;1" dur="4.2s" repeatCount="indefinite" begin="1.4s" />
+    </rect>
+  </g>
+
+  <g>
+    <rect x="-11" y="-8" width="22" height="16" rx="3" fill="#38bdf8" stroke="#e0f2fe" stroke-width="1">
+      <animateMotion dur="4.2s" repeatCount="indefinite" begin="2.8s">
+        <mpath href="#packetTrack" />
+      </animateMotion>
+      <animate attributeName="width" values="24;18;20;14;10;8" keyTimes="0;0.22;0.42;0.62;0.82;1" dur="4.2s" repeatCount="indefinite" begin="2.8s" />
+      <animate attributeName="height" values="16;13;14;11;9;7" keyTimes="0;0.22;0.42;0.62;0.82;1" dur="4.2s" repeatCount="indefinite" begin="2.8s" />
+      <animate attributeName="fill" values="#94a3b8;#38bdf8;#a855f7;#f59e0b;#10b981;#22c55e" keyTimes="0;0.2;0.4;0.6;0.8;1" dur="4.2s" repeatCount="indefinite" begin="2.8s" />
+      <animate attributeName="opacity" values="0;1;1;1;1;0" keyTimes="0;0.08;0.3;0.7;0.92;1" dur="4.2s" repeatCount="indefinite" begin="2.8s" />
+    </rect>
+  </g>
+
+  <!-- Funnel Stage Labels -->
+  <text class="stage-sub" x="80" y="302">10,000 docs</text>
+  <text class="stage-sub" x="227" y="302">~1,200 matched</text>
+  <text class="stage-sub" x="374" y="302">~2,400 items</text>
+  <text class="stage-sub" x="521" y="302">~80 groups</text>
+  <text class="stage-sub" x="675" y="302">Top 10</text>
+  <text class="stage-sub" x="822" y="302">10 lean docs</text>
+</svg>

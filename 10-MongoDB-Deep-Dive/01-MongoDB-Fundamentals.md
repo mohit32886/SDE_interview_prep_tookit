@@ -1,5 +1,10 @@
 # MongoDB Deep Dive: Fundamentals
 
+![MongoDB BSON & WiredTiger Architecture](./assets/01-mongodb-bson-architecture.svg)
+
+> [!NOTE]
+> **Study Guide Overview:** MongoDB is a document-oriented NoSQL database that stores data as BSON (Binary JSON) documents inside collections, trading rigid relational normalization for schema flexibility, horizontal scalability, and single-document atomicity.
+
 ## Table of Contents
 1. [MongoDB vs Relational Databases](#mongodb-vs-relational-databases)
 2. [Core Concepts](#core-concepts)
@@ -18,28 +23,44 @@
 
 ### The Fundamental Difference: Documents vs Tables
 
-**SQL Server (Relational Model):**
+Relational databases (e.g., SQL Server) normalize data across multiple tables joined at read time. MongoDB stores related entities together as nested documents in a single collection.
+
+```mermaid
+erDiagram
+    USERS ||--o{ ORDERS : places
+    ORDERS ||--|{ ORDER_ITEMS : contains
+    USERS {
+        int user_id PK
+        string name
+        string email
+        datetime created_at
+    }
+    ORDERS {
+        int order_id PK
+        int user_id FK
+        decimal total
+        string status
+    }
+    ORDER_ITEMS {
+        int item_id PK
+        int order_id FK
+        string product_id
+        int quantity
+    }
 ```
-Table: Users
-| user_id | name     | email              | created_at |
-|---------|----------|-------------------|-----------|
-| 1       | John Doe | john@example.com   | 2024-01-15|
-| 2       | Jane Smith| jane@example.com   | 2024-01-16|
 
-Table: Orders
-| order_id | user_id | total | status    |
-|----------|---------|-------|-----------|
-| 101      | 1       | 450.50| completed |
-| 102      | 2       | 275.00| pending   |
+**SQL Server (Relational Model — Normalized Tables):**
 
-Table: Order_Items
-| item_id | order_id | product_id | quantity |
-|---------|----------|-----------|----------|
-| 1       | 101      | P1        | 2        |
-| 2       | 101      | P2        | 1        |
-```
+| Table | Columns & Sample Data |
+|-------|-----------------------|
+| **Users** | `user_id: 1`, `name: "John Doe"`, `email: "john@example.com"`, `created_at: 2024-01-15` |
+| **Users** | `user_id: 2`, `name: "Jane Smith"`, `email: "jane@example.com"`, `created_at: 2024-01-16` |
+| **Orders** | `order_id: 101`, `user_id: 1`, `total: 450.50`, `status: "completed"` |
+| **Orders** | `order_id: 102`, `user_id: 2`, `total: 275.00`, `status: "pending"` |
+| **Order_Items** | `item_id: 1`, `order_id: 101`, `product_id: "P1"`, `quantity: 2` |
+| **Order_Items** | `item_id: 2`, `order_id: 101`, `product_id: "P2"`, `quantity: 1` |
 
-**MongoDB (Document Model):**
+**MongoDB (Document Model — Embedded Hierarchy):**
 ```json
 db.users.find({
   _id: ObjectId("507f1f77bcf86cd799439011"),
@@ -76,45 +97,74 @@ db.users.find({
 |--------|------------------|-------------------|
 | **Data Structure** | Tables with rows/columns | Collections with documents (JSON-like) |
 | **Schema** | Fixed schema (strict) | Flexible schema (dynamic) |
-| **Relationships** | Foreign keys, JOIN operations | Embedding, References, $lookup |
+| **Relationships** | Foreign keys, JOIN operations | Embedding, References, `$lookup` |
 | **Normalization** | Highly normalized (3NF) | Denormalized (when read-heavy) |
 | **Transactions** | ACID across all tables | ACID multi-doc (4.0+), single-doc atomicity |
 | **Query Language** | SQL | MongoDB Query Language (JSON) |
-| **Joins** | Native JOINs (efficient) | $lookup (requires care in sharding) |
+| **Joins** | Native JOINs (efficient) | `$lookup` (requires care in sharding) |
 | **Data Size** | Optimized for small reads | Optimized for large document reads |
 | **Flexibility** | Changes require migrations | Add fields without migration |
 | **Write Performance** | Can suffer with many indexes | Generally faster writes (fewer indexes) |
 | **Read Performance** | Very fast with proper indexes | Fast for document reads, JOINs slower |
 
-### When to Use MongoDB
+### When to Use MongoDB vs SQL
 
-✅ **Good Use Cases:**
-- Content management systems (flexible schema)
-- User profiles with variable attributes
-- Time-series data aggregation
-- Real-time analytics dashboards
-- E-commerce catalogs (products have different attributes)
-- IoT sensor data with varying measurements
-- Chat applications and messaging
-- Machine learning feature stores
-- Logging and event storage
-- Caching layer for distributed systems
+```mermaid
+flowchart LR
+    Workload["Application Workload"] --> Check{"Schema &amp; Join Profile?"}
+    Check -->|"Evolving schema, nested docs, high write/read"| Mongo["Choose MongoDB"]
+    Check -->|"Strict ACID, 3NF joins, FK constraints"| SQL["Choose SQL"]
+    Mongo --> MUse["CMS, Catalogs, IoT, Chat, ML Feature Stores, Logs"]
+    SQL --> SUse["Banking, Inventory, Warehousing, Complex Reporting"]
 
-❌ **When SQL is Better:**
-- Financial transactions (credits/debits must be precise)
-- Highly normalized data with many relationships
-- Complex reporting with multiple JOINs
-- Data integrity is critical (foreign key constraints)
-- Budget forecasting and data warehousing
-- Systems with ACID requirement across multiple tables
-- Data with minimal changes and stable schema
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Workload purple
+    class Check amber
+    class Mongo,MUse green
+    class SQL,SUse blue
+```
+
+- **Good MongoDB Use Cases:** Content management systems (flexible schema), user profiles with variable attributes, time-series data aggregation, real-time analytics dashboards, e-commerce catalogs (varying product attributes), IoT sensor data, chat/messaging, ML feature stores, logging/event storage, and distributed caching layers.
+- **When SQL is Better:** Financial transactions (strict credit/debit precision), highly normalized data with many relationships, complex reporting with multiple JOINs, critical referential integrity (foreign key constraints), budget forecasting/data warehousing, multi-table ACID systems, and stable schemas with minimal changes.
 
 ---
 
 ## Core Concepts
 
+MongoDB organizes data into a four-tier hierarchy, where every document carries a unique `_id` primary key.
+
+```mermaid
+flowchart LR
+    Server["MongoDB Server"] --> DB["Database (myappdb)"]
+    DB --> Coll["Collection (users)"]
+    Coll --> Doc["Document (BSON Object)"]
+    Doc --> Fields["Fields (Key-Value Pairs)"]
+    Doc --> Id["_id Field (12-Byte ObjectId)"]
+    Id --> B1["4B: Timestamp"]
+    Id --> B2["3B: Machine ID"]
+    Id --> B3["2B: Process ID"]
+    Id --> B4["3B: Random Counter"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Server,DB blue
+    class Coll,Doc green
+    class Fields purple
+    class Id amber
+    class B1,B2,B3,B4 red
+```
+
 ### 1. Database
-A MongoDB server contains multiple databases. Each database is a collection of collections.
+A MongoDB server hosts multiple isolated databases, each containing its own collections.
 
 ```javascript
 // Mongo shell commands
@@ -125,7 +175,7 @@ db.dropDatabase()           // Delete current database
 ```
 
 ### 2. Collections
-Similar to tables but schemaless. Contains documents.
+Schemaless containers for documents (analogous to SQL tables), optionally guarded by `$jsonSchema` validators.
 
 ```javascript
 // Collection operations
@@ -148,8 +198,8 @@ db.users.drop()                           // Delete collection
 db.users.stats()                          // Get collection statistics
 ```
 
-### 3. Documents
-JSON-like objects (BSON format). Every document has a unique `_id` field.
+### 3. Documents & Fields
+Documents are JSON-like BSON objects composed of key-value pairs; nested objects and arrays are queried via dot notation.
 
 ```javascript
 // Document insertion
@@ -170,19 +220,14 @@ db.users.insertOne({
     ip: "192.168.1.1"
   }
 })
-```
 
-### 4. Fields
-Key-value pairs within documents.
-
-```javascript
 // Accessing fields
 db.users.find({ age: { $gt: 25 } })              // Dot notation for fields
 db.users.find({ "address.city": "New York" })    // Nested field access
 ```
 
-### 5. _id Field
-Auto-generated unique identifier (ObjectId by default).
+### 4. `_id` Field & ObjectId Structure
+Every document requires a unique, immutable `_id` field (defaults to a 12-byte `ObjectId`).
 
 ```javascript
 // Different _id types
@@ -197,15 +242,37 @@ Auto-generated unique identifier (ObjectId by default).
 // 3 bytes: machine ID (identifier of machine)
 // 2 bytes: process ID
 // 3 bytes: random counter (starting from random value)
-
 // This means ObjectIds are sortable by insertion time!
 ```
+
+> [!TIP]
+> Because the leading 4 bytes of an `ObjectId` encode a Unix timestamp, sorting by `_id` naturally approximates chronological insertion order without an extra `created_at` index.
 
 ---
 
 ## BSON Data Types
 
-MongoDB stores data in BSON (Binary JSON), which extends JSON with additional types:
+MongoDB stores data in **BSON (Binary JSON)**, extending standard JSON with rich binary, numeric, temporal, and internal types.
+
+```mermaid
+flowchart TD
+    BSON["BSON Data Types (16 MB Max Doc Size)"] --> Prim["Primitives: String, Boolean, Null, Undefined"]
+    BSON --> Num["Numeric: Int32, NumberLong (64-bit), Double, Decimal128"]
+    BSON --> Spec["Special: ObjectId, ISODate (UTC), RegExp, Timestamp"]
+    BSON --> Comp["Composite &amp; Internal: Array, Embedded Doc, BinData, MinKey/MaxKey, Code"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class BSON purple
+    class Prim blue
+    class Num green
+    class Spec amber
+    class Comp red
+```
 
 ```javascript
 db.datatypes.insertOne({
@@ -259,9 +326,12 @@ db.datatypes.insertOne({
 ```
 
 ### BSON Size Limits
-- **Document size limit**: 16 MB (includes field names, values, types)
-- **Array limit**: No fixed limit, but document size applies
-- **String field limit**: No fixed limit (but part of 16 MB document)
+
+| Constraint | Limit | Practical Implication |
+|------------|-------|-----------------------|
+| **Document Size** | **16 MB** | Includes all field names, values, and type metadata |
+| **Array Length** | No fixed element cap | Bounded indirectly by the 16 MB document limit |
+| **String Length** | No fixed char cap | Bounded indirectly by the 16 MB document limit |
 
 ```javascript
 // Practical example: handling large arrays
@@ -278,22 +348,47 @@ db.products.insertOne({
 })
 ```
 
+> [!IMPORTANT]
+> Always use `Decimal128` for monetary or high-precision scientific values—standard JSON `Double` introduces binary floating-point rounding errors.
+
 ---
 
 ## Document Structure Patterns
 
+Choosing between embedding, referencing, or combining both is the core data-modeling decision in MongoDB.
+
+```mermaid
+flowchart TD
+    Model["Data Modeling Choice"] --> Embed["1. Embedded (Denormalized)"]
+    Model --> Ref["2. Referenced (Normalized)"]
+    Model --> Hybrid["3. Hybrid (Most Practical)"]
+
+    Embed --> EPro["Single-query read &amp; atomic write"]
+    Embed --> ECon["Duplication &amp; 16 MB cap risk"]
+    Ref --> RPro["No duplication &amp; small documents"]
+    Ref --> RCon["Requires $lookup / multiple queries"]
+    Hybrid --> HPro["Hot fields embedded + cold refs linked"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Model purple
+    class Embed,EPro green
+    class Ref,RPro blue
+    class Hybrid,HPro amber
+    class ECon,RCon red
+```
+
+| Pattern | Pros | Cons | Best For |
+|---------|------|------|----------|
+| **Embedded** | Faster reads (1 fetch), atomic writes, no JOINs | Data duplication, larger docs, harder shared updates | 1:1 and bounded 1:Few data read together |
+| **Referenced** | Zero duplication, smaller docs, easy shared updates | Requires `$lookup` or extra queries, cross-shard JOIN limits | 1:Many (unbounded), independent lifecycles |
+| **Hybrid** | Fast hot-path reads without bloating documents | Must sync duplicated hot fields on update | Real-world apps (e.g., user summary + full details) |
+
 ### Pattern 1: Embedded Documents (Denormalization)
-
-**Advantages:**
-- Faster reads (single document fetch)
-- Atomic writes on related data
-- No JOINs needed
-
-**Disadvantages:**
-- Data duplication
-- Larger document size
-- Hard to update shared data
-
 ```javascript
 // User with embedded profile and settings
 db.users.insertOne({
@@ -329,17 +424,6 @@ db.users.updateOne(
 ```
 
 ### Pattern 2: References (Normalization)
-
-**Advantages:**
-- No data duplication
-- Smaller documents
-- Easier to update shared data
-
-**Disadvantages:**
-- Requires $lookup (slower than embedded)
-- Multiple queries needed
-- JOINs can't cross shards easily
-
 ```javascript
 // User references a profile document
 db.users.insertOne({
@@ -375,7 +459,6 @@ db.users.aggregate([
 ```
 
 ### Pattern 3: Hybrid Approach (Most Practical)
-
 ```javascript
 // Store frequently accessed data in document, reference for less frequent data
 db.users.insertOne({
@@ -401,10 +484,48 @@ db.users.insertOne({
 
 ## Schema Design Patterns
 
-### Pattern 1: Attribute Pattern
-Store optional or sparse attributes without creating separate collections.
+MongoDB provides eight canonical schema patterns to solve scale, indexing, and 16 MB document-size challenges.
 
-**Use Case:** Product catalogs where items have different attributes (e.g., clothing has size/color, electronics have specs).
+```mermaid
+flowchart TD
+    Patterns["8 MongoDB Schema Patterns"] --> P1["Attribute: Sparse/variable key-value pairs"]
+    Patterns --> P2["Bucket: Group time-series into fixed windows"]
+    Patterns --> P3["Computed: Pre-calculate stats on write"]
+    Patterns --> P4["Versioning: Latest doc + history collection"]
+    Patterns --> P5["Extended Reference: Copy hot fields to avoid $lookup"]
+    Patterns --> P6["Outlier: Paginate extreme-cardinality docs"]
+    Patterns --> P7["Polymorphic: Different shapes in one collection"]
+    Patterns --> P8["Subset: Keep top-N hot items in main doc"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Patterns purple
+    class P1,P7 blue
+    class P2,P6,P8 green
+    class P3,P5 amber
+    class P4 red
+```
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Main as Main Collection (users/products)
+    participant Overflow as Overflow / History Collection
+
+    App->>Main: Write new order / review
+    Main-->>Main: $inc computed stats or update subset
+    alt Exceeds Bucket / Outlier Threshold
+        App->>Overflow: Write paginated / bucketed batch
+    end
+    App->>Main: Read hot summary (1 query, no $lookup)
+```
+
+### Pattern 1: Attribute Pattern
+Store optional or sparse attributes as `{ name, value }` arrays to index them uniformly without creating separate collections. **Use Case:** Product catalogs where items have different attributes (e.g., clothing size/color vs. electronics specs).
 
 ```javascript
 // Before (normalized - requires joins)
@@ -438,9 +559,7 @@ db.products.find({
 ```
 
 ### Pattern 2: Bucket Pattern
-Group related data into buckets to avoid large arrays and document size limits.
-
-**Use Case:** Time-series data (sensor readings, stock prices, page views).
+Group related data into time/count buckets to avoid huge arrays and 16 MB limits. **Use Case:** Time-series data (sensor readings, stock prices, page views).
 
 ```javascript
 // Without bucket pattern (problematic for 10K readings/day)
@@ -478,9 +597,7 @@ db.sensorReadings.find({
 ```
 
 ### Pattern 3: Computed Pattern
-Pre-calculate and store values instead of computing on read.
-
-**Use Case:** Frequently accessed aggregations (user stats, product ratings).
+Pre-calculate and store aggregate values on write instead of computing them on every read. **Use Case:** Frequently accessed aggregations (user stats, product ratings).
 
 ```javascript
 // Without computed pattern
@@ -513,7 +630,7 @@ db.users.updateOne(
 ```
 
 ### Pattern 4: Document Versioning
-Track document changes and maintain version history.
+Keep the latest active state in the main collection while archiving historical snapshots in a separate versions collection.
 
 ```javascript
 // Main document with latest version
@@ -552,7 +669,7 @@ db.productVersions.insertMany([
 ```
 
 ### Pattern 5: Extended Reference
-Include frequently queried fields from referenced document.
+Copy frequently queried fields from a referenced document into the parent document to eliminate `$lookup` on hot reads.
 
 ```javascript
 // Without extended reference - must look up full profile
@@ -577,7 +694,7 @@ db.posts.insertOne({
 ```
 
 ### Pattern 6: Outlier Pattern
-Handle documents with unusual characteristics (very large arrays).
+Flag extreme-cardinality documents (`isOutlier: true`) and paginate their overflow data into a secondary collection so normal documents stay fast.
 
 ```javascript
 // E-commerce: product with millions of reviews
@@ -613,7 +730,7 @@ db.productReviews.findOne({
 ```
 
 ### Pattern 7: Polymorphic Pattern
-Store different document shapes in same collection.
+Store documents with different shapes in the same collection using a discriminator field (`type`) when they are queried together.
 
 ```javascript
 // Media collection with different types
@@ -661,7 +778,7 @@ db.media.find({
 ```
 
 ### Pattern 8: Subset Pattern
-Keep frequently accessed subset of data in main document, detailed data in separate collection.
+Keep only the most frequently accessed subset (e.g., last 10 reviews) in the main document, and store the full history in a separate collection.
 
 ```javascript
 // User document with summary of recent reviews
@@ -698,8 +815,33 @@ db.userReviews.insertMany([
 
 ## Relationships in MongoDB
 
-### One-to-One Relationships
+Cardinality dictates whether to embed, reference from parent, reference from child, or introduce a junction collection.
 
+```mermaid
+flowchart LR
+    Rel["Relationship Cardinality"] --> OneOne["1:1 (One-to-One)"]
+    Rel --> OneMany["1:Many (One-to-Many)"]
+    Rel --> ManyMany["M:N (Many-to-Many)"]
+
+    OneOne --> OO1["Embed (tight coupling) or Ref (independent lifecycle)"]
+    OneMany --> OM1["Bounded (&lt;1000): Embed array"]
+    OneMany --> OM2["Medium: Array of child IDs"]
+    OneMany --> OM3["Unbounded: Parent ref in child"]
+    ManyMany --> MM1["Dual ref arrays or Junction collection (with metadata)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Rel purple
+    class OneOne,OO1 blue
+    class OneMany,OM1,OM2,OM3 green
+    class ManyMany,MM1 amber
+```
+
+### One-to-One Relationships
 ```javascript
 // Approach 1: Embedded document (preferred for tight coupling)
 db.users.insertOne({
@@ -726,7 +868,6 @@ db.profiles.insertOne({
 ```
 
 ### One-to-Many Relationships
-
 ```javascript
 // Approach 1: Array of embedded documents (< 1000 items)
 db.users.insertOne({
@@ -781,7 +922,6 @@ db.orders.find({ userId: ObjectId() })
 ```
 
 ### Many-to-Many Relationships
-
 ```javascript
 // Approach 1: Arrays of references (both directions)
 db.users.insertOne({
@@ -827,7 +967,25 @@ db.userSkills.insertMany([
 
 ## Schema Validation
 
-MongoDB supports JSON Schema validation to enforce structure:
+MongoDB enforces structural rules on writes via `$jsonSchema` validators at collection creation or via `collMod`.
+
+```mermaid
+flowchart LR
+    Write["insertOne / updateOne"] --> Validator{"$jsonSchema Validator"}
+    Validator -->|"Matches types, required, regex, enum"| Commit["Persist Document"]
+    Validator -->|"Fails validation"| Reject["Reject Write (DocumentValidationFailure)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Write blue
+    class Validator amber
+    class Commit green
+    class Reject red
+```
 
 ```javascript
 // Create collection with schema validation
@@ -908,6 +1066,28 @@ db.users.insertOne({
 
 ## MongoDB vs Other NoSQL
 
+```mermaid
+flowchart TD
+    NoSQL["NoSQL Database Selection"] --> Doc["Document: MongoDB / Couchbase"]
+    NoSQL --> Col["Column-Family: Cassandra"]
+    NoSQL --> KV["Key-Value: DynamoDB"]
+
+    Doc --> D1["Flexible JSON, rich secondary indexes, multi-doc ACID"]
+    Col --> C1["Massive write throughput, peer-to-peer, CQL"]
+    KV --> K1["Serverless auto-scale, single-item ACID, API-only"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class NoSQL purple
+    class Doc,D1 green
+    class Col,C1 blue
+    class KV,K1 amber
+```
+
 | Feature | MongoDB | Cassandra | DynamoDB | Couchbase |
 |---------|---------|-----------|----------|-----------|
 | **Data Model** | Document (JSON) | Column-family | Key-value | Document (JSON) |
@@ -925,6 +1105,32 @@ db.users.insertOne({
 ---
 
 ## When MongoDB Is Wrong
+
+```mermaid
+flowchart TD
+    RedFlags["MongoDB Anti-Patterns &amp; Red Flags"] --> RF1["Multi-table Financial ACID"]
+    RedFlags --> RF2["Highly Normalized / FK Integrity"]
+    RedFlags --> RF3["Graph Traversals (friends-of-friends)"]
+    RedFlags --> RF4["Unbounded Embedded Arrays"]
+    RedFlags --> RF5["Low-Cardinality Shard Key"]
+
+    RF1 --> Fix1["Use SQL (PostgreSQL / SQL Server)"]
+    RF2 --> Fix1
+    RF3 --> Fix2["Use Graph DB (Neo4j)"]
+    RF4 --> Fix3["Use Parent Reference or Bucket Pattern"]
+    RF5 --> Fix4["Pick High-Cardinality, Immutable Key"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class RedFlags purple
+    class RF1,RF2,RF3,RF4,RF5 red
+    class Fix1,Fix2 blue
+    class Fix3,Fix4 green
+```
 
 ### When to Choose SQL Instead
 
@@ -1003,31 +1209,42 @@ db.users.insertOne({
 // ✅ DO: Choose high-cardinality, immutable shard key
 ```
 
+> [!WARNING]
+> Never embed unbounded arrays (like user posts, comments, or logs) inside a single document—crossing the 16 MB BSON limit causes writes to fail abruptly in production.
+
 ---
 
 ## Common Interview Questions
+
+```mermaid
+flowchart LR
+    IQ["Core Interview Themes"] --> Q1["Q1: SQL vs MongoDB"]
+    IQ --> Q2["Q2: Why BSON?"]
+    IQ --> Q3["Q3: 16 MB Cap Solutions"]
+    IQ --> Q4["Q4: Embed vs Reference"]
+    IQ --> Q5["Q5: Denormalized Consistency"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class IQ purple
+    class Q1,Q2 blue
+    class Q3,Q4 green
+    class Q5 amber
+```
 
 ### Q1: What's the difference between MongoDB and SQL Server? When would you use each?
 
 **Answer:**
 MongoDB uses a flexible document model (JSON-like) while SQL Server uses structured tables with fixed schemas.
 
-**MongoDB is better for:**
-- Rapidly evolving schemas
-- Nested or hierarchical data
-- Flexible queries on varying data structures
-- Content management and catalogs
-- Real-time analytics
+- **MongoDB is better for:** Rapidly evolving schemas, nested/hierarchical data, flexible queries on varying structures, content management/catalogs, and real-time analytics.
+- **SQL Server is better for:** Complex financial transactions, highly normalized data with many relationships, strong consistency, data warehousing/complex reporting, and strict referential integrity.
 
-**SQL Server is better for:**
-- Complex transactions (financial systems)
-- Highly normalized data with many relationships
-- Strong consistency requirements
-- Data warehousing and complex reporting
-- Data integrity is critical
-
-**Example:**
-```
+```text
 MongoDB: E-commerce product catalog (products have different attributes)
 SQL Server: Bank transactions (strict ACID, audit requirements)
 ```
@@ -1035,18 +1252,17 @@ SQL Server: Bank transactions (strict ACID, audit requirements)
 ### Q2: Explain the concept of BSON and why MongoDB uses it.
 
 **Answer:**
-BSON (Binary JSON) is MongoDB's binary serialization format. It extends JSON with additional data types like ObjectId, ISODate, NumberLong, Decimal128.
+BSON (Binary JSON) is MongoDB's binary serialization format. It extends JSON with additional data types like `ObjectId`, `ISODate`, `NumberLong`, and `Decimal128`.
 
-**Why BSON?**
-- Efficient storage and transmission (binary vs text)
-- Type information preservation (ambiguous in JSON)
-- Indexes on binary format are faster
-- Direct binary comparison without parsing
+- **Efficient storage and transmission** (binary vs text)
+- **Type information preservation** (ambiguous in JSON)
+- **Faster indexing** on binary format
+- **Direct binary comparison** without parsing
 
 ### Q3: Document size limit is 16 MB. How would you handle entities with more data?
 
 **Answer:**
-Use the Bucket Pattern or Subset Pattern:
+Use the **Bucket Pattern** or **Subset Pattern**:
 
 ```javascript
 // Bucket Pattern for time-series data
@@ -1070,17 +1286,8 @@ db.userPosts.find({ userId: ObjectId() })  // All posts here
 ### Q4: Should you embed or reference documents?
 
 **Answer:**
-**Embed when:**
-- One-to-one relationship
-- One-to-many with bounded array (< 1000 items)
-- Data accessed together frequently
-- Atomicity across related data needed
-
-**Reference when:**
-- One-to-many with large arrays
-- Data accessed independently
-- Updates to referenced data would duplicate changes
-- Cross-shard joins needed
+- **Embed when:** One-to-one relationship, one-to-many with bounded array (`< 1000` items), data accessed together frequently, or atomicity across related data is needed.
+- **Reference when:** One-to-many with large/unbounded arrays, data accessed independently, updates to referenced data would duplicate changes, or cross-shard joins are needed.
 
 ```javascript
 // Embed user's profile (accessed together)
@@ -1096,10 +1303,10 @@ db.posts.find({ userId: 1 })
 ### Q5: How do you maintain data consistency with denormalization?
 
 **Answer:**
-- Update in multiple places atomically with transactions
+- Update in multiple places atomically with multi-document transactions
 - Use application logic to keep data consistent
-- Use triggers/jobs to sync denormalized data
-- Accept eventual consistency as trade-off
+- Use triggers or background jobs to sync denormalized data
+- Accept eventual consistency as a trade-off
 
 ```javascript
 db.session.startTransaction()

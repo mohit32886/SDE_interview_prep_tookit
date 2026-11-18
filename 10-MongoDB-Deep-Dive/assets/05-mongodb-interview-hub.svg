@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="MongoDB Interview Decision Matrix">
+  <defs>
+    <style>
+      .bg-card { fill: #0f172a; stroke: #334155; stroke-width: 1.5; }
+      .node-bg { fill: #1e293b; stroke-width: 1.5; }
+      .gate-bg { fill: #1e293b; stroke: #38bdf8; stroke-width: 1.75; }
+      .prod-bg { fill: #064e3b; stroke: #34d399; stroke-width: 2; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; fill: #f8fafc; letter-spacing: 0.6px; }
+      .subtitle { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .node-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12.5px; font-weight: 700; fill: #f1f5f9; }
+      .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #94a3b8; }
+      .gate-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; fill: #e0f2fe; text-anchor: middle; }
+      .gate-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #7dd3fc; text-anchor: middle; }
+      .prod-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 800; fill: #ecfdf5; text-anchor: middle; }
+      .prod-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10.5px; fill: #a7f3d0; text-anchor: middle; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; font-weight: 600; fill: #6ee7b7; text-anchor: middle; }
+      .wire { fill: none; stroke: #334155; stroke-width: 2; }
+      .wire-main { fill: none; stroke: #10b981; stroke-width: 2.5; stroke-dasharray: 6 4; animation: dashFlow 1.6s linear infinite; }
+      .prod-pulse { animation: prodGlow 2.8s ease-in-out infinite; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes prodGlow {
+        0%, 100% { stroke: #34d399; stroke-opacity: 0.85; }
+        50% { stroke: #6ee7b7; stroke-opacity: 1; }
+      }
+    </style>
+
+    <path id="path-1" d="M 276 86 C 345 86, 360 164, 424 164" />
+    <path id="path-2" d="M 276 132 C 340 132, 365 170, 424 170" />
+    <path id="path-3" d="M 276 178 L 424 178" />
+    <path id="path-4" d="M 276 224 C 340 224, 365 186, 424 186" />
+    <path id="path-5" d="M 276 270 C 345 270, 360 192, 424 192" />
+    <path id="path-out" d="M 574 178 L 644 178" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect x="2" y="2" width="896" height="316" rx="14" class="bg-card" />
+
+  <!-- Header -->
+  <text x="28" y="30" class="title">MONGODB INTERVIEW DECISION MATRIX</text>
+  <text x="28" y="47" class="subtitle">5 Core Architectural Pillars -&gt; Production-Ready System Design</text>
+  <line x1="28" y1="56" x2="872" y2="56" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Wires -->
+  <use href="#path-1" class="wire" />
+  <use href="#path-2" class="wire" />
+  <use href="#path-3" class="wire" />
+  <use href="#path-4" class="wire" />
+  <use href="#path-5" class="wire" />
+  <use href="#path-out" class="wire-main" />
+
+  <!-- Animated Signal Pulses -->
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="0s"><mpath href="#path-1" /></animateMotion>
+  </circle>
+  <circle r="3.5" fill="#4ade80">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.45s"><mpath href="#path-2" /></animateMotion>
+  </circle>
+  <circle r="3.5" fill="#fbbf24">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.9s"><mpath href="#path-3" /></animateMotion>
+  </circle>
+  <circle r="3.5" fill="#c084fc">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.35s"><mpath href="#path-4" /></animateMotion>
+  </circle>
+  <circle r="3.5" fill="#fb7185">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.8s"><mpath href="#path-5" /></animateMotion>
+  </circle>
+  <circle r="4.5" fill="#6ee7b7">
+    <animateMotion dur="1.2s" repeatCount="indefinite" begin="0.2s"><mpath href="#path-out" /></animateMotion>
+  </circle>
+
+  <!-- Left Column: 5 Pillars -->
+  <g>
+    <rect x="28" y="68" width="248" height="36" rx="8" class="node-bg" stroke="#38bdf8" />
+    <circle cx="44" cy="86" r="4" fill="#38bdf8" />
+    <text x="56" y="83" class="node-title">Schema Modeling</text>
+    <text x="56" y="96" class="node-sub">Embed vs Reference (16MB)</text>
+  </g>
+
+  <g>
+    <rect x="28" y="114" width="248" height="36" rx="8" class="node-bg" stroke="#4ade80" />
+    <circle cx="44" cy="132" r="4" fill="#4ade80" />
+    <text x="56" y="129" class="node-title">ESR Indexing</text>
+    <text x="56" y="142" class="node-sub">Equality -&gt; Sort -&gt; Range</text>
+  </g>
+
+  <g>
+    <rect x="28" y="160" width="248" height="36" rx="8" class="node-bg" stroke="#fbbf24" />
+    <circle cx="44" cy="178" r="4" fill="#fbbf24" />
+    <text x="56" y="175" class="node-title">Aggregation</text>
+    <text x="56" y="188" class="node-sub">$match Early + $lookup</text>
+  </g>
+
+  <g>
+    <rect x="28" y="206" width="248" height="36" rx="8" class="node-bg" stroke="#c084fc" />
+    <circle cx="44" cy="224" r="4" fill="#c084fc" />
+    <text x="56" y="221" class="node-title">Write/Read Concern</text>
+    <text x="56" y="234" class="node-sub">w: majority + j: true</text>
+  </g>
+
+  <g>
+    <rect x="28" y="252" width="248" height="36" rx="8" class="node-bg" stroke="#fb7185" />
+    <circle cx="44" cy="270" r="4" fill="#fb7185" />
+    <text x="56" y="267" class="node-title">Shard Key Selection</text>
+    <text x="56" y="280" class="node-sub">Cardinality + Targeting</text>
+  </g>
+
+  <!-- Center Gate -->
+  <g>
+    <rect x="424" y="144" width="150" height="68" rx="10" class="gate-bg" />
+    <text x="499" y="169" class="gate-title">Workload &amp; Scale</text>
+    <text x="499" y="185" class="gate-title">Verification</text>
+    <text x="499" y="201" class="gate-sub">explain() + MVCC</text>
+  </g>
+
+  <!-- Right Hub: Production Ready -->
+  <g>
+    <rect x="644" y="114" width="228" height="128" rx="12" class="prod-bg prod-pulse" />
+    <circle cx="758" cy="138" r="5" fill="#34d399">
+      <animate attributeName="r" values="4;6.5;4" dur="2s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
+    </circle>
+    <text x="758" y="164" class="prod-title">Production Ready</text>
+    <text x="758" y="182" class="prod-sub">Low Latency &amp; High Durability</text>
+
+    <rect x="662" y="196" width="90" height="20" rx="4" fill="#022c22" stroke="#10b981" stroke-width="1" />
+    <text x="707" y="209" class="badge-text">IXSCAN Only</text>
+
+    <rect x="764" y="196" width="90" height="20" rx="4" fill="#022c22" stroke="#10b981" stroke-width="1" />
+    <text x="809" y="209" class="badge-text">Zero Rollback</text>
+
+    <rect x="698" y="220" width="120" height="16" rx="4" fill="#022c22" stroke="#10b981" stroke-width="1" />
+    <text x="758" y="231" class="badge-text">No Scatter-Gather</text>
+  </g>
+</svg>

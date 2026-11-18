@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="MongoDB Document Model and WiredTiger Storage Flow">
+  <defs>
+    <style>
+      .title { font: 700 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+      .badge-text { font: 600 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #e2e8f0; }
+      .box-title { font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f1f5f9; }
+      .box-sub { font: 400 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; }
+      .sec-title { font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f8fafc; }
+      .sec-body { font: 400 10.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #cbd5e1; }
+      .code-mini { font: 500 9.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #93c5fd; }
+      .flow-line { stroke: #475569; stroke-width: 2; fill: none; }
+      .flow-dash { stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 5 5; fill: none; animation: dashMove 1.4s linear infinite; }
+      .pulse-node { animation: nodeGlow 3s ease-in-out infinite; }
+      .pulse-node-delay { animation: nodeGlow 3s ease-in-out 1.5s infinite; }
+      @keyframes dashMove {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes nodeGlow {
+        0%, 100% { stroke-opacity: 0.55; }
+        50% { stroke-opacity: 1; }
+      }
+    </style>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#4ade80" />
+    </marker>
+  </defs>
+
+  <!-- Outer Dark Slate Card -->
+  <rect x="2" y="2" width="896" height="316" rx="14" fill="#0f172a" stroke="#334155" stroke-width="2" />
+
+  <!-- Header -->
+  <text x="24" y="28" class="title">MongoDB Document Model &amp; WiredTiger Storage Flow</text>
+  <text x="24" y="45" class="subtitle">BSON Binary Serialization • 16 MB Document Limit • In-Memory Cache &amp; WAL Durability</text>
+  <rect x="742" y="15" width="134" height="22" rx="11" fill="#1e293b" stroke="#22c55e" stroke-width="1.2" />
+  <circle cx="755" cy="26" r="4" fill="#22c55e">
+    <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite" />
+  </circle>
+  <text x="765" y="30" class="badge-text">WiredTiger Engine</text>
+
+  <!-- Top Section: Storage Flow Container -->
+  <rect x="20" y="58" width="860" height="118" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1.2" />
+  <text x="34" y="76" class="subtitle">WRITE &amp; STORAGE PIPELINE</text>
+
+  <!-- Stage 1: JSON Document -->
+  <rect x="34" y="88" width="170" height="72" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.6" class="pulse-node" />
+  <text x="119" y="109" text-anchor="middle" class="box-title">1. JSON Document</text>
+  <text x="119" y="126" text-anchor="middle" class="box-sub">{ _id, name, orders }</text>
+  <text x="119" y="143" text-anchor="middle" class="code-mini">Driver / App Payload</text>
+
+  <!-- Connector 1 -> 2 -->
+  <path id="p1" d="M 204 124 L 246 124" class="flow-dash" marker-end="url(#arrowBlue)" />
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 204 124 L 246 124" />
+  </circle>
+
+  <!-- Stage 2: BSON Binary -->
+  <rect x="252" y="88" width="176" height="72" rx="8" fill="#0f172a" stroke="#a855f7" stroke-width="1.6" class="pulse-node-delay" />
+  <text x="340" y="109" text-anchor="middle" class="box-title">2. BSON Binary</text>
+  <text x="340" y="126" text-anchor="middle" class="box-sub">Type + Len + Value</text>
+  <text x="340" y="143" text-anchor="middle" class="code-mini">ObjectId, Date, Dec128</text>
+
+  <!-- Connector 2 -> 3 -->
+  <path id="p2" d="M 428 124 L 470 124" class="flow-dash" marker-end="url(#arrowBlue)" />
+  <circle r="3.5" fill="#a855f7">
+    <animateMotion dur="1.4s" begin="0.4s" repeatCount="indefinite" path="M 428 124 L 470 124" />
+  </circle>
+
+  <!-- Stage 3: WiredTiger Cache -->
+  <rect x="476" y="88" width="180" height="72" rx="8" fill="#0f172a" stroke="#22c55e" stroke-width="1.6" class="pulse-node" />
+  <text x="566" y="109" text-anchor="middle" class="box-title">3. WiredTiger Cache</text>
+  <text x="566" y="126" text-anchor="middle" class="box-sub">Dirty Pages + B-Tree</text>
+  <text x="566" y="143" text-anchor="middle" class="code-mini">Snappy / zstd Compress</text>
+
+  <!-- Connector 3 -> 4 -->
+  <path id="p3" d="M 656 124 L 698 124" class="flow-dash" marker-end="url(#arrowGreen)" />
+  <circle r="3.5" fill="#4ade80">
+    <animateMotion dur="1.4s" begin="0.8s" repeatCount="indefinite" path="M 656 124 L 698 124" />
+  </circle>
+
+  <!-- Stage 4: Journal / Checkpoint -->
+  <rect x="704" y="88" width="162" height="72" rx="8" fill="#0f172a" stroke="#f59e0b" stroke-width="1.6" class="pulse-node-delay" />
+  <text x="785" y="109" text-anchor="middle" class="box-title">4. Journal / Disk</text>
+  <text x="785" y="126" text-anchor="middle" class="box-sub">WAL + 60s Checkpoint</text>
+  <text x="785" y="143" text-anchor="middle" class="code-mini">Crash-Safe Durability</text>
+
+  <!-- Bottom Left: Embed (1:Few) -->
+  <rect x="20" y="190" width="420" height="112" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="1.4" />
+  <rect x="34" y="202" width="112" height="20" rx="5" fill="#14532d" />
+  <text x="90" y="216" text-anchor="middle" class="badge-text">EMBED (1 : Few)</text>
+  <text x="158" y="216" class="sec-title">Denormalized Single Document</text>
+  <text x="34" y="240" class="sec-body">• Single-query read &amp; atomic single-doc write</text>
+  <text x="34" y="257" class="sec-body">• Ideal when bounded (&lt; 1,000 items) &amp; read together</text>
+  <text x="34" y="274" class="sec-body">• Watch 16 MB BSON limit &amp; update duplication</text>
+  <rect x="315" y="226" width="112" height="64" rx="6" fill="#0f172a" stroke="#4ade80" stroke-width="1" />
+  <text x="323" y="241" class="code-mini">{ _id: 1,</text>
+  <text x="323" y="255" class="code-mini">  profile: { ... },</text>
+  <text x="323" y="269" class="code-mini">  addrs: [ {...} ]</text>
+  <text x="323" y="283" class="code-mini">}</text>
+
+  <!-- Bottom Right: Reference (1:Many / Unbounded) -->
+  <rect x="460" y="190" width="420" height="112" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="1.4" />
+  <rect x="474" y="202" width="178" height="20" rx="5" fill="#1e3a8a" />
+  <text x="563" y="216" text-anchor="middle" class="badge-text">REFERENCE (1 : Many / Unbounded)</text>
+  <text x="662" y="216" class="sec-title">Normalized Collections</text>
+  <text x="474" y="240" class="sec-body">• Prevents unbounded array growth past 16 MB</text>
+  <text x="474" y="257" class="sec-body">• Independent lifecycles &amp; shared entity updates</text>
+  <text x="474" y="274" class="sec-body">• Join via $lookup or parent reference query</text>
+  <rect x="752" y="226" width="114" height="26" rx="5" fill="#0f172a" stroke="#38bdf8" stroke-width="1" />
+  <text x="809" y="243" text-anchor="middle" class="code-mini">users { _id: 1 }</text>
+  <path d="M 809 252 L 809 266" class="flow-dash" marker-end="url(#arrowBlue)" />
+  <rect x="752" y="268" width="114" height="26" rx="5" fill="#0f172a" stroke="#a855f7" stroke-width="1" />
+  <text x="809" y="285" text-anchor="middle" class="code-mini">posts { userId: 1 }</text>
+</svg>

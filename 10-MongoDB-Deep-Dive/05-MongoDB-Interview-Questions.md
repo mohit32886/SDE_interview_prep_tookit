@@ -13,14 +13,37 @@
 5. [Schema Design Scenarios](#5-schema-design-scenarios)
 6. [MongoDB vs Other Databases](#6-mongodb-vs-other-databases)
 7. [Java / Spring Data MongoDB](#7-java--spring-data-mongodb)
+8. [Quick Revision Table](#quick-revision-table)
 
 ---
 
 ## 1. Fundamentals
 
+![MongoDB Interview Decision Matrix](./assets/05-mongodb-interview-hub.svg)
+
+```mermaid
+flowchart TD
+    Q["Data Modeling Decision"] --> A{"Accessed together &amp; bounded?"}
+    A -->|Yes| E["Embed Document (16MB max)"]
+    A -->|No / Unbounded| R["Reference in Separate Collection"]
+    E --> S{"Exceeds 16MB?"}
+    S -->|Files &gt; 16MB| G["GridFS (255KB chunks)"]
+    S -->|Time-series / Logs| B["Bucket or Subset Pattern"]
+    S -->|Within limit| OK["Atomic Single-Doc Updates"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    class Q,A,S blue
+    class E,OK green
+    class R,B amber
+    class G purple
+```
+
 ### Q1: What is MongoDB and how does it differ from relational databases?
 
-MongoDB is a document-oriented NoSQL database that stores data as flexible JSON-like documents (BSON). Key differences:
+MongoDB is a document-oriented NoSQL database that stores data as flexible JSON-like documents (BSON).
 
 | Aspect | MongoDB | Relational (PostgreSQL/MySQL) |
 |--------|---------|-------------------------------|
@@ -30,11 +53,10 @@ MongoDB is a document-oriented NoSQL database that stores data as flexible JSON-
 | Scaling | Horizontal (sharding built-in) | Primarily vertical |
 | Transactions | Multi-doc transactions (4.0+) | Full ACID from day one |
 | Query Language | MQL (MongoDB Query Language) | SQL |
-| JOINs | $lookup (limited) | Full JOIN support |
+| JOINs | `$lookup` (limited) | Full JOIN support |
 
-**When to use MongoDB:** High write throughput, flexible/evolving schemas, hierarchical data, rapid prototyping, event logging, content management, real-time analytics.
-
-**When NOT to use:** Complex multi-table JOINs, strict ACID across many entities, mature relational data with deep relationships.
+- **Use MongoDB for:** High write throughput, flexible/evolving schemas, hierarchical data, rapid prototyping, event logging, CMS, real-time analytics.
+- **Avoid MongoDB for:** Complex multi-table JOINs, strict ACID across many entities, mature relational data with deep relationships.
 
 ---
 
@@ -50,25 +72,21 @@ BSON (Binary JSON) is the binary-encoded serialization format MongoDB uses inter
 | Size | Smaller for simple docs | Slightly larger (stores field lengths) |
 | Speed | Slower to parse | Faster encode/decode |
 
-BSON enables MongoDB to efficiently traverse documents without parsing the entire structure — critical for query performance.
+BSON enables MongoDB to traverse documents via field offsets without parsing the entire structure — critical for query performance.
 
 ---
 
 ### Q3: Explain ObjectId. How is it generated? Can it collide?
 
-ObjectId is a 12-byte unique identifier:
+ObjectId is a **12-byte** unique identifier:
 
-```
-|  4 bytes  |  5 bytes  |  3 bytes  |
-| timestamp | random    | counter   |
-| (seconds) | (per-process unique) | (incrementing) |
-```
+| Segment | Size | Purpose |
+|---------|------|---------|
+| **Timestamp** | 4 bytes | Unix epoch in seconds — gives creation time for free |
+| **Random value** | 5 bytes | Unique per machine + process |
+| **Counter** | 3 bytes | Starts from random value, increments per process |
 
-- **Timestamp (4 bytes):** Unix epoch in seconds — gives you creation time for free
-- **Random value (5 bytes):** Unique per machine + process
-- **Counter (3 bytes):** Starts from random value, increments per process
-
-**Collision probability:** Virtually zero. You'd need the same second, same machine, same process, and exhaust the 16 million counter values (2^24).
+- **Collision probability:** Virtually zero. Requires the same second, same machine, same process, and exhausting $2^{24}$ (~16.7 million) counter values.
 
 ```java
 // Extract creation time from ObjectId
@@ -76,26 +94,20 @@ ObjectId id = new ObjectId("507f1f77bcf86cd799439011");
 Date created = id.getDate(); // Returns timestamp embedded in ID
 ```
 
-**Interview tip:** ObjectIds are roughly sortable by creation time (because timestamp is the first component), which makes them decent for range queries on insertion order — but NOT perfectly ordered across distributed systems.
+> [!TIP]
+> ObjectIds are roughly sortable by creation time (timestamp is the leading component), making them decent for range queries on insertion order — though NOT strictly ordered across distributed systems.
 
 ---
 
 ### Q4: Embedded documents vs References — how do you decide?
 
-**Embed when:**
-- Data is accessed together (e.g., user + address)
-- One-to-few relationship (user has 2-3 addresses)
-- Data doesn't change independently
-- You want atomic single-document updates
-- Read performance is priority
-
-**Reference when:**
-- Data is accessed independently
-- One-to-many with unbounded growth (user has 10,000 orders)
-- Many-to-many relationships
-- Document would exceed 16MB limit
-- Data changes independently and frequently
-- You need to avoid data duplication
+| Embed When | Reference When |
+|------------|----------------|
+| Data is accessed together (e.g., user + address) | Data is accessed independently |
+| One-to-few relationship (2–3 addresses) | One-to-many with unbounded growth (10,000 orders) |
+| Data doesn't change independently | Many-to-many relationships |
+| Atomic single-document updates needed | Document would exceed 16MB limit |
+| Read performance is priority | Data changes independently or deduplication needed |
 
 ```javascript
 // Embedded (denormalized)
@@ -115,18 +127,19 @@ Date created = id.getDate(); // Returns timestamp embedded in ID
 { _id: ObjectId("a1"), type: "home", city: "Kolkata", zip: "700001" }
 ```
 
-**Rule of thumb:** If in doubt, embed. MongoDB is optimized for embedded reads. Only reference when you have a compelling reason.
+> [!NOTE]
+> **Rule of thumb:** When in doubt, embed. MongoDB is optimized for embedded reads; only reference when you have a compelling reason.
 
 ---
 
 ### Q5: What is the 16MB document size limit? How do you handle large data?
 
-MongoDB enforces a 16MB BSON document size limit. Strategies for large data:
+MongoDB enforces a **16MB BSON document size limit**. Strategies for large data:
 
-1. **GridFS:** For files >16MB. Splits file into 255KB chunks stored in `fs.chunks`, metadata in `fs.files`
-2. **Subset pattern:** Store only the most recent/relevant subset in the document, archive the rest
-3. **Bucket pattern:** Group related data into time-based buckets (e.g., IoT readings per hour)
-4. **Reference pattern:** Move large arrays to separate collection, store references
+1. **GridFS:** For files >16MB. Splits file into 255KB chunks in `fs.chunks` and metadata in `fs.files`.
+2. **Subset pattern:** Store only the most recent/relevant subset in the document; archive the rest.
+3. **Bucket pattern:** Group related data into time-based buckets (e.g., IoT readings per hour/day).
+4. **Reference pattern:** Move large arrays to a separate collection and store references.
 
 ```javascript
 // Bucket pattern for time-series data
@@ -160,14 +173,15 @@ MongoDB enforces a 16MB BSON document size limit. Strategies for large data:
 **Read Concern** — consistency level for read operations:
 
 | Read Concern | Meaning |
-|-------------|---------|
+|--------------|---------|
 | `local` (default) | Returns most recent data on the node (may be rolled back) |
-| `available` | Like local, but for sharded clusters |
+| `available` | Like `local`, but for sharded clusters |
 | `majority` | Returns data acknowledged by majority (won't be rolled back) |
 | `linearizable` | Strongest — reflects all successful majority-committed writes before the read |
 | `snapshot` | For multi-document transactions |
 
-**Interview answer:** "For financial systems like at Barclays, I'd use `w: majority` with `j: true` for critical writes (trade confirmations, settlements) to ensure durability, and `readConcern: majority` to avoid reading data that could be rolled back. For logging or analytics, `w: 1` is sufficient."
+> [!IMPORTANT]
+> **Interview answer:** "For financial systems like at Barclays, I'd use `w: majority` with `j: true` for critical writes (trade confirmations, settlements) to ensure durability, and `readConcern: majority` to avoid reading data that could be rolled back. For logging or analytics, `w: 1` is sufficient."
 
 ---
 
@@ -175,40 +189,69 @@ MongoDB enforces a 16MB BSON document size limit. Strategies for large data:
 
 WiredTiger (default since MongoDB 3.2):
 
-- **Document-level concurrency control:** Uses optimistic concurrency with document-level locks (not collection or database level)
-- **Compression:** Supports snappy (default), zlib, zstd for data; prefix compression for indexes
-- **Cache:** Internal cache (default: 50% of RAM - 1GB). Keeps frequently accessed data in memory
-- **Journaling:** Write-ahead log (WAL) for crash recovery. Writes go to journal first, then to data files
-- **Checkpoints:** Creates consistent snapshots of data every 60 seconds
+- **Document-level concurrency control:** Optimistic concurrency with document-level locks (not collection or database level).
+- **Compression:** `snappy` (default), `zlib`, `zstd` for data; prefix compression for indexes.
+- **Cache:** Internal cache (default: `50% of RAM - 1GB`) keeps hot data in memory.
+- **Journaling:** Write-ahead log (WAL) for crash recovery — writes go to journal first, then data files.
+- **Checkpoints:** Creates consistent data snapshots every 60 seconds.
 
+```mermaid
+flowchart LR
+    C["Client"] --> WTC["WiredTiger Cache (In-Memory)"]
+    WTC -->|Write Path| J["Journal (WAL)"]
+    J --> CP["Checkpoint (60s)"]
+    CP --> D["Disk Data Files"]
+    C -->|Read Hit| WTC
+    WTC -->|Read Miss| D
+    D -->|Populate| WTC
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class C blue
+    class WTC,J green
+    class CP,D amber
 ```
-Write Path:
-Client → In-Memory (WiredTiger Cache) → Journal (WAL) → Checkpoint → Disk
 
-Read Path:
-Client → WiredTiger Cache (hit?) → Disk (miss) → Cache (populate)
-```
-
-**Interview tip:** When asked "how does MongoDB handle concurrent writes," explain document-level locking with WiredTiger — not the old MMAPv1 collection-level locking.
+> [!TIP]
+> When asked "how does MongoDB handle concurrent writes," explain **document-level locking with WiredTiger** — not the legacy MMAPv1 collection-level locking.
 
 ---
 
 ### Q8: What happens when a document is updated? Does MongoDB update in-place?
 
 WiredTiger uses a **no-overwrite** storage model:
-1. The original document stays on disk
-2. A new version is written to a new location
-3. Internal data structures are updated to point to the new location
-4. Old versions are cleaned up during checkpoints
+1. The original document stays on disk.
+2. A new version is written to a new location.
+3. Internal data structures are updated to point to the new location.
+4. Old versions are reclaimed during checkpoints.
 
-This means:
-- Updates that grow the document DON'T need to find contiguous space (unlike MMAPv1)
-- Compression works better because data is written sequentially
-- Reads can happen concurrently with writes (MVCC - Multi-Version Concurrency Control)
+**Benefits:**
+- Growing documents don't require contiguous space reallocation (unlike MMAPv1).
+- Sequential writes improve compression efficiency.
+- Reads run concurrently with writes via **MVCC** (Multi-Version Concurrency Control).
 
 ---
 
 ## 2. Querying & Aggregation
+
+```mermaid
+flowchart LR
+    M1["1. $match Early (Uses Index)"] --> G["2. $group (Aggregates Filtered Set)"]
+    G --> SL["3. $sort + $limit (Top-K Coalesced)"]
+    SL --> L["4. $lookup (Left Outer Join)"]
+    L --> U["5. $unwind (Flatten Array)"]
+    U --> P["6. $project (Shape Output)"]
+
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    class M1 green
+    class G,SL blue
+    class L,U amber
+    class P purple
+```
 
 ### Q9: Write an aggregation pipeline to find the top 3 customers by total order amount.
 
@@ -297,14 +340,15 @@ List<CustomerSpending> results = mongoTemplate
 ```
 
 **Limitations:**
-- Foreign collection must be in the SAME database (until 5.1 which supports cross-db)
-- Foreign collection CANNOT be sharded (until 5.1)
-- No index hint support on the foreign pipeline
-- Performance degrades with large foreign collections — no hash join optimization
-- Returns an array (even for 1:1) — must $unwind for flat results
-- Nested $lookup is possible but becomes hard to optimize
+- Foreign collection must be in the **same database** (cross-db supported in 5.1+).
+- Foreign collection **cannot be sharded** (until 5.1).
+- No index hint support on the foreign pipeline.
+- Performance degrades with large foreign collections (no hash join optimization).
+- Always returns an array (even for 1:1) — requires `$unwind` for flat results.
+- Nested `$lookup` is possible but hard to optimize.
 
-**Interview tip:** "If I find myself using many $lookups, it usually signals that my schema design needs rethinking. MongoDB works best with embedded documents that minimize cross-collection queries."
+> [!TIP]
+> "If I find myself using many `$lookup`s, it usually signals that my schema design needs rethinking. MongoDB works best with embedded documents that minimize cross-collection queries."
 
 ---
 
@@ -322,12 +366,12 @@ List<CustomerSpending> results = mongoTemplate
 { _id: 1, tags: "mongodb" }
 ```
 
-**Edge cases:**
-- If `tags` is empty `[]` → document is **dropped** by default
-- If `tags` is missing → document is **dropped** by default
-- If `tags` is not an array → document passes through as-is
+| Case | Default Behavior | With `preserveNullAndEmptyArrays: true` |
+|------|------------------|-----------------------------------------|
+| `tags: []` | Document **dropped** | Document kept (`tags` omitted) |
+| `tags` missing / `null` | Document **dropped** | Document kept |
+| `tags` not an array | Passes through as-is | Passes through as-is |
 
-**Preserve null/empty:**
 ```javascript
 { $unwind: {
     path: "$tags",
@@ -340,15 +384,30 @@ List<CustomerSpending> results = mongoTemplate
 
 ### Q12: How would you implement pagination in MongoDB? What are the pitfalls of skip/limit?
 
-**Naive approach (skip/limit):**
+```mermaid
+flowchart TD
+    P["Pagination Request"] --> T{"Need arbitrary page jumps?"}
+    T -->|"No (Infinite Scroll / Next)"| C["Cursor-Based: _id &gt; lastId + limit(20)"]
+    T -->|"Yes (Page N)"| S["skip(N * 20).limit(20)"]
+    C --> CO["O(log N) Index Seek — Constant Time"]
+    S --> SO["Linear Scan — Discards Skipped Docs"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class P,T blue
+    class C,CO green
+    class S,SO red
+```
+
+**Naive approach (`skip`/`limit`):**
 ```javascript
 // Page 3, 20 items per page
 db.products.find().sort({ _id: 1 }).skip(40).limit(20)
 ```
+- **Pitfall:** `skip(100000)` still scans 100K documents and discards them — linear degradation.
 
-**Problem:** `skip(40)` still scans 40 documents and discards them. At `skip(100000)`, it's scanning 100K docs. Performance degrades linearly.
-
-**Better approach — Range-based pagination (cursor-based):**
+**Better approach — Range-based (cursor) pagination:**
 ```javascript
 // First page
 db.products.find().sort({ _id: 1 }).limit(20)
@@ -357,10 +416,7 @@ db.products.find().sort({ _id: 1 }).limit(20)
 // Next page — seek directly using index
 db.products.find({ _id: { $gt: ObjectId("abc123") } }).sort({ _id: 1 }).limit(20)
 ```
-
-**Benefits:** Uses index to seek directly. Constant time regardless of page number. No scanning of skipped documents.
-
-**Trade-off:** Can't jump to "page 50" directly. Best for "infinite scroll" or "load more" UIs, not traditional page-numbered navigation.
+- **Trade-off:** Constant-time index seek regardless of page depth, but cannot jump directly to arbitrary page numbers (e.g., "page 50").
 
 ```java
 // Spring Data MongoDB — cursor-based
@@ -387,25 +443,41 @@ List<Product> findNextPage(ObjectId lastId, Pageable pageable);
 ```
 
 **Pipeline optimization rules:**
-1. **$match moves before $project/$addFields** when it doesn't depend on projected fields
-2. **$match at the start** can use indexes; after $group it CANNOT
-3. **Adjacent $match stages** are coalesced into one
-4. **$sort + $limit** coalesced into a top-k sort (memory efficient)
-5. **$project + $skip/$limit** — projection moves after skip/limit to reduce work
+1. `$match` moves before `$project`/`$addFields` when independent of projected fields.
+2. `$match` at the start **can use indexes**; after `$group` it **cannot**.
+3. Adjacent `$match` stages are coalesced into one.
+4. `$sort` + `$limit` are coalesced into a memory-efficient top-k sort.
+5. `$project` moves after `$skip`/`$limit` to reduce work.
 
-**Interview answer:** "I always put $match as early as possible in the pipeline. MongoDB's query optimizer will try to move $match before $project, but it can't move it before $group. So the order I write it in matters for performance — filtering 1 million documents down to 10,000 before grouping is dramatically different from grouping 1 million first."
+> [!IMPORTANT]
+> "I always put `$match` as early as possible. The optimizer can move `$match` before `$project`, but never before `$group`. Filtering 1M documents down to 10K before grouping is orders of magnitude faster than grouping 1M first."
 
 ---
 
 ## 3. Indexing & Performance
 
+```mermaid
+flowchart LR
+    E["1. Equality (status: 'shipped')"] --> S["2. Sort (date: -1)"]
+    S --> R["3. Range (price: $gt 50)"]
+    R --> G["Index Preserves Sort Order (No In-Memory SORT)"]
+
+    E2["1. Equality"] --> R2["2. Range"]
+    R2 --> S2["3. Sort"]
+    S2 --> B["Range Breaks Sort Order → SORT_KEY_GENERATOR"]
+
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class E,S,R,G green
+    class E2,R2,S2,B red
+```
+
 ### Q14: Explain the ESR (Equality, Sort, Range) rule for compound indexes.
 
-The ESR rule is the optimal order for fields in a compound index:
-
-1. **E (Equality)** — Fields tested with exact match (`{ status: "active" }`)
-2. **S (Sort)** — Fields used in sort (`sort({ date: -1 })`)
-3. **R (Range)** — Fields tested with range (`{ price: { $gt: 100 } }`)
+The ESR rule defines the optimal field order in a compound index:
+1. **E (Equality):** Exact-match fields (`{ status: "active" }`)
+2. **S (Sort):** Fields used in `.sort()` (`sort({ date: -1 })`)
+3. **R (Range):** Range predicates (`{ price: { $gt: 100 } }`)
 
 ```javascript
 // Query
@@ -416,32 +488,24 @@ db.orders.find({
 
 // OPTIMAL index (ESR order)
 db.orders.createIndex({ status: 1, date: -1, price: 1 })
-
-// WHY this order:
-// 1. status = "shipped" → narrows to exact subset (E)
-// 2. date: -1 → already sorted in index, no in-memory sort needed (S)
-// 3. price range → scans within the sorted subset (R)
 ```
 
-**Why not E-R-S?**
-If you put Range before Sort: `{ status: 1, price: 1, date: -1 }`
-- After equality match on status, MongoDB scans the price range
-- But within that price range, documents are NOT sorted by date
-- So MongoDB must do an in-memory sort → SORT_KEY_GENERATOR in explain plan
+- **Why not E-R-S (`{ status: 1, price: 1, date: -1 }`)?** Within the `price` range, documents are NOT sorted by `date`, forcing MongoDB to perform an in-memory sort (`SORT_KEY_GENERATOR` in `explain()`).
 
-**Interview tip:** "The key insight is that range predicates break the sort order in the index. By putting sort between equality and range, we preserve the index's sort order and avoid an in-memory sort, which is critical for large result sets."
+> [!TIP]
+> "Range predicates break sort order in a B-tree index. Putting Sort between Equality and Range preserves the index's sort order and eliminates in-memory sorts."
 
 ---
 
 ### Q15: What is a covered query? How do you achieve it?
 
-A covered query is answered entirely from the index without accessing the actual documents.
+A covered query is answered **entirely from the index** without fetching any documents from disk.
 
 **Requirements:**
-1. All fields in the query filter are part of the index
-2. All fields in the projection are part of the index
-3. No field in the projection is an array (arrays need document access)
-4. `_id` is excluded from projection (unless it's in the index)
+1. All fields in the query filter are in the index.
+2. All fields in the projection are in the index.
+3. No projected field is an array.
+4. `_id` is excluded from projection (unless included in the index).
 
 ```javascript
 // Index
@@ -449,22 +513,15 @@ db.users.createIndex({ email: 1, name: 1, status: 1 })
 
 // Covered query — all fields in index
 db.users.find(
-  { email: "mohit@example.com" },   // Filter: email in index ✓
-  { name: 1, status: 1, _id: 0 }    // Projection: name, status in index ✓, _id excluded ✓
+  { email: "mohit@example.com" },   // Filter: email in index
+  { name: 1, status: 1, _id: 0 }    // Projection: name, status in index, _id excluded
 )
+// explain(): totalDocsExamined: 0, totalKeysExamined: 1, stage: "IXSCAN" (no FETCH)
 
-// explain() output for covered query:
-// totalDocsExamined: 0        ← No documents accessed!
-// totalKeysExamined: 1        ← Only index scanned
-// executionStages: "IXSCAN"   ← Index scan only, no FETCH
-```
-
-**NOT covered (needs FETCH stage):**
-```javascript
-// This requires document access because 'age' is not in the index
+// NOT covered — 'age' is not in the index, so MongoDB must FETCH document
 db.users.find(
   { email: "mohit@example.com" },
-  { name: 1, age: 1, _id: 0 }    // 'age' not in index → must FETCH document
+  { name: 1, age: 1, _id: 0 }
 )
 ```
 
@@ -472,13 +529,31 @@ db.users.find(
 
 ### Q16: How do you read and interpret an explain() plan?
 
+```mermaid
+flowchart TD
+    EX["explain('executionStats')"] --> ST{"executionStages.stage"}
+    ST -->|COLLSCAN| BAD1["Red Flag: Add Index"]
+    ST -->|SORT| BAD2["Red Flag: Fix ESR Index Order"]
+    ST -->|IXSCAN only| COV["Ideal: Covered Query (0 Docs Examined)"]
+    ST -->|IXSCAN → FETCH| RAT{"totalDocsExamined ≈ nReturned?"}
+    RAT -->|Yes| GOOD["Healthy Indexed Query"]
+    RAT -->|"No (&gt;&gt; nReturned)"| SEL["Improve Index Selectivity"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class EX,ST,RAT blue
+    class COV,GOOD green
+    class SEL amber
+    class BAD1,BAD2 red
+```
+
 ```javascript
 db.orders.find({ status: "active", amount: { $gt: 100 } })
          .sort({ date: -1 })
          .explain("executionStats")
 ```
-
-**Key fields to check:**
 
 ```
 executionStats: {
@@ -488,7 +563,7 @@ executionStats: {
   totalDocsExamined: 850,      // Documents fetched from disk
 
   executionStages: {
-    stage: "SORT",             // ⚠️ In-memory sort (bad for large sets)
+    stage: "SORT",             // In-memory sort (bad for large sets)
     memUsage: 3245678,         // Memory used for sort
     inputStage: {
       stage: "FETCH",          // Fetching documents from disk
@@ -506,23 +581,18 @@ executionStats: {
 }
 ```
 
-**Red flags in explain:**
-- `COLLSCAN` → Full collection scan, no index used
-- `SORT` stage → In-memory sort, index not covering sort order
-- `totalDocsExamined >> nReturned` → Scanning too many documents
-- `totalKeysExamined >> nReturned` → Index not selective enough
-- `memUsage > 33554432` → Sort exceeds 100MB limit, will fail
-
-**Ideal plan:**
-- `IXSCAN → FETCH → (no SORT)` — Index handles both filter and sort
-- `totalDocsExamined ≈ nReturned` — Examined only what was returned
-- No `SORT_KEY_GENERATOR` — Sort handled by index
+| Red Flags | Ideal Plan |
+|-----------|------------|
+| `COLLSCAN` (full collection scan) | `IXSCAN` → `FETCH` (no `SORT`) |
+| `SORT` stage / `memUsage > 32MB` (100MB cap) | Sort handled by index (no `SORT_KEY_GENERATOR`) |
+| `totalDocsExamined >> nReturned` | `totalDocsExamined ≈ nReturned` |
+| `totalKeysExamined >> nReturned` | Selective index bounds |
 
 ---
 
 ### Q17: What are TTL indexes? When would you use them?
 
-TTL (Time-To-Live) indexes automatically delete documents after a specified time.
+TTL (Time-To-Live) indexes automatically delete documents after a specified duration.
 
 ```javascript
 // Delete documents 30 days after 'createdAt'
@@ -533,19 +603,14 @@ db.events.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 })
 // Then set per-document: { expiresAt: ISODate("2025-06-15T00:00:00Z") }
 ```
 
-**Use cases:** Session management, temporary tokens, log rotation, GDPR auto-deletion, cache expiry.
-
-**Caveats:**
-- Background thread runs every 60 seconds (not instant deletion)
-- Only works on single-field indexes with date values
-- Cannot be compound indexes
-- Not suitable for precise time-based deletion (60s granularity)
+- **Use cases:** Session management, temporary tokens, log rotation, GDPR auto-deletion, cache expiry.
+- **Caveats:** Background thread runs every **60 seconds** (not instant), single-field date index only, cannot be compound.
 
 ---
 
 ### Q18: What are partial indexes? When are they useful?
 
-Partial indexes only index documents that match a filter expression.
+Partial indexes only index documents matching a `partialFilterExpression`.
 
 ```javascript
 // Only index active orders (most queries only care about active)
@@ -555,17 +620,14 @@ db.orders.createIndex(
 )
 ```
 
-**Benefits:**
-- Smaller index size (less RAM, faster operations)
-- Faster writes (only active documents update the index)
-- More focused query optimization
+- **Benefits:** Smaller index footprint (less RAM), faster writes (inactive docs don't update the index).
+- **Rule:** Queries must include the partial filter condition to use the index:
 
-**Important:** The query must include the partial filter condition for MongoDB to use the index:
 ```javascript
-// ✓ Will use partial index
+// Will use partial index
 db.orders.find({ customer_id: "c1", status: "active" })
 
-// ✗ Will NOT use partial index (no status filter)
+// Will NOT use partial index (no status filter)
 db.orders.find({ customer_id: "c1" })
 ```
 
@@ -573,74 +635,64 @@ db.orders.find({ customer_id: "c1" })
 
 ## 4. Architecture & Operations
 
+```mermaid
+sequenceDiagram
+    participant P as Primary
+    participant S1 as Secondary 1 (Recent Oplog)
+    participant S2 as Secondary 2
+    participant D as Driver
+
+    P->>S1: Oplog Replication + Heartbeat (2s)
+    P->>S2: Oplog Replication + Heartbeat (2s)
+    Note over P: Primary becomes unreachable
+    S1--xP: Heartbeat Timeout (10s)
+    S1->>S2: Call Election (Request Vote)
+    S2-->>S1: Majority Vote Granted (2/3)
+    Note over S1: S1 promoted to Primary (~10-12s total)
+    D->>S1: Redirect Writes to New Primary
+```
+
 ### Q19: Explain MongoDB replica set architecture. How does failover work?
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   PRIMARY    │────▶│  SECONDARY  │────▶│  SECONDARY  │
-│  (reads +    │     │  (reads if  │     │  (reads if  │
-│   writes)    │     │  configured)│     │  configured)│
-└──────┬───────┘     └──────┬──────┘     └──────┬──────┘
-       │                    │                    │
-       │◀──── Oplog Replication ────▶│           │
-       │                    │◀────────────────▶│ │
-       └────────────────────┴────────────────────┘
-                    Heartbeat (every 2s)
-```
+A replica set consists of a **Primary** (all writes + default reads) and **Secondaries** (replicate via oplog; optional reads) connected by **2-second heartbeats**.
 
-**Failover process:**
-1. Primary becomes unreachable (heartbeat timeout: 10s default)
-2. Secondaries notice missing heartbeats
-3. Eligible secondary calls for election
-4. Members vote (need majority: for 3-node set, need 2 votes)
-5. Winning secondary becomes new primary (typically 10-12 seconds total)
-6. Drivers detect new primary and redirect writes
+**Failover process (10–12s total):**
+1. Primary becomes unreachable (default heartbeat timeout: **10s**).
+2. Secondaries detect missing heartbeats and an eligible secondary calls an election.
+3. Members vote (requires **majority**: 2 of 3 nodes).
+4. Winning secondary becomes the new Primary; drivers automatically redirect writes.
 
-**Election criteria:**
-- Member with most recent oplog entry preferred
-- Priority settings (higher = more likely to be elected)
-- Members with `priority: 0` can never become primary
-- Hidden members can vote but can't become primary
-- Arbiters vote but hold no data
+**Election criteria & node roles:**
+- Most recent oplog entry + higher `priority` preferred.
+- `priority: 0` or **Hidden** members can vote but cannot become Primary.
+- **Arbiters** vote without holding data (avoid in production when possible).
 
 ---
 
 ### Q20: How does sharding work? What makes a good shard key?
 
-**Architecture:**
-```
-        Client Application
-              │
-        ┌─────▼─────┐
-        │   mongos   │  ← Query router
-        │  (router)  │
-        └─────┬──────┘
-              │
-    ┌─────────┼─────────┐
-    ▼         ▼         ▼
-┌────────┐ ┌────────┐ ┌────────┐
-│Config  │ │Config  │ │Config  │  ← Metadata (which chunks on which shard)
-│Server 1│ │Server 2│ │Server 3│
-└────────┘ └────────┘ └────────┘
+```mermaid
+flowchart TD
+    App["Client Application"] --> M["mongos (Query Router)"]
+    M --> CS["Config Servers (3-Node RS: Chunk Metadata)"]
+    M --> SH1["Shard 1 (Replica Set)"]
+    M --> SH2["Shard 2 (Replica Set)"]
+    M --> SH3["Shard 3 (Replica Set)"]
 
-    ┌─────────┼─────────┐
-    ▼         ▼         ▼
-┌────────┐ ┌────────┐ ┌────────┐
-│Shard 1 │ │Shard 2 │ │Shard 3 │  ← Each shard is a replica set
-│(RS)    │ │(RS)    │ │(RS)    │
-└────────┘ └────────┘ └────────┘
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class App,M blue
+    class CS purple
+    class SH1,SH2,SH3 green
 ```
-
-**Good shard key properties:**
 
 | Property | Good | Bad |
 |----------|------|-----|
-| High cardinality | `user_id` (millions of values) | `status` (3-4 values) |
+| High cardinality | `user_id` (millions of values) | `status` (3–4 values) |
 | Even distribution | `hashed(user_id)` | `timestamp` (monotonic) |
-| Query targeting | Queries include shard key | Queries need scatter-gather |
-| Not monotonic | Random or hashed | Auto-increment, ObjectId, timestamp |
-
-**Shard key examples:**
+| Query targeting | Queries include shard key | Scatter-gather across all shards |
+| Not monotonic | Random or hashed | Auto-increment, `ObjectId`, `timestamp` |
 
 ```javascript
 // BAD: monotonic, creates hotspot on last shard
@@ -653,22 +705,23 @@ sh.shardCollection("db.logs", { timestamp: "hashed" })
 sh.shardCollection("db.orders", { customer_id: 1, order_date: 1 })
 ```
 
-**Critical interview point:** Shard key is IMMUTABLE after 4.4 (can refine but not change). Choosing wrong = resharding entire collection. This is the single most important decision in MongoDB sharding.
+> [!WARNING]
+> **Critical interview point:** Shard keys are immutable (can be refined in 4.4+ or resharded in 5.0+ with overhead, but choosing wrong initially is costly). It is the single most important sharding decision.
 
 ---
 
 ### Q21: Explain MongoDB transactions. When should you avoid them?
 
-**Single-document atomicity (always available):**
+**Single-document atomicity (always available, zero transaction overhead):**
 ```javascript
-// This is atomic without explicit transaction
+// Atomic without explicit transaction
 db.accounts.updateOne(
   { _id: "acc1" },
   { $inc: { balance: -100 }, $push: { transactions: { amount: -100, date: new Date() } } }
 )
 ```
 
-**Multi-document transactions (4.0+ for replica sets, 4.2+ for sharded):**
+**Multi-document transactions (4.0+ replica sets, 4.2+ sharded):**
 ```java
 // Spring Data MongoDB transaction
 @Transactional
@@ -692,18 +745,19 @@ public void transferFunds(String fromId, String toId, double amount) {
 ```
 
 **When to AVOID transactions:**
-- If you can redesign schema to use single-document atomicity (preferred)
-- High-throughput scenarios (transactions add ~2x latency)
-- Long-running operations (60s default timeout)
-- Cross-shard transactions (even higher overhead)
+- When schema redesign can achieve single-document atomicity.
+- High-throughput paths (adds ~2x latency).
+- Long-running operations (60s default timeout).
+- Cross-shard transactions (high coordination overhead).
 
-**Interview answer:** "In MongoDB, the first question isn't 'how do I use transactions' but 'can I redesign my schema to avoid them?' Embedding related data in a single document gives you atomicity for free. I'd only reach for multi-document transactions when the data genuinely belongs in separate collections and consistency is critical."
+> [!IMPORTANT]
+> "In MongoDB, the first question isn't 'how do I use transactions' but 'can I redesign my schema to avoid them?' Embedding related data gives atomicity for free."
 
 ---
 
 ### Q22: What are Change Streams? How would you use them?
 
-Change Streams allow applications to watch real-time changes on collections, databases, or entire deployments.
+Change Streams allow applications to subscribe to real-time changes on collections, databases, or entire deployments (requires replica set or sharded cluster).
 
 ```java
 // Spring Data MongoDB — watch for changes
@@ -735,9 +789,7 @@ public class OrderChangeListener {
 }
 ```
 
-**Use cases:** Event-driven architectures, real-time sync between services, audit logging, cache invalidation, triggering notifications.
-
-**Requires:** Replica set or sharded cluster (not standalone).
+- **Use cases:** Event-driven architectures, real-time sync between services, audit logging, cache invalidation, notifications.
 
 ---
 
@@ -750,20 +802,46 @@ public class OrderChangeListener {
 | MongoDB Atlas continuous backup | Cloud | Zero impact | Yes (to the second) |
 | Ops Manager / Cloud Manager | Enterprise | Low impact | Yes |
 
-**Best practice for production:**
-1. Use filesystem snapshots for fast recovery
-2. Enable journaling (`j: true`) for consistency
-3. Back up from a secondary to avoid impacting primary
-4. Test restores regularly (backup is useless if you can't restore)
-5. Store oplog for point-in-time recovery
+**Production best practices:** Use filesystem snapshots with journaling (`j: true`), back up from a **secondary**, store oplog for point-in-time recovery, and test restores regularly.
 
 ---
 
 ## 5. Schema Design Scenarios
 
-### Q24: Design a MongoDB schema for an e-commerce platform.
+```mermaid
+erDiagram
+    USERS ||--o{ ORDERS : places
+    USERS ||--o{ REVIEWS : writes
+    PRODUCTS ||--o{ REVIEWS : receives
+    USERS {
+        ObjectId _id
+        string email
+        array addresses_embedded
+        array paymentMethods_tokens
+    }
+    PRODUCTS {
+        ObjectId _id
+        string slug
+        object category_embedded
+        array variants_embedded
+        object ratings_summary
+    }
+    ORDERS {
+        ObjectId _id
+        ObjectId userId
+        array items_snapshot
+        array statusHistory_embedded
+        string status
+    }
+    REVIEWS {
+        ObjectId _id
+        ObjectId productId
+        ObjectId userId
+        int rating
+    }
+```
 
-**Collections:**
+### Q24: Design a MongoDB schema for an e-commerce platform.
 
 ```javascript
 // 1. products — catalog items
@@ -848,11 +926,7 @@ db.orders.createIndex({ status: 1, createdAt: -1 })
 db.reviews.createIndex({ productId: 1, createdAt: -1 })
 ```
 
-**Design decisions explained:**
-- Products embed variants and specs (accessed together, bounded)
-- Orders embed item snapshots (price at time of order must be preserved)
-- Reviews are separate (unbounded per product, queried independently)
-- Category path stored as string for tree queries (`/^Electronics/`)
+- **Design rationale:** Products embed bounded variants/specs; Orders snapshot item prices at purchase time; Reviews live in a separate collection (unbounded); Category path string enables tree queries (`/^Electronics/`).
 
 ---
 
@@ -897,52 +971,54 @@ db.reviews.createIndex({ productId: 1, createdAt: -1 })
 }
 ```
 
-**Fan-out strategy:**
-- Regular users (<10K followers): Fan-out on write (pre-populate followers' feeds)
-- Celebrity users (>10K followers): Fan-out on read (merge at query time)
-- Hybrid approach handles the "celebrity problem"
+**Hybrid fan-out strategy:**
+- **Regular users (<10K followers):** Fan-out on write (pre-populate followers' feeds).
+- **Celebrity users (>10K followers):** Fan-out on read (merge at query time) to avoid massive write amplification.
 
 ---
 
 ### Q26: How would you migrate from SQL Server to MongoDB?
 
-This is directly relevant to the Barclays experience. Strategy:
+```mermaid
+flowchart LR
+    P1["Phase 1: Analysis (2-4w)"] --> P2["Phase 2: Schema Design (1-2w)"]
+    P2 --> P3["Phase 3: Dual-Write + Sync/Verify"]
+    P3 --> P4["Phase 4: Cutover (SQL Read-Only 2-4w)"]
 
-**Phase 1: Analysis (2-4 weeks)**
-- Map SQL tables to MongoDB collections
-- Identify JOIN-heavy queries → candidates for embedding
-- Identify 1:1 and 1:few relationships → embed
-- Identify 1:many unbounded → reference
-- Map stored procedures to aggregation pipelines or application logic
-
-**Phase 2: Schema Design (1-2 weeks)**
-- Design target MongoDB schema
-- Create validation rules
-- Plan indexes based on query patterns
-- Design migration scripts
-
-**Phase 3: Dual-Write Migration**
-```
-SQL Server ──write──▶ Application ──write──▶ MongoDB
-     │                                          │
-     └──────── Sync/Verify Script ─────────────┘
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    class P1,P2 blue
+    class P3 amber
+    class P4 green
 ```
 
-- Application writes to both databases
-- Background job syncs historical data
-- Verify data consistency between both
-- Gradually shift reads to MongoDB
-- Once confident, cut over writes
-
-**Phase 4: Cutover**
-- Stop dual-write
-- MongoDB becomes primary
-- Keep SQL Server read-only for rollback (2-4 weeks)
-- Decommission SQL Server
+1. **Phase 1 — Analysis (2–4 weeks):** Map SQL tables to collections, identify JOIN-heavy queries for embedding (1:1, 1:few) vs referencing (1:many unbounded), and map stored procedures to aggregation pipelines or app logic.
+2. **Phase 2 — Schema Design (1–2 weeks):** Design target schema, validation rules, indexes from query patterns, and migration scripts.
+3. **Phase 3 — Dual-Write Migration:** Application writes to both SQL Server and MongoDB; background job syncs historical data; verification script checks consistency; gradually shift reads to MongoDB.
+4. **Phase 4 — Cutover:** Stop dual-writes, make MongoDB primary, keep SQL Server read-only for 2–4 weeks as rollback safety net, then decommission.
 
 ---
 
 ## 6. MongoDB vs Other Databases
+
+```mermaid
+flowchart TD
+    W["Workload Requirements"] --> Q1{"Complex JOINs or Multi-Entity ACID?"}
+    Q1 -->|Yes| PG["PostgreSQL"]
+    Q1 -->|No| Q2{"Columnar BI / Data Warehouse?"}
+    Q2 -->|Yes| DW["Redshift / BigQuery"]
+    Q2 -->|No| MG["MongoDB (Flexible Schema + Horizontal Scale)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    class W,Q1,Q2 blue
+    class MG green
+    class PG purple
+    class DW amber
+```
 
 ### Q27: MongoDB vs PostgreSQL — when would you choose each?
 
@@ -953,43 +1029,60 @@ SQL Server ──write──▶ Application ──write──▶ MongoDB
 | Scaling | Built-in horizontal sharding | Primarily vertical (Citus for horizontal) |
 | Transactions | Single-doc atomic + multi-doc (4.0+) | Full ACID from day one |
 | Query language | MQL + Aggregation | SQL (decades of optimization) |
-| GeoSpatial | Native 2dsphere indexes | PostGIS extension (more powerful) |
-| Full-text search | Basic text indexes | Better (ts_vector, ts_query) |
-| JSON support | Native (BSON) | JSONB (very good) |
-| Best for | Content management, IoT, catalogs, real-time analytics | Financial systems, ERP, complex reporting |
+| GeoSpatial | Native `2dsphere` indexes | PostGIS extension (more powerful) |
+| Full-text search | Basic text indexes | Better (`ts_vector`, `ts_query`) |
+| JSON support | Native (BSON) | `JSONB` (very good) |
+| Best for | CMS, IoT, catalogs, real-time analytics | Financial systems, ERP, complex reporting |
 
-**Choose MongoDB when:** Schema changes frequently, data is hierarchical/nested, you need horizontal scaling, read-heavy workloads with denormalized data.
-
-**Choose PostgreSQL when:** Data is highly relational, you need complex JOINs and transactions across many tables, reporting is critical, ACID is non-negotiable across multiple entities.
+- **Choose MongoDB:** Rapidly evolving schema, hierarchical/nested data, horizontal scaling, read-heavy denormalized workloads.
+- **Choose PostgreSQL:** Highly relational data, complex multi-table JOINs and transactions, critical reporting, strict DB-level ACID.
 
 ---
 
 ### Q28: When would you NOT use MongoDB?
 
-1. **Highly relational data:** If you're constantly doing multi-collection lookups, a relational DB is better
-2. **Complex transactions across entities:** Banking ledger systems where every entry must be ACID across multiple accounts
-3. **Complex reporting with ad-hoc JOINs:** Business intelligence workloads
-4. **Strict schema enforcement is desired:** When you want the database (not application) to enforce data integrity
-5. **Small dataset, simple needs:** SQLite or PostgreSQL is simpler and sufficient
-6. **Data warehousing:** Column-oriented databases (Redshift, BigQuery) are better
+1. **Highly relational data** requiring frequent multi-collection lookups.
+2. **Complex cross-entity transactions** (e.g., banking ledgers requiring strict multi-account ACID).
+3. **Ad-hoc BI reporting** with complex JOINs.
+4. **Strict DB-enforced schema** requirements.
+5. **Small, simple datasets** where SQLite/PostgreSQL is simpler.
+6. **Data warehousing** (use columnar DBs like Redshift or BigQuery).
 
 ---
 
 ## 7. Java / Spring Data MongoDB
 
+```mermaid
+flowchart TD
+    SD["Spring Data MongoDB"] --> OP{"Operation Type"}
+    OP -->|Simple CRUD / Derived Queries| MR["MongoRepository"]
+    OP -->|Dynamic Criteria / Partial Update / Agg / Bulk| MT["MongoTemplate"]
+    SD --> MIG{"Schema Migration"}
+    MIG -->|Versioned Scripts| MK["Mongock (@ChangeUnit)"]
+    MIG -->|Lazy On-Read| SV["schemaVersion Field"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    class SD,OP,MIG blue
+    class MR,MK green
+    class MT,SV amber
+```
+
 ### Q29: MongoTemplate vs MongoRepository — when to use which?
 
 | Feature | MongoRepository | MongoTemplate |
-|---------|----------------|---------------|
+|---------|-----------------|---------------|
 | Approach | Declarative (interface methods) | Programmatic (explicit queries) |
 | Simple CRUD | Excellent | Verbose |
-| Complex queries | Limited (custom @Query) | Full flexibility |
+| Complex queries | Limited (custom `@Query`) | Full flexibility |
 | Aggregation | Not supported | Full pipeline support |
 | Bulk operations | Not supported | Supported |
 | Update operations | Save entire document | Partial updates with operators |
 | Learning curve | Low | Medium |
 
-**Use MongoRepository when:**
+**Use `MongoRepository` when:**
 ```java
 public interface UserRepository extends MongoRepository<User, String> {
     List<User> findByStatus(String status);
@@ -1003,7 +1096,7 @@ public interface UserRepository extends MongoRepository<User, String> {
 }
 ```
 
-**Use MongoTemplate when:**
+**Use `MongoTemplate` when:**
 ```java
 @Service
 public class UserService {
@@ -1051,7 +1144,8 @@ public class UserService {
 }
 ```
 
-**Best practice:** Use both. Repository for simple CRUD, Template for complex operations.
+> [!TIP]
+> Use both: `MongoRepository` for simple CRUD and `MongoTemplate` for dynamic queries, partial updates, aggregations, and bulk ops.
 
 ---
 
@@ -1109,9 +1203,7 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
 
 ### Q31: How do you handle schema migration in MongoDB with Spring Boot?
 
-Unlike Flyway/Liquibase for SQL, MongoDB schema migrations are handled differently:
-
-**Option 1: Mongock (recommended)**
+**Option 1: Mongock (recommended — Flyway-like for MongoDB)**
 ```java
 @ChangeUnit(id = "add-email-index", order = "001", author = "mohit")
 public class AddEmailIndexMigration {
@@ -1183,52 +1275,55 @@ public class UserMigrator {
 
 ---
 
-### Q32-Q40: Rapid-Fire Questions
+### Q32–Q40: Rapid-Fire Questions
 
-**Q32: How does MongoDB handle concurrent writes to the same document?**
-WiredTiger uses optimistic concurrency control. If two writes target the same document, one wins and the other retries automatically. For application-level conflicts, use `findOneAndUpdate` with version fields.
-
-**Q33: What is the oplog and how big should it be?**
-The oplog (operations log) is a capped collection that records all write operations. Default size is 5% of disk. Size it based on: how long you want a secondary to be offline and still catch up. For high-write workloads, increase it.
-
-**Q34: Can you shard an existing collection?**
-Yes, but the shard key must have a supporting index. For large collections, this can take significant time due to initial chunk migration. Plan sharding BEFORE the collection grows too large.
-
-**Q35: How do you handle MongoDB connection failures in Spring Boot?**
-Configure retry logic, connection pool settings, and use `@Retryable`. Set appropriate timeouts. Use `WriteConcern.MAJORITY` with `wtimeout` to avoid hanging on network partitions.
-
-**Q36: What's the maximum number of indexes per collection?**
-64 indexes per collection. But more indexes = slower writes. Aim for 5-10 well-designed indexes covering your query patterns.
-
-**Q37: How do you monitor MongoDB performance?**
-`mongostat` for real-time metrics, `mongotop` for collection-level read/write times, `db.currentOp()` for running operations, `db.serverStatus()` for comprehensive stats, and Prometheus + Grafana for dashboards.
-
-**Q38: What is a capped collection?**
-Fixed-size collection that overwrites oldest documents when full. Maintains insertion order. Used for logs, cache. Cannot be sharded or have documents deleted individually.
-
-**Q39: How does MongoDB handle network partitions?**
-In a replica set, the partition with the majority of nodes continues serving reads and writes. The minority side steps down to secondary (read-only with appropriate read preference). This is a CP system for writes.
-
-**Q40: What is the aggregation pipeline memory limit?**
-Each pipeline stage has a 100MB RAM limit by default. Use `{ allowDiskUse: true }` for larger datasets, but this is slower. Better to $match early to reduce data before memory-intensive stages.
+| # | Question | Concise Answer |
+|---|----------|----------------|
+| **Q32** | How does MongoDB handle concurrent writes to the same document? | WiredTiger uses optimistic concurrency control; one write wins and the other retries automatically. For app-level conflicts, use `findOneAndUpdate` with version fields. |
+| **Q33** | What is the oplog and how big should it be? | A capped collection recording all write operations (default: 5% of disk). Size it for how long a secondary can be offline and still catch up; increase for write-heavy workloads. |
+| **Q34** | Can you shard an existing collection? | Yes, with a supporting index on the shard key. Initial chunk migration is expensive on large collections — shard before data grows too large. |
+| **Q35** | How do you handle MongoDB connection failures in Spring Boot? | Configure connection pool/socket timeouts, retry logic (`@Retryable`), and `WriteConcern.MAJORITY` with `wtimeout` to avoid hanging on partitions. |
+| **Q36** | What's the maximum number of indexes per collection? | **64 indexes** max. Aim for 5–10 well-designed indexes since extra indexes slow down writes. |
+| **Q37** | How do you monitor MongoDB performance? | `mongostat` (real-time metrics), `mongotop` (collection read/write times), `db.currentOp()` (active ops), `db.serverStatus()` (full stats), plus Prometheus + Grafana. |
+| **Q38** | What is a capped collection? | Fixed-size collection that overwrites oldest documents in insertion order when full (logs, caches). Cannot be sharded or have individual docs deleted. |
+| **Q39** | How does MongoDB handle network partitions? | Majority partition continues serving reads and writes; minority side steps down to secondary (read-only). **CP** for writes. |
+| **Q40** | What is the aggregation pipeline memory limit? | **100MB RAM** per stage by default. Pass `{ allowDiskUse: true }` for larger sets (slower), or `$match` early to shrink data first. |
 
 ---
 
 ## Quick Revision Table
 
+```mermaid
+flowchart LR
+    S["1. Schema (Embed First)"] --> I["2. Index (ESR Rule)"]
+    I --> A["3. Aggregate ($match Early)"]
+    A --> D["4. Durability (majority + j:true)"]
+    D --> SH["5. Shard (High Card + Targeted)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    class S blue
+    class I green
+    class A amber
+    class D purple
+    class SH red
+```
+
 | Topic | Key Concept | Remember This |
 |-------|------------|---------------|
 | Schema Design | Embed vs Reference | "If accessed together, embed; if unbounded, reference" |
 | Indexing | ESR Rule | "Equality → Sort → Range for compound indexes" |
-| Performance | explain() | "COLLSCAN = bad, IXSCAN = good, SORT stage = needs index" |
-| Replication | Failover | "10-12 seconds, needs majority vote" |
+| Performance | `explain()` | "`COLLSCAN` = bad, `IXSCAN` = good, `SORT` stage = needs index" |
+| Replication | Failover | "10–12 seconds, needs majority vote" |
 | Sharding | Shard Key | "High cardinality + query targeting + non-monotonic" |
 | Transactions | Prefer Schema Design | "Redesign schema to avoid transactions when possible" |
 | WiredTiger | Document-level locking | "Not collection-level (that was MMAPv1)" |
-| Aggregation | $match first | "Always filter early — only $match can use indexes" |
+| Aggregation | `$match` first | "Always filter early — only `$match` can use indexes" |
 | Spring Data | Template vs Repository | "Repository for CRUD, Template for complex queries" |
 | Migration | Mongock | "Like Flyway but for MongoDB" |
 
----
-
-> **Final tip:** In FAANG interviews, when discussing MongoDB, always lead with your schema design rationale. The #1 thing interviewers want to hear is *why* you chose to embed vs reference, not just how to write queries.
+> [!IMPORTANT]
+> **Final tip:** In FAANG interviews, always lead with your **schema design rationale**. The #1 thing interviewers want to hear is *why* you chose to embed vs reference, not just how to write queries.

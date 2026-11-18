@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="MongoDB Distributed Architecture: Sharding and Replica Set Flow">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke-width: 1.5; rx: 10; }
+      .subcard { fill: #0f172a; stroke-width: 1.5; rx: 8; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+      .heading { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; font-weight: 700; fill: #f1f5f9; }
+      .label { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10.5px; fill: #cbd5e1; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; font-weight: 700; }
+      .flow-line { fill: none; stroke-width: 2; stroke-dasharray: 6 4; animation: dashFlow 1.6s linear infinite; }
+      .meta-line { fill: none; stroke: #f59e0b; stroke-width: 1.5; stroke-dasharray: 4 4; animation: dashFlow 2.2s linear infinite; }
+      .pulse-ring { animation: softPulse 2.4s ease-in-out infinite; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -20; }
+      }
+      @keyframes softPulse {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 1; }
+      }
+    </style>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a855f7"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+    </marker>
+  </defs>
+
+  <!-- Canvas -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="12"/>
+  <rect x="6" y="6" width="888" height="308" rx="10" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text class="title" x="24" y="28">MongoDB Distributed Architecture: Chunk Routing &amp; Replica Set Oplog Flow</text>
+  <rect x="705" y="14" width="171" height="20" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="1"/>
+  <text class="badge-text" x="790" y="27" text-anchor="middle" fill="#4ade80">writeConcern: w:majority</text>
+
+  <!-- Client -->
+  <rect class="card" x="24" y="76" width="124" height="92" stroke="#38bdf8"/>
+  <text class="heading" x="86" y="102" text-anchor="middle">Client App</text>
+  <text class="label" x="86" y="120" text-anchor="middle">MongoDB Driver</text>
+  <rect x="36" y="132" width="100" height="22" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text class="mono" x="86" y="146" text-anchor="middle" fill="#38bdf8">R/W + ReadPref</text>
+
+  <!-- mongos Router -->
+  <rect class="card" x="196" y="62" width="164" height="106" stroke="#a855f7"/>
+  <text class="heading" x="278" y="86" text-anchor="middle">mongos Router</text>
+  <text class="label" x="278" y="104" text-anchor="middle">Stateless Query Router</text>
+  <rect x="210" y="116" width="136" height="38" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text class="mono" x="278" y="132" text-anchor="middle" fill="#c084fc">Shard Key Routing</text>
+  <text class="mono" x="278" y="146" text-anchor="middle">Targeted / Scatter</text>
+
+  <!-- Config Servers -->
+  <rect class="card" x="196" y="204" width="164" height="96" stroke="#f59e0b"/>
+  <text class="heading" x="278" y="228" text-anchor="middle">Config Servers</text>
+  <text class="label" x="278" y="245" text-anchor="middle">CSRS (Replica Set)</text>
+  <rect x="210" y="256" width="136" height="32" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text class="mono" x="278" y="276" text-anchor="middle" fill="#fbbf24">Chunk Map &amp; Zones</text>
+
+  <!-- Shard 1 Replica Set -->
+  <rect class="card" x="416" y="46" width="460" height="122" stroke="#334155"/>
+  <text class="heading" x="432" y="66" fill="#e2e8f0">Shard 1 Replica Set</text>
+  <text class="mono" x="862" y="66" text-anchor="end" fill="#94a3b8">Chunks [a - m)</text>
+
+  <rect class="subcard pulse-ring" x="432" y="78" width="110" height="74" stroke="#22c55e"/>
+  <text class="badge-text" x="487" y="98" text-anchor="middle" fill="#4ade80">PRIMARY</text>
+  <text class="label" x="487" y="116" text-anchor="middle">Accepts Writes</text>
+  <text class="mono" x="487" y="134" text-anchor="middle">Term 1 | Node 0</text>
+
+  <rect class="subcard" x="568" y="92" width="96" height="46" stroke="#38bdf8"/>
+  <text class="badge-text" x="616" y="112" text-anchor="middle" fill="#38bdf8">OPLOG</text>
+  <text class="mono" x="616" y="128" text-anchor="middle">local.oplog.rs</text>
+
+  <rect class="subcard" x="694" y="76" width="168" height="34" stroke="#3b82f6"/>
+  <text class="badge-text" x="778" y="97" text-anchor="middle" fill="#60a5fa">SECONDARY 1 (Poll + Ack)</text>
+
+  <rect class="subcard" x="694" y="120" width="168" height="34" stroke="#3b82f6"/>
+  <text class="badge-text" x="778" y="141" text-anchor="middle" fill="#60a5fa">SECONDARY 2 (Poll + Ack)</text>
+
+  <!-- Shard 2 Replica Set -->
+  <rect class="card" x="416" y="182" width="460" height="122" stroke="#334155"/>
+  <text class="heading" x="432" y="202" fill="#e2e8f0">Shard 2 Replica Set</text>
+  <text class="mono" x="862" y="202" text-anchor="end" fill="#94a3b8">Chunks [m - z]</text>
+
+  <rect class="subcard pulse-ring" x="432" y="214" width="110" height="74" stroke="#22c55e"/>
+  <text class="badge-text" x="487" y="234" text-anchor="middle" fill="#4ade80">PRIMARY</text>
+  <text class="label" x="487" y="252" text-anchor="middle">Accepts Writes</text>
+  <text class="mono" x="487" y="270" text-anchor="middle">Term 1 | Node 0</text>
+
+  <rect class="subcard" x="568" y="228" width="96" height="46" stroke="#38bdf8"/>
+  <text class="badge-text" x="616" y="248" text-anchor="middle" fill="#38bdf8">OPLOG</text>
+  <text class="mono" x="616" y="264" text-anchor="middle">local.oplog.rs</text>
+
+  <rect class="subcard" x="694" y="212" width="168" height="34" stroke="#3b82f6"/>
+  <text class="badge-text" x="778" y="233" text-anchor="middle" fill="#60a5fa">SECONDARY 1 (Poll + Ack)</text>
+
+  <rect class="subcard" x="694" y="256" width="168" height="34" stroke="#3b82f6"/>
+  <text class="badge-text" x="778" y="277" text-anchor="middle" fill="#60a5fa">SECONDARY 2 (Poll + Ack)</text>
+
+  <!-- Paths: Client -> mongos -->
+  <path id="p-client-mongos" class="flow-line" stroke="#38bdf8" d="M 148 116 L 194 116" marker-end="url(#arrow-cyan)"/>
+
+  <!-- Paths: mongos <-> Config Servers -->
+  <path id="p-mongos-cfg" class="meta-line" d="M 278 168 L 278 202" marker-end="url(#arrow-amber)" marker-start="url(#arrow-amber)"/>
+
+  <!-- Paths: mongos -> Shards -->
+  <path id="p-mongos-s1" class="flow-line" stroke="#a855f7" d="M 360 115 L 430 115" marker-end="url(#arrow-purple)"/>
+  <path id="p-mongos-s2" class="flow-line" stroke="#a855f7" d="M 360 132 C 392 132, 392 251, 430 251" marker-end="url(#arrow-purple)"/>
+
+  <!-- Paths: Shard 1 Oplog Replication -->
+  <path id="p-s1-oplog" class="flow-line" stroke="#22c55e" d="M 542 115 L 566 115" marker-end="url(#arrow-green)"/>
+  <path id="p-s1-sec1" class="flow-line" stroke="#38bdf8" d="M 664 108 L 692 93" marker-end="url(#arrow-cyan)"/>
+  <path id="p-s1-sec2" class="flow-line" stroke="#38bdf8" d="M 664 122 L 692 137" marker-end="url(#arrow-cyan)"/>
+
+  <!-- Paths: Shard 2 Oplog Replication -->
+  <path id="p-s2-oplog" class="flow-line" stroke="#22c55e" d="M 542 251 L 566 251" marker-end="url(#arrow-green)"/>
+  <path id="p-s2-sec1" class="flow-line" stroke="#38bdf8" d="M 664 244 L 692 229" marker-end="url(#arrow-cyan)"/>
+  <path id="p-s2-sec2" class="flow-line" stroke="#38bdf8" d="M 664 258 L 692 273" marker-end="url(#arrow-cyan)"/>
+
+  <!-- Animated Pulses (SMIL animateMotion) -->
+  <circle r="3.5" fill="#38bdf8">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M 148 116 L 194 116"/>
+  </circle>
+  <circle r="3" fill="#f59e0b">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M 278 168 L 278 202"/>
+  </circle>
+  <circle r="3.5" fill="#c084fc">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 360 115 L 430 115"/>
+  </circle>
+  <circle r="3.5" fill="#c084fc">
+    <animateMotion dur="2.2s" begin="0.6s" repeatCount="indefinite" path="M 360 132 C 392 132, 392 251, 430 251"/>
+  </circle>
+
+  <!-- Oplog Replication Pulses -->
+  <circle r="3" fill="#4ade80">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 542 115 L 566 115"/>
+  </circle>
+  <circle r="3" fill="#38bdf8">
+    <animateMotion dur="1.4s" begin="0.3s" repeatCount="indefinite" path="M 664 108 L 692 93"/>
+  </circle>
+  <circle r="3" fill="#38bdf8">
+    <animateMotion dur="1.4s" begin="0.3s" repeatCount="indefinite" path="M 664 122 L 692 137"/>
+  </circle>
+
+  <circle r="3" fill="#4ade80">
+    <animateMotion dur="1.4s" begin="0.7s" repeatCount="indefinite" path="M 542 251 L 566 251"/>
+  </circle>
+  <circle r="3" fill="#38bdf8">
+    <animateMotion dur="1.4s" begin="1.0s" repeatCount="indefinite" path="M 664 244 L 692 229"/>
+  </circle>
+  <circle r="3" fill="#38bdf8">
+    <animateMotion dur="1.4s" begin="1.0s" repeatCount="indefinite" path="M 664 258 L 692 273"/>
+  </circle>
+</svg>
