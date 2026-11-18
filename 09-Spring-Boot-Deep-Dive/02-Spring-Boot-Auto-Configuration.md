@@ -17,48 +17,40 @@
 
 ## How Auto-Configuration Works
 
-### The Magic Behind Auto-Configuration
+![Spring Boot Auto-Configuration Flow](./assets/02-spring-auto-config-flow.svg)
 
-Spring Boot auto-configuration is driven by classpath analysis and `spring.factories` metadata files.
+Spring Boot auto-configuration inspects your **classpath**, **existing beans**, and **environment properties** at startup to register sensible defaults without manual boilerplate.
 
-### Execution Flow
+```mermaid
+flowchart TD
+    A["1. Application Start: SpringApplication.run()"]:::blue --> B["2. ConfigurationClassPostProcessor reads @EnableAutoConfiguration"]:::purple
+    B --> C["3. Scan AutoConfiguration.imports / spring.factories"]:::purple
+    C --> D{"4. Evaluate @Conditional Checks"}:::amber
+    D -->|"@ConditionalOnClass + @ConditionalOnMissingBean + @ConditionalOnProperty pass"| E["5a. Register Default Beans"]:::green
+    D -->|"Condition fails or user bean exists"| F["5b. Skip Auto-Configuration (User Wins)"]:::red
+    E --> G["6. Application Ready"]:::blue
 
-```
-1. Application Start
-   └─> SpringApplication.run()
-
-2. Load Auto-Configuration Classes
-   └─> ConfigurationClassPostProcessor reads @EnableAutoConfiguration
-   └─> Scans META-INF/spring.factories or META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
-   └─> Collects all AutoConfiguration classes
-
-3. Apply @Conditional Checks
-   └─> @ConditionalOnClass: Check if class on classpath
-   └─> @ConditionalOnMissingBean: Check if user bean not defined
-   └─> @ConditionalOnProperty: Check if property value matches
-   └─> Other conditions...
-
-4. Register Matching Beans
-   └─> Only beans that pass @Conditional checks are registered
-   └─> User-defined beans take precedence (never overridden)
-
-5. Application Ready
-   └─> All beans configured and ready for use
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
 ```
 
-### Auto-Configuration Classes Location
+### Auto-Configuration Metadata Locations
 
-Spring Boot 2.7+:
-```
-META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
-```
+| Spring Boot Version | Metadata File Path |
+|---|---|
+| **Spring Boot 2.7+** | `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` |
+| **Spring Boot 2.6 & earlier** | `META-INF/spring.factories` |
 
-Spring Boot 2.6 and earlier:
-```
-META-INF/spring.factories
-```
+### Key `@Conditional` Annotations
 
-### Example: DataSourceAutoConfiguration
+- `@ConditionalOnClass`: Activates only if the specified class is present on the classpath.
+- `@ConditionalOnMissingBean`: Activates only if the user has **not** defined their own bean of that type (user-defined beans always take precedence).
+- `@ConditionalOnProperty`: Activates only when a property matches an expected value.
+
+### Example: `DataSourceAutoConfiguration`
 
 ```java
 // This is simplified - real implementation is more complex
@@ -108,6 +100,9 @@ public class Application {
 
 // OR run with: java -jar app.jar --debug
 ```
+
+> [!TIP]
+> Run your app with `--debug` (or `debug=true` in `application.properties`) to print the **AUTO-CONFIGURATION REPORT**, which lists **Positive matches** (configs that ran) and **Negative matches** (configs skipped, with exact reasons).
 
 ### Understanding the Order of Auto-Configuration
 
@@ -162,7 +157,20 @@ public class MyFeatureAutoConfiguration {
 
 ## @SpringBootApplication Unpacked
 
-### What @SpringBootApplication Actually Does
+```mermaid
+flowchart TD
+    SBA["@SpringBootApplication"]:::blue --> CFG["@Configuration (CGLIB proxied @Bean factory)"]:::purple
+    SBA --> EAC["@EnableAutoConfiguration (Loads AutoConfiguration.imports)"]:::green
+    SBA --> CS["@ComponentScan (Scans current package &amp; subpackages)"]:::amber
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
+
+### What `@SpringBootApplication` Actually Does
 
 ```java
 @SpringBootApplication
@@ -181,26 +189,21 @@ public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
     }
+}
 ```
 
-### Breaking Down Each Annotation
+### Breakdown of Composed Annotations
 
-**@Configuration:**
-- Makes the class a Spring configuration class
-- @Bean methods define beans
-- Uses CGLIB proxying for singleton bean management
+| Annotation | Role | Key Behavior |
+|---|---|---|
+| **`@Configuration`** | Declares a Spring config class | `@Bean` methods define beans; uses CGLIB proxying for singleton bean management |
+| **`@EnableAutoConfiguration`** | Activates auto-configuration | Loads classes from `AutoConfiguration.imports` / `spring.factories` and applies `@Conditional` checks |
+| **`@ComponentScan`** | Discovers stereotype beans | Scans `@Component`, `@Service`, `@Repository`, `@Controller` in current package and subpackages |
 
-**@EnableAutoConfiguration:**
-- Activates Spring Boot's auto-configuration mechanism
-- Loads classes from `spring.factories` or `AutoConfiguration.imports`
-- Applies @Conditional checks to determine which configs to use
+> [!IMPORTANT]
+> `@ComponentScan` does **not** scan packages outside the main application class's package hierarchy unless you explicitly configure `scanBasePackages`.
 
-**@ComponentScan:**
-- Scans for @Component, @Service, @Repository, @Controller annotations
-- Scans current package and all subpackages (basePackages parameter can limit this)
-- Does NOT scan outside the application package structure
-
-### Customizing @SpringBootApplication
+### Customizing `@SpringBootApplication`
 
 ```java
 @SpringBootApplication(
@@ -223,7 +226,7 @@ public class Application {
 }
 ```
 
-### SpringApplication Customization
+### `SpringApplication` Customization
 
 ```java
 @SpringBootApplication
@@ -260,11 +263,32 @@ public class ApplicationStartedListener implements ApplicationListener<Applicati
 
 ## Starter Dependencies
 
-### What Are Starters?
+Starters are curated dependency descriptors that bundle compatible libraries and transitive dependencies under a single Maven/Gradle coordinate.
 
-Starters are convenient dependency descriptors that simplify Maven/Gradle configuration. They handle transitive dependencies automatically.
+```mermaid
+flowchart LR
+    App["Your App pom.xml"]:::blue --> Web["spring-boot-starter-web"]:::purple
+    Web --> Core["spring-boot-starter"]:::green
+    Web --> MVC["spring-webmvc"]:::green
+    Web --> Tomcat["spring-boot-starter-tomcat"]:::amber
+    Web --> JSON["spring-boot-starter-json"]:::amber
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
 
 ### Common Starters
+
+| Starter | Key Transitive Dependencies Included |
+|---|---|
+| `spring-boot-starter-web` | `spring-boot-starter`, `spring-webmvc`, `spring-boot-starter-tomcat`, `spring-boot-starter-json` |
+| `spring-boot-starter-data-jpa` | `spring-data-jpa`, `spring-orm`, `spring-core`, Hibernate |
+| `spring-boot-starter-security` | Spring Security core, web, and config |
+| `spring-boot-starter-actuator` | Production monitoring, health, and metrics endpoints |
+| `spring-boot-starter-test` | JUnit 5, Mockito, AssertJ, Spring Test (`test` scope) |
 
 ```xml
 <!-- Spring Boot Web -->
@@ -420,32 +444,42 @@ User can now use:
 
 ## Configuration Properties
 
+```mermaid
+flowchart TD
+    High["Highest Priority: @TestPropertySource &amp; Command-Line Args (--prop=val)"]:::red --> Env["OS Env Vars &amp; Java System Properties"]:::amber
+    Env --> Prof["Profile-Specific: application-{profile}.yml / .properties"]:::purple
+    Prof --> Base["Base Config: application.yml / .properties &amp; @PropertySource"]:::blue
+    Base --> Def["Lowest Priority: SpringApplication.setDefaultProperties()"]:::green
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
+
 ### 17 Levels of Property Resolution (Priority Order)
 
-```
-1.  ServletConfig init parameters
-2.  ServletContext init parameters
-3.  JNDI environment variables (java:comp/env/)
-4.  System properties (System.getProperties())
-5.  System environment variables (System.getenv())
-6.  RandomValuePropertySource ({random.int}, {random.long}, etc.)
-7.  application-{profile}.properties (profile-specific)
-8.  application.properties (classpath root)
-9.  @PropertySource annotations
-10. Default properties set via SpringApplication.setDefaultProperties()
-11. application-{profile}.yml (profile-specific, YAML)
-12. application.yml (classpath root, YAML)
-13. Command-line arguments (--property=value)
-14. Environment variables from .env file
-15. application-test.properties (when running tests)
-16. test/@PropertySource annotations
-17. @TestPropertySource annotations
+Higher numbers override lower numbers (command-line arguments override everything except `@TestPropertySource`):
 
-Higher numbers = higher priority
-Command-line arguments override everything except @TestPropertySource
-```
+| Level | Property Source |
+|---|---|
+| **1–3** | `ServletConfig` init params → `ServletContext` init params → JNDI (`java:comp/env/`) |
+| **4–6** | System properties (`System.getProperties()`) → OS env vars (`System.getenv()`) → `RandomValuePropertySource` (`random.*`) |
+| **7–10** | `application-{profile}.properties` → `application.properties` → `@PropertySource` → `SpringApplication.setDefaultProperties()` |
+| **11–12** | `application-{profile}.yml` → `application.yml` |
+| **13–14** | Command-line arguments (`--property=value`) → `.env` environment variables |
+| **15–17** | `application-test.properties` → `test/@PropertySource` → `@TestPropertySource` (Highest) |
 
-### @ConfigurationProperties vs @Value
+### `@ConfigurationProperties` vs `@Value`
+
+| Feature | `@ConfigurationProperties` | `@Value` |
+|---|---|---|
+| **Use Case** | Binding entire hierarchical configuration objects | Injecting single, isolated property values |
+| **Type Safety & Conversion** | Strong type safety (`Duration`, `DataSize`, `List`, `Map`, `URL`) | Basic conversion only |
+| **Validation** | Supports `@Validated` + JSR-303 (`@NotBlank`, `@Min`, etc.) | Not supported natively |
+| **SpEL Support** | No | Yes (`#{...}`) |
+| **IDE Autocomplete** | Yes (via `spring-boot-configuration-processor`) | Limited |
 
 ```java
 // @ConfigurationProperties: Mapping entire configuration objects
@@ -550,7 +584,7 @@ app:
 */
 ```
 
-### Validation with @ConfigurationProperties
+### Validation with `@ConfigurationProperties`
 
 ```java
 @Component
@@ -579,19 +613,31 @@ public class DatabaseProperties {
 // Property validation failed
 ```
 
+> [!NOTE]
+> Adding `@Validated` to a `@ConfigurationProperties` class causes Spring Boot to fail fast at startup with `BindValidationException` if any constraint is violated.
+
 ---
 
 ## Profiles and Multi-Document YAML
 
+```mermaid
+flowchart LR
+    Act["Profile Activation (CLI / Env Var / Properties / Code)"]:::amber --> Merge["Merge application.yml + application-{profile}.yml"]:::blue
+    Merge --> Multi["Or Multi-Doc YAML (spring.config.activate.on-profile)"]:::purple
+    Multi --> Beans["Activate @Profile Beans (dev / prod / !prod)"]:::green
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
+
 ### Profile-Specific Properties
 
-```
-application.yml                 # Default
-application-dev.yml             # Profile: dev
-application-test.yml            # Profile: test
-application-prod.yml            # Profile: prod
-application-prod-db-cluster.yml # Multiple active profiles
-```
+- `application.yml` — Default base configuration
+- `application-dev.yml`, `application-test.yml`, `application-prod.yml` — Single active profile overrides
+- `application-prod-db-cluster.yml` — Multiple active profiles
 
 ```yaml
 # application.yml (default)
@@ -638,7 +684,19 @@ server:
     key-store-password: ${SSL_PASSWORD}
 ```
 
+> [!WARNING]
+> Always set `spring.jpa.hibernate.ddl-auto: validate` (or `none`) in `application-prod.yml` so Hibernate never alters or drops production tables automatically.
+
 ### Activating Profiles
+
+| Method | Example |
+|---|---|
+| **Programmatic** | `app.setAdditionalProfiles("dev", "mysql");` |
+| **Properties** | `spring.profiles.active=dev,mysql` |
+| **Environment Variable** | `SPRING_PROFILES_ACTIVE=dev,mysql` |
+| **Command Line** | `java -jar app.jar --spring.profiles.active=prod` |
+| **Maven** | `mvn spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=dev"` |
+| **IDE (IntelliJ)** | VM options `-Dspring.profiles.active=dev` or env var `SPRING_PROFILES_ACTIVE=dev` |
 
 ```java
 // Programmatically
@@ -743,6 +801,20 @@ public ConsoleAppender consoleAppender() {
 
 ## Spring Boot Actuator
 
+```mermaid
+flowchart LR
+    Req["HTTP Request to /actuator/**"]:::blue --> Sec{"SecurityFilterChain"}:::amber
+    Sec -->|"/actuator/health (permitAll)"| Health["HealthIndicator &amp; Status"]:::green
+    Sec -->|"/actuator/** (hasRole ADMIN)"| Endpoints["Metrics / Env / Loggers / Custom @Endpoint"]:::purple
+    Sec -->|"Unauthorized"| Deny["401 / 403 Denied"]:::red
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
+
 ### Actuator Endpoints Overview
 
 ```yaml
@@ -769,18 +841,18 @@ management:
 
 ### Common Endpoints
 
-```
-GET /actuator/health              # Overall health status
-GET /actuator/info                # Application information
-GET /actuator/metrics             # Available metrics
-GET /actuator/metrics/{metric}    # Specific metric values
-GET /actuator/env                 # Properties and environment
-GET /actuator/loggers             # Logger levels
-POST /actuator/loggers/{name}     # Change log level
-GET /actuator/threaddump          # Thread dump
-GET /actuator/heapdump            # Heap dump
-GET /actuator/flyway              # Database migration info
-```
+| Method & Path | Purpose |
+|---|---|
+| `GET /actuator/health` | Overall application health status |
+| `GET /actuator/info` | Application metadata and build info |
+| `GET /actuator/metrics` | List of available metrics |
+| `GET /actuator/metrics/{metric}` | Specific metric values |
+| `GET /actuator/env` | Active properties and environment sources |
+| `GET /actuator/loggers` | Current logger levels |
+| `POST /actuator/loggers/{name}` | Dynamically change log level at runtime |
+| `GET /actuator/threaddump` | JVM thread dump |
+| `GET /actuator/heapdump` | JVM heap dump download |
+| `GET /actuator/flyway` | Database migration history |
 
 ### Health Endpoint Example
 
@@ -915,9 +987,26 @@ public class ActuatorSecurityConfiguration {
 // Only /actuator/health is public; others require ADMIN role
 ```
 
+> [!CAUTION]
+> Sensitive endpoints like `/actuator/env` and `/actuator/heapdump` can expose secrets or memory contents. By default, only `/actuator/health` is exposed—always restrict additional endpoints with Spring Security (`hasRole("ADMIN")`).
+
 ---
 
 ## DevTools and Development Features
+
+```mermaid
+flowchart LR
+    Edit["Code / Resource Change"]:::blue --> Poll["Poll (1000ms) &amp; Quiet Period (400ms)"]:::amber
+    Poll -->|"Static assets (excluded)"| Skip["No Restart"]:::green
+    Poll -->|"Java / Config change"| Restart["Fast RestartClassLoader Reload"]:::purple
+    Restart --> Live["LiveReload Browser Refresh (Port 35729)"]:::green
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
 
 ### Enabling DevTools
 
@@ -929,6 +1018,9 @@ public class ActuatorSecurityConfiguration {
     <optional>true</optional>
 </dependency>
 ```
+
+> [!NOTE]
+> `spring-boot-devtools` automatically disables itself when running a fully packaged production JAR (`java -jar`).
 
 ### Auto-Restart
 
@@ -945,7 +1037,7 @@ spring:
 
 ### LiveReload
 
-Browser automatically refreshes when files change:
+Browser automatically refreshes when files change (install the LiveReload browser extension and enable it):
 
 ```yaml
 spring:
@@ -954,8 +1046,6 @@ spring:
       enabled: true
       port: 35729
 ```
-
-Install LiveReload browser extension and enable it.
 
 ### Remote Debugging
 
@@ -977,17 +1067,32 @@ spring:
 
 ## Spring Boot 2.x vs 3.x Migration
 
+```mermaid
+flowchart LR
+    SB2["Spring Boot 2.x (Java 8+ / javax.* / Spring 5.x)"]:::amber --> SB3["Spring Boot 3.x (Java 17+ / jakarta.* / Spring 6.x)"]:::blue
+    SB3 --> Native["GraalVM Native Binary (~100ms startup)"]:::green
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
+
 ### Key Differences
 
 | Feature | Spring Boot 2.x | Spring Boot 3.x |
-|---------|-----------------|-----------------|
+|---|---|---|
 | Java Version | 8+ | 17+ |
-| Jakarta EE | javax.* | jakarta.* |
+| Jakarta EE | `javax.*` | `jakarta.*` |
 | Spring Version | 5.x | 6.x |
 | Native Compilation | Not supported | Supported (GraalVM) |
 | Observability | Micrometer | Built-in |
 | Servlet Support | Supported | Still supported |
 | Kotlin Version | 1.5+ | 1.7+ |
+
+> [!IMPORTANT]
+> Migrating to Spring Boot 3.x requires updating all Java EE imports from `javax.*` (`javax.servlet`, `javax.persistence`, `javax.validation`) to `jakarta.*`.
 
 ### Jakarta Namespace Migration
 
@@ -1092,6 +1197,20 @@ spring.native.verbose=false
 
 ## Embedded Server Configuration
 
+```mermaid
+flowchart TD
+    Starter["spring-boot-starter-web"]:::blue -->|"Default"| Tomcat["Tomcat (threads.max, accept-count, accesslog)"]:::green
+    Starter -->|"Exclude Tomcat + Add Jetty"| Jetty["Jetty (threads.max, connection-idle-timeout)"]:::purple
+    Starter -->|"Exclude Tomcat + Add Undertow"| Undertow["Undertow (threads.io, worker, direct-buffers)"]:::amber
+    Tomcat & Jetty & Undertow --> Tune["Shared Tuning: HTTP/2, Compression, Virtual Threads (Java 21+)"]:::blue
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
+
 ### Tomcat (Default)
 
 ```yaml
@@ -1142,7 +1261,7 @@ server:
   jetty:
     threads:
       max: 200
-      min: 10
+      min-spare: 10
     connection-idle-timeout: 60000ms
 ```
 
@@ -1201,6 +1320,20 @@ spring:
 
 ## Graceful Shutdown
 
+```mermaid
+sequenceDiagram
+    participant K8s as "Kubernetes / Docker (SIGTERM)"
+    participant Server as "Embedded Server (Tomcat)"
+    participant App as "Spring Context &amp; Beans"
+
+    K8s->>Server: Send SIGTERM
+    Server->>Server: Stop accepting new requests
+    Note over Server: Drain in-flight requests (up to timeout-per-shutdown-phase: 30s)
+    Server->>App: Publish ContextClosedEvent
+    App->>App: Invoke @PreDestroy &amp; close beans
+    App-->>K8s: Process exits cleanly
+```
+
 ### Configuration
 
 ```yaml
@@ -1211,6 +1344,9 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 30s  # 30 seconds to shutdown gracefully
 ```
+
+> [!TIP]
+> In Kubernetes, ensure `terminationGracePeriodSeconds` on your Pod is greater than `spring.lifecycle.timeout-per-shutdown-phase` (e.g., `45s` vs `30s`) so the container isn't force-killed with `SIGKILL` mid-drain.
 
 ### Graceful Shutdown Implementation
 
@@ -1272,25 +1408,37 @@ public class OrderController {
 
 ## Interview Questions
 
+```mermaid
+flowchart LR
+    Core["Spring Boot Internals"]:::blue --> Q1["Auto-Config &amp; @Conditional (Q1, Q2, Q7)"]:::purple
+    Core --> Q2["Properties &amp; Config Binding (Q3, Q4)"]:::green
+    Core --> Q3["Ops &amp; Lifecycle (Q5, Q8)"]:::amber
+    Core --> Q4["Boot 3.x &amp; Jakarta EE (Q6)"]:::red
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+```
+
 ### Q1: Explain how Spring Boot auto-configuration works.
 
 **Answer:**
-Auto-configuration works through these steps:
-1. `@SpringBootApplication` includes `@EnableAutoConfiguration`
-2. Spring loads classes from `META-INF/spring/AutoConfiguration.imports` (or `spring.factories` in older versions)
-3. For each auto-configuration class, Spring evaluates `@Conditional` annotations (ConditionalOnClass, ConditionalOnMissingBean, ConditionalOnProperty, etc.)
-4. Only configurations that pass all conditions are registered
-5. User-defined beans take precedence and prevent auto-configuration
+1. `@SpringBootApplication` includes `@EnableAutoConfiguration`.
+2. Spring loads candidate classes from `META-INF/spring/AutoConfiguration.imports` (or `spring.factories` in older versions).
+3. For each auto-configuration class, Spring evaluates `@Conditional` annotations (`@ConditionalOnClass`, `@ConditionalOnMissingBean`, `@ConditionalOnProperty`, etc.).
+4. Only configurations that pass all conditions are registered.
+5. User-defined beans take precedence and prevent auto-configuration.
 
 This allows Spring Boot to intelligently provide sensible defaults based on the classpath and properties, which users can override.
 
-### Q2: What's the difference between @SpringBootApplication and @Configuration?
+### Q2: What's the difference between `@SpringBootApplication` and `@Configuration`?
 
 **Answer:**
-- `@SpringBootApplication` = `@Configuration` + `@EnableAutoConfiguration` + `@ComponentScan`
-- `@Configuration` alone doesn't enable auto-configuration or component scanning
-- Use `@SpringBootApplication` for the main application class
-- Use `@Configuration` for additional configuration classes
+- `@SpringBootApplication` = `@Configuration` + `@EnableAutoConfiguration` + `@ComponentScan`.
+- `@Configuration` alone doesn't enable auto-configuration or component scanning.
+- Use `@SpringBootApplication` for the main application class; use `@Configuration` for additional configuration classes.
 
 ### Q3: How do property sources work in Spring Boot?
 
@@ -1298,19 +1446,19 @@ This allows Spring Boot to intelligently provide sensible defaults based on the 
 Spring resolves properties using a strict priority order (17 levels). Higher-priority sources override lower-priority ones:
 1. Command-line arguments override everything (except test sources)
 2. Environment variables
-3. application-{profile}.yml/properties
-4. application.yml/properties
+3. `application-{profile}.yml` / `.properties`
+4. `application.yml` / `.properties`
 5. System properties
-6. @PropertySource annotations
+6. `@PropertySource` annotations
 7. Default values
 
-Within the same source, profile-specific files (application-prod.yml) override the base file (application.yml).
+Within the same source, profile-specific files (`application-prod.yml`) override the base file (`application.yml`).
 
-### Q4: When should you use @ConfigurationProperties vs @Value?
+### Q4: When should you use `@ConfigurationProperties` vs `@Value`?
 
 **Answer:**
-- `@ConfigurationProperties`: For mapping entire configuration objects with hierarchical structure. Type-safe, validation support, IDE hints
-- `@Value`: For injecting individual properties. Simple, but no type safety or validation
+- **`@ConfigurationProperties`**: For mapping entire configuration objects with hierarchical structure. Provides type safety, validation support, and IDE hints.
+- **`@Value`**: For injecting individual properties. Simple, but lacks type safety and validation.
 
 Prefer `@ConfigurationProperties` for application configuration; use `@Value` for occasional property injection.
 
@@ -1318,44 +1466,41 @@ Prefer `@ConfigurationProperties` for application configuration; use `@Value` fo
 
 **Answer:**
 With `server.shutdown=graceful`:
-1. Tomcat/servlet container stops accepting new requests
-2. Existing requests are allowed to complete (up to `timeout-per-shutdown-phase`, default 30s)
-3. After timeout or all requests complete, beans are destroyed
-4. Application exits
+1. Tomcat/servlet container stops accepting new requests.
+2. Existing requests are allowed to complete (up to `timeout-per-shutdown-phase`, default `30s`).
+3. After timeout or once all requests complete, beans are destroyed.
+4. Application exits.
 
 This prevents data loss or corrupt requests when the application is stopped (e.g., during deployment).
 
 ### Q6: What are the main differences between Spring Boot 2.x and 3.x?
 
 **Answer:**
-Key changes:
-- Java 17+ required (was Java 8+)
-- Jakarta EE (jakarta.*) instead of Java EE (javax.*)
-- Spring 6.x (was 5.x)
-- Native compilation support with GraalVM
-- Observability improvements with Micrometer
-- All javax.* imports must be changed to jakarta.*
+- **Java 17+** required (was Java 8+)
+- **Jakarta EE** (`jakarta.*`) instead of Java EE (`javax.*`)
+- **Spring 6.x** (was 5.x)
+- **Native compilation** support with GraalVM
+- **Observability** improvements with Micrometer
+- All `javax.*` imports must be changed to `jakarta.*`
 
-Migration requires updating imports and dependencies, but core functionality remains similar.
+Migration requires updating imports and dependencies, while core functionality remains similar.
 
 ### Q7: How do you create a custom Spring Boot starter?
 
 **Answer:**
-1. Create a separate Maven project with auto-configuration class
-2. Register in `META-INF/spring/AutoConfiguration.imports`
-3. Add `@ConfigurationProperties` class for configuration
-4. Create starter parent POM that includes implementation and auto-configuration
-5. Users add one dependency and auto-configuration runs automatically
+1. Create a separate Maven project with an auto-configuration class.
+2. Register it in `META-INF/spring/AutoConfiguration.imports`.
+3. Add a `@ConfigurationProperties` class for configuration.
+4. Create a starter parent POM that includes the implementation and auto-configuration.
+5. Users add one dependency and auto-configuration runs automatically.
 
 This allows sharing configuration and beans across multiple projects.
 
 ### Q8: Explain Spring Boot Actuator endpoints and their security.
 
 **Answer:**
-Actuator provides production-ready endpoints (health, metrics, loggers, etc.) for monitoring:
-- By default, only `/actuator/health` is exposed
-- Other endpoints are disabled by default; enable with `management.endpoints.web.exposure.include`
-- Secure with Spring Security (@Configuration + SecurityFilterChain)
-- Implement custom HealthIndicator for domain-specific health checks
-- Custom endpoints with @Endpoint annotations
-
+Actuator provides production-ready endpoints (`health`, `metrics`, `loggers`, etc.) for monitoring:
+- By default, only `/actuator/health` is exposed.
+- Other endpoints are disabled/unexposed by default; enable with `management.endpoints.web.exposure.include`.
+- Secure with Spring Security (`@Configuration` + `SecurityFilterChain`).
+- Implement custom `HealthIndicator` for domain-specific health checks, and custom endpoints with `@Endpoint` annotations.

@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="Spring Security Filter Chain JWT Verification Flow">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .node-box { fill: #1e293b; stroke-width: 1.8; rx: 10; ry: 10; }
+      .node-blue { stroke: #38bdf8; }
+      .node-indigo { stroke: #818cf8; }
+      .node-purple { stroke: #c084fc; }
+      .node-amber { stroke: #fbbf24; }
+      .node-green { stroke: #34d399; }
+      .node-red { stroke: #f87171; fill: #2a161b; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 16px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #94a3b8; }
+      .node-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; font-weight: 700; fill: #f1f5f9; text-anchor: middle; }
+      .node-sub { font-family: system-ui, -apple-system, sans-serif; font-size: 9.5px; fill: #94a3b8; text-anchor: middle; }
+      .label-small { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; fill: #cbd5e1; text-anchor: middle; }
+      .label-err { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; fill: #fca5a5; text-anchor: middle; }
+      .flow-line { fill: none; stroke: #475569; stroke-width: 2; }
+      .flow-dash { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 6; animation: dashFlow 1.2s linear infinite; }
+      .lookup-dash { fill: none; stroke: #c084fc; stroke-width: 1.8; stroke-dasharray: 5 5; animation: dashFlow 1.4s linear infinite; }
+      .err-dash { fill: none; stroke: #f87171; stroke-width: 1.6; stroke-dasharray: 4 4; animation: dashFlow 1.8s linear infinite; }
+      .chain-frame { fill: rgba(30, 41, 59, 0.35); stroke: #334155; stroke-width: 1.2; stroke-dasharray: 6 4; rx: 12; ry: 12; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 600; fill: #38bdf8; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -24; }
+      }
+      @keyframes pulseNode {
+        0%, 100% { opacity: 0.85; }
+        50% { opacity: 1; }
+      }
+      .pulse { animation: pulseNode 2.6s ease-in-out infinite; }
+    </style>
+
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc" />
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f87171" />
+    </marker>
+
+    <path id="mainTokenPath" d="M 118 118 L 762 118" />
+    <path id="lookupPath" d="M 212 146 L 212 198 L 358 198 L 358 146" />
+  </defs>
+
+  <!-- Outer Card -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="14" ry="14" />
+  <rect x="8" y="8" width="884" height="304" rx="12" ry="12" fill="none" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Header -->
+  <text class="title" x="28" y="34">Spring SecurityFilterChain — Stateless JWT Request Flow</text>
+  <text class="subtitle" x="28" y="52">DelegatingFilterProxy → FilterChainProxy → OncePerRequestFilter → Method Security</text>
+
+  <!-- SecurityFilterChain Container -->
+  <rect class="chain-frame" x="136" y="68" width="612" height="104" />
+  <text class="badge-text" x="148" y="83">SecurityFilterChain (FilterChainProxy)</text>
+
+  <!-- Main Horizontal Flow Connectors -->
+  <line class="flow-dash" x1="118" y1="118" x2="148" y2="118" marker-end="url(#arrow-blue)" />
+  <line class="flow-dash" x1="264" y1="118" x2="290" y2="118" marker-end="url(#arrow-blue)" />
+  <line class="flow-dash" x1="432" y1="118" x2="458" y2="118" marker-end="url(#arrow-blue)" />
+  <line class="flow-dash" x1="604" y1="118" x2="628" y2="118" marker-end="url(#arrow-blue)" />
+  <line class="flow-dash" x1="734" y1="118" x2="768" y2="118" marker-end="url(#arrow-blue)" />
+
+  <!-- Node 1: HTTP + JWT -->
+  <g class="pulse">
+    <rect class="node-box node-blue" x="24" y="92" width="94" height="52" />
+    <text class="node-title" x="71" y="114">HTTP + JWT</text>
+    <text class="node-sub" x="71" y="131">Bearer Token</text>
+  </g>
+
+  <!-- Node 2: JwtAuthFilter -->
+  <g class="pulse">
+    <rect class="node-box node-indigo" x="150" y="92" width="114" height="52" />
+    <text class="node-title" x="207" y="114">JwtAuthFilter</text>
+    <text class="node-sub" x="207" y="131">Validate Signature</text>
+  </g>
+
+  <!-- Node 3: AuthenticationManager -->
+  <g class="pulse">
+    <rect class="node-box node-purple" x="292" y="92" width="140" height="52" />
+    <text class="node-title" x="362" y="114">AuthenticationManager</text>
+    <text class="node-sub" x="362" y="131">ProviderManager / DAO</text>
+  </g>
+
+  <!-- Node 4: SecurityContextHolder -->
+  <g class="pulse">
+    <rect class="node-box node-amber" x="460" y="92" width="144" height="52" />
+    <text class="node-title" x="532" y="114">SecurityContextHolder</text>
+    <text class="node-sub" x="532" y="131">ThreadLocal Principal</text>
+  </g>
+
+  <!-- Node 5: @PreAuthorize -->
+  <g class="pulse">
+    <rect class="node-box node-amber" x="630" y="92" width="104" height="52" />
+    <text class="node-title" x="682" y="114">@PreAuthorize</text>
+    <text class="node-sub" x="682" y="131">SpEL Role Check</text>
+  </g>
+
+  <!-- Node 6: Controller -->
+  <g class="pulse">
+    <rect class="node-box node-green" x="770" y="92" width="104" height="52" />
+    <text class="node-title" x="822" y="114">Controller</text>
+    <text class="node-sub" x="822" y="131">200 OK Response</text>
+  </g>
+
+  <!-- Secondary Row: UserDetailsService & 401/403 -->
+  <!-- Lookup Connectors -->
+  <path class="lookup-dash" d="M 212 144 L 212 214 L 268 214" marker-end="url(#arrow-purple)" />
+  <path class="lookup-dash" d="M 412 214 L 362 214 L 362 146" marker-end="url(#arrow-purple)" />
+  <text class="label-small" x="212" y="185" fill="#d8b4fe">loadUserByUsername</text>
+
+  <!-- Node 7: UserDetailsService -->
+  <rect class="node-box node-purple" x="270" y="192" width="150" height="48" />
+  <text class="node-title" x="345" y="213">UserDetailsService</text>
+  <text class="node-sub" x="345" y="229">Load Roles &amp; Authorities</text>
+
+  <!-- Error Connectors -->
+  <path class="err-dash" d="M 184 144 L 184 268 L 570 268 L 570 234 L 598 234" marker-end="url(#arrow-red)" />
+  <path class="err-dash" d="M 682 144 L 682 188" marker-end="url(#arrow-red)" />
+  <text class="label-err" x="360" y="262">Invalid / Expired JWT → 401</text>
+  <text class="label-err" x="735" y="172">Denied → 403</text>
+
+  <!-- Node 8: 401 / 403 -->
+  <rect class="node-box node-red" x="600" y="192" width="152" height="48" />
+  <text class="node-title" x="676" y="213" fill="#fecaca">401 / 403 Error</text>
+  <text class="node-sub" x="676" y="229" fill="#fca5a5">ExceptionTranslationFilter</text>
+
+  <!-- Animated JWT Packet along Main Path -->
+  <circle r="5.5" fill="#38bdf8">
+    <animateMotion dur="3.4s" repeatCount="indefinite" rotate="auto">
+      <mpath href="#mainTokenPath" />
+    </animateMotion>
+    <animate attributeName="fill" values="#38bdf8;#818cf8;#fbbf24;#34d399" dur="3.4s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Animated Principal Lookup Pulse -->
+  <circle r="4" fill="#c084fc">
+    <animateMotion dur="2.8s" repeatCount="indefinite">
+      <mpath href="#lookupPath" />
+    </animateMotion>
+  </circle>
+
+  <!-- Legend Footer -->
+  <circle cx="34" cy="296" r="4" fill="#38bdf8" />
+  <text class="subtitle" x="45" y="300">JWT Token Flow</text>
+
+  <circle cx="178" cy="296" r="4" fill="#c084fc" />
+  <text class="subtitle" x="189" y="300">UserDetails Lookup</text>
+
+  <circle cx="340" cy="296" r="4" fill="#fbbf24" />
+  <text class="subtitle" x="351" y="300">SecurityContext &amp; SpEL</text>
+
+  <circle cx="524" cy="296" r="4" fill="#34d399" />
+  <text class="subtitle" x="535" y="300">Authorized (200)</text>
+
+  <circle cx="674" cy="296" r="4" fill="#f87171" />
+  <text class="subtitle" x="685" y="300">Rejected (401 / 403)</text>
+</svg>

@@ -21,22 +21,32 @@
 
 ### Repository Interfaces
 
+Spring Data provides a layered hierarchy of repository interfaces. Each layer adds more capabilities, from a marker interface up to full JPA batching and flushing.
+
+```mermaid
+flowchart TD
+    R["Repository&lt;T, ID&gt; (Marker Interface)"]:::purple --> C["CrudRepository&lt;T, ID&gt; (Basic CRUD)"]:::blue
+    C --> P["PagingAndSortingRepository&lt;T, ID&gt; (Sort &amp; Pageable)"]:::amber
+    P --> J["JpaRepository&lt;T, ID&gt; (Flush, Batch, QBE)"]:::green
+    Q["QueryByExampleExecutor&lt;T&gt;"]:::purple --> J
+    J --> U["Custom UserRepository"]:::blue
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
 ```
-                        Repository
-                            ▲
-                            │
-        CrudRepository◄──────┴─────────────────┐
-                            ▲                  │
-                            │                  │
-    PagingAndSorting        │                  │
-    Repository◄─────────────┼──────────────────┤
-                            │                  │
-                            │              JpaRepository
-                    JpaRepository◄─────────────┘
-                            ▲
-                            │
-                    (Your custom interface)
-```
+
+| Interface | Primary Responsibility | Return Types | Typical Use Case |
+| :--- | :--- | :--- | :--- |
+| `Repository<T, ID>` | Marker interface for Spring Data proxy generation | Custom | Expose only explicitly declared query methods |
+| `CrudRepository<T, ID>` | Basic CRUD (`save`, `findById`, `delete`, `count`) | `Iterable<T>`, `Optional<T>` | Simple persistence without pagination or JPA specifics |
+| `PagingAndSortingRepository<T, ID>` | Adds `Sort` and `Pageable` support | `Iterable<T>`, `Page<T>` | Paginated APIs and sorted queries |
+| `JpaRepository<T, ID>` | Extends `PagingAndSorting` + `QueryByExampleExecutor` | `List<T>`, `Page<T>` | Standard JPA apps needing `flush()`, `saveAndFlush()`, batch deletes |
+
+> [!TIP]
+> Prefer `JpaRepository<T, ID>` for standard JPA applications because it returns `List<T>` instead of `Iterable<T>` and exposes `flush()`, `saveAndFlush()`, and batch deletion methods.
 
 ### CrudRepository: Basic CRUD Operations
 
@@ -118,6 +128,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 ### Query Methods: Method Name Conventions
 
+Spring Data parses method names at startup into JPQL queries using keywords such as `findBy`, `countBy`, `existsBy`, `deleteBy`, `And`, `Or`, `IgnoreCase`, `GreaterThan`, `Between`, `Before`, `Containing`, `StartingWith`, and `EndingWith`.
+
 ```java
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -154,7 +166,27 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 ## Entity Mapping
 
+### Persistence Context & Entity Lifecycle
+
+![JPA Persistence Context Animation](./assets/04-jpa-persistence-context.svg)
+
+Hibernate's Persistence Context acts as the **L1 Cache** (identity map) for a single `EntityManager` / transaction. It tracks managed entities against load-time snapshots and automatically emits SQL during flush/commit via **dirty checking**.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Transient: new Entity()
+    Transient --> Managed: em.persist() / save()
+    Managed --> Detached: em.close() / clear() / detach()
+    Detached --> Managed: em.merge()
+    Managed --> Removed: em.remove() / delete()
+    Removed --> [*]: TX Commit (DELETE SQL)
+```
+
 ### Basic Entity Definition
+
+- **`@Entity` & `@Table`**: Maps the class to a database table and defines indexes (`@Index`) for query performance.
+- **`@Version`**: Enables optimistic locking by incrementing a version column on each update.
+- **`@PrePersist` / `@PreUpdate`**: JPA lifecycle callbacks executed before `INSERT` and `UPDATE`.
 
 ```java
 @Entity
@@ -207,6 +239,31 @@ public class User {
 ```
 
 ### ID Generation Strategies
+
+| Strategy | Mechanism | JDBC Batching Friendly? | Best For |
+| :--- | :--- | :--- | :--- |
+| `IDENTITY` | DB `AUTO_INCREMENT` / `SERIAL` | No (disables Hibernate insert batching) | MySQL simple inserts |
+| `SEQUENCE` | DB sequence (`@SequenceGenerator`) | Yes (supports `allocationSize` pre-allocation) | PostgreSQL, Oracle high-throughput writes |
+| `TABLE` | Dedicated ID table (`@TableGenerator`) | Moderate (row-locking overhead) | Legacy DBs without sequences |
+| `UUID` | Programmatic `UUID.randomUUID()` | Yes (ID known before insert) | Distributed systems, microservices |
+| `AUTO` | Provider selects based on dialect | Depends on dialect | Portable prototypes |
+
+```mermaid
+flowchart LR
+    ID["@GeneratedValue Strategy"]:::purple --> I["IDENTITY (MySQL AUTO_INCREMENT)"]:::amber
+    ID --> S["SEQUENCE (PostgreSQL / Batching)"]:::green
+    ID --> T["TABLE (Portable, Slower)"]:::red
+    ID --> U["UUID (Distributed / Pre-assigned)"]:::blue
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+> [!IMPORTANT]
+> `GenerationType.IDENTITY` disables Hibernate JDBC insert batching because Hibernate needs the generated primary key immediately upon `persist()`. Use `SEQUENCE` with `allocationSize` when bulk-inserting records.
 
 ```java
 // 1. IDENTITY: Database auto-increment
@@ -264,6 +321,8 @@ public class Document {
 
 ### Embeddable Objects
 
+Use `@Embeddable` and `@Embedded` to group value-object columns into reusable Java types without creating a separate table. Use `@AttributeOverrides` when embedding the same type multiple times in one entity.
+
 ```java
 @Embeddable
 public class Address {
@@ -308,6 +367,25 @@ public class User {
 ---
 
 ## Relationships and Fetch Strategies
+
+### Entity Relationship Overview
+
+```mermaid
+erDiagram
+    AUTHOR ||--o{ BOOK : writes
+    USER ||--|| USER_PROFILE : has
+    STUDENT }o--o{ COURSE : enrolls_via_student_course
+```
+
+| Annotation | Default FetchType | Owning Side | Recommended FetchType |
+| :--- | :--- | :--- | :--- |
+| `@OneToMany` | `LAZY` | Child (`@ManyToOne` with `@JoinColumn`) | `LAZY` |
+| `@ManyToOne` | `EAGER` | This side (`@JoinColumn`) | Override to `LAZY` |
+| `@ManyToMany` | `LAZY` | Side with `@JoinTable` | `LAZY` |
+| `@OneToOne` | `EAGER` | Side with `@JoinColumn` | Override to `LAZY` |
+
+> [!WARNING]
+> `@ManyToOne` and `@OneToOne` default to `FetchType.EAGER` in JPA! Always explicitly set `fetch = FetchType.LAZY` on them to avoid loading entire object graphs unnecessarily.
 
 ### One-to-Many
 
@@ -463,6 +541,20 @@ public class UserProfile {
 
 ### Cascade Types
 
+```mermaid
+flowchart LR
+    P["Parent Entity Operation"]:::purple --> C1["PERSIST → Save children"]:::green
+    P --> C2["MERGE → Update children"]:::blue
+    P --> C3["REMOVE → Delete children"]:::red
+    P --> C4["REFRESH / DETACH → Sync / Evict"]:::amber
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
 ```java
 // cascade = CascadeType.ALL means ALL cascade operations
 // Individual options:
@@ -483,6 +575,26 @@ public class UserProfile {
 ## N+1 Problem and Solutions
 
 ### The Problem
+
+When you fetch `N` parent entities in 1 query and then access a lazy collection on each parent, Hibernate fires `N` additional `SELECT` queries—totaling **1 + N queries**.
+
+```mermaid
+sequenceDiagram
+    participant App as AuthorService
+    participant DB as Database
+
+    Note over App,DB: N+1 Problem (1 + N Queries)
+    App->>DB: SELECT * FROM authors (1 query)
+    DB-->>App: Returns 1000 authors
+    loop For each of 1000 authors
+        App->>DB: SELECT * FROM books WHERE author_id = ?
+        DB-->>App: Books for author
+    end
+
+    Note over App,DB: JOIN FETCH Solution (1 Query)
+    App->>DB: SELECT DISTINCT a.*, b.* FROM authors a LEFT JOIN books b
+    DB-->>App: All authors + books in 1 round-trip
+```
 
 ```java
 @Service
@@ -514,6 +626,34 @@ public class AuthorService {
 
 // Problem: If there are 1000 authors, you make 1001 database queries
 ```
+
+### N+1 Solutions Comparison
+
+| Solution | Queries Fired | Pagination Safe? | Best Use Case |
+| :--- | :--- | :--- | :--- |
+| `JOIN FETCH` | `1` | No (in-memory pagination warning with collections) | Need parent + collection together without pagination |
+| `@EntityGraph` | `1` | Same as `JOIN FETCH` | Declarative eager loading on repository methods |
+| `@BatchSize(size = N)` | `1 + ceil(total / N)` | Yes | Paginated lists or global lazy-loading optimization |
+| Projection (DTO/Interface) | `1` | Yes | Read-only views needing only selected columns |
+| Query-Specific Loading | `1` (tailored) | Depends on query | Separate endpoints with/without child associations |
+
+```mermaid
+flowchart TD
+    N1["N+1 Detected"]:::red --> Q{"Need Child Entities?"}:::purple
+    Q -->|No| P["Use Interface/DTO Projection"]:::green
+    Q -->|Yes| PG{"Using Pageable?"}:::amber
+    PG -->|Yes| BS["Use @BatchSize(size = 20)"]:::blue
+    PG -->|No| JF["Use JOIN FETCH or @EntityGraph"]:::green
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+> [!WARNING]
+> Combining `JOIN FETCH` on a collection (`@OneToMany`) with `Pageable` forces Hibernate to fetch all rows and paginate in memory (`HHH90003004`). Use `@BatchSize` or two-step ID pagination when paginating parent entities.
 
 ### Solution 1: JOIN FETCH
 
@@ -637,6 +777,30 @@ public interface AuthorRepository extends JpaRepository<Author, Long> {
 ---
 
 ## JPQL and Native Queries
+
+```mermaid
+flowchart LR
+    JPQL["@Query (JPQL)"]:::blue --> H["Hibernate AST Translator"]:::purple
+    NQ["@NamedQuery (Validated at Startup)"]:::green --> H
+    H --> SQL["Dialect-Specific SQL"]:::amber
+    NAT["@Query(nativeQuery = true)"]:::red --> DB["Direct JDBC Execution"]:::amber
+    SQL --> DB
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+| Query Type | Targets | DB Portable? | Validated at Startup? | Best For |
+| :--- | :--- | :--- | :--- | :--- |
+| **JPQL** | Entity classes & fields | Yes | Yes | Standard queries, joins, aggregations |
+| **Native SQL** | Database tables & columns | No | No (runtime) | DB-specific features (CTEs, window functions, JSON) |
+| **Named Queries** | Entity classes & fields | Yes | Yes (fail-fast) | Reusable static queries defined on `@Entity` |
+
+> [!TIP]
+> Always prefer named parameters (`:email`) over positional parameters (`?1`) in both JPQL and native queries for readability and refactoring safety.
 
 ### JPQL (Java Persistence Query Language)
 
@@ -762,6 +926,31 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 ### Specification for Dynamic Queries
 
+`JpaSpecificationExecutor<T>` lets you compose type-safe `Specification<T>` predicates dynamically at runtime—ideal for multi-filter search endpoints.
+
+```mermaid
+flowchart TD
+    S0["Specification.where(null)"]:::purple --> S1{"email != blank?"}:::amber
+    S1 -->|Yes| A1["and(emailContains)"]:::blue
+    S1 -->|No| S2{"minAge != null?"}:::amber
+    A1 --> S2
+    S2 -->|Yes| A2["and(ageGreaterThan)"]:::blue
+    S2 -->|No| S3{"createdAfter != null?"}:::amber
+    A2 --> S3
+    S3 -->|Yes| A3["and(createdAfter)"]:::blue
+    S3 -->|No| EX["userRepository.findAll(spec)"]:::green
+    A3 --> EX
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+> [!NOTE]
+> `Specification` wraps JPA's `CriteriaBuilder`, `Root<T>`, and `CriteriaQuery<?>` so you can combine reusable predicates with `.and()` and `.or()` without string concatenation.
+
 ```java
 public class UserSpecification {
     public static Specification<User> hasEmail(String email) {
@@ -830,6 +1019,31 @@ public class UserSearchService {
 
 ### @CreatedDate, @LastModifiedDate, @CreatedBy
 
+Spring Data JPA Auditing automatically populates creation and modification metadata via `AuditingEntityListener` and `AuditorAware<T>`.
+
+```mermaid
+sequenceDiagram
+    participant Repo as UserRepository
+    participant Listener as AuditingEntityListener
+    participant Aware as AuditorAware
+    participant DB as Database
+
+    Repo->>Listener: save(newUser) [@PrePersist]
+    Listener->>Aware: getCurrentAuditor()
+    Aware-->>Listener: username or "SYSTEM"
+    Listener->>Listener: Set createdAt, lastModifiedAt, createdBy, lastModifiedBy
+    Listener->>DB: INSERT INTO users
+
+    Repo->>Listener: save(existingUser) [@PreUpdate]
+    Listener->>Aware: getCurrentAuditor()
+    Aware-->>Listener: username
+    Listener->>Listener: Update lastModifiedAt, lastModifiedBy
+    Listener->>DB: UPDATE users
+```
+
+> [!IMPORTANT]
+> Two annotations are required for auditing to work: `@EnableJpaAuditing` on a `@Configuration` class and `@EntityListeners(AuditingEntityListener.class)` on the entity (or mapped superclass).
+
 ```java
 @Configuration
 @EnableJpaAuditing(auditorAwareRef = "auditorAware")
@@ -890,6 +1104,8 @@ public class User {
 
 ### @Transactional Fundamentals
 
+`@Transactional` wraps service methods in a database transaction boundary so that all repository calls succeed together or roll back atomically.
+
 ```java
 @Service
 public class OrderService {
@@ -927,6 +1143,16 @@ public class OrderService {
 ```
 
 ### Propagation Levels
+
+| Propagation | Active TX Exists | No Active TX | Common Use Case |
+| :--- | :--- | :--- | :--- |
+| `REQUIRED` (default) | Joins existing TX | Creates new TX | Standard service methods |
+| `REQUIRES_NEW` | Suspends existing, starts new TX | Creates new TX | Independent audit logging |
+| `SUPPORTS` | Joins existing TX | Runs non-transactionally | Optional-TX read queries |
+| `NOT_SUPPORTED` | Suspends existing, runs without TX | Runs non-transactionally | External API calls / non-TX work |
+| `MANDATORY` | Joins existing TX | Throws exception | Internal helper requiring caller TX |
+| `NEVER` | Throws exception | Runs non-transactionally | Enforcing non-transactional execution |
+| `NESTED` | Creates DB savepoint | Creates new TX | Partial rollback within parent TX |
 
 ```java
 // 1. REQUIRED (default)
@@ -1019,6 +1245,13 @@ public void nestedTransaction() {
 
 ### Isolation Levels
 
+| Isolation Level | Dirty Read | Non-Repeatable Read | Phantom Read | Performance |
+| :--- | :--- | :--- | :--- | :--- |
+| `READ_UNCOMMITTED` | Possible | Possible | Possible | Fastest |
+| `READ_COMMITTED` | Prevented | Possible | Possible | High (DB default) |
+| `REPEATABLE_READ` | Prevented | Prevented | Possible | Medium |
+| `SERIALIZABLE` | Prevented | Prevented | Prevented | Slowest |
+
 ```java
 @Service
 public class OrderService {
@@ -1060,6 +1293,9 @@ public class OrderService {
 ```
 
 ### Rollback Rules
+
+> [!WARNING]
+> By default, Spring `@Transactional` rolls back **only on unchecked exceptions** (`RuntimeException` and `Error`), **not** on checked exceptions (`Exception`). Use `rollbackFor = Exception.class` when checked exceptions must trigger a rollback.
 
 ```java
 @Service
@@ -1108,26 +1344,59 @@ public class OrderService {
 
 ### How @Transactional Works Internally
 
+```mermaid
+flowchart TD
+    C["Caller invokes method"]:::blue --> P["Spring AOP Proxy (TransactionInterceptor)"]:::purple
+    P --> TM["PlatformTransactionManager.getTransaction()"]:::amber
+    TM --> M["Execute Target Method"]:::blue
+    M --> E{"Exception thrown?"}:::amber
+    E -->|No| CM["txManager.commit()"]:::green
+    E -->|Yes| R{"Matches rollbackFor?"}:::amber
+    R -->|Yes| RB["txManager.rollback()"]:::red
+    R -->|No| CM
+    CM --> RET["Return result to caller"]:::green
+    RB --> TH["Propagate exception"]:::red
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
 ```
-1. Method call detected
-2. TransactionInterceptor (AOP) intercepts
-3. Creates PlatformTransactionManager
-4. Begins transaction
-5. Actual method executes
-6. If exception:
-   - rollback() called if matches rollbackFor
-   - Transaction rolled back
-7. If no exception:
-   - commit() called
-   - Changes persisted to database
-8. Returns result to caller
-```
+
+> [!NOTE]
+> Because `@Transactional` relies on Spring AOP proxies, **self-invocation** (calling a `@Transactional` method from another method inside the same class) bypasses the proxy and does not start a new transaction.
 
 ---
 
 ## Connection Pooling
 
 ### HikariCP Configuration (Default in Spring Boot)
+
+```mermaid
+flowchart LR
+    APP["Application Threads"]:::blue -->|"borrow conn (30s timeout)"| HK["HikariCP Pool (min 5 / max 20)"]:::purple
+    HK -->|"reuse cached PreparedStmt"| DB["Database Connections"]:::green
+    HK -->|"held &gt; 60s"| LK["Leak Detection Log"]:::red
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+| Property | Example Value | Purpose |
+| :--- | :--- | :--- |
+| `maximum-pool-size` | `20` | Max active + idle connections in the pool |
+| `minimum-idle` | `5` | Minimum idle connections HikariCP tries to maintain |
+| `connection-timeout` | `30000` (30s) | Max wait time for a connection before throwing `SQLException` |
+| `idle-timeout` | `600000` (10m) | Max time a connection can sit idle before eviction |
+| `max-lifetime` | `1800000` (30m) | Max lifetime of a connection (should be shorter than DB wait_timeout) |
+| `leak-detection-threshold` | `60000` (1m) | Logs a warning if a connection is not returned within threshold |
+
+> [!TIP]
+> Follow the HikariCP pool sizing guideline: `connections = ((core_count * 2) + effective_spindle_count)`. For a 4-core CPU with 1 SSD/disk, `9` connections often outperforms a huge pool by avoiding context-switching and lock contention.
 
 ```yaml
 # application.yml
@@ -1194,6 +1463,30 @@ public class DataSourceConfiguration {
 ---
 
 ## Database Migrations
+
+```mermaid
+flowchart LR
+    BOOT["Spring Boot Startup"]:::purple --> CHK["Check History Table (flyway_schema_history / DATABASECHANGELOG)"]:::amber
+    CHK --> DIFF["Identify Pending Scripts / ChangeSets"]:::blue
+    DIFF --> RUN["Execute Migrations in Order"]:::green
+    RUN --> APP["Start Application Context"]:::green
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+| Feature | Flyway | Liquibase |
+| :--- | :--- | :--- |
+| **Primary Format** | Versioned SQL (`V1__Initial.sql`) | YAML, XML, JSON, or SQL (`changeSet`) |
+| **DB Portability** | SQL-first (dialect-specific) | Abstracted changesets (DB-agnostic) |
+| **Rollback Support** | Undo scripts (Teams/Enterprise) | Built-in rollback tags in OSS |
+| **Learning Curve** | Minimal (plain SQL) | Moderate (changelog DSL) |
+
+> [!IMPORTANT]
+> Never modify an already-applied migration script in production—checksum validation will fail on startup. Always create a new versioned migration (`V4__...` or a new `changeSet`) instead.
 
 ### Flyway
 
@@ -1296,6 +1589,28 @@ databaseChangeLog:
 
 ## Multi-Datasource Configuration
 
+When an application connects to multiple databases, you must isolate each datasource's `DataSource`, `LocalContainerEntityManagerFactoryBean` (with separate `packagesToScan`), and `PlatformTransactionManager`, marking one set as `@Primary`.
+
+```mermaid
+flowchart TD
+    DS1["primaryDataSource (@Primary)"]:::blue --> EM1["primaryEntityManager (com.example.entity.primary)"]:::purple
+    EM1 --> TX1["primaryTransactionManager (@Primary)"]:::green
+    TX1 --> R1["PrimaryUserRepository"]:::amber
+
+    DS2["secondaryDataSource"]:::blue --> EM2["secondaryEntityManager (com.example.entity.secondary)"]:::purple
+    EM2 --> TX2["secondaryTransactionManager"]:::green
+    TX2 --> R2["SecondaryOrderRepository"]:::amber
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+> [!NOTE]
+> Use `@Qualifier` when wiring the `DataSource` into each `EntityManagerFactory` and each `EntityManagerFactory` into its `PlatformTransactionManager` so Spring resolves the exact bean.
+
 ```java
 @Configuration
 public class DataSourceConfiguration {
@@ -1378,6 +1693,30 @@ public interface SecondaryOrderRepository extends JpaRepository<Order, Long> {
 ---
 
 ## Spring Data MongoDB
+
+```mermaid
+flowchart LR
+    SVC["UserService"]:::blue --> MR["MongoRepository&lt;User, String&gt; (Derived Queries)"]:::green
+    SVC --> MT["MongoTemplate (Dynamic Query + Criteria)"]:::purple
+    MR --> MDB["MongoDB Collections (BSON Documents)"]:::amber
+    MT --> MDB
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+| JPA Annotation | MongoDB Equivalent | Purpose |
+| :--- | :--- | :--- |
+| `@Entity` / `@Table` | `@Document(collection = "...")` | Maps class to a MongoDB collection |
+| `@Id` | `@Id` | Maps to MongoDB `_id` field (`String` / `ObjectId`) |
+| `@Column(name = "...")` | `@Field("...")` | Customizes document field name |
+| `@Transient` | `@Transient` | Excludes field from persistence |
+
+> [!TIP]
+> Use `MongoRepository` for standard CRUD and derived queries, and inject `MongoTemplate` with `Query` + `Criteria` when building dynamic multi-field filters.
 
 ### Basic Configuration
 
@@ -1477,10 +1816,28 @@ public class UserService {
 
 ## Interview Questions
 
+```mermaid
+flowchart TD
+    IQ["Spring Data &amp; JPA Interview Map"]:::purple --> Q1["Repository Hierarchy (Q1)"]:::blue
+    IQ --> Q2["N+1 &amp; @EntityGraph (Q2, Q4)"]:::red
+    IQ --> Q3["@Transactional Propagation (Q3)"]:::amber
+    IQ --> Q5["Optimistic vs Pessimistic Locking (Q5)"]:::green
+    IQ --> Q6["Multi-Datasource Setup (Q6)"]:::blue
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+```
+
+> [!TIP]
+> In system design and backend interviews, pair N+1 answers with **pagination trade-offs** (`JOIN FETCH` vs `@BatchSize`) and `@Transactional` answers with **proxy self-invocation** and **checked-exception rollback** caveats.
+
 ### Q1: Explain the Spring Data repository hierarchy.
 
 **Answer:**
-`Repository` is the root marker interface. `CrudRepository` extends it with CRUD operations (save, delete, findById). `PagingAndSortingRepository` adds pagination/sorting. `JpaRepository` extends both and adds JPA-specific methods (flush, saveAndFlush, deleteInBatch).
+`Repository` is the root marker interface. `CrudRepository` extends it with CRUD operations (`save`, `delete`, `findById`). `PagingAndSortingRepository` adds pagination and sorting. `JpaRepository` extends both and adds JPA-specific methods (`flush`, `saveAndFlush`, `deleteInBatch`).
 
 Use `JpaRepository` for JPA applications as it has all features needed.
 
@@ -1490,9 +1847,9 @@ Use `JpaRepository` for JPA applications as it has all features needed.
 N+1 problem: You fetch N parent entities, then for each parent, you fetch related children. Results in 1 + N database queries.
 
 Solutions:
-1. **JOIN FETCH**: Eagerly fetch in single query with JOIN
+1. **JOIN FETCH**: Eagerly fetch in single query with `JOIN`
 2. **@EntityGraph**: Declare which associations to fetch
-3. **@BatchSize**: Fetch related entities in batches (50 authors' books in 1 query instead of 50)
+3. **@BatchSize**: Fetch related entities in batches (e.g., 50 authors' books in 1 query instead of 50)
 4. **Projection**: Only select fields you need
 5. **Query-specific methods**: Create different query methods for different use cases
 
@@ -1518,18 +1875,17 @@ Choose based on whether operation depends on parent transaction.
 List<Author> findAllWithDetails();
 ```
 
-@EntityGraph defines which related entities to eagerly fetch. Spring generates single query with JOINs. More declarative than JOIN FETCH, less boilerplate.
+`@EntityGraph` defines which related entities to eagerly fetch. Spring generates single query with JOINs. More declarative than `JOIN FETCH`, less boilerplate.
 
 ### Q5: Explain optimistic vs pessimistic locking.
 
 **Answer:**
-- **Optimistic locking**: Assumes no conflicts, use `@Version` field. If version changed, throws exception on update. Good for low-conflict scenarios
-- **Pessimistic locking**: Lock row in database, `@Lock(LockModeType.PESSIMISTIC_WRITE)`. No one else can modify until released. Good for high-conflict scenarios
+- **Optimistic locking**: Assumes no conflicts, use `@Version` field. If version changed, throws exception on update. Good for low-conflict scenarios.
+- **Pessimistic locking**: Lock row in database, `@Lock(LockModeType.PESSIMISTIC_WRITE)`. No one else can modify until released. Good for high-conflict scenarios.
 
 Optimistic is faster but requires handling version conflicts; pessimistic is safer but slower.
 
 ### Q6: How do you configure multiple datasources?
 
 **Answer:**
-Define multiple DataSource beans with @Primary for default. For each datasource, create separate EntityManagerFactory and PlatformTransactionManager. Use @Qualifier("dataSourceName") to inject specific datasource. Repositories use @Transactional(transactionManager = "txManagerName").
-
+Define multiple `DataSource` beans with `@Primary` for default. For each datasource, create separate `EntityManagerFactory` and `PlatformTransactionManager`. Use `@Qualifier("dataSourceName")` to inject specific datasource. Repositories use `@Transactional(transactionManager = "txManagerName")`.

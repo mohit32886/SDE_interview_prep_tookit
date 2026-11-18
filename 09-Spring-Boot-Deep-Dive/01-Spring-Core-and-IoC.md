@@ -16,14 +16,29 @@
 
 ## BeanFactory vs ApplicationContext
 
+```mermaid
+flowchart LR
+    BF["BeanFactory (Basic IoC)"] --> AC["ApplicationContext (Enterprise IoC)"]
+    AC --> CP["ClassPathXmlApplicationContext"]
+    AC --> FS["FileSystemXmlApplicationContext"]
+    AC --> AN["AnnotationConfigApplicationContext"]
+    AC --> WEB["ServletWebServerApplicationContext"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class BF blue
+    class AC green
+    class CP,FS,AN,WEB purple
+```
+
 ### BeanFactory: The Basic Container
 
-BeanFactory is the lowest-level interface for accessing Spring beans. It's responsible for instantiating, configuring, and managing beans.
+`BeanFactory` is the lowest-level interface for accessing Spring beans, responsible for instantiating, configuring, and managing them.
 
-**Key Characteristics:**
-- Lazy initialization (beans created on demand)
-- Minimal overhead
-- Used in resource-constrained environments
+- **Lazy initialization:** Beans are created on demand when `getBean()` is called.
+- **Minimal overhead:** Lightweight footprint suited for resource-constrained environments.
 
 ```java
 // Basic BeanFactory usage
@@ -33,16 +48,12 @@ MyBean bean = factory.getBean("myBean", MyBean.class);
 
 ### ApplicationContext: The Advanced Container
 
-ApplicationContext extends BeanFactory and provides additional enterprise-level features.
+`ApplicationContext` extends `BeanFactory` and adds enterprise-grade container features:
 
-**Key Characteristics:**
-- Eager initialization (beans created on startup)
-- Message resource handling (i18n)
-- Event publishing
-- Hierarchical context
-- ResourceLoader capabilities
+- **Eager initialization:** Singleton beans are instantiated at container startup.
+- **Enterprise services:** Built-in i18n (`MessageSource`), event publishing (`ApplicationEventPublisher`), hierarchical contexts, and `ResourceLoader` support.
+- **Automatic post-processing:** Automatically detects and registers `BeanPostProcessor` and `BeanFactoryPostProcessor` beans.
 
-**Core Implementations:**
 ```java
 // ClassPathXmlApplicationContext: loads XML from classpath
 ApplicationContext context = new ClassPathXmlApplicationContext("beans.xml");
@@ -70,7 +81,8 @@ ApplicationContext context = new AnnotationConfigApplicationContext(MyConfigurat
 | Hierarchical Contexts | No | Yes |
 | AOP | Manual Setup | Automatic |
 
-### Practical Implications
+> [!NOTE]
+> Spring Boot always uses an `ApplicationContext` (such as `ServletWebServerApplicationContext` for web apps), so i18n, event publishing, and auto-registered AOP proxies are available immediately after `SpringApplication.run(...)`.
 
 ```java
 // Spring Boot always uses ApplicationContext
@@ -90,14 +102,40 @@ public class Application {
 
 ## Dependency Injection Strategies
 
+```mermaid
+flowchart TD
+    Q1{"Is the dependency required?"} -->|Yes| Q2{"Is target Prototype inside Singleton?"}
+    Q1 -->|No| OPT["Use Optional&lt;T&gt; or ObjectProvider&lt;T&gt;"]
+    Q2 -->|No| CON["Constructor Injection (Preferred)"]
+    Q2 -->|Yes| LKP["@Lookup or ObjectProvider&lt;T&gt;"]
+    OPT --> SET["Or @Autowired(required = false) Setter"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class Q1,Q2 amber
+    class CON green
+    class OPT,LKP blue
+    class SET purple
+```
+
+### Strategy Comparison
+
+| Strategy | Mutability | Null-Safety | Testability | Circular Dependency | Recommendation |
+|----------|-----------|-------------|-------------|---------------------|----------------|
+| Constructor | Immutable (`final`) | Fails fast at startup | High (plain `new`) | Fails fast (good) | Preferred |
+| Setter | Mutable | Requires null checks | Medium | Allowed | Optional / runtime changes |
+| Field (`@Autowired`) | Mutable | NPE risk outside Spring | Low (needs reflection/context) | Hidden | Avoid in production |
+| `@Lookup` | Dynamic | Safe per invocation | Medium | N/A | Prototype in Singleton |
+
 ### 1. Constructor Injection (PREFERRED)
 
-**Advantages:**
-- Immutability: dependencies are final
-- Null-safety: detects missing dependencies at construction time
-- Testability: easy to provide mocks
-- Explicit dependencies: all dependencies visible in constructor signature
-- Thread-safety: no need for synchronization
+- **Immutability:** Dependencies can be declared `final`.
+- **Null-safety:** Missing dependencies are detected at construction time.
+- **Testability:** Easy to instantiate with mocks without starting a Spring context.
+- **Explicit dependencies & thread-safety:** All collaborators are visible in the constructor signature and require no synchronization.
 
 ```java
 @Component
@@ -136,9 +174,8 @@ public void testRegisterUser() {
 }
 ```
 
-**When Spring Doesn't Find a Constructor with @Autowired:**
-
-If no constructor is explicitly marked with @Autowired and there's only one constructor, Spring automatically uses it (implicit constructor injection).
+> [!TIP]
+> If a bean has only **one constructor**, Spring automatically uses it for dependency injection—no `@Autowired` annotation is required.
 
 ```java
 @Component
@@ -154,15 +191,8 @@ public class PaymentService {
 
 ### 2. Setter Injection
 
-**Advantages:**
-- Optional dependencies (use DefaultValue pattern)
-- Can change dependencies at runtime
-- Backward compatible with existing code
-
-**Disadvantages:**
-- Mutable state (thread-unsafe without proper synchronization)
-- Doesn't enforce all dependencies are set
-- Harder to test
+- **Advantages:** Supports optional dependencies, allows runtime reconfiguration, and remains backward compatible with legacy JavaBeans.
+- **Disadvantages:** Introduces mutable state, does not enforce required dependencies, and is harder to test cleanly.
 
 ```java
 @Component
@@ -197,12 +227,7 @@ public class ReportService {
 
 ### 3. Field Injection (NOT RECOMMENDED)
 
-**Disadvantages:**
-- Hidden dependencies
-- Mutable state
-- Cannot be injected in constructor, complicating testing
-- NullPointerException risk if field not injected
-- Circular dependency issues
+- **Disadvantages:** Hides dependencies, forces mutable state, complicates unit testing without Spring, risks `NullPointerException`, and masks circular dependencies.
 
 ```java
 @Component
@@ -235,7 +260,7 @@ public class OrderServiceTest {
 
 ### 4. Optional Dependency Pattern
 
-For truly optional dependencies, use Optional or @Autowired(required = false):
+For truly optional dependencies, inject `Optional<T>` via the constructor or use `@Autowired(required = false)`.
 
 ```java
 @Component
@@ -277,7 +302,7 @@ public class NotificationConfig {
 
 ### 5. Lookup Method Injection (Rare, but Useful)
 
-When you need a new instance every time:
+Use `@Lookup` when a singleton bean needs a fresh `prototype`-scoped bean instance on every method call.
 
 ```java
 @Component
@@ -348,59 +373,41 @@ public class PaymentProcessor {
 
 ## Bean Lifecycle
 
-Understanding the bean lifecycle is crucial for production applications. Here's the complete sequence:
+![Spring Bean Lifecycle Animation](./assets/01-spring-bean-lifecycle.svg)
 
-### Visual Flow
+### Complete 16-Stage Sequence
 
+```mermaid
+flowchart TD
+    S1["1. BeanDefinition Loading"] --> S2["2. BeanFactoryPostProcessor.postProcessBeanFactory()"]
+    S2 --> S3["3. Instantiation (Constructor / CGLIB)"]
+    S3 --> S4["4. Populate Properties &amp; @Autowired"]
+    S4 --> S5["5-7. Aware Interfaces (BeanName → BeanFactory → ApplicationContext)"]
+    S5 --> S8["8. BPP.postProcessBeforeInitialization()"]
+    S8 --> S9["9. @PostConstruct"]
+    S9 --> S10["10. InitializingBean.afterPropertiesSet()"]
+    S10 --> S11["11. Custom init-method"]
+    S11 --> S12["12. BPP.postProcessAfterInitialization() (AOP Proxy)"]
+    S12 --> S13["13. Bean Ready for Use"]
+    S13 --> S14["14. @PreDestroy (Shutdown)"]
+    S14 --> S15["15. DisposableBean.destroy()"]
+    S15 --> S16["16. Custom destroy-method"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class S1,S2,S3 blue
+    class S4,S5,S8 purple
+    class S9,S10,S11,S12 green
+    class S13 amber
+    class S14,S15,S16 red
 ```
-1. Bean Definition Loading
-   └─> Parsing XML/Annotations → BeanDefinition created
 
-2. BeanFactoryPostProcessor.postProcessBeanFactory()
-   └─> Modifying bean definitions
-
-3. Instantiation (Constructor called)
-   └─> New instance created via reflection/CGLIB
-
-4. Property Population & Autowiring
-   └─> Setter methods called, @Autowired resolved
-
-5. BeanNameAware.setBeanName()
-   └─> Bean learns its name
-
-6. BeanFactoryAware.setBeanFactory()
-   └─> Bean gets reference to factory
-
-7. ApplicationContextAware.setApplicationContext()
-   └─> Bean gets reference to context
-
-8. BeanPostProcessor.postProcessBeforeInitialization()
-   └─> Before init lifecycle callbacks
-
-9. @PostConstruct method (if exists)
-   └─> Annotated with @PostConstruct
-
-10. InitializingBean.afterPropertiesSet()
-    └─> If implements InitializingBean interface
-
-11. Custom init-method (if configured)
-    └─> init-method in @Bean or XML
-
-12. BeanPostProcessor.postProcessAfterInitialization()
-    └─> After init lifecycle callbacks
-
-13. Bean Ready for Use
-    └─> Singleton added to cache, prototype returned
-
-14. @PreDestroy method (if exists)
-    └─> On shutdown, annotated with @PreDestroy
-
-15. DisposableBean.destroy()
-    └─> If implements DisposableBean interface
-
-16. Custom destroy-method (if configured)
-    └─> destroy-method in @Bean or XML
-```
+> [!IMPORTANT]
+> AOP proxies are typically created during `BeanPostProcessor.postProcessAfterInitialization()` (step 12). Destruction callbacks (`@PreDestroy`, `DisposableBean.destroy()`, `destroy-method`) are **not** invoked for `prototype`-scoped beans.
 
 ### Practical Lifecycle Implementation
 
@@ -502,7 +509,7 @@ public class DatabaseConnection implements
 
 ### BeanPostProcessor: Advanced Lifecycle Hook
 
-BeanPostProcessors allow you to customize bean creation:
+`BeanPostProcessor` lets you inspect, wrap, or replace bean instances before and after initialization callbacks.
 
 ```java
 @Component
@@ -599,11 +606,41 @@ public class DataSourceManager {
 
 ## Bean Scopes
 
-Bean scope determines the lifecycle and visibility of a bean instance.
+```mermaid
+flowchart LR
+    IOC["Spring Container"] --> SIN["singleton (1 per container)"]
+    IOC --> PRO["prototype (New per request)"]
+    IOC --> WEB["Web Scopes"]
+    IOC --> CUS["Custom Scope (e.g., ThreadLocal)"]
+    WEB --> REQ["request (Per HTTP request)"]
+    WEB --> SES["session (Per HTTP session)"]
+    WEB --> APP["application (Per ServletContext)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class IOC blue
+    class SIN,APP green
+    class PRO,CUS amber
+    class WEB,REQ,SES purple
+```
+
+### Scope Comparison
+
+| Scope | Instance Lifetime | Cleanup Hooks | Best For |
+|-------|------------------|---------------|----------|
+| `singleton` (Default) | 1 per `ApplicationContext` | Yes (`@PreDestroy`) | Stateless services, DAOs, config beans |
+| `prototype` | New per `getBean()` / `ObjectProvider` | No | Stateful objects, per-invocation tasks |
+| `request` | 1 per HTTP request | Yes | Correlation IDs, request timing |
+| `session` | 1 per HTTP session | Yes | User session state, shopping carts |
+| `application` | 1 per `ServletContext` | Yes | App-wide counters, shared caches |
+| Custom (`Scope`) | Defined by `Scope` impl | Optional | Thread-local caches, tenant contexts |
 
 ### 1. Singleton Scope (Default)
 
-One instance per Spring container. Thread-safe but stateless.
+One instance per Spring container—ideal for stateless services and repositories.
 
 ```java
 @Component
@@ -639,15 +676,9 @@ public class SingletonScopeTest {
 }
 ```
 
-**Best For:**
-- Stateless services
-- Repository/DAO objects
-- Utility services
-- Configuration beans
-
 ### 2. Prototype Scope
 
-New instance created each time the bean is requested. No cleanup lifecycle calls.
+Creates a new instance every time the bean is requested; Spring does **not** invoke `@PreDestroy` or `DisposableBean.destroy()`.
 
 ```java
 @Component
@@ -701,15 +732,9 @@ public class PrototypeScopeTest {
 }
 ```
 
-**Best For:**
-- Request-scoped data
-- Stateful objects
-- Per-invocation instances
-- Thread-local-like behavior
-
 ### 3. Web Scopes (Request, Session, Application)
 
-Only available in web-aware ApplicationContext.
+Available only in a web-aware `ApplicationContext`.
 
 ```java
 // REQUEST SCOPE: New bean per HTTP request
@@ -813,7 +838,7 @@ public class OrderController {
 
 ### 4. Custom Scope
 
-Implement Scope interface for custom scope behavior:
+Implement Spring's `Scope` interface and register it via `CustomScopeConfigurer`:
 
 ```java
 // Custom scope: Thread-scoped beans
@@ -879,9 +904,37 @@ public class ThreadLocalCache {
 
 ## Stereotype Annotations
 
+```mermaid
+flowchart TD
+    COMP["@Component (Generic Bean)"] --> SVC["@Service (Business Logic)"]
+    COMP --> REPO["@Repository (Data Access + Exception Translation)"]
+    COMP --> CTRL["@Controller (Web MVC View)"]
+    CTRL --> REST["@RestController (@Controller + @ResponseBody)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+
+    class COMP blue
+    class SVC green
+    class REPO amber
+    class CTRL,REST purple
+```
+
+### Key Differences
+
+| Annotation | Purpose | Exception Translation | AOP |
+|-----------|---------|---------------------|-----|
+| `@Component` | Generic bean | No | Yes |
+| `@Service` | Business logic | No | Yes |
+| `@Repository` | Data access | Yes (`DataAccessException`) | Yes |
+| `@Controller` | Web requests (view) | No | Yes |
+| `@RestController` | Web requests (JSON) | No | Yes |
+
 ### @Component
 
-Generic stereotype for any managed component.
+Generic stereotype for any Spring-managed component.
 
 ```java
 @Component
@@ -894,7 +947,7 @@ public class UtilityService {
 
 ### @Service
 
-Semantic indication that the class provides business logic.
+Semantic specialization of `@Component` indicating business logic.
 
 ```java
 @Service
@@ -922,7 +975,7 @@ public class OrderService {
 
 ### @Repository
 
-Semantic indication that the class accesses data. Also provides exception translation (DataAccessException).
+Indicates data access and enables automatic translation of persistence exceptions (e.g., `SQLException`) into Spring's unchecked `DataAccessException` hierarchy.
 
 ```java
 @Repository
@@ -955,9 +1008,10 @@ public class LegacyUserRepository {
 }
 ```
 
-### @Controller
+### @Controller & @RestController
 
-Indicates the class handles HTTP requests (returns views).
+- `@Controller` handles web requests and resolves view names.
+- `@RestController` combines `@Controller` + `@ResponseBody` to serialize return values directly as JSON/XML.
 
 ```java
 @Controller
@@ -975,10 +1029,6 @@ public class ProductController {
     }
 }
 ```
-
-### @RestController
-
-Combination of @Controller + @ResponseBody. Returns JSON/XML directly.
 
 ```java
 @RestController
@@ -1007,21 +1057,38 @@ public class ProductRestController {
 }
 ```
 
-### Key Differences
-
-| Annotation | Purpose | Exception Translation | AOP |
-|-----------|---------|---------------------|-----|
-| @Component | Generic bean | No | Yes |
-| @Service | Business logic | No | Yes |
-| @Repository | Data access | Yes (DataAccessException) | Yes |
-| @Controller | Web requests (view) | No | Yes |
-| @RestController | Web requests (JSON) | No | Yes |
-
 ---
 
 ## @Configuration and @Bean
 
+```mermaid
+sequenceDiagram
+    participant C as Container / Caller
+    participant P as CGLIB Proxy (AppConfiguration)
+    participant Cache as Singleton Bean Cache
+    participant Target as Real @Bean Method
+
+    C->>P: call userRepository() (1st time)
+    P->>Cache: lookup("userRepository")
+    Cache-->>P: miss
+    P->>Target: invoke userRepository()
+    Target-->>P: new UserRepository()
+    P->>Cache: store singleton
+    P-->>C: UserRepository instance
+
+    C->>P: call userRepository() (2nd time)
+    P->>Cache: lookup("userRepository")
+    Cache-->>P: hit (cached instance)
+    P-->>C: same UserRepository instance
+```
+
 ### How @Configuration Works with CGLIB Proxying
+
+`ConfigurationClassPostProcessor` (a `BeanFactoryPostProcessor`) enhances `@Configuration` classes with a runtime CGLIB subclass:
+
+1. Calling a `@Bean` method directly or injecting it as a parameter is intercepted by the CGLIB proxy.
+2. On the first call, the proxy creates the bean and caches it in the singleton registry.
+3. Subsequent calls return the **same cached singleton instance** (`repo1 == repo2`).
 
 ```java
 @Configuration
@@ -1043,26 +1110,6 @@ public class AppConfiguration {
         return new UserService(userRepository, passwordEncoder);
     }
 }
-```
-
-When you call `userService()`, it doesn't just call the method. Here's what actually happens:
-
-```
-@Configuration is processed by:
-1. ConfigurationClassPostProcessor (BeanFactoryPostProcessor)
-2. CGLIB creates a subclass of AppConfiguration at runtime
-3. This subclass intercepts @Bean method calls
-4. Returns cached singleton instances instead of creating new ones
-
-// Without CGLIB proxying (if @Configuration didn't use proxies):
-UserRepository repo1 = appConfig.userRepository(); // new instance
-UserRepository repo2 = appConfig.userRepository(); // another new instance
-// repo1 != repo2 ❌ WRONG!
-
-// With CGLIB proxying (actual behavior):
-UserRepository repo1 = appConfig.userRepository(); // cached instance
-UserRepository repo2 = appConfig.userRepository(); // same cached instance
-// repo1 == repo2 ✓ CORRECT!
 ```
 
 ### Full CGLIB Proxy Example
@@ -1110,7 +1157,9 @@ public class UserRepository {
 }
 ```
 
-### @Bean Method Parameters Are Auto-Injected
+### @Bean Method Parameters & Scope Configuration
+
+Spring automatically resolves and injects `@Bean` method parameters, supports custom bean names, and honors `@Scope` (including `ScopedProxyMode`).
 
 ```java
 @Configuration
@@ -1139,8 +1188,6 @@ public class ServiceConfiguration {
 }
 ```
 
-### @Bean Scope Configuration
-
 ```java
 @Configuration
 public class PrototypeConfiguration {
@@ -1159,7 +1206,12 @@ public class PrototypeConfiguration {
 }
 ```
 
-### Comparison: @Configuration vs @Component
+### Comparison: @Configuration vs @Component (Lite Mode)
+
+| Mode | CGLIB Proxying | Direct Inter-Bean Method Calls (`service()`) | Use Case |
+|------|---------------|---------------------------------------------|----------|
+| `@Configuration` (Full) | Yes | Returns cached singleton instance | Standard configuration classes |
+| `@Component` + `@Bean` (Lite) | No | Creates a new instance on every direct call | Simple standalone factory methods |
 
 ```java
 // @Configuration: Full-featured config class with CGLIB proxying
@@ -1189,17 +1241,46 @@ public class LiteConfiguration {
         return new Repository(service()); // Calls service() multiple times
     }
 }
-
-// Difference:
-// @Configuration ensures singleton behavior and inter-bean dependencies work correctly
-// @Component with @Bean creates new instances each time (lite mode)
 ```
 
 ---
 
 ## Profiles and Conditional Beans
 
+```mermaid
+flowchart TD
+    CAND["Candidate @Configuration / @Bean"] --> PROF{"@Profile matches active?"}
+    PROF -->|No| SKIP["Skip Bean Registration"]
+    PROF -->|Yes| COND{"@Conditional* evaluates true?"}
+    COND -->|No| SKIP
+    COND -->|Yes| REG["Register BeanDefinition in Context"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class CAND blue
+    class PROF,COND amber
+    class REG green
+    class SKIP red
+```
+
+### Conditional Annotations Quick Reference
+
+| Annotation | Evaluates True When |
+|------------|---------------------|
+| `@Profile("prod")` | `spring.profiles.active` includes `prod` |
+| `@Conditional(MyCondition.class)` | Custom `Condition.matches(...)` returns `true` |
+| `@ConditionalOnProperty` | Configured property matches `havingValue` (or `matchIfMissing = true`) |
+| `@ConditionalOnClass` | Specified class is present on the classpath |
+| `@ConditionalOnMissingClass` | Specified class is absent from the classpath |
+| `@ConditionalOnBean` | Specified bean type or name exists in the context |
+| `@ConditionalOnMissingBean` | No matching bean is already registered |
+
 ### @Profile: Environment-Specific Configuration
+
+Activate profiles via `spring.profiles.active=prod`, `SPRING_PROFILES_ACTIVE=prod`, or `application-prod.properties`.
 
 ```java
 // Development configuration
@@ -1245,11 +1326,6 @@ public class ProdConfiguration {
         return new HikariDataSource(config);
     }
 }
-
-// Activation
-// application.properties: spring.profiles.active=prod
-// OR environment variable: SPRING_PROFILES_ACTIVE=prod
-// OR application-prod.properties file
 ```
 
 ### @Conditional: Programmatic Bean Conditions
@@ -1291,7 +1367,7 @@ public class ConditionalBeanConfiguration {
 }
 ```
 
-### @ConditionalOnProperty: Property-Based Conditions
+### @ConditionalOnProperty & Classpath/Bean Conditions
 
 ```java
 @Configuration
@@ -1326,9 +1402,10 @@ public class FeatureToggleConfiguration {
         return new RedisCacheManager();
     }
 }
+```
 
-// application.yml
-/*
+```yaml
+# application.yml
 feature:
   email-notifications:
     enabled: true
@@ -1337,10 +1414,7 @@ feature:
 
 cache:
   type: redis
-*/
 ```
-
-### Other Useful Conditional Annotations
 
 ```java
 @Configuration
@@ -1380,30 +1454,54 @@ public class SmartConditionalConfiguration {
 
 ## Spring AOP Deep Dive
 
-### How AOP Proxies Work
+```mermaid
+flowchart LR
+    T{"Target implements interface?"} -->|"Yes (proxyTargetClass=false)"| JDK["JDK Dynamic Proxy (Proxy.newProxyInstance)"]
+    T -->|"No / Spring Boot Default"| CGLIB["CGLIB Proxy (Subclass via Enhancer)"]
+    JDK --> TGT["Target Bean Method"]
+    CGLIB --> TGT
 
-Spring AOP uses either JDK dynamic proxies or CGLIB to create proxies:
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
 
+    class T amber
+    class JDK blue
+    class CGLIB purple
+    class TGT green
 ```
-// Original class structure
-┌─ UserService (interface)
-   └─ UserServiceImpl (concrete class)
 
-// JDK Dynamic Proxy (for interfaces)
-UserService userService = (UserService) Proxy.newProxyInstance(
-    classLoader,
-    new Class[] { UserService.class },
-    new InvocationHandler() { ... }
-);
-// proxiedService.someMethod() → handler → UserServiceImpl.someMethod()
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Proxy
+    participant Aspect as @Aspect Advice
+    participant Target as Target Bean
 
-// CGLIB Proxy (for concrete classes without interfaces)
-Enhancer enhancer = new Enhancer();
-enhancer.setSuperclass(UserService.class);
-enhancer.setCallback(...);
-UserService userService = (UserService) enhancer.create();
-// proxiedService.someMethod() → CGLIB → UserService.someMethod()
+    Caller->>Proxy: invoke method()
+    Proxy->>Aspect: @Around (before) / @Before
+    Aspect->>Target: joinPoint.proceed()
+    alt Success
+        Target-->>Aspect: return result
+        Aspect-->>Proxy: @AfterReturning / @After
+        Proxy-->>Caller: result
+    else Exception
+        Target-->>Aspect: throw exception
+        Aspect-->>Proxy: @AfterThrowing / @After
+        Proxy-->>Caller: propagate exception
+    end
 ```
+
+### Advice Types
+
+| Advice | Execution Timing | Use Case |
+|--------|-----------------|----------|
+| `@Before` | Before target method | Validation, auth checks, entry logging |
+| `@After` | Always after target (`finally`) | Resource cleanup, audit completion |
+| `@AfterReturning` | After normal return | Inspect/log return value |
+| `@AfterThrowing` | After exception thrown | Error logging, alerting |
+| `@Around` | Wraps target (`proceed()`) | Timing, caching, retries, transactions |
 
 ### @Aspect: Complete Example
 
@@ -1537,6 +1635,9 @@ public class PointcutExamples {
 
 ### JDK Dynamic Proxy vs CGLIB
 
+> [!WARNING]
+> Because Spring AOP is proxy-based, **self-invocation** (calling `this.anotherMethod()` inside the same bean) bypasses the proxy—annotations like `@Transactional` or `@PerformanceLogging` will not trigger on self-invoked methods.
+
 ```java
 // Interface-based: Uses JDK Dynamic Proxy
 public interface OrderService {
@@ -1551,13 +1652,6 @@ public class OrderServiceImpl implements OrderService {
     }
 }
 
-// Proxy created automatically:
-// OrderService proxy = Proxy.newProxyInstance(
-//     OrderService.class.getClassLoader(),
-//     new Class[]{OrderService.class},
-//     invocationHandler
-// );
-
 // Concrete class without interface: Uses CGLIB (by default in Spring Boot)
 @Service
 public class PaymentService {
@@ -1565,9 +1659,6 @@ public class PaymentService {
         // Actual implementation
     }
 }
-
-// CGLIB proxy created automatically
-// Unless spring.aop.proxy-target-class=false
 
 // Force specific proxy type in configuration
 @Configuration
@@ -1577,7 +1668,7 @@ public class AopConfiguration {
 }
 ```
 
-### Creating Custom Advice
+### Creating Custom Advice (`MethodInterceptor`)
 
 ```java
 @Component
@@ -1616,7 +1707,38 @@ public @interface RequiresAuthentication {
 
 ## SpEL Basics
 
-Spring Expression Language allows dynamic runtime expressions:
+```mermaid
+flowchart LR
+    STR["Expression String (e.g. '#orders.?[price &gt; 1000]')"] --> PARSER["SpelExpressionParser"]
+    PARSER --> EXPR["Parsed Expression"]
+    CTX["EvaluationContext (Variables / Root)"] --> EVAL["expr.getValue(context)"]
+    EXPR --> EVAL
+    EVAL --> RES["Evaluated Result"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+
+    class STR,CTX blue
+    class PARSER,EXPR purple
+    class EVAL amber
+    class RES green
+```
+
+### SpEL Syntax Quick Reference
+
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| `#{...}` | SpEL evaluation block | `#{1 + 2}` |
+| `${...}` | Property placeholder | `${app.debug-mode:false}` |
+| `T(Type)` | Static type / constant access | `#{T(java.lang.Math).PI}` |
+| `#var` | EvaluationContext variable | `#orders` |
+| `.?[cond]` | Collection selection (filter) | `#orders.?[price > 1000]` |
+| `.![prop]` | Collection projection (map) | `#orders.![price]` |
+| `.^[cond]` | First matching element | `#orders.![price].^[#this]` |
+
+Spring Expression Language (SpEL) enables dynamic expression evaluation in `@Value` annotations and at runtime via `SpelExpressionParser`:
 
 ```java
 @Component
@@ -1708,80 +1830,80 @@ public class OrderService {
 
 ## Interview Questions
 
+```mermaid
+flowchart TD
+    M["Multiple Candidate Beans Found"] --> P1{"@Primary present?"}
+    P1 -->|Yes| W1["Inject @Primary Bean"]
+    P1 -->|No| P2{"@Qualifier specified?"}
+    P2 -->|Yes| W2["Inject Qualified Bean"]
+    P2 -->|No| P3{"Parameter name matches bean name?"}
+    P3 -->|Yes| W3["Inject Matching Name Bean"]
+    P3 -->|No| ERR["NoUniqueBeanDefinitionException"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class M blue
+    class P1,P2,P3 amber
+    class W1,W2,W3 green
+    class ERR red
+```
+
 ### Q1: Explain the complete bean lifecycle with all hooks.
 
-**Answer:**
-The bean lifecycle has 13+ stages from creation to destruction. The sequence is:
-1. **Bean definition loading** from XML/annotations
-2. **BeanFactoryPostProcessor** modifies bean definitions
-3. **Instantiation** via constructor reflection
-4. **Property population** (setter injection, @Autowired)
-5. **Aware interfaces**: BeanNameAware → BeanFactoryAware → ApplicationContextAware
-6. **BeanPostProcessor.postProcessBeforeInitialization()** before initialization
-7. **@PostConstruct** method (JSR-250)
-8. **InitializingBean.afterPropertiesSet()** interface method
-9. **Custom init-method** from @Bean(initMethod = "...")
-10. **BeanPostProcessor.postProcessAfterInitialization()** after initialization
-11. **Bean ready for use** (singleton cached or prototype returned)
-12. On shutdown: **@PreDestroy** method
-13. **DisposableBean.destroy()** interface method
-14. **Custom destroy-method** from @Bean(destroyMethod = "...")
+1. **Bean definition loading** from XML/annotations.
+2. **BeanFactoryPostProcessor** modifies bean definitions.
+3. **Instantiation** via constructor reflection.
+4. **Property population** (setter injection, `@Autowired`).
+5. **Aware interfaces:** `BeanNameAware` → `BeanFactoryAware` → `ApplicationContextAware`.
+6. **`BeanPostProcessor.postProcessBeforeInitialization()`** before initialization.
+7. **`@PostConstruct`** method (JSR-250).
+8. **`InitializingBean.afterPropertiesSet()`** interface method.
+9. **Custom `init-method`** from `@Bean(initMethod = "...")`.
+10. **`BeanPostProcessor.postProcessAfterInitialization()`** after initialization.
+11. **Bean ready for use** (singleton cached or prototype returned).
+12. On shutdown: **`@PreDestroy`** method → **`DisposableBean.destroy()`** → **custom `destroy-method`**.
 
-Constructor injection happens during instantiation; setter injection happens during property population. Use @PostConstruct for initialization logic that depends on all dependencies being set.
+> [!TIP]
+> Constructor injection happens during instantiation; setter injection happens during property population. Use `@PostConstruct` for initialization logic that depends on all dependencies being set.
 
 ### Q2: Why is constructor injection preferred over field injection?
 
-**Answer:**
-1. **Immutability**: Fields can be final, preventing accidental modification
-2. **Null-safety**: Missing dependencies detected at construction time, not at method call time
-3. **Testability**: Can instantiate beans without Spring context for unit testing
-4. **Explicit dependencies**: All dependencies visible in constructor signature
-5. **Thread-safety**: No synchronization needed for immutable state
-6. **Circular dependency detection**: Constructor injection fails fast if there are circular dependencies; field injection can hide them
+- **Immutability:** Fields can be `final`, preventing accidental modification.
+- **Null-safety:** Missing dependencies are detected at construction time, not at method call time.
+- **Testability:** Beans can be instantiated directly without a Spring context for unit tests.
+- **Explicit dependencies:** All dependencies are visible in the constructor signature.
+- **Thread-safety:** No synchronization needed for immutable state.
+- **Circular dependency detection:** Constructor injection fails fast on circular dependencies, whereas field injection can hide them.
 
-Field injection hides dependencies, makes testing harder, and creates mutable state that's not thread-safe.
+### Q3: What's the difference between `@Component` and `@Service`?
 
-### Q3: What's the difference between @Component and @Service?
+- Semantically, `@Service` indicates business logic while `@Component` is generic; both create singleton beans by default and enable component scanning.
+- `@Repository` adds automatic exception translation (`SQLException` → `DataAccessException`).
+- `@Service` and `@Controller` do not add special runtime behavior beyond semantics, though using them improves readability and allows future aspect targeting.
 
-**Answer:**
-Semantically, @Service indicates business logic while @Component is generic. Functionally:
-- Both create singleton beans by default
-- Both enable component scanning
-- @Repository provides exception translation (SQLException → DataAccessException)
-- @Service and @Controller don't provide special features beyond semantics
-- Using correct annotations improves code readability and allows future enhancement (e.g., @Service could get @Transactional by default)
+### Q4: How does `@Configuration` with `@Bean` achieve singleton behavior?
 
-### Q4: How does @Configuration with @Bean achieve singleton behavior?
-
-**Answer:**
-@Configuration classes are enhanced with CGLIB proxies at runtime. When you call a @Bean method, the proxy intercepts the call:
-- First call: Creates instance and caches it
-- Subsequent calls: Returns cached instance
-
-This is why `@Bean public DataSource dataSource()` and `@Bean public JdbcTemplate jdbcTemplate(DataSource dataSource)` always get the same DataSource instance, even though the method is called multiple times. Without proxying, each call would create a new instance.
+- `@Configuration` classes are enhanced with **CGLIB proxies** at runtime.
+- When a `@Bean` method is called, the proxy intercepts it: the first call creates and caches the instance, and subsequent calls return the cached instance.
+- Without proxying (e.g., lite mode with `@Component`), each direct method call would create a new instance.
 
 ### Q5: Explain AOP proxies: JDK Dynamic Proxy vs CGLIB.
 
-**Answer:**
-- **JDK Dynamic Proxy**: Used for interface-based implementations. Creates proxy implementing the same interface. Can only proxy interface methods.
-- **CGLIB**: Used for concrete classes without interfaces. Creates subclass that overrides methods. Can proxy all public methods.
+- **JDK Dynamic Proxy:** Used for interface-based implementations; creates a proxy implementing the same interface and can only proxy interface methods (faster creation).
+- **CGLIB:** Used for concrete classes without interfaces; creates a subclass overriding public methods (faster at runtime).
+- Spring Boot uses **CGLIB by default** (since Spring 5.1, controlled by `spring.aop.proxy-target-class`).
 
-Spring Boot uses CGLIB by default (since Spring 5.1). JDK Dynamic Proxy is faster at creation but CGLIB is faster at runtime. CGLIB is better for concrete classes; JDK Dynamic Proxy is better for interfaces because proxies can be accessed as the interface type.
+### Q6: What's the difference between `@Bean` scope configurations?
 
-### Q6: What's the difference between @Bean scope configurations?
-
-**Answer:**
-- **Singleton** (default): One instance per ApplicationContext, shared across entire application
-- **Prototype**: New instance every time requested, no cleanup hooks called
-- **Request**: New instance per HTTP request (web-only)
-- **Session**: One instance per HTTP session (web-only)
-- **Application**: One instance per ServletContext (web-only)
-
-Use singleton for stateless services; use prototype for stateful objects; use web scopes for request/session-specific data.
+- **Singleton (default):** One instance per `ApplicationContext`, shared across the application (use for stateless services).
+- **Prototype:** New instance every time requested; no destruction hooks called (use for stateful objects).
+- **Request / Session / Application:** Web-only scopes tied to an HTTP request, HTTP session, or `ServletContext`.
 
 ### Q7: How do you handle optional dependencies in Spring?
 
-**Answer:**
 ```java
 // Option 1: Optional<T>
 public MyService(Optional<OptionalDependency> dependency) {
@@ -1805,11 +1927,10 @@ public OptionalDependency optionalDependency() {
 }
 ```
 
-ObjectProvider is preferred because it allows lazy initialization and clear intent.
+`ObjectProvider<T>` is preferred because it supports lazy initialization and expresses clear intent.
 
-### Q8: Explain @ConditionalOnProperty with example.
+### Q8: Explain `@ConditionalOnProperty` with an example.
 
-**Answer:**
 ```java
 @Bean
 @ConditionalOnProperty(
@@ -1822,16 +1943,15 @@ public CacheManager cacheManager() {
 }
 ```
 
-Bean is created only if application.properties has `feature.caching.enabled=true`. If property is missing and `matchIfMissing = false`, bean won't be created. This is useful for feature flags and environment-specific configurations.
+The bean is created only if `application.properties` has `feature.caching.enabled=true`. If the property is missing and `matchIfMissing = false`, the bean is skipped—ideal for feature flags and environment toggles.
 
 ### Q9: How does Spring resolve constructor injection with multiple candidates?
 
-**Answer:**
-Spring uses this priority:
-1. **@Primary**: Marks preferred bean when multiple exist
-2. **@Qualifier**: Explicitly names which bean to inject
-3. **Parameter name matching**: Matches constructor parameter name to bean name
-4. **Type matching**: If only one bean of that type exists
+Spring evaluates candidates in this order:
+1. **`@Primary`:** Marks the preferred bean when multiple candidates exist.
+2. **`@Qualifier`:** Explicitly names which bean to inject.
+3. **Parameter name matching:** Matches the constructor parameter name to the bean name.
+4. **Type matching:** Succeeds only if a single bean of that type exists.
 
 ```java
 @Bean
@@ -1859,4 +1979,3 @@ public class OtherService {
     }
 }
 ```
-

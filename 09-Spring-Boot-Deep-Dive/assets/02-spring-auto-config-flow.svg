@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="Spring Boot Auto-Configuration Evaluation Flow">
+  <defs>
+    <style>
+      .sans { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .title { fill: #f8fafc; font-size: 15px; font-weight: 700; }
+      .subtitle { fill: #94a3b8; font-size: 11px; }
+      .badge-text { fill: #93c5fd; font-size: 10px; font-weight: 600; }
+      .node-title { fill: #f8fafc; font-size: 12px; font-weight: 700; }
+      .node-sub { fill: #cbd5e1; font-size: 10.5px; }
+      .node-code { fill: #e2e8f0; font-size: 10px; }
+      .edge-label { fill: #94a3b8; font-size: 10px; font-weight: 600; }
+      .edge-pass { fill: #4ade80; font-size: 10px; font-weight: 600; }
+      .edge-skip { fill: #f87171; font-size: 10px; font-weight: 600; }
+      .footer-text { fill: #64748b; font-size: 10.5px; }
+      .flow-line { stroke: #475569; stroke-width: 2; fill: none; }
+      .flow-line-pass { stroke: #22c55e; stroke-width: 2; fill: none; stroke-dasharray: 5 4; animation: dashFlow 1.4s linear infinite; }
+      .flow-line-skip { stroke: #ef4444; stroke-width: 2; fill: none; stroke-dasharray: 5 4; animation: dashFlow 1.4s linear infinite; }
+      .gate-pulse { animation: gateGlow 2.4s ease-in-out infinite; }
+      @keyframes dashFlow {
+        to { stroke-dashoffset: -18; }
+      }
+      @keyframes gateGlow {
+        0%, 100% { stroke: #f59e0b; stroke-width: 2; }
+        50% { stroke: #fbbf24; stroke-width: 3; }
+      }
+    </style>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <!-- Card Background -->
+  <rect x="2" y="2" width="896" height="316" rx="14" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+
+  <!-- Header -->
+  <rect x="2" y="2" width="896" height="44" rx="14" fill="#1e293b"/>
+  <rect x="2" y="32" width="896" height="14" fill="#1e293b"/>
+  <line x1="2" y1="46" x2="898" y2="46" stroke="#334155" stroke-width="1"/>
+  <text x="22" y="29" class="sans title">@SpringBootApplication &amp; Auto-Configuration Evaluation</text>
+  <rect x="765" y="13" width="115" height="22" rx="11" fill="#172554" stroke="#3b82f6" stroke-width="1"/>
+  <text x="822" y="28" text-anchor="middle" class="mono badge-text">Spring Boot 3.x</text>
+
+  <!-- Paths (behind nodes) -->
+  <!-- 1 -> 2 -->
+  <path id="path12" d="M 195 155 L 228 155" class="flow-line" marker-end="url(#arrow-slate)"/>
+  <!-- 2 -> 3 -->
+  <path id="path23" d="M 425 155 L 458 155" class="flow-line" marker-end="url(#arrow-slate)"/>
+  <!-- 3 -> 4A (Pass) -->
+  <path id="path34a" d="M 665 135 C 685 135, 685 100, 706 100" class="flow-line-pass" marker-end="url(#arrow-green)"/>
+  <!-- 3 -> 4B (Skip) -->
+  <path id="path34b" d="M 665 175 C 685 175, 685 215, 706 215" class="flow-line-skip" marker-end="url(#arrow-red)"/>
+
+  <!-- Node 1: @EnableAutoConfiguration -->
+  <rect x="20" y="105" width="175" height="100" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="20" y="105" width="175" height="26" rx="10" fill="#1e3a8a"/>
+  <rect x="20" y="121" width="175" height="10" fill="#1e3a8a"/>
+  <text x="107" y="122" text-anchor="middle" class="sans node-title">1. Trigger</text>
+  <text x="107" y="150" text-anchor="middle" class="mono node-code">@SpringBootApplication</text>
+  <text x="107" y="168" text-anchor="middle" class="mono node-code" fill="#60a5fa">@EnableAutoConfiguration</text>
+  <text x="107" y="188" text-anchor="middle" class="sans node-sub">Starts classpath scan</text>
+
+  <!-- Node 2: AutoConfiguration.imports -->
+  <rect x="232" y="105" width="193" height="100" rx="10" fill="#1e293b" stroke="#8b5cf6" stroke-width="2"/>
+  <rect x="232" y="105" width="193" height="26" rx="10" fill="#4c1d95"/>
+  <rect x="232" y="121" width="193" height="10" fill="#4c1d95"/>
+  <text x="328" y="122" text-anchor="middle" class="sans node-title">2. Candidate Discovery</text>
+  <text x="328" y="149" text-anchor="middle" class="mono node-code">AutoConfiguration.imports</text>
+  <text x="328" y="167" text-anchor="middle" class="sans node-sub">META-INF/spring/ (Boot 2.7+)</text>
+  <text x="328" y="186" text-anchor="middle" class="sans node-sub">Legacy: spring.factories</text>
+
+  <!-- Node 3: Gatekeeper -->
+  <rect x="462" y="92" width="203" height="126" rx="10" fill="#1e293b" class="gate-pulse"/>
+  <rect x="462" y="92" width="203" height="26" rx="10" fill="#78350f"/>
+  <rect x="462" y="108" width="203" height="10" fill="#78350f"/>
+  <text x="563" y="109" text-anchor="middle" class="sans node-title">3. @Conditional Gatekeeper</text>
+  <text x="563" y="138" text-anchor="middle" class="mono node-code">@ConditionalOnClass</text>
+  <text x="563" y="156" text-anchor="middle" class="mono node-code">@ConditionalOnMissingBean</text>
+  <text x="563" y="174" text-anchor="middle" class="mono node-code">@ConditionalOnProperty</text>
+  <text x="563" y="198" text-anchor="middle" class="sans node-sub">Evaluates classpath &amp; context</text>
+
+  <!-- Node 4A: Register Default Bean -->
+  <rect x="710" y="64" width="170" height="74" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+  <rect x="710" y="64" width="170" height="24" rx="10" fill="#14532d"/>
+  <rect x="710" y="78" width="170" height="10" fill="#14532d"/>
+  <text x="795" y="80" text-anchor="middle" class="sans node-title">Register Default Bean</text>
+  <text x="795" y="105" text-anchor="middle" class="mono node-code">e.g. HikariDataSource</text>
+  <text x="795" y="123" text-anchor="middle" class="sans node-sub">Positive match applied</text>
+
+  <!-- Node 4B: Skip (User Override) -->
+  <rect x="710" y="178" width="170" height="74" rx="10" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+  <rect x="710" y="178" width="170" height="24" rx="10" fill="#7f1d1d"/>
+  <rect x="710" y="192" width="170" height="10" fill="#7f1d1d"/>
+  <text x="795" y="194" text-anchor="middle" class="sans node-title">Skip Auto-Config</text>
+  <text x="795" y="219" text-anchor="middle" class="sans node-sub">User bean or missing lib</text>
+  <text x="795" y="236" text-anchor="middle" class="sans node-sub">Negative match (User wins)</text>
+
+  <!-- Branch Labels -->
+  <text x="686" y="92" text-anchor="middle" class="sans edge-pass">Pass</text>
+  <text x="686" y="232" text-anchor="middle" class="sans edge-skip">Fail</text>
+
+  <!-- Animated Evaluation Pulses (SMIL) -->
+  <circle r="4" fill="#60a5fa">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 195 155 L 228 155"/>
+    <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle r="4" fill="#c084fc">
+    <animateMotion dur="1.8s" begin="0.6s" repeatCount="indefinite" path="M 425 155 L 458 155"/>
+    <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" begin="0.6s" repeatCount="indefinite"/>
+  </circle>
+  <circle r="4" fill="#4ade80">
+    <animateMotion dur="2s" begin="1.1s" repeatCount="indefinite" path="M 665 135 C 685 135, 685 100, 706 100"/>
+    <animate attributeName="opacity" values="0;1;1;0" dur="2s" begin="1.1s" repeatCount="indefinite"/>
+  </circle>
+  <circle r="4" fill="#f87171">
+    <animateMotion dur="2s" begin="1.5s" repeatCount="indefinite" path="M 665 175 C 685 175, 685 215, 706 215"/>
+    <animate attributeName="opacity" values="0;1;1;0" dur="2s" begin="1.5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Footer -->
+  <line x1="20" y1="278" x2="880" y2="278" stroke="#1e293b" stroke-width="1"/>
+  <text x="450" y="299" text-anchor="middle" class="sans footer-text">Tip: Run with --debug (or debug=true) to inspect Positive and Negative matches in the AUTO-CONFIGURATION REPORT</text>
+</svg>

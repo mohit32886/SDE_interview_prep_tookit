@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="100%" height="auto" role="img" aria-labelledby="title desc">
+  <title id="title">Spring MVC DispatcherServlet Request Lifecycle</title>
+  <desc id="desc">Animated flow showing HTTP Request through Servlet Filter, DispatcherServlet, HandlerMapping, HandlerInterceptor, RestController with HttpMessageConverter, and ControllerAdvice exception handling.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+      .node { fill: #1e293b; stroke-width: 1.5; rx: 8; }
+      .node-blue { stroke: #38bdf8; }
+      .node-indigo { stroke: #818cf8; }
+      .node-purple { stroke: #c084fc; }
+      .node-amber { stroke: #fbbf24; }
+      .node-green { stroke: #34d399; }
+      .node-rose { stroke: #fb7185; }
+      .title-text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        fill: #f8fafc;
+      }
+      .subtitle-text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 11px;
+        fill: #94a3b8;
+      }
+      .label {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        fill: #f1f5f9;
+        text-anchor: middle;
+      }
+      .sublabel {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 9.5px;
+        fill: #94a3b8;
+        text-anchor: middle;
+      }
+      .badge {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 9px;
+        font-weight: 600;
+      }
+      .arrow-req {
+        fill: none;
+        stroke: #38bdf8;
+        stroke-width: 1.75;
+        stroke-dasharray: 5 4;
+        animation: dash-flow 1.4s linear infinite;
+      }
+      .arrow-res {
+        fill: none;
+        stroke: #34d399;
+        stroke-width: 1.75;
+        stroke-dasharray: 5 4;
+        animation: dash-flow 1.4s linear infinite;
+      }
+      .arrow-err {
+        fill: none;
+        stroke: #fb7185;
+        stroke-width: 1.5;
+        stroke-dasharray: 4 4;
+      }
+      .pulse-hub {
+        animation: hub-pulse 2.8s ease-in-out infinite;
+      }
+      @keyframes dash-flow {
+        to { stroke-dashoffset: -18; }
+      }
+      @keyframes hub-pulse {
+        0%, 100% { stroke-opacity: 0.7; }
+        50% { stroke-opacity: 1; }
+      }
+    </style>
+
+    <marker id="head-req" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="head-res" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399" />
+    </marker>
+    <marker id="head-err" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fb7185" />
+    </marker>
+
+    <path id="req-path" d="M 65 110 L 185 110 L 325 110 L 465 110 L 605 110 L 785 110" />
+    <path id="res-path" d="M 785 170 L 605 170 L 325 170 L 185 170 L 65 170" />
+  </defs>
+
+  <!-- Outer Dark-Slate Card -->
+  <rect class="bg" x="0" y="0" width="900" height="320" rx="12" />
+  <rect class="card" x="10" y="10" width="880" height="300" rx="10" />
+
+  <!-- Header -->
+  <text class="title-text" x="28" y="38">Spring MVC DispatcherServlet — Request &amp; Response Lifecycle</text>
+  <text class="subtitle-text" x="28" y="55">Front Controller pipeline from Servlet Filter to @RestController, HttpMessageConverter, and @ControllerAdvice</text>
+
+  <!-- Legend -->
+  <circle cx="670" cy="34" r="4.5" fill="#38bdf8" />
+  <text class="badge" x="680" y="37" fill="#38bdf8">Request</text>
+  <circle cx="745" cy="34" r="4.5" fill="#34d399" />
+  <text class="badge" x="755" y="37" fill="#34d399">Response</text>
+  <circle cx="825" cy="34" r="4.5" fill="#fb7185" />
+  <text class="badge" x="835" y="37" fill="#fb7185">Exception</text>
+
+  <!-- Request Flow Lines (Top) -->
+  <path class="arrow-req" d="M 105 110 L 132 110" marker-end="url(#head-req)" />
+  <path class="arrow-req" d="M 235 110 L 262 110" marker-end="url(#head-req)" />
+  <path class="arrow-req" d="M 385 110 L 410 110" marker-end="url(#head-req)" />
+  <path class="arrow-req" d="M 520 110 L 545 110" marker-end="url(#head-req)" />
+  <path class="arrow-req" d="M 665 110 L 692 110" marker-end="url(#head-req)" />
+
+  <!-- Response Flow Lines (Bottom) -->
+  <path class="arrow-res" d="M 695 170 L 668 170" marker-end="url(#head-res)" />
+  <path class="arrow-res" d="M 545 170 L 388 170" marker-end="url(#head-res)" />
+  <path class="arrow-res" d="M 265 170 L 238 170" marker-end="url(#head-res)" />
+  <path class="arrow-res" d="M 135 170 L 108 170" marker-end="url(#head-res)" />
+
+  <!-- Exception Path to @ControllerAdvice -->
+  <path class="arrow-err" d="M 785 182 L 785 248 L 628 248" marker-end="url(#head-err)" />
+  <path class="arrow-err" d="M 422 248 L 325 248 L 325 184" marker-end="url(#head-err)" />
+
+  <!-- Node 1: HTTP Request / Client -->
+  <rect class="node node-blue" x="24" y="90" width="80" height="100" rx="8" />
+  <text class="label" x="64" y="130">HTTP</text>
+  <text class="label" x="64" y="145">Client</text>
+  <text class="sublabel" x="64" y="164">Req / Res</text>
+
+  <!-- Node 2: Servlet Filter -->
+  <rect class="node node-indigo" x="135" y="90" width="100" height="100" rx="8" />
+  <text class="label" x="185" y="128">Servlet Filter</text>
+  <text class="sublabel" x="185" y="146">FilterChain</text>
+  <text class="sublabel" x="185" y="161">CORS / Auth</text>
+
+  <!-- Node 3: DispatcherServlet -->
+  <rect class="node node-purple pulse-hub" x="265" y="86" width="120" height="108" rx="8" />
+  <text class="label" x="325" y="124">DispatcherServlet</text>
+  <text class="sublabel" x="325" y="142">Front Controller</text>
+  <text class="sublabel" x="325" y="157">doDispatch()</text>
+  <text class="sublabel" x="325" y="172">View / Body</text>
+
+  <!-- Node 4: HandlerMapping -->
+  <rect class="node node-amber" x="412" y="90" width="108" height="68" rx="8" />
+  <text class="label" x="466" y="118">HandlerMapping</text>
+  <text class="sublabel" x="466" y="135">&amp; HandlerAdapter</text>
+  <text class="sublabel" x="466" y="148">@RequestMapping</text>
+
+  <!-- Node 5: HandlerInterceptor -->
+  <rect class="node node-amber" x="548" y="90" width="117" height="100" rx="8" />
+  <text class="label" x="606" y="124">HandlerInterceptor</text>
+  <text class="sublabel" x="606" y="142">preHandle()</text>
+  <text class="sublabel" x="606" y="156">postHandle()</text>
+  <text class="sublabel" x="606" y="170">afterCompletion()</text>
+
+  <!-- Node 6: @RestController + HttpMessageConverter -->
+  <rect class="node node-green" x="695" y="90" width="178" height="100" rx="8" />
+  <text class="label" x="784" y="124">@RestController</text>
+  <text class="sublabel" x="784" y="142">+ HttpMessageConverter</text>
+  <text class="sublabel" x="784" y="158">JSON / XML Binding</text>
+  <text class="sublabel" x="784" y="172">@Valid / ResponseEntity</text>
+
+  <!-- Node 7: @ControllerAdvice -->
+  <rect class="node node-rose" x="424" y="218" width="202" height="60" rx="8" />
+  <text class="label" x="525" y="242">@ControllerAdvice</text>
+  <text class="sublabel" x="525" y="259">@ExceptionHandler / ProblemDetail</text>
+
+  <!-- Step Badges -->
+  <text class="badge" x="118" y="102" fill="#38bdf8" text-anchor="middle">1</text>
+  <text class="badge" x="249" y="102" fill="#38bdf8" text-anchor="middle">2</text>
+  <text class="badge" x="398" y="102" fill="#38bdf8" text-anchor="middle">3</text>
+  <text class="badge" x="533" y="102" fill="#38bdf8" text-anchor="middle">4</text>
+  <text class="badge" x="680" y="102" fill="#38bdf8" text-anchor="middle">5</text>
+  <text class="badge" x="710" y="242" fill="#fb7185" text-anchor="middle">Exception</text>
+
+  <!-- Animated Request Packet (Cyan) -->
+  <circle r="5" fill="#38bdf8">
+    <animateMotion dur="3.6s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear">
+      <mpath href="#req-path" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="3.6s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Animated Response Packet (Emerald) -->
+  <circle r="5" fill="#34d399">
+    <animateMotion dur="3.6s" begin="1.8s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear">
+      <mpath href="#res-path" />
+    </animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="3.6s" begin="1.8s" repeatCount="indefinite" />
+  </circle>
+</svg>

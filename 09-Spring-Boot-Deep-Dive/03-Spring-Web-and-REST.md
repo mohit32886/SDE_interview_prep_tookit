@@ -21,31 +21,68 @@
 
 ## DispatcherServlet Architecture
 
-### Request Flow Through Spring MVC
+![DispatcherServlet Request Flow](./assets/03-dispatcher-servlet-flow.svg)
 
+`DispatcherServlet` implements the **Front Controller** pattern, acting as the single entry point that coordinates routing, parameter binding, interception, execution, and response rendering in Spring MVC.
+
+```mermaid
+flowchart LR
+    A["HTTP Request"] --> B["DispatcherServlet (Front Controller)"]
+    B --> C["HandlerMapping (@RequestMapping / @GetMapping)"]
+    C --> D["HandlerAdapter (Resolves @PathVariable, @RequestParam)"]
+    D --> E["Controller Method Execution"]
+    E --> F{"Return Type?"}
+    F -- "View Name" --> G["ViewResolver → Render HTML"]
+    F -- "@ResponseBody" --> H["HttpMessageConverter → JSON / XML"]
+    G --> I["HTTP Response"]
+    H --> I
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+
+    class A,I blue;
+    class B purple;
+    class C,D,F amber;
+    class E,G,H green;
 ```
-1. HTTP Request arrives
-   └─> DispatcherServlet (Front Controller pattern)
 
-2. HandlerMapping
-   └─> Finds controller method matching URL pattern
-   └─> @RequestMapping, @GetMapping, etc.
+```mermaid
+sequenceDiagram
+    participant Client
+    participant DS as DispatcherServlet
+    participant HM as HandlerMapping
+    participant HI as HandlerInterceptor
+    participant HA as HandlerAdapter
+    participant Ctrl as Controller
 
-3. HandlerAdapter
-   └─> Adapts handler to be executed
-   └─> Resolves method parameters (@PathVariable, @RequestParam, etc.)
-
-4. Handler (Controller Method) Execution
-   └─> Calls business logic
-
-5. ViewResolver / Message Conversion
-   └─> If View returned: resolves view name
-   └─> If @ResponseBody: converts response to JSON/XML
-
-6. Response Rendered
-   └─> View rendered OR JSON/XML sent
-   └─> HTTP Response returned to client
+    Client->>DS: HTTP Request
+    DS->>DS: checkMultipart(request)
+    DS->>HM: getHandler(request)
+    HM-->>DS: HandlerExecutionChain
+    DS->>HI: applyPreHandle()
+    HI-->>DS: true (continue)
+    DS->>HA: handle(request, response, handler)
+    HA->>Ctrl: Invoke method with bound args
+    Ctrl-->>HA: ModelAndView / ResponseEntity
+    DS->>HI: applyPostHandle()
+    DS->>DS: processDispatchResult()
+    DS->>HI: triggerAfterCompletion()
+    DS-->>Client: HTTP Response
 ```
+
+| Step | Component | Responsibility |
+| :--- | :--- | :--- |
+| **1** | `checkMultipart()` | Wraps multipart form-data requests for file uploads |
+| **2** | `HandlerMapping` | Matches URL + HTTP method to a `HandlerExecutionChain` |
+| **3** | `HandlerAdapter` | Resolves method arguments (`@PathVariable`, `@RequestParam`, `@RequestBody`) |
+| **4** | `HandlerInterceptor` | Runs `preHandle()`, `postHandle()`, and `afterCompletion()` hooks |
+| **5** | `ViewResolver` / `HttpMessageConverter` | Renders HTML templates or serializes objects to JSON/XML |
+
+> [!NOTE]
+> If `preHandle()` returns `false`, `DispatcherServlet` short-circuits immediately without invoking the controller or `postHandle()`.
 
 ### Complete DispatcherServlet Flow
 
@@ -143,6 +180,36 @@ public class UserController {
 ---
 
 ## @RestController vs @Controller
+
+```mermaid
+flowchart TD
+    A["Spring MVC Controller"] --> B["@Controller"]
+    A --> C["@RestController (@Controller + @ResponseBody)"]
+    B --> D{"Method has @ResponseBody?"}
+    D -- "No" --> E["ViewResolver → HTML Template (Thymeleaf/FreeMarker)"]
+    D -- "Yes" --> F["HttpMessageConverter → JSON / XML"]
+    C --> F
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+
+    class A purple;
+    class B,C blue;
+    class D amber;
+    class E,F green;
+```
+
+| Feature | `@Controller` | `@RestController` |
+| :--- | :--- | :--- |
+| **Composition** | Standard Spring MVC stereotype | `@Controller` + `@ResponseBody` |
+| **Default Return** | View name (`String` resolved by `ViewResolver`) | Serialized data (JSON/XML via `HttpMessageConverter`) |
+| **Template Engine** | Required (Thymeleaf, FreeMarker, JSP) | Not required |
+| **Hybrid Usage** | Add `@ResponseBody` on specific methods for JSON | All methods automatically serialize return values |
+
+> [!TIP]
+> Use `ResponseEntity.created(URI).body(...)` for `POST` endpoints (`201 Created`) and `ResponseEntity.noContent().build()` for `DELETE` endpoints (`204 No Content`).
 
 ### @RestController
 
@@ -251,6 +318,37 @@ public class HybridController {
 ---
 
 ## Request Mapping and Binding
+
+```mermaid
+flowchart LR
+    A["Incoming HTTP Request"] --> B["URI Path: /users/{id} → @PathVariable"]
+    A --> C["Query String: ?status=pending → @RequestParam"]
+    A --> D["JSON Body → @RequestBody"]
+    A --> E["Headers / Cookies → @RequestHeader / @CookieValue"]
+    B --> F["Controller Method Parameters"]
+    C --> F
+    D --> F
+    E --> F
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+
+    class A blue;
+    class B,C,D,E amber;
+    class F green;
+```
+
+| Annotation | Source | Typical Use Case |
+| :--- | :--- | :--- |
+| `@PathVariable` | URI template (`/users/{id}`) | Identifying specific resources or hierarchy |
+| `@RequestParam` | Query string (`?page=0&size=20`) | Filtering, searching, pagination with `defaultValue` |
+| `@RequestBody` | HTTP body (JSON/XML) | Creating (`POST`) or updating (`PUT`/`PATCH`) payloads |
+| `@RequestHeader` | HTTP headers (`Authorization`) | Auth tokens, correlation IDs, API versions |
+| `@CookieValue` | HTTP `Cookie` header | Session IDs or client preferences |
+
+> [!NOTE]
+> Use `@PathVariable` for hierarchical resource identity (`/api/users/123/orders/456`) and `@RequestParam` for optional filters, sorting, and pagination.
 
 ### @GetMapping / @PostMapping / @PutMapping / @DeleteMapping
 
@@ -410,6 +508,34 @@ public class HeaderController {
 
 ## Content Negotiation
 
+Spring MVC determines the response representation format (JSON, XML, etc.) at runtime using `Accept` headers, URL suffixes, or configured defaults.
+
+```mermaid
+flowchart LR
+    A["Client Request"] --> B{"ContentNegotiationStrategy"}
+    B -- "Accept: application/json or Default" --> C["MappingJackson2HttpMessageConverter"]
+    B -- "Accept: application/xml or .xml" --> D["Jaxb2RootElementHttpMessageConverter"]
+    C --> E["JSON Response (@JsonIgnore applied)"]
+    D --> F["XML Response (@XmlRootElement applied)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+
+    class A blue;
+    class B amber;
+    class C,D,E,F green;
+```
+
+| Strategy | Example | Notes |
+| :--- | :--- | :--- |
+| **`Accept` Header** | `Accept: application/xml` | Standard REST approach; preferred in modern APIs |
+| **URL Suffix** | `/api/products/1.xml` | Configured via `ContentNegotiationConfigurer.mediaType(...)` |
+| **Default Media Type** | No `Accept` header | Falls back to `MediaType.APPLICATION_JSON` |
+
+> [!TIP]
+> `@JsonIgnore` excludes a field from JSON serialization while still allowing `@XmlElement` to include it in XML output.
+
 ### JSON vs XML Response
 
 ```java
@@ -471,6 +597,40 @@ public class ContentNegotiationConfig {
 ---
 
 ## Exception Handling
+
+Centralized exception handling with `@ControllerAdvice` and `@ExceptionHandler` keeps controllers clean and guarantees consistent error payloads across the API.
+
+```mermaid
+flowchart TD
+    A["Controller / Service Throws Exception"] --> B["@ControllerAdvice (GlobalExceptionHandler)"]
+    B --> C{"Exception Type?"}
+    C -- "ResourceNotFoundException" --> D["404 Not Found"]
+    C -- "MethodArgumentNotValidException" --> E["400 Bad Request (Field Errors)"]
+    C -- "NoHandlerFoundException" --> F["404 Endpoint Not Found"]
+    C -- "Exception (Fallback)" --> G["500 Internal Server Error"]
+    D --> H["ErrorResponse or RFC 7807 ProblemDetail"]
+    E --> H
+    F --> H
+    G --> H
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+
+    class A,D,E,F,G red;
+    class B purple;
+    class C amber;
+    class H blue;
+```
+
+| Approach | Standard | Key Fields |
+| :--- | :--- | :--- |
+| **Custom `ErrorResponse`** | Custom DTO | `status`, `message`, `timestamp`, `path`, optional `errors` map |
+| **`ProblemDetail`** | RFC 7807 (Spring Boot 3.x) | `type`, `title`, `status`, `detail`, `instance`, custom properties via `setProperty()` |
+
+> [!IMPORTANT]
+> Extending `ResponseEntityExceptionHandler` gives you built-in hooks like `handleMethodArgumentNotValid` and `handleNoHandlerFoundException` so Spring MVC exceptions follow your global error format.
 
 ### @ExceptionHandler and @ControllerAdvice
 
@@ -630,6 +790,38 @@ public class ProblemDetailExceptionHandler {
 ---
 
 ## Validation
+
+Bean Validation (`jakarta.validation`) enforces structural, custom, and group-based constraints before business logic executes.
+
+```mermaid
+flowchart TD
+    A["Request DTO (@RequestBody)"] --> B["@Valid / @Validated"]
+    B --> C["Field &amp; Class-Level Constraints"]
+    C --> D{"All Constraints Pass?"}
+    D -- "Yes" --> E["Execute Controller / Service"]
+    D -- "No" --> F["Throw MethodArgumentNotValidException"]
+    F --> G["@ControllerAdvice → 400 Bad Request"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+
+    class A blue;
+    class B,C,D amber;
+    class E green;
+    class F,G red;
+```
+
+| Mechanism | Target | Purpose |
+| :--- | :--- | :--- |
+| **Built-in Annotations** | Fields (`@NotBlank`, `@Positive`, `@Email`, `@Pattern`, `@Future`) | Standard single-field constraints |
+| **Custom Field Validator** | `@Constraint` + `ConstraintValidator&lt;A, T&gt;` | Domain-specific rules (e.g., `@ValidPhoneNumber`) |
+| **Cross-Field Validator** | `ElementType.TYPE` + `ConstraintValidator&lt;A, Object&gt;` | Comparing multiple fields (e.g., `@PasswordMatch`) |
+| **Validation Groups** | `@Validated(CreateUserGroup.class)` | Applying different rules for create vs update |
+
+> [!WARNING]
+> Standard `@Valid` does not support validation groups—use Spring's `@Validated(GroupClass.class)` on the class or method when you need group-specific validation.
 
 ### @Valid and @Validated
 
@@ -826,6 +1018,36 @@ public class UserService {
 
 ## Pagination and Sorting
 
+Spring Data's `Pageable` abstraction binds `page`, `size`, and `sort` query parameters directly into database queries and returns `Page<T>` with pagination metadata.
+
+```mermaid
+flowchart LR
+    A["GET ?page=0&amp;size=20&amp;sort=price,desc"] --> B["Pageable / PageRequest"]
+    B --> C["JpaRepository.findAll(pageable)"]
+    C --> D["Page&lt;Product&gt;"]
+    D --> E["products.map(ProductDTO::from)"]
+    E --> F["JSON: content + totalPages + totalElements"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+
+    class A blue;
+    class B,C amber;
+    class D,E,F green;
+```
+
+| `Page<T>` Field | Meaning |
+| :--- | :--- |
+| `content` | List of items on the current page |
+| `totalPages` | Total available pages based on `size` |
+| `totalElements` | Total matching records in the database |
+| `first` / `last` | Booleans indicating boundary pages |
+| `numberOfElements` | Actual count of items in `content` |
+
+> [!TIP]
+> Use `page.map(ProductDTO::from)` to convert entities to DTOs while preserving all pagination metadata (`totalPages`, `totalElements`, `pageable`).
+
 ### Spring Data Pageable
 
 ```java
@@ -907,6 +1129,30 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 ---
 
 ## HATEOAS Basics
+
+HATEOAS (Hypermedia as the Engine of Application State) enriches REST responses with `_links` so clients can discover valid state transitions dynamically.
+
+```mermaid
+flowchart LR
+    A["ProductDTO"] --> B["EntityModel.of(dto, links...)"]
+    C["linkTo(methodOn(Controller.class).getProduct(id))"] --> B
+    B --> D["JSON Response with _links (self, all-products, update, delete)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+
+    class A,C blue;
+    class B purple;
+    class D green;
+```
+
+- **`EntityModel<T>`**: Wraps a single resource DTO with hypermedia links.
+- **`CollectionModel<T>`**: Wraps a list of resources with collection-level links (e.g., `self`).
+- **`linkTo(methodOn(...))`**: Generates type-safe URIs from controller methods, avoiding hardcoded URL strings.
+
+> [!NOTE]
+> `methodOn(...)` creates a dynamic proxy of the controller class—the method is not actually invoked; Spring HATEOAS inspects its `@RequestMapping` metadata to build the URL.
 
 ### Building Links
 
@@ -1008,6 +1254,35 @@ public class ProductHateoasController {
 ---
 
 ## File Upload/Download
+
+Spring MVC handles multipart uploads via `MultipartFile` and file downloads via `ByteArrayResource` (small files) or `InputStreamResource` (streaming large files).
+
+```mermaid
+flowchart LR
+    A["Upload: MultipartFile"] --> B["FileService.saveFile()"]
+    B --> C["Disk Storage (uploads/)"]
+    C --> D{"Download Size?"}
+    D -- "Small File" --> E["ByteArrayResource (In-Memory)"]
+    D -- "Large File" --> F["InputStreamResource (Streaming)"]
+    E --> G["ResponseEntity + Content-Disposition"]
+    F --> G
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+
+    class A blue;
+    class B,C,D amber;
+    class E,F,G green;
+```
+
+| Resource Type | Memory Profile | Best For |
+| :--- | :--- | :--- |
+| `ByteArrayResource` | Loads entire `byte[]` into heap | Small files (icons, config, short PDFs) |
+| `InputStreamResource` | Streams chunks without buffering full file | Large files (videos, archives, backups) |
+
+> [!WARNING]
+> Always sanitize or UUID-prefix `file.getOriginalFilename()` and validate resolved paths against `uploadDir` to prevent path traversal attacks, and prefer `InputStreamResource` for large downloads to avoid `OutOfMemoryError`.
 
 ### File Upload
 
@@ -1151,6 +1426,34 @@ public class FileService {
 
 ## WebClient vs RestTemplate
 
+```mermaid
+flowchart TD
+    A["HTTP Client Call"] --> B["RestTemplate (Blocking)"]
+    A --> C["WebClient (Reactive / Non-Blocking)"]
+    B --> D["Thread Blocks Until Response"]
+    C --> E["Event Loop Returns Mono&lt;T&gt; / Flux&lt;T&gt;"]
+    D --> F["Returns T / ResponseEntity&lt;T&gt;"]
+    E --> G["Subscribers Process Async Stream"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+
+    class A blue;
+    class B,D,F amber;
+    class C,E,G green;
+```
+
+| Feature | `RestTemplate` | `WebClient` |
+| :--- | :--- | :--- |
+| **Execution Model** | Synchronous, blocking (one thread per request) | Asynchronous, non-blocking (reactive event loop) |
+| **Return Types** | `T`, `ResponseEntity&lt;T&gt;` | `Mono&lt;T&gt;` (0..1), `Flux&lt;T&gt;` (0..N) |
+| **Error Handling** | `RestClientException` / `@Retryable` | `.onStatus(...)`, `.onErrorResume(...)`, `.doOnError(...)` |
+| **Status in Spring** | Maintenance mode | Recommended for new reactive &amp; non-blocking apps |
+
+> [!IMPORTANT]
+> `WebClient` is lazy—nothing is sent over the network until the returned `Mono` or `Flux` is subscribed to (e.g., returned from a Spring WebFlux/MVC controller or `.block()`ed).
+
 ### RestTemplate (Blocking)
 
 ```java
@@ -1286,6 +1589,36 @@ public class UserController {
 
 ## Filters vs Interceptors vs AOP
 
+```mermaid
+flowchart LR
+    A["HTTP Request"] --> B["Servlet Filter (Servlet Container)"]
+    B --> C["DispatcherServlet"]
+    C --> D["HandlerInterceptor (Spring MVC)"]
+    D --> E["AOP @Around (Spring Bean Proxy)"]
+    E --> F["Controller / Service Method"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+
+    class A blue;
+    class B,D,E amber;
+    class C purple;
+    class F green;
+```
+
+### When to Use Each
+
+| Layer | Scope | Use Case | Examples |
+| :--- | :--- | :--- | :--- |
+| **Filter** | Servlet-level (outside Spring MVC) | Raw HTTP processing, before Spring | CORS, Security headers, compression |
+| **Interceptor** | Spring MVC-level (inside `DispatcherServlet`) | Spring MVC-specific logic with `handler` access | Request/response logging, authentication |
+| **AOP** | Spring Bean method-level | Business logic cross-cutting concerns | Performance monitoring, caching, transactions |
+
+> [!TIP]
+> Choose the outermost layer that has the context you need: **Filters** for raw `ServletRequest`/`ServletResponse`, **Interceptors** when you need the mapped `HandlerMethod`, and **AOP** for service-layer method arguments and return values.
+
 ### Filters (Servlet-level)
 
 Execute outside Spring context, closest to network layer:
@@ -1403,17 +1736,27 @@ public class PerformanceAspect {
 }
 ```
 
-### When to Use Each
-
-| Layer | Use Case | Examples |
-|-------|----------|----------|
-| **Filter** | Raw HTTP processing, before Spring | CORS, Security headers, compression |
-| **Interceptor** | Spring MVC-specific logic | Request/response logging, authentication |
-| **AOP** | Business logic cross-cutting concerns | Performance monitoring, caching, transactions |
-
 ---
 
 ## CORS Configuration
+
+Cross-Origin Resource Sharing (CORS) allows browsers on one origin (`https://app.example.com`) to call APIs hosted on another origin, governed by preflight `OPTIONS` checks.
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Spring as Spring MVC (CORS)
+    participant Ctrl as @RestController
+
+    Browser->>Spring: OPTIONS /api/data (Origin: https://app.example.com)
+    Spring-->>Browser: 200 OK (Access-Control-Allow-Origin, Methods, Max-Age: 3600)
+    Browser->>Spring: GET /api/data (Origin: https://app.example.com)
+    Spring->>Ctrl: Forward Request
+    Ctrl-->>Browser: 200 OK + Access-Control-Allow-Origin
+```
+
+> [!WARNING]
+> When `allowCredentials(true)` is set, `allowedOrigins` must list explicit origins (e.g., `https://example.com`) rather than a wildcard `*`.
 
 ```java
 @Configuration
@@ -1450,6 +1793,30 @@ public class PublicController {
 ---
 
 ## API Versioning
+
+```mermaid
+flowchart TD
+    A["API Versioning Strategy"] --> B["URL Path (/api/v1/products vs /api/v2/products)"]
+    A --> C["Header Versioning (X-API-Version: 1 vs 2)"]
+    B --> D["Separate Controllers (ProductControllerV1 / V2)"]
+    C --> E["Single URI, @RequestMapping(headers=...)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+
+    class A purple;
+    class B,C blue;
+    class D,E green;
+```
+
+| Strategy | Pros | Cons |
+| :--- | :--- | :--- |
+| **URL Path Versioning** | Explicit, easy to cache and test in browsers | Pollutes URIs when resources evolve |
+| **Header Versioning** | Clean, stable resource URIs | Harder to test in browsers; requires custom headers |
+
+> [!NOTE]
+> Both strategies can coexist in Spring MVC, but pick one convention per API surface to keep client integration predictable.
 
 ### URL Path Versioning
 
@@ -1493,6 +1860,30 @@ public class ProductController {
 ---
 
 ## Rate Limiting
+
+Token-bucket rate limiting with **Bucket4j** inside a `HandlerInterceptor` protects API endpoints from burst traffic and abuse.
+
+```mermaid
+flowchart TD
+    A["Request → RateLimitingInterceptor.preHandle()"] --> B["Resolve clientId (X-Client-Id or RemoteAddr)"]
+    B --> C["Lookup / Create Bucket (100 tokens/min)"]
+    C --> D{"bucket.tryConsumeAndReturnRemaining(1)"}
+    D -- "isConsumed() == true" --> E["Add X-Rate-Limit-Remaining → Allow"]
+    D -- "isConsumed() == false" --> F["Add Retry-After → 429 Too Many Requests"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534;
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e;
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b;
+
+    class A,B blue;
+    class C,D amber;
+    class E green;
+    class F red;
+```
+
+> [!TIP]
+> A `ConcurrentHashMap<String, Bucket>` works for a single instance; for horizontally scaled microservices, back Bucket4j with a distributed store such as Redis.
 
 ### Bucket4j Implementation
 
@@ -1561,18 +1952,33 @@ public class RateLimitingConfiguration implements WebMvcConfigurer {
 
 ## Interview Questions
 
+```mermaid
+flowchart LR
+    A["Core Interview Pillars"] --> B["DispatcherServlet Lifecycle"]
+    A --> C["@Controller vs @RestController"]
+    A --> D["Validation &amp; @ControllerAdvice"]
+    A --> E["Filters vs Interceptors vs AOP"]
+    A --> F["Content Negotiation"]
+
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8;
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af;
+
+    class A purple;
+    class B,C,D,E,F blue;
+```
+
 ### Q1: Explain the complete flow of an HTTP request through DispatcherServlet.
 
 **Answer:**
 1. Client sends HTTP request
-2. DispatcherServlet (front controller) receives it
-3. HandlerMapping identifies matching controller method
-4. HandlerAdapter resolves method parameters (@PathVariable, @RequestParam, etc.)
+2. `DispatcherServlet` (front controller) receives it
+3. `HandlerMapping` identifies matching controller method
+4. `HandlerAdapter` resolves method parameters (`@PathVariable`, `@RequestParam`, etc.)
 5. Controller method executes
 6. Return value converted to response (JSON/XML/View)
 7. Response sent to client
 
-DispatcherServlet acts as central hub coordinating all components.
+`DispatcherServlet` acts as central hub coordinating all components.
 
 ### Q2: When would you use @Controller vs @RestController?
 
@@ -1594,7 +2000,7 @@ They're identical to Spring except `@RestController` is `@Controller` + `@Respon
 ### Q4: Difference between Filters, Interceptors, and AOP.
 
 **Answer:**
-- **Filters**: Servlet-level, outside Spring context, execute before/after DispatcherServlet
+- **Filters**: Servlet-level, outside Spring context, execute before/after `DispatcherServlet`
 - **Interceptors**: Spring MVC-level, within Spring context, execute before/after controller
 - **AOP**: Bean method-level, cross-cutting concerns like logging and transactions
 
@@ -1605,9 +2011,11 @@ Filters are closest to network; AOP is closest to business logic.
 **Answer:**
 Spring can return different response formats (JSON, XML) based on:
 - `Accept` HTTP header
-- File extension (.json, .xml)
+- File extension (`.json`, `.xml`)
 - `@RequestMapping(produces=...)`
 - `ContentNegotiationConfigurer` configuration
 
 Most commonly uses `Accept` header and `HttpMessageConverter` to convert response to appropriate format.
 
+> [!TIP]
+> When answering lifecycle questions, trace the exact order (`Filter` → `DispatcherServlet` → `HandlerMapping` → `HandlerInterceptor.preHandle` → `HandlerAdapter` → Controller → `HttpMessageConverter` / `@ControllerAdvice`) to demonstrate deep architectural clarity.

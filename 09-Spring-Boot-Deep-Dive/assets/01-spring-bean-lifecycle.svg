@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" width="900" height="330" role="img" aria-label="Spring Bean Lifecycle and IoC Container Pipeline">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="trackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <path id="beanPath" d="M 126 68 L 342 68 L 558 68 L 774 68 L 876 68 L 876 171 L 774 171 L 558 171 L 342 171 L 126 171"/>
+  </defs>
+
+  <style>
+    .title { font: 700 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 500 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #94a3b8; }
+    .stage-title { font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f1f5f9; }
+    .stage-sub { font: 500 10.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; }
+    .badge { font: 700 9.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .footer-text { font: 500 10.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #94a3b8; }
+
+    @keyframes stagePulse {
+      0%, 100% { stroke-opacity: 0.45; }
+      12% { stroke-opacity: 1; }
+      24% { stroke-opacity: 0.45; }
+    }
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -24; }
+    }
+
+    .card-1 { animation: stagePulse 8s infinite 0.0s; }
+    .card-2 { animation: stagePulse 8s infinite 1.0s; }
+    .card-3 { animation: stagePulse 8s infinite 2.0s; }
+    .card-4 { animation: stagePulse 8s infinite 3.0s; }
+    .card-5 { animation: stagePulse 8s infinite 4.5s; }
+    .card-6 { animation: stagePulse 8s infinite 5.5s; }
+    .card-7 { animation: stagePulse 8s infinite 6.5s; }
+    .card-8 { animation: stagePulse 8s infinite 7.3s; }
+
+    .flow-line {
+      stroke-dasharray: 6 6;
+      animation: dashFlow 1.2s linear infinite;
+    }
+  </style>
+
+  <!-- Outer Card -->
+  <rect x="2" y="2" width="896" height="326" rx="14" fill="url(#bgGrad)" stroke="#334155" stroke-width="2"/>
+
+  <!-- Header -->
+  <text x="28" y="32" class="title">Spring Bean Lifecycle &amp; IoC Container Pipeline</text>
+  <text x="28" y="49" class="subtitle">ApplicationContext Startup → Dependency Injection → AOP Proxy → Graceful Shutdown</text>
+
+  <!-- Phase Legend Pills -->
+  <rect x="572" y="18" width="94" height="22" rx="11" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1"/>
+  <text x="619" y="33" text-anchor="middle" class="badge" fill="#7dd3fc">1-2 SETUP</text>
+
+  <rect x="674" y="18" width="96" height="22" rx="11" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+  <text x="722" y="33" text-anchor="middle" class="badge" fill="#d8b4fe">3-4 DI/AWARE</text>
+
+  <rect x="778" y="18" width="96" height="22" rx="11" fill="#064e3b" stroke="#34d399" stroke-width="1"/>
+  <text x="826" y="33" text-anchor="middle" class="badge" fill="#6ee7b7">5-8 LIFECYCLE</text>
+
+  <!-- Subtle Animated Pipeline Rail -->
+  <path d="M 126 68 L 876 68 L 876 171 L 126 171" fill="none" stroke="#334155" stroke-width="2" class="flow-line"/>
+
+  <!-- Row 1 Connectors -->
+  <line x1="216" y1="108" x2="246" y2="108" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <line x1="432" y1="108" x2="462" y2="108" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowPurple)"/>
+  <line x1="648" y1="108" x2="678" y2="108" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowPurple)"/>
+
+  <!-- Turn Connector: Box 4 down to Box 5 -->
+  <path d="M 774 140 L 774 202" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#arrowGreen)"/>
+
+  <!-- Row 2 Connectors (Right to Left) -->
+  <line x1="684" y1="240" x2="654" y2="240" stroke="#34d399" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <line x1="468" y1="240" x2="438" y2="240" stroke="#34d399" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <line x1="252" y1="240" x2="222" y2="240" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowAmber)"/>
+
+  <!-- ROW 1 STAGES -->
+  <!-- 1. BeanDefinition -->
+  <g>
+    <rect x="36" y="76" width="180" height="64" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="card-1"/>
+    <text x="126" y="102" text-anchor="middle" class="stage-title">1. BeanDefinition</text>
+    <text x="126" y="121" text-anchor="middle" class="stage-sub">Scan + BFPP Hook</text>
+  </g>
+
+  <!-- 2. Instantiate -->
+  <g>
+    <rect x="252" y="76" width="180" height="64" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="card-2"/>
+    <text x="342" y="102" text-anchor="middle" class="stage-title">2. Instantiate</text>
+    <text x="342" y="121" text-anchor="middle" class="stage-sub">Constructor / CGLIB</text>
+  </g>
+
+  <!-- 3. Populate Props (DI) -->
+  <g>
+    <rect x="468" y="76" width="180" height="64" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2" class="card-3"/>
+    <text x="558" y="102" text-anchor="middle" class="stage-title">3. Populate Props (DI)</text>
+    <text x="558" y="121" text-anchor="middle" class="stage-sub">@Autowired / Setters</text>
+  </g>
+
+  <!-- 4. Aware & BPP Before -->
+  <g>
+    <rect x="684" y="76" width="180" height="64" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2" class="card-4"/>
+    <text x="774" y="102" text-anchor="middle" class="stage-title">4. Aware &amp; BPP Before</text>
+    <text x="774" y="121" text-anchor="middle" class="stage-sub">Context + BeforeInit</text>
+  </g>
+
+  <!-- ROW 2 STAGES (Right to Left) -->
+  <!-- 5. @PostConstruct -->
+  <g>
+    <rect x="684" y="208" width="180" height="64" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2" class="card-5"/>
+    <text x="774" y="234" text-anchor="middle" class="stage-title">5. @PostConstruct</text>
+    <text x="774" y="253" text-anchor="middle" class="stage-sub">InitializingBean / init</text>
+  </g>
+
+  <!-- 6. BPP After / AOP Proxy -->
+  <g>
+    <rect x="468" y="208" width="180" height="64" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2" class="card-6"/>
+    <text x="558" y="234" text-anchor="middle" class="stage-title">6. BPP After / AOP</text>
+    <text x="558" y="253" text-anchor="middle" class="stage-sub">JDK / CGLIB Proxy</text>
+  </g>
+
+  <!-- 7. Ready -->
+  <g>
+    <rect x="252" y="208" width="180" height="64" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2" class="card-7"/>
+    <text x="342" y="234" text-anchor="middle" class="stage-title">7. Ready in Context</text>
+    <text x="342" y="253" text-anchor="middle" class="stage-sub">Singleton Cache / Use</text>
+  </g>
+
+  <!-- 8. @PreDestroy -->
+  <g>
+    <rect x="36" y="208" width="180" height="64" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2" class="card-8"/>
+    <text x="126" y="234" text-anchor="middle" class="stage-title">8. @PreDestroy</text>
+    <text x="126" y="253" text-anchor="middle" class="stage-sub">DisposableBean / destroy</text>
+  </g>
+
+  <!-- Animated Bean Token -->
+  <g filter="url(#glow)">
+    <circle r="7" fill="#38bdf8" stroke="#f8fafc" stroke-width="1.5">
+      <animateMotion dur="8s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#beanPath"/>
+      </animateMotion>
+      <animate attributeName="fill" values="#38bdf8;#38bdf8;#a78bfa;#a78bfa;#34d399;#34d399;#fbbf24;#f87171" dur="8s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="11" fill="none" stroke="#f8fafc" stroke-width="1" opacity="0.6">
+      <animateMotion dur="8s" repeatCount="indefinite">
+        <mpath href="#beanPath"/>
+      </animateMotion>
+      <animate attributeName="r" values="8;14;8" dur="1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.7;0.1;0.7" dur="1s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- Footer -->
+  <line x1="28" y1="292" x2="872" y2="292" stroke="#334155" stroke-width="1"/>
+  <text x="28" y="311" class="footer-text">IoC Container: ApplicationContext (eager singletons)</text>
+  <text x="455" y="311" class="footer-text">AOP: Proxy wraps bean in BPP After</text>
+  <text x="708" y="311" class="footer-text">Prototype: skips @PreDestroy</text>
+</svg>

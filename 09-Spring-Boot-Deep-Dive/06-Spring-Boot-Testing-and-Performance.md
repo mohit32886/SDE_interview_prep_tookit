@@ -20,49 +20,62 @@
 
 ## Testing Pyramid
 
+![Spring Boot Test Slice Pyramid](./assets/06-spring-test-slice-pyramid.svg)
+
+| Layer | Share | Spring Context | Dependencies | Speed | Primary Focus |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Unit Tests** | 60–80% | None | Mocked (`@Mock`) | Milliseconds | Single component logic, happy paths, edge cases |
+| **Integration / Slice Tests** | 15–25% | Partial or Full | Real DB / Testcontainers / `@MockBean` | Seconds | Component wiring, web layer, JPA queries, migrations |
+| **E2E Tests** | 5–10% | Full Stack | Real DB & external services | Minutes | Critical end-to-end user flows |
+
+```mermaid
+flowchart TD
+    Q["What are you testing?"] --> U["Single class or business rule"]
+    Q --> S["Single Spring layer: Web, JPA, or JSON"]
+    Q --> I["Multi-layer wiring or real DB"]
+    U --> UT["Unit Test: Mockito, no Spring context, ms"]
+    S --> ST["Slice Test: @WebMvcTest / @DataJpaTest / @JsonTest"]
+    I --> IT["Integration Test: @SpringBootTest + Testcontainers"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Q blue
+    class U,UT green
+    class S,ST blue
+    class I,IT purple
 ```
-           ▲
-          /|\
-         / | \
-        /  |  \
-       /   |   \
-      /    |    \
-     /  E2E Tests \ (Slow, expensive, 5-10%)
-    /______|_______\
-   /      |        \
-  /  Integration    \ (Medium speed, medium cost, 15-25%)
- /        |          \
-/_________|___________\
-|        |           |
-|   Unit Tests       | (Fast, cheap, 60-80%)
-|_______|___________|
 
-
-Unit Tests (Fast):
-- No Spring context
-- Mock dependencies
-- Test single component in isolation
-- Run in milliseconds
-- Cover happy path and edge cases
-
-Integration Tests (Medium):
-- Load Spring context
-- Test component interactions
-- Real database (or Testcontainers)
-- Run in seconds
-- Test integration points
-
-E2E Tests (Slow):
-- Full application stack
-- Real database, external services
-- Test complete user flows
-- Run in minutes
-- Few critical paths only
-```
+> [!TIP]
+> Keep 60–80% of your suite as context-free unit tests for sub-second feedback, use slice tests for framework wiring, and reserve `@SpringBootTest` + Testcontainers for critical integration paths.
 
 ---
 
 ## Unit Testing
+
+Unit tests isolate a single class without starting a Spring `ApplicationContext`, using Mockito to stub collaborators and verify interactions.
+
+```mermaid
+sequenceDiagram
+    participant Test as OrderServiceTest
+    participant Service as OrderService (@InjectMocks)
+    participant Repo as OrderRepository (@Mock)
+    participant Pay as PaymentService (@Mock)
+    participant Notif as NotificationService (@Mock)
+
+    Test->>Repo: when(save).thenReturn(savedOrder)
+    Test->>Service: createOrder(request)
+    Service->>Repo: save(order)
+    Repo-->>Service: savedOrder
+    Service->>Pay: processPayment(savedOrder)
+    Service->>Notif: sendConfirmation(savedOrder)
+    Service-->>Test: savedOrder
+    Test->>Pay: verify(processPayment, times(1))
+    Test->>Notif: verify(sendConfirmation, times(1))
+```
+
+> [!NOTE]
+> Use `@Mock` for pure stubbed collaborators, `@Spy` to wrap a real instance while still verifying calls, and `@InjectMocks` to inject those mocks into the class under test.
 
 ### Unit Test with Mockito
 
@@ -191,6 +204,29 @@ public class OrderServiceTest {
 
 ## Integration Testing
 
+`@SpringBootTest` boots the full Spring `ApplicationContext` so you can verify HTTP routing, serialization, services, and persistence together.
+
+```mermaid
+flowchart LR
+    Test["OrderControllerIntegrationTest"] -->|"MockMvc POST/GET"| Ctrl["OrderController"]
+    Ctrl --> Svc["OrderService"]
+    Svc --> Repo["OrderRepository (Real Bean)"]
+    Svc --> Pay["PaymentService (@MockBean)"]
+    Repo --> DB["Database"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Test purple
+    class Ctrl,Svc,Repo blue
+    class Pay amber
+    class DB green
+```
+
+> [!IMPORTANT]
+> `@MockBean` replaces a bean inside the Spring `ApplicationContext` (unlike Mockito's `@Mock`). Each unique combination of `@MockBean` definitions creates a separate context cache key, which can slow down large test suites.
+
 ### @SpringBootTest Integration Test
 
 ```java
@@ -259,6 +295,38 @@ public class OrderControllerIntegrationTest {
 ---
 
 ## Slice Tests
+
+Slice tests load only the auto-configuration and beans relevant to a single architectural layer, keeping startup fast while still testing real Spring behavior.
+
+| Slice Annotation | Loaded Beans / Tools | Mocked / Excluded | Typical Use Case |
+| :--- | :--- | :--- | :--- |
+| **`@WebMvcTest`** | Controllers, `MockMvc`, `ObjectMapper`, filters, `@ControllerAdvice` | `@Service`, `@Repository` (use `@MockBean`) | Request mapping, validation, status codes, JSON responses |
+| **`@DataJpaTest`** | `@Entity`, `Spring Data JPA` repositories, `TestEntityManager` | `@Controller`, `@Service`, web layer | Custom queries, entity mappings, transactions |
+| **`@JsonTest`** | `ObjectMapper`, `JacksonTester&lt;T&gt;`, custom serializers | Web, service, and repository layers | JSON serialization/deserialization formats |
+
+```mermaid
+flowchart TD
+    S["Spring Boot Slice Tests"] --> W["@WebMvcTest(OrderController.class)"]
+    S --> D["@DataJpaTest"]
+    S --> J["@JsonTest"]
+    W --> W1["Loads: Controller + MockMvc + Filters"]
+    W --> W2["Mocks: @MockBean OrderService"]
+    D --> D1["Loads: JPA Repositories + TestEntityManager"]
+    D --> D2["Default: In-memory DB + Auto-Rollback"]
+    J --> J1["Loads: JacksonTester&lt;T&gt; + ObjectMapper"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class S purple
+    class W,W1,W2 blue
+    class D,D1,D2 green
+    class J,J1 amber
+```
+
+> [!TIP]
+> `@DataJpaTest` is `@Transactional` by default and rolls back after each test. Use `TestEntityManager.persistAndFlush(...)` to ensure SQL `INSERT` statements actually execute and hit the persistence context before querying.
 
 ### @WebMvcTest: Test Controllers Only
 
@@ -377,6 +445,26 @@ public class OrderJsonTest {
 
 ## MockMvc and Controllers
 
+`MockMvc` exercises Spring MVC's `DispatcherServlet`, request mapping, headers, form params, and `@ControllerAdvice` exception handlers without starting a real HTTP server.
+
+```mermaid
+sequenceDiagram
+    participant Test as MockMvcExamplesTest
+    participant MVC as MockMvc / DispatcherServlet
+    participant Ctrl as Controller
+    participant Svc as OrderService (@MockBean)
+
+    Test->>MVC: perform(get/post/put/delete + headers/body)
+    MVC->>Ctrl: Route to handler method
+    Ctrl->>Svc: Call service method
+    Svc-->>Ctrl: Return Order or throw Exception
+    Ctrl-->>MVC: ResponseEntity / ExceptionHandler
+    MVC-->>Test: andDo(print()) + andExpect(status/header/jsonPath)
+```
+
+> [!NOTE]
+> Use `MockMvc` for fast in-process MVC testing; switch to `TestRestTemplate` or `WebTestClient` with `SpringBootTest.WebEnvironment.RANDOM_PORT` when you need a real embedded servlet container.
+
 ### Complete MockMvc Examples
 
 ```java
@@ -479,6 +567,25 @@ public class MockMvcExamplesTest {
 
 ## Testcontainers
 
+Testcontainers spins up ephemeral Docker containers (MySQL, PostgreSQL, Redis) for integration tests so queries, dialects, and migrations run against real production engines instead of H2.
+
+```mermaid
+sequenceDiagram
+    participant JUnit as JUnit 5 / Spring TestContext
+    participant Docker as Docker Engine (MySQL / Redis)
+    participant Props as @DynamicPropertySource / Initializer
+    participant App as Spring Boot ApplicationContext
+
+    JUnit->>Docker: Start static @Container / Startables.deepStart()
+    Docker-->>JUnit: Exposed mapped ports & JDBC URL
+    JUnit->>Props: Register spring.datasource.url & redis host/port
+    Props->>App: Inject dynamic properties into Environment
+    App->>Docker: Execute real SQL / Redis operations
+```
+
+> [!WARNING]
+> Declare `@Container` fields as `static` (or use `Startables.deepStart` in an `ApplicationContextInitializer`) so containers start once per test class instead of restarting for every test method. A running Docker daemon is required.
+
 ### Docker-based Integration Tests
 
 ```xml
@@ -566,6 +673,28 @@ public class MultipleContainersTest {
 
 ## Test Profiles and Configuration
 
+Customize test beans and properties cleanly using `@TestConfiguration`, `@Profile("test")`, `application-test.properties`, and inline `@SpringBootTest(properties = ...)`.
+
+```mermaid
+flowchart LR
+    Base["application.properties"] --> Prof["application-test.properties + @Profile('test')"]
+    Prof --> Inline["@SpringBootTest(properties = ...)"]
+    TC["@TestConfiguration + @Import(TestConfiguration.class)"] --> Ctx["Test ApplicationContext"]
+    Inline --> Ctx
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Base blue
+    class Prof,Inline amber
+    class TC purple
+    class Ctx green
+```
+
+> [!IMPORTANT]
+> Top-level `@TestConfiguration` classes are excluded from component scanning by default, so they only apply when explicitly imported via `@Import(TestConfiguration.class)` (or declared as a static inner class).
+
 ### Test Configuration
 
 ```java
@@ -630,6 +759,34 @@ public class CustomPropertiesTest {
 
 ## Performance Tuning
 
+Optimizing Spring Boot throughput and latency relies on three core levers: JVM garbage collection & heap sizing, HikariCP database connection pooling, and bounded thread pools.
+
+| Layer | Key Settings | Sizing / Tuning Rule |
+| :--- | :--- | :--- |
+| **JVM** | `-XX:+UseG1GC`, `-XX:MaxGCPauseMillis=200`, `-XX:InitialHeapSize`, `-XX:MaxHeapSize`, `-Xloggc:gc.log` | Bound pause times with G1GC and size heap to workload |
+| **HikariCP** | `maximum-pool-size: 20`, `minimum-idle: 5`, `connection-timeout: 30000`, `idle-timeout: 600000`, `max-lifetime: 1800000` | `(core_count * 2) + disk_spindles` |
+| **ThreadPoolTaskExecutor** | `corePoolSize: 10`, `maxPoolSize: 100`, `queueCapacity: 500`, `waitForTasksToCompleteOnShutdown: true` | `core = cores`, `max = cores * 2`, `queue = core * throughput / avgTime` |
+
+```mermaid
+flowchart LR
+    Req["Incoming Load"] --> JVM["JVM: G1GC + Heap (512m-2g)"]
+    JVM --> TP["ThreadPoolTaskExecutor: core 10, max 100, queue 500"]
+    TP --> Pool["HikariCP Pool: max 20, min-idle 5, 30s timeout"]
+    Pool --> DB["Database"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Req purple
+    class JVM amber
+    class TP,Pool blue
+    class DB green
+```
+
+> [!TIP]
+> Avoid oversized database connection pools—excessive connections cause context-switching and lock contention. Enable `com.zaxxer.hikari: DEBUG` temporarily when diagnosing pool starvation.
+
 ### JVM Tuning
 
 ```bash
@@ -689,6 +846,31 @@ public class ThreadPoolConfiguration {
 ---
 
 ## Caching
+
+Spring's `@EnableCaching` abstraction intercepts annotated methods via proxies, supporting in-memory (`ConcurrentMapCacheManager`) or distributed stores (Redis, Caffeine, Ehcache, Hazelcast).
+
+```mermaid
+flowchart TD
+    Call["Method Call: getUser(id)"] --> Cond{"condition (#id &gt; 1000)?"}
+    Cond -->|"False"| Exec["Execute Method Directly"]
+    Cond -->|"True"| Hit{"Cache Hit in 'users'?"}
+    Hit -->|"Yes"| Ret["Return Cached Value"]
+    Hit -->|"No"| DB["Query UserRepository"]
+    DB --> Store["Store in Cache (unless null)"]
+    Store --> Ret
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Call purple
+    class Cond,Hit amber
+    class Exec,DB blue
+    class Store,Ret green
+```
+
+> [!WARNING]
+> Because Spring caching uses AOP proxies, calling a `@Cacheable` method from another method inside the same bean (`this.getUser(id)`) bypasses the proxy and skips the cache.
 
 ### @Cacheable, @CacheEvict, @CachePut
 
@@ -773,6 +955,26 @@ spring:
 ---
 
 ## Async Processing
+
+`@EnableAsync` and `@Async` offload slow I/O (emails, notifications, reports) onto a `ThreadPoolTaskExecutor`, freeing HTTP request threads immediately and optionally returning a `CompletableFuture`.
+
+```mermaid
+sequenceDiagram
+    participant Client as HTTP Client
+    participant Ctrl as EmailController (HTTP Thread)
+    participant Pool as ThreadPoolTaskExecutor (async-)
+    participant Svc as EmailService (@Async)
+
+    Client->>Ctrl: POST /api/emails/send-async
+    Ctrl->>Pool: Submit sendEmailAsync(...)
+    Ctrl-->>Client: Return CompletableFuture (non-blocking)
+    Pool->>Svc: Execute on async- thread
+    Svc-->>Pool: CompletableFuture.completedFuture("Email sent")
+    Pool-->>Client: Resolve HTTP 200 OK (or 500 on exceptionally)
+```
+
+> [!IMPORTANT]
+> Always define a bounded `ThreadPoolTaskExecutor` bean when using `@EnableAsync`; otherwise Spring falls back to `SimpleAsyncTaskExecutor`, which creates a new unbounded thread per invocation.
 
 ### @Async and CompletableFuture
 
@@ -864,6 +1066,35 @@ public class EmailController {
 
 ## Scheduling
 
+`@EnableScheduling` paired with `ThreadPoolTaskScheduler` runs periodic background jobs using `fixedDelay`, `fixedRate`, `initialDelay`, or 6-field Spring cron expressions.
+
+| Trigger Mode | Behavior |
+| :--- | :--- |
+| **`fixedDelay = 60000`** | Waits 60s **after** the previous execution finishes before starting the next |
+| **`fixedRate = 60000`** | Triggers every 60s from the **start** of the previous execution |
+| **`initialDelay = 10000`** | Waits 10s after application startup before the first run |
+| **`cron = "0 0 0 * * *"`** | Runs on calendar schedule (`second minute hour day month day-of-week`), optionally with `zone` |
+
+```mermaid
+flowchart LR
+    Sched["@EnableScheduling + ThreadPoolTaskScheduler (poolSize=5)"] --> FD["fixedDelay: wait after completion"]
+    Sched --> FR["fixedRate: interval from start"]
+    Sched --> CR["cron + zone: calendar schedule"]
+    Sched --> AS["@Async + @Scheduled: non-blocking runs"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Sched purple
+    class FD,FR blue
+    class CR amber
+    class AS green
+```
+
+> [!NOTE]
+> Without a custom `TaskScheduler` bean, Spring executes all `@Scheduled` tasks on a single thread, so one slow job can delay every other scheduled task.
+
 ### @Scheduled Tasks
 
 ```java
@@ -929,6 +1160,32 @@ public class ReportService {
 ---
 
 ## Logging
+
+Spring Boot uses SLF4J + Logback by default. Use `logback-spring.xml` for `<springProfile>`-specific appenders and MDC (`Mapped Diagnostic Context`) to attach `requestId` and `userId` to every log line.
+
+```mermaid
+flowchart LR
+    Req["HTTP Request"] --> Pre["preHandle: MDC.put(requestId, userId, method, path)"]
+    Pre --> Ctrl["Controller / Service Logs via SLF4J"]
+    Ctrl --> LB{"logback-spring.xml"}
+    LB -->|"dev profile"| Con["CONSOLE (DEBUG)"]
+    LB -->|"prod profile"| File["RollingFileAppender .gz (INFO)"]
+    Ctrl --> Post["afterCompletion: MDC.clear()"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#7f1d1d
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Req purple
+    class Pre,Ctrl blue
+    class LB amber
+    class Con,File green
+    class Post red
+```
+
+> [!WARNING]
+> Always call `MDC.clear()` in `afterCompletion` (or a `finally` block). Because servlet containers reuse worker threads, stale MDC values will leak into subsequent requests if not cleared.
 
 ### SLF4J + Logback Configuration
 
@@ -1028,6 +1285,29 @@ logging:
 
 ## Monitoring with Micrometer
 
+Spring Boot Actuator + `micrometer-registry-prometheus` exposes JVM, HTTP, HikariCP, and custom business metrics (`Counter`, `Gauge`, `Timer`) at `/actuator/prometheus`.
+
+```mermaid
+flowchart LR
+    Svc["OrderService"] -->|"Counter: orders.created, payments.*"| Reg["MeterRegistry"]
+    Svc -->|"Gauge: orders.total"| Reg
+    Svc -->|"Timer: orders.creation.time, payment.processing.time"| Reg
+    Reg --> Act["GET /actuator/prometheus"]
+    Act --> Prom["Prometheus Scraper"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class Svc purple
+    class Reg blue
+    class Act amber
+    class Prom green
+```
+
+> [!TIP]
+> Use **Counter** for monotonically increasing totals (`orders.created`), **Gauge** for current point-in-time values (`orders.total`), and **Timer** to measure both duration and call count (`orders.creation.time`).
+
 ### Adding Prometheus Metrics
 
 ```xml
@@ -1112,40 +1392,56 @@ public class OrderService {
 
 ## Interview Questions
 
+```mermaid
+flowchart TD
+    IQ["Spring Boot Testing & Performance"] --> T["Testing: Unit (60-80%) → Slice → @SpringBootTest + Testcontainers"]
+    IQ --> P["Performance: G1GC + HikariCP + @Cacheable + @Async"]
+    IQ --> O["Observability: MDC Logs + Micrometer /actuator/prometheus"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef green fill:#dcfce7,stroke:#166534,color:#14532d
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#581c87
+    class IQ purple
+    class T green
+    class P blue
+    class O amber
+```
+
 ### Q1: Explain the testing pyramid and how it applies to Spring Boot.
 
 **Answer:**
-Testing pyramid has three levels:
-1. **Unit tests (60-80%)**: Fast, test single component in isolation, no Spring context, use Mockito
-2. **Integration tests (15-25%)**: Medium speed, test interactions, load Spring context, use @SpringBootTest
-3. **E2E tests (5-10%)**: Slow, test complete flow, real backend and frontend
+The testing pyramid has three levels:
+1. **Unit tests (60–80%)**: Fast, test a single component in isolation, no Spring context, use Mockito.
+2. **Integration tests (15–25%)**: Medium speed, test interactions, load Spring context (or slice), use `@SpringBootTest` / `@WebMvcTest` / `@DataJpaTest`.
+3. **E2E tests (5–10%)**: Slow, test complete flow with real backend and frontend.
 
-Write many unit tests (fast, cheap), fewer integration tests, very few E2E tests. This gives good coverage with fast feedback.
+Write many unit tests (fast, cheap), fewer integration tests, and very few E2E tests for good coverage with fast feedback.
 
-### Q2: Difference between @WebMvcTest and @SpringBootTest.
+### Q2: Difference between `@WebMvcTest` and `@SpringBootTest`.
 
 **Answer:**
-- `@WebMvcTest`: Loads only web layer (Controller, MockMvc). Services/repositories are mocked. Fast, focused testing.
-- `@SpringBootTest`: Loads entire application context. Real beans unless explicitly mocked. Slower but more realistic.
+- **`@WebMvcTest`**: Loads only the web layer (Controller, `MockMvc`). Services and repositories are mocked with `@MockBean`. Fast, focused testing.
+- **`@SpringBootTest`**: Loads the entire application context with real beans unless explicitly mocked. Slower, but more realistic.
 
-Use @WebMvcTest for controller testing; use @SpringBootTest for integration testing.
+Use `@WebMvcTest` for controller testing and `@SpringBootTest` for full integration testing.
 
 ### Q3: What's the advantage of using Testcontainers?
 
 **Answer:**
-Testcontainers run real Docker containers (database, Redis, etc.) during tests. Eliminates differences between test environment and production. Tests run against real database, not H2 mock. Ensures migrations work correctly. Slower than in-memory databases but more realistic.
+Testcontainers runs real Docker containers (database, Redis, etc.) during tests. This eliminates behavioral differences between test and production environments (e.g., H2 vs. MySQL/PostgreSQL), ensures schema migrations run against the real engine, and provides higher confidence at the cost of slower startup than in-memory databases.
 
 ### Q4: How do you optimize Spring Boot application performance?
 
 **Answer:**
-1. **JVM tuning**: Use G1GC, tune heap size
-2. **Connection pooling**: HikariCP with proper max-pool-size
-3. **Caching**: @Cacheable for expensive operations
-4. **Async processing**: @Async for non-blocking operations
-5. **Database optimization**: Proper indexes, avoid N+1 queries, use pagination
-6. **Monitoring**: Micrometer + Prometheus to identify bottlenecks
+1. **JVM tuning**: Use G1GC, tune heap size (`InitialHeapSize`, `MaxHeapSize`).
+2. **Connection pooling**: Configure HikariCP with an appropriate `maximum-pool-size`.
+3. **Caching**: Use `@Cacheable` for expensive or repetitive operations.
+4. **Async processing**: Use `@Async` with a bounded `ThreadPoolTaskExecutor` for non-blocking operations.
+5. **Database optimization**: Add proper indexes, avoid N+1 queries, and use pagination.
+6. **Monitoring**: Use Micrometer + Prometheus to identify bottlenecks.
 
-### Q5: Explain @Cacheable with conditions.
+### Q5: Explain `@Cacheable` with conditions.
 
 **Answer:**
 ```java
@@ -1158,10 +1454,12 @@ Testcontainers run real Docker containers (database, Redis, etc.) during tests. 
 public User getUser(Long id) { }
 ```
 
-Condition controls when caching applies. Unless controls when result is cached. Useful for avoiding cache pollution.
+`condition` controls whether caching is evaluated before method execution; `unless` controls whether the returned result is stored in the cache—useful for avoiding cache pollution (such as `null` results).
 
-### Q6: How does async processing with @Async improve performance?
+### Q6: How does async processing with `@Async` improve performance?
 
 **Answer:**
-@Async executes method in separate thread, returns immediately. Main thread continues without waiting. Useful for non-blocking operations (email, notifications, reports). Must configure ThreadPoolTaskExecutor with appropriate pool size. Returns CompletableFuture for result handling.
+`@Async` executes the method in a separate thread from a configured `ThreadPoolTaskExecutor` and returns immediately so the calling (HTTP) thread continues without waiting. It is ideal for non-blocking operations (emails, notifications, reports) and can return a `CompletableFuture` for result or error handling.
 
+> [!TIP]
+> In system-design or Spring Boot interviews, always connect `@Async` and `@Cacheable` back to **thread-pool sizing**, **proxy self-invocation**, and **Micrometer metrics** to show production depth.

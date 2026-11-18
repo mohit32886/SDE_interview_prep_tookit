@@ -18,55 +18,54 @@
 
 ## Spring Security Architecture
 
-### SecurityFilterChain and Filter Order
+![Spring Security Filter Chain Animation](./assets/05-spring-security-filter-chain.svg)
 
+Spring Security intercepts incoming HTTP requests at the Servlet Filter layer before they ever reach `DispatcherServlet` or your controllers.
+
+```mermaid
+flowchart TD
+    REQ["HTTP Request"] --> DFP["DelegatingFilterProxy (Servlet → Spring Bridge)"]
+    DFP --> FCP["FilterChainProxy (Orchestrates SecurityFilterChain)"]
+    FCP --> F1["1. SecurityContextPersistenceFilter (Load/Save Context)"]
+    F1 --> F2["2. HeaderWriterFilter (Security Headers)"]
+    F2 --> F3["3. CsrfFilter (CSRF Token Validation)"]
+    F3 --> F4["4. LogoutFilter (Handle /logout)"]
+    F4 --> F5["5. UsernamePasswordAuthenticationFilter (Form Login)"]
+    F5 --> F6["6. BasicAuthenticationFilter (HTTP Basic)"]
+    F6 --> F7["7. ExceptionTranslationFilter (Handle Auth Exceptions)"]
+    F7 --> F8["8. FilterSecurityInterceptor (Authorization Checks)"]
+    F8 --> DS["DispatcherServlet → Controller"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+
+    class REQ,DFP,FCP blue
+    class F1,F2,F3,F4 purple
+    class F5,F6 amber
+    class F7 red
+    class F8,DS green
 ```
-┌─────────────────────────────────────────────┐
-│         HTTP Request                        │
-└──────────────┬──────────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────────┐
-│   DelegatingFilterProxy                     │
-│   (Bridge between servlet and Spring)       │
-└──────────────┬──────────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────────┐
-│   FilterChainProxy                          │
-│   (Orchestrates SecurityFilterChain)        │
-└──────────────┬──────────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────────┐
-│   SecurityFilter 1: SecurityContextPersistenceFilter
-│   (Load/save SecurityContext from session)  │
-├─────────────────────────────────────────────┤
-│   SecurityFilter 2: HeaderWriterFilter      │
-│   (Add security headers)                    │
-├─────────────────────────────────────────────┤
-│   SecurityFilter 3: CsrfFilter              │
-│   (CSRF protection)                         │
-├─────────────────────────────────────────────┤
-│   SecurityFilter 4: LogoutFilter            │
-│   (Handle logout requests)                  │
-├─────────────────────────────────────────────┤
-│   SecurityFilter 5: UsernamePasswordAuthenticationFilter
-│   (Form login authentication)               │
-├─────────────────────────────────────────────┤
-│   SecurityFilter 6: BasicAuthenticationFilter
-│   (HTTP Basic authentication)               │
-├─────────────────────────────────────────────┤
-│   SecurityFilter 7: ExceptionTranslationFilter
-│   (Handle AuthenticationException)          │
-├─────────────────────────────────────────────┤
-│   SecurityFilter 8: FilterSecurityInterceptor
-│   (Authorization - @PreAuthorize, etc.)    │
-└─────────────────────────────────────────────┘
-               │
-               ▼
-        DispatcherServlet
-```
+
+### Key Filters in Order
+
+| Order | Filter | Responsibility |
+| :--- | :--- | :--- |
+| **Bridge** | `DelegatingFilterProxy` | Servlet container filter that delegates to a Spring-managed bean |
+| **Orchestrator** | `FilterChainProxy` | Routes requests through the matching `SecurityFilterChain` |
+| **1** | `SecurityContextPersistenceFilter` | Loads and saves `SecurityContext` from the HTTP session |
+| **2** | `HeaderWriterFilter` | Adds security headers (`CSP`, `X-Frame-Options`, `HSTS`, etc.) |
+| **3** | `CsrfFilter` | Validates CSRF tokens on state-changing requests |
+| **4** | `LogoutFilter` | Processes logout URLs, clears auth, invalidates session |
+| **5** | `UsernamePasswordAuthenticationFilter` | Extracts username/password from form login requests |
+| **6** | `BasicAuthenticationFilter` | Parses `Authorization: Basic ...` headers |
+| **7** | `ExceptionTranslationFilter` | Translates `AuthenticationException` / `AccessDeniedException` to HTTP 401/403 |
+| **8** | `FilterSecurityInterceptor` | Enforces final URL and method authorization rules |
+
+> [!NOTE]
+> Filters execute sequentially. If any filter rejects the request or throws an exception, `ExceptionTranslationFilter` intercepts it and returns `401 Unauthorized` or `403 Forbidden` before `DispatcherServlet` is invoked.
 
 ### SecurityFilterChain Configuration
 
@@ -137,6 +136,42 @@ public class SecurityConfiguration {
 ---
 
 ## Authentication
+
+Spring Security separates **who you are** (`AuthenticationManager` + `UserDetailsService`) from **where your identity lives** (`SecurityContextHolder`).
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant AC as AuthController
+    participant AM as AuthenticationManager
+    participant DAO as DaoAuthenticationProvider
+    participant UDS as CustomUserDetailsService
+    participant PE as PasswordEncoder
+    participant SCH as SecurityContextHolder
+
+    C->>AC: POST /api/auth/login {email, password}
+    AC->>AM: authenticate(UsernamePasswordAuthenticationToken)
+    AM->>DAO: delegate authentication
+    DAO->>UDS: loadUserByUsername(email)
+    UDS-->>DAO: CustomUserPrincipal (UserDetails)
+    DAO->>PE: matches(rawPassword, encodedPassword)
+    alt Valid Credentials
+        PE-->>DAO: true
+        DAO-->>AM: Authenticated Token + Authorities
+        AM-->>AC: Authentication
+        AC->>SCH: getContext().setAuthentication(authenticated)
+        AC-->>C: 200 OK (Login successful)
+    else Invalid Credentials
+        PE-->>DAO: false
+        DAO-->>AC: BadCredentialsException
+        AC-->>C: 401 Unauthorized
+    end
+```
+
+- **`UserDetailsService`**: Loads user-specific data (`loadUserByUsername`) from your database or directory.
+- **`UserDetails`**: Wraps your domain `User` entity, exposing `getAuthorities()`, `getPassword()`, `getUsername()`, and account status flags (`isAccountNonLocked()`, `isEnabled()`).
+- **`AuthenticationManager` (`ProviderManager`)**: Delegates credentials to one or more `AuthenticationProvider`s such as `DaoAuthenticationProvider`.
+- **`SecurityContextHolder`**: Stores the authenticated `Authentication` object in a `ThreadLocal` for the duration of the request.
 
 ### UserDetailsService
 
@@ -268,9 +303,40 @@ public class AuthController {
 }
 ```
 
+> [!TIP]
+> Prefix role names with `"ROLE_"` when building `SimpleGrantedAuthority` in `UserDetails.getAuthorities()` so `hasRole("ADMIN")` matches `"ROLE_ADMIN"` seamlessly.
+
 ---
 
 ## Password Encoding
+
+```mermaid
+flowchart LR
+    P1["Plain Password (Registration)"] --> ENC["PasswordEncoder.encode()"]
+    ENC --> DB["Salted One-Way Hash in DB"]
+    P2["Plain Password (Login)"] --> MAT["PasswordEncoder.matches()"]
+    DB --> MAT
+    MAT --> OK["true → Authenticated"]
+    MAT --> FAIL["false → BadCredentialsException"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class P1,P2 blue
+    class ENC,DB,MAT purple
+    class OK green
+    class FAIL red
+```
+
+| Encoder | Algorithm | GPU / ASIC Resistance | Key Tuning Parameters |
+| :--- | :--- | :--- | :--- |
+| `BCryptPasswordEncoder` | Blowfish-based adaptive hash | Moderate (CPU-hard) | `strength` 4–31 (default `10`, recommended `12`) |
+| `Argon2PasswordEncoder` | Argon2id (memory-hard) | High (memory + CPU-hard) | `saltLength=16`, `hashLength=32`, `parallelism=1`, `memory=60000` KB, `iterations=2` |
+
+> [!WARNING]
+> Never store plaintext passwords or use fast general-purpose hashes (`MD5`, `SHA-256`). Always use an adaptive, salted `PasswordEncoder` like `BCryptPasswordEncoder` or `Argon2PasswordEncoder`.
 
 ### BCryptPasswordEncoder
 
@@ -343,6 +409,38 @@ public class PasswordEncoderConfiguration {
 ---
 
 ## Authorization
+
+Enable method-level security with `@EnableMethodSecurity` to enforce fine-grained access control directly on service or controller methods.
+
+```mermaid
+flowchart TD
+    CALL["Method Invocation"] --> PRE{"@PreAuthorize / @Secured / @RolesAllowed"}
+    PRE -->|"Pass"| EXEC["Execute Target Method"]
+    PRE -->|"Fail"| DENY["AccessDeniedException → 403"]
+    EXEC --> POST{"@PostAuthorize (returnObject check)"}
+    POST -->|"Pass"| RET["Return Result"]
+    POST -->|"Fail"| DENY
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class CALL,EXEC blue
+    class PRE,POST amber
+    class RET green
+    class DENY red
+```
+
+| Annotation | SpEL Support | Evaluation Timing | Typical Use Case |
+| :--- | :--- | :--- | :--- |
+| `@PreAuthorize` | Yes | Before method execution | Role checks, permission checks, ownership via `#arg` and `@bean` |
+| `@PostAuthorize` | Yes | After method execution | Validating `returnObject` belongs to `authentication.principal` |
+| `@Secured` | No | Before method execution | Simple `ROLE_*` checks (`@Secured("ROLE_ADMIN")`) |
+| `@RolesAllowed` | No (JSR-250) | Before method execution | Standard Java EE/Jakarta role annotation |
+
+> [!IMPORTANT]
+> `hasRole('ADMIN')` automatically prepends `ROLE_` (checking `ROLE_ADMIN`), whereas `hasAuthority('ORDER_DELETE')` checks the exact authority string without adding a prefix.
 
 ### @PreAuthorize and @PostAuthorize
 
@@ -450,6 +548,43 @@ public class AdminService {
 ---
 
 ## JWT Implementation
+
+Stateless JWT authentication removes server-side HTTP sessions. Every API request carries a signed `Bearer` token validated by `JwtAuthenticationFilter` before `UsernamePasswordAuthenticationFilter`.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant AC as AuthController
+    participant JTP as JwtTokenProvider
+    participant JAF as JwtAuthenticationFilter
+    participant UDS as UserDetailsService
+    participant SCH as SecurityContextHolder
+    participant API as Protected Endpoint
+
+    Note over C,JTP: 1. Login & Token Issuance
+    C->>AC: POST /api/auth/login {email, password}
+    AC->>JTP: generateToken(principal)
+    JTP-->>AC: Signed {JWT} (HS512)
+    AC-->>C: 200 OK {token}
+
+    Note over C,API: 2. Authenticated Request
+    C->>JAF: GET /api/... (Authorization: Bearer {JWT})
+    JAF->>JTP: validateToken(token) & extractUsername(token)
+    JTP-->>JAF: valid + username
+    JAF->>UDS: loadUserByUsername(username)
+    UDS-->>JAF: UserDetails + Authorities
+    JAF->>SCH: setAuthentication(token)
+    JAF->>API: filterChain.doFilter(request, response)
+    API-->>C: 200 OK
+```
+
+- **`JwtTokenProvider`**: Signs JWTs with `HS512`, embeds `subject`, `userId`, `email`, `roles`, and validates expiration/signatures.
+- **`JwtAuthenticationFilter`**: Extends `OncePerRequestFilter`, extracts the `Bearer ` token, validates it, loads `UserDetails`, and populates `SecurityContextHolder`.
+- **`JwtSecurityConfiguration`**: Sets `SessionCreationPolicy.STATELESS`, disables CSRF/HTTP Basic, and registers `JwtAuthenticationFilter` before `UsernamePasswordAuthenticationFilter`.
+- **`AuthController`**: Exposes `/api/auth/login`, `/api/auth/register`, and `/api/auth/refresh`.
+
+> [!TIP]
+> Always configure `SessionCreationPolicy.STATELESS` and register `JwtAuthenticationFilter` with `addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)` so Spring Security never creates an `HttpSession`.
 
 ### JWT Token Generation and Validation
 
@@ -767,6 +902,31 @@ public class AuthController {
 
 ## OAuth 2.0
 
+Spring Boot provides distinct starters for validating incoming OAuth 2.0 tokens (**Resource Server**) vs delegating user login to external providers like Google or GitHub (**OAuth 2.0 Client**).
+
+```mermaid
+sequenceDiagram
+    participant C as Client App
+    participant AS as Auth Server (Google/Keycloak)
+    participant RS as Spring Resource Server
+
+    C->>AS: Authenticate & Request Token
+    AS-->>C: Signed {JWT} Access Token
+    C->>RS: GET /api/data (Authorization: Bearer {JWT})
+    RS->>AS: Fetch Public Keys (jwk-set-uri)
+    AS-->>RS: JWKS Public Keys
+    RS->>RS: Verify Signature + Map "roles" Claim → ROLE_*
+    RS-->>C: 200 OK Protected Resource
+```
+
+| Role | Starter Dependency | Key Configuration | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Resource Server** | `spring-boot-starter-oauth2-resource-server` | `issuer-uri`, `jwk-set-uri`, `JwtAuthenticationConverter` | Validates Bearer JWTs issued by an external Authorization Server |
+| **OAuth 2.0 Client** | `spring-boot-starter-oauth2-client` | `client-id`, `client-secret`, `scope`, `provider.issuer-uri` | Logs users in via third-party OAuth2/OIDC providers (Google, GitHub) |
+
+> [!NOTE]
+> Use `JwtGrantedAuthoritiesConverter` to map custom JWT claim names (like `"roles"`) and prefixes (`"ROLE_"`) so `@PreAuthorize("hasRole('ADMIN')")` works out of the box with OAuth 2.0 tokens.
+
 ### OAuth 2.0 Resource Server
 
 ```xml
@@ -858,6 +1018,33 @@ spring:
 
 ## CORS and CSRF
 
+```mermaid
+flowchart LR
+    REQ["Browser Cross-Origin Request"] --> CORS["CorsFilter (Checks Origin, Methods, Headers)"]
+    CORS -->|"Origin Allowed"| CSRF["CsrfFilter (Validates _csrf / XSRF-TOKEN)"]
+    CORS -->|"Origin Blocked"| B1["403 CORS Rejected"]
+    CSRF -->|"Token Valid or Ignored"| APP["Controller"]
+    CSRF -->|"Token Missing/Invalid"| B2["403 Invalid CSRF Token"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+
+    class REQ blue
+    class CORS,CSRF purple
+    class APP green
+    class B1,B2 red
+```
+
+| Mechanism | Protects Against | How It Works | When to Enable / Disable |
+| :--- | :--- | :--- | :--- |
+| **CORS** | Unauthorized cross-origin browser reads/calls | Browser sends preflight `OPTIONS`; server returns `Access-Control-Allow-*` | Configure `CorsConfigurationSource` inside `SecurityFilterChain` for SPAs |
+| **CSRF** | Forged state-changing requests via ambient cookies | Synchronizer token pattern (`CookieCsrfTokenRepository` / hidden `_csrf` field) | **Enable** for session/cookie apps; **disable** only for stateless `Bearer` JWT APIs |
+
+> [!WARNING]
+> Only disable CSRF (`csrf.disable()`) for stateless APIs using `Authorization: Bearer` headers. If your application relies on cookies for authentication, keep CSRF protection enabled.
+
 ### CORS Configuration
 
 ```java
@@ -943,6 +1130,37 @@ public class FormController {
 
 ## Security Headers
 
+`HeaderWriterFilter` attaches browser-enforced defense-in-depth headers to every HTTP response.
+
+```mermaid
+flowchart LR
+    RESP["HTTP Response"] --> HWF["HeaderWriterFilter"]
+    HWF --> H1["Content-Security-Policy (Mitigate XSS)"]
+    HWF --> H2["X-Frame-Options: SAMEORIGIN (Mitigate Clickjacking)"]
+    HWF --> H3["X-XSS-Protection (Legacy Browser Filter)"]
+    HWF --> H4["Strict-Transport-Security (Enforce HTTPS)"]
+    HWF --> H5["Referrer-Policy (Limit Referer Leakage)"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+
+    class RESP blue
+    class HWF purple
+    class H1,H2,H3,H4,H5 green
+```
+
+| Header | Configured Value | Security Benefit |
+| :--- | :--- | :--- |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline'` | Restricts where scripts and resources can load from |
+| `X-Frame-Options` | `SAMEORIGIN` | Prevents clickjacking by blocking cross-origin `<iframe>` embedding |
+| `X-XSS-Protection` | `1` (`HeaderValue.ENABLED`) | Enables legacy browser XSS filter |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Forces HTTPS connections for 1 year across subdomains |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Limits `Referer` header leakage on cross-origin navigation |
+
+> [!TIP]
+> Avoid `'unsafe-inline'` in `Content-Security-Policy` in production whenever possible; prefer script nonces or hashes for strict XSS defense.
+
 ```java
 @Configuration
 @EnableWebSecurity
@@ -980,6 +1198,51 @@ public class SecurityConfiguration {
 
 ## Role vs Permission-Based Access
 
+```mermaid
+flowchart LR
+    subgraph RBAC["RBAC (Coarse-Grained)"]
+        U1["User"] --> R1["ROLE_ADMIN"]
+        R1 --> C1["@PreAuthorize(hasRole('ADMIN'))"]
+    end
+
+    subgraph PBAC["PBAC (Fine-Grained)"]
+        U2["User"] --> P1["USER_DELETE / ORDER_VIEW (DB)"]
+        P1 --> C2["@PreAuthorize(hasAuthority('USER_DELETE'))"]
+    end
+
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+
+    class U1,U2 blue
+    class R1,C1 amber
+    class P1,C2 green
+```
+
+```mermaid
+erDiagram
+    USER {
+        Long id PK
+        String email
+    }
+    PERMISSION {
+        Long id PK
+        String name
+        String description
+    }
+    USER ||--o{ USER_PERMISSION : has
+    PERMISSION ||--o{ USER_PERMISSION : granted_to
+```
+
+| Aspect | Role-Based (RBAC) | Permission-Based (PBAC) |
+| :--- | :--- | :--- |
+| **Granularity** | Coarse (`ADMIN`, `USER`) | Fine-grained (`USER_DELETE`, `ORDER_VIEW`) |
+| **Flexibility** | Brittle; changing privileges requires code changes | Dynamic; permissions updated in database without redeploying |
+| **Spring Expression** | `hasRole('ADMIN')` | `hasAuthority('USER_DELETE')` |
+
+> [!NOTE]
+> You can combine both patterns: group permissions into roles in the database, then flatten all `Permission` names into `GrantedAuthority` instances inside `UserDetailsService`.
+
 ### Role-Based Access Control (RBAC)
 
 ```java
@@ -997,7 +1260,6 @@ public void deleteUser(Long userId) { }
 ```java
 // User has permissions: USER_DELETE, USER_CREATE, ORDER_VIEW
 // More granular and flexible
-
 @PreAuthorize("hasAuthority('USER_DELETE')")
 public void deleteUser(Long userId) { }
 
@@ -1070,6 +1332,28 @@ public void deleteUser(Long userId) { }
 
 ## Common Vulnerabilities
 
+```mermaid
+flowchart TD
+    V1["SQL Injection"] --> D1["Parameterized @Query / JPA Bindings"]
+    V2["Cross-Site Scripting (XSS)"] --> D2["Thymeleaf th:text + textContent + CSP"]
+    V3["Cross-Site Request Forgery (CSRF)"] --> D3["CsrfFilter + Synchronizer _csrf Token"]
+
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+
+    class V1,V2,V3 red
+    class D1,D2,D3 green
+```
+
+| Vulnerability | Vulnerable Pattern | Safe Spring Pattern |
+| :--- | :--- | :--- |
+| **SQL Injection** | String concatenation (`"... WHERE email = '" + email + "'"`) | Parameterized JPQL/SQL (`@Query("... WHERE u.email = :email")`) |
+| **XSS** | `th:utext="${user.name}"` or `element.innerHTML` | `th:text="${user.name}"`, `element.textContent`, strict `CSP` |
+| **CSRF** | Missing CSRF validation on cookie-authenticated POST forms | `CookieCsrfTokenRepository` + hidden `_csrf` input |
+
+> [!CAUTION]
+> Never use `th:utext` or `innerHTML` with untrusted user input, and never concatenate raw parameters into SQL or JPQL strings.
+
 ### SQL Injection Prevention
 
 ```java
@@ -1128,6 +1412,35 @@ public class SecurityConfiguration {
 ---
 
 ## Testing Security
+
+```mermaid
+flowchart LR
+    T1["No Auth Header / Mock User"] --> S1["401 Unauthorized"]
+    T2["@WithMockUser(roles = 'USER')"] --> S2["200 OK (User Endpoint) / 403 Forbidden (Admin Endpoint)"]
+    T3["@WithMockUser(roles = 'ADMIN')"] --> S3["204 No Content (Admin Delete)"]
+    T4["POST without csrf()"] --> S4["403 Forbidden"]
+    T5["POST with .with(csrf())"] --> S5["200 OK"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef red fill:#fee2e2,stroke:#991b1b,color:#991b1b
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+
+    class T1,T4 red
+    class S1,S4 red
+    class T2,S2 amber
+    class T3,T5 blue
+    class S3,S5 green
+```
+
+| Test Utility | Purpose | Expected Outcome |
+| :--- | :--- | :--- |
+| No authentication | Verify protected endpoints reject anonymous users | `status().isUnauthorized()` (`401`) |
+| `@WithMockUser(username, roles)` | Simulate authenticated principal with specific roles | `200`/`204` if authorized, `403` if role lacks permission |
+| `SecurityMockMvcRequestPostProcessors.csrf()` | Attach valid CSRF token to `MockMvc` `POST`/`PUT`/`DELETE` | Prevents `403 Forbidden` when CSRF is enabled |
+
+> [!TIP]
+> Always test all three security states for sensitive endpoints: unauthenticated (`401`), authenticated without required role (`403`), and authenticated with required role (`200`/`204`).
 
 ### @WithMockUser
 
@@ -1216,47 +1529,57 @@ public class AuthControllerTest {
 
 ## Interview Questions
 
+```mermaid
+flowchart TD
+    ROOT["Spring Security Interview Core"] --> Q1["Q1: FilterChainProxy & Filter Order"]
+    ROOT --> Q2["Q2: AuthN (Who) vs AuthZ (What)"]
+    ROOT --> Q3["Q3: Stateless JWT Flow"]
+    ROOT --> Q4["Q4: @PreAuthorize vs @Secured"]
+    ROOT --> Q5["Q5: CSRF Synchronizer Token"]
+
+    classDef blue fill:#dbeafe,stroke:#1e40af,color:#1e40af
+    classDef purple fill:#f3e8ff,stroke:#6b21a8,color:#6b21a8
+    classDef green fill:#dcfce7,stroke:#166534,color:#166534
+    classDef amber fill:#fef3c7,stroke:#92400e,color:#92400e
+
+    class ROOT blue
+    class Q1,Q3 purple
+    class Q2,Q4 green
+    class Q5 amber
+```
+
 ### Q1: Explain the Spring Security filter chain.
 
 **Answer:**
-Spring Security uses a FilterChainProxy that orchestrates multiple security filters. Key filters include:
-1. SecurityContextPersistenceFilter: Loads/saves SecurityContext
-2. UsernamePasswordAuthenticationFilter: Handles form login
-3. BasicAuthenticationFilter: Handles HTTP Basic auth
-4. ExceptionTranslationFilter: Handles authentication exceptions
-5. FilterSecurityInterceptor: Performs authorization checks
-
-Filters execute in order, allowing request to pass through if all succeed.
+Spring Security uses a `FilterChainProxy` that orchestrates multiple security filters in order, allowing the request to pass through to `DispatcherServlet` only if all succeed:
+1. `SecurityContextPersistenceFilter`: Loads/saves `SecurityContext`
+2. `UsernamePasswordAuthenticationFilter`: Handles form login
+3. `BasicAuthenticationFilter`: Handles HTTP Basic auth
+4. `ExceptionTranslationFilter`: Handles authentication/authorization exceptions
+5. `FilterSecurityInterceptor`: Performs authorization checks
 
 ### Q2: What's the difference between authentication and authorization?
 
 **Answer:**
-- **Authentication**: Verifying who you are (login with credentials)
-- **Authorization**: Verifying what you're allowed to do (access control)
-
-Spring Security handles both via UserDetailsService (authentication) and @PreAuthorize/@PostAuthorize (authorization).
+- **Authentication**: Verifying who you are (login with credentials), handled via `UserDetailsService` and `AuthenticationManager`.
+- **Authorization**: Verifying what you're allowed to do (access control), handled via URL rules and `@PreAuthorize`/`@PostAuthorize`.
 
 ### Q3: How do you implement JWT authentication in Spring?
 
 **Answer:**
-1. Create JwtTokenProvider to generate/validate JWT tokens
-2. Create JwtAuthenticationFilter to extract token from request and set SecurityContext
-3. Register filter in SecurityFilterChain before UsernamePasswordAuthenticationFilter
-4. Disable session management (SessionCreationPolicy.STATELESS)
-5. Provide login endpoint that returns JWT token
-
-Token contains user info and roles, verified on each request.
+1. Create `JwtTokenProvider` to generate/validate JWT tokens (containing user info and roles).
+2. Create `JwtAuthenticationFilter` (`OncePerRequestFilter`) to extract the token from the request and populate `SecurityContextHolder`.
+3. Register the filter in `SecurityFilterChain` before `UsernamePasswordAuthenticationFilter`.
+4. Disable session management (`SessionCreationPolicy.STATELESS`).
+5. Provide a login endpoint that authenticates credentials and returns the JWT token.
 
 ### Q4: Explain @PreAuthorize vs @Secured.
 
 **Answer:**
-- **@PreAuthorize**: Supports Spring EL expressions, more powerful
-- **@Secured**: Simple role checking, no EL support
-
-@PreAuthorize is preferred because it's more flexible and can use custom expressions like @PreAuthorize("@authService.canAccess(#id)").
+- **`@PreAuthorize`**: Supports Spring EL (SpEL) expressions, making it more powerful and preferred for custom expressions like `@PreAuthorize("@authService.canAccess(#id)")`.
+- **`@Secured`**: Simple role checking only, with no SpEL support.
 
 ### Q5: How does Spring prevent CSRF attacks?
 
 **Answer:**
-Spring uses synchronizer token pattern: generates unique CSRF token per request, includes in hidden form field, validates on POST/PUT/DELETE. Token stored in session/cookie, random per request, invalidates if doesn't match. Automatically handled by CsrfFilter if enabled in SecurityFilterChain.
-
+Spring uses the **synchronizer token pattern**: `CsrfFilter` (when enabled in `SecurityFilterChain`) generates a unique, random CSRF token per request stored in the session or cookie, includes it in a hidden form field, and validates it on state-changing `POST`/`PUT`/`DELETE` requests — rejecting any request with a missing or mismatched token.

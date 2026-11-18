@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="JPA Persistence Context and Dirty Checking Lifecycle">
+  <defs>
+    <style>
+      .title { font: 700 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 500 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+      .box-title { font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #f8fafc; }
+      .box-sub { font: 500 10.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #cbd5e1; }
+      .box-meta { font: 400 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+      .edge-label { font: 600 9.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #94a3b8; }
+      .footer-title { font: 700 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #e2e8f0; }
+      .footer-text { font: 400 10.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: #94a3b8; }
+      .badge-text { font: 600 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #e2e8f0; }
+
+      @keyframes pulse1 { 0%, 18% { stroke-opacity: 1; stroke-width: 2.5; } 22%, 100% { stroke-opacity: 0.45; stroke-width: 1.5; } }
+      @keyframes pulse2 { 0%, 18% { stroke-opacity: 0.45; stroke-width: 1.5; } 20%, 38% { stroke-opacity: 1; stroke-width: 2.5; } 42%, 100% { stroke-opacity: 0.45; stroke-width: 1.5; } }
+      @keyframes pulse3 { 0%, 38% { stroke-opacity: 0.45; stroke-width: 1.5; } 40%, 58% { stroke-opacity: 1; stroke-width: 2.5; } 62%, 100% { stroke-opacity: 0.45; stroke-width: 1.5; } }
+      @keyframes pulse4 { 0%, 58% { stroke-opacity: 0.45; stroke-width: 1.5; } 60%, 78% { stroke-opacity: 1; stroke-width: 2.5; } 82%, 100% { stroke-opacity: 0.45; stroke-width: 1.5; } }
+      @keyframes pulse5 { 0%, 78% { stroke-opacity: 0.45; stroke-width: 1.5; } 80%, 98% { stroke-opacity: 1; stroke-width: 2.5; } 100% { stroke-opacity: 0.45; stroke-width: 1.5; } }
+      @keyframes dashFlow { to { stroke-dashoffset: -24; } }
+
+      .stage-1 { animation: pulse1 6s infinite; }
+      .stage-2 { animation: pulse2 6s infinite; }
+      .stage-3 { animation: pulse3 6s infinite; }
+      .stage-4 { animation: pulse4 6s infinite; }
+      .stage-5 { animation: pulse5 6s infinite; }
+      .flow-line { stroke-dasharray: 6 6; animation: dashFlow 1.2s linear infinite; }
+    </style>
+
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+    </marker>
+
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Card Background -->
+  <rect x="1" y="1" width="898" height="318" rx="14" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="24" y="34" class="title">JPA / Hibernate Persistence Context &amp; Dirty Checking</text>
+  <text x="24" y="52" class="subtitle">Entity lifecycle from instantiation through L1 cache snapshot diffing to database commit</text>
+
+  <!-- Header Badges -->
+  <rect x="612" y="20" width="78" height="22" rx="11" fill="#1e293b" stroke="#3b82f6" stroke-width="1"/>
+  <text x="651" y="34.5" text-anchor="middle" class="badge-text">L1 Cache</text>
+
+  <rect x="698" y="20" width="90" height="22" rx="11" fill="#1e293b" stroke="#f59e0b" stroke-width="1"/>
+  <text x="743" y="34.5" text-anchor="middle" class="badge-text">Dirty Check</text>
+
+  <rect x="796" y="20" width="80" height="22" rx="11" fill="#1e293b" stroke="#22c55e" stroke-width="1"/>
+  <text x="836" y="34.5" text-anchor="middle" class="badge-text">Auto-Flush</text>
+
+  <!-- Connector Lines -->
+  <line x1="166" y1="145" x2="199" y2="145" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" class="flow-line"/>
+  <text x="183" y="135" text-anchor="middle" class="edge-label">persist</text>
+
+  <line x1="343.5" y1="145" x2="376.5" y2="145" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" class="flow-line"/>
+  <text x="361" y="135" text-anchor="middle" class="edge-label">mutate</text>
+
+  <line x1="521" y1="145" x2="554" y2="145" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" class="flow-line"/>
+  <text x="538" y="135" text-anchor="middle" class="edge-label">flush</text>
+
+  <line x1="698.5" y1="145" x2="731.5" y2="145" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" class="flow-line"/>
+  <text x="716" y="135" text-anchor="middle" class="edge-label">close</text>
+
+  <!-- Stage 1: Transient -->
+  <g>
+    <rect x="24" y="88" width="142" height="114" rx="10" fill="#1e293b" stroke="#a855f7" class="stage-1"/>
+    <rect x="24" y="88" width="142" height="26" rx="10" fill="#3b0764"/>
+    <rect x="24" y="102" width="142" height="12" fill="#3b0764"/>
+    <text x="95" y="105" text-anchor="middle" class="box-title">1. Transient</text>
+    <text x="95" y="136" text-anchor="middle" class="box-sub">new User()</text>
+    <text x="95" y="158" text-anchor="middle" class="box-meta">Not tracked by EM</text>
+    <text x="95" y="176" text-anchor="middle" class="box-meta">No DB row / No ID</text>
+  </g>
+
+  <!-- Stage 2: Managed (L1 Cache) -->
+  <g>
+    <rect x="201.5" y="88" width="142" height="114" rx="10" fill="#1e293b" stroke="#3b82f6" class="stage-2"/>
+    <rect x="201.5" y="88" width="142" height="26" rx="10" fill="#172554"/>
+    <rect x="201.5" y="102" width="142" height="12" fill="#172554"/>
+    <text x="272.5" y="105" text-anchor="middle" class="box-title">2. Managed</text>
+    <text x="272.5" y="136" text-anchor="middle" class="box-sub">L1 Cache + Snap</text>
+    <text x="272.5" y="158" text-anchor="middle" class="box-meta">em.persist() / find()</text>
+    <text x="272.5" y="176" text-anchor="middle" class="box-meta">1st-level identity map</text>
+  </g>
+
+  <!-- Stage 3: Dirty Check & Flush -->
+  <g>
+    <rect x="379" y="88" width="142" height="114" rx="10" fill="#1e293b" stroke="#f59e0b" class="stage-3"/>
+    <rect x="379" y="88" width="142" height="26" rx="10" fill="#451a03"/>
+    <rect x="379" y="102" width="142" height="12" fill="#451a03"/>
+    <text x="450" y="105" text-anchor="middle" class="box-title">3. Dirty Check</text>
+    <text x="450" y="136" text-anchor="middle" class="box-sub">state != snap</text>
+    <text x="450" y="158" text-anchor="middle" class="box-meta">Auto-detects setters</text>
+    <text x="450" y="176" text-anchor="middle" class="box-meta">Queues SQL flush</text>
+  </g>
+
+  <!-- Stage 4: HikariCP / DB Commit -->
+  <g>
+    <rect x="556.5" y="88" width="142" height="114" rx="10" fill="#1e293b" stroke="#22c55e" class="stage-4"/>
+    <rect x="556.5" y="88" width="142" height="26" rx="10" fill="#052e16"/>
+    <rect x="556.5" y="102" width="142" height="12" fill="#052e16"/>
+    <text x="627.5" y="105" text-anchor="middle" class="box-title">4. HikariCP / DB</text>
+    <text x="627.5" y="136" text-anchor="middle" class="box-sub">TX Commit</text>
+    <text x="627.5" y="158" text-anchor="middle" class="box-meta">Pooled JDBC conn</text>
+    <text x="627.5" y="176" text-anchor="middle" class="box-meta">INSERT / UPDATE SQL</text>
+  </g>
+
+  <!-- Stage 5: Detached / Removed -->
+  <g>
+    <rect x="734" y="88" width="142" height="114" rx="10" fill="#1e293b" stroke="#ef4444" class="stage-5"/>
+    <rect x="734" y="88" width="142" height="26" rx="10" fill="#450a0a"/>
+    <rect x="734" y="102" width="142" height="12" fill="#450a0a"/>
+    <text x="805" y="105" text-anchor="middle" class="box-title">5. Detached</text>
+    <text x="805" y="136" text-anchor="middle" class="box-sub">em.close() / del</text>
+    <text x="805" y="158" text-anchor="middle" class="box-meta">Changes not tracked</text>
+    <text x="805" y="176" text-anchor="middle" class="box-meta">merge() to re-attach</text>
+  </g>
+
+  <!-- Animated Entity Token traversing the lifecycle -->
+  <g filter="url(#glow)">
+    <circle r="6.5" fill="#38bdf8" stroke="#f8fafc" stroke-width="1.5">
+      <animateMotion dur="6s" repeatCount="indefinite" path="M 95 202 L 272.5 202 L 450 202 L 627.5 202 L 805 202"/>
+      <animate attributeName="fill" values="#a855f7;#3b82f6;#f59e0b;#22c55e;#ef4444" dur="6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- Progress Track below boxes -->
+  <line x1="95" y1="202" x2="805" y2="202" stroke="#334155" stroke-width="1" stroke-dasharray="3 3"/>
+
+  <!-- Bottom Info Cards -->
+  <rect x="24" y="228" width="416" height="72" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="40" y="250" class="footer-title">L1 Cache &amp; Snapshot Diffing</text>
+  <text x="40" y="269" class="footer-text">Hibernate stores an immutable snapshot on load. At flush/commit, dirty checking</text>
+  <text x="40" y="285" class="footer-text">compares current fields to the snapshot — no explicit save() needed for updates.</text>
+
+  <rect x="460" y="228" width="416" height="72" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="476" y="250" class="footer-title">Performance &amp; Read-Only Optimization</text>
+  <text x="476" y="269" class="footer-text">@Transactional(readOnly = true) sets FlushMode.MANUAL and skips snapshot</text>
+  <text x="476" y="285" class="footer-text">creation, reducing memory overhead and avoiding unnecessary dirty checks.</text>
+</svg>
